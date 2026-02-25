@@ -171,9 +171,11 @@ export default function HomeHub() {
                     </h2>
                     <div className="grid gap-6 md:grid-cols-3 items-stretch">
                         {SERVICE_LIST.map((service) => (
-                            <div
+                            <a
                                 key={service.slug}
-                                className="bg-white rounded-3xl border border-border p-5 md:p-6 shadow-sm h-full flex flex-col"
+                                href={`/${service.slug}`}
+                                className="bg-white rounded-3xl border border-border p-5 md:p-6 shadow-sm h-full flex flex-col hover:shadow-md transition-shadow"
+                                aria-label={`Open ${service.providerName} landing page`}
                             >
                                 <div
                                     className="rounded-2xl aspect-[4/3] border border-white/50 flex items-center justify-center text-text-primary font-semibold text-sm md:text-base px-4 text-center"
@@ -191,15 +193,14 @@ export default function HomeHub() {
                                     <p className="text-sm italic text-text-primary">"{service.homeReview}"</p>
                                     <p className="text-xs text-text-secondary font-semibold mt-2">{service.homeReviewer}</p>
                                 </div>
-                                <a
-                                    href={`/${service.slug}`}
-                                    className="mt-auto pt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-white font-semibold hover:opacity-95 transition-opacity text-center"
+                                <div
+                                    className="mt-auto pt-5 inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-white font-semibold text-center"
                                     style={{ backgroundColor: service.theme.primary }}
                                 >
                                     {service.primaryCta}
                                     <ArrowRight size={16} />
-                                </a>
-                            </div>
+                                </div>
+                            </a>
                         ))}
                     </div>
                 </section>
