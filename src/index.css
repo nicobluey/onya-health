@@ -1,0 +1,186 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-serif: 'Playfair Display', 'Times New Roman', serif;
+
+  --color-bark-25: #f4f8ff;
+  --color-bark-50: #ebf2ff;
+  --color-bark-100: #dbe8ff;
+  --color-bark-200: #bed4ff;
+  --color-bark-300: #96b9ff;
+  --color-bark-400: #6f9beb;
+  --color-bark-500: #4f7fd0;
+  --color-bark-600: #3d66ad;
+  --color-bark-700: #2d4e86;
+  --color-bark-800: #1f3862;
+  --color-bark-900: #112542;
+
+  --color-sand-25: #f3f8ff;
+  --color-sand-50: #eaf2ff;
+  --color-sand-75: #dfebff;
+  --color-sand-100: #d5e5ff;
+  --color-sand-150: #c9ddff;
+  --color-sand-200: #b7d0f3;
+  --color-sand-300: #9fbbe2;
+  --color-sand-400: #86a4cf;
+
+  --color-sunlight-50: #edf4ff;
+  --color-sunlight-100: #d5e6ff;
+  --color-sunlight-200: #b6d3ff;
+  --color-sunlight-300: #8db7ff;
+  --color-sunlight-400: #5a95f6;
+
+  --color-forest-50: #e8f1ff;
+  --color-forest-100: #cfe1ff;
+  --color-forest-200: #afcbff;
+  --color-forest-300: #86aeff;
+  --color-forest-400: #568ef9;
+  --color-forest-500: #2f78f0;
+  --color-forest-600: #1a6de8;
+  --color-forest-700: #0f66e8;
+  --color-forest-800: #0a4ebf;
+  --color-forest-900: #083c93;
+
+  --color-primary: var(--color-forest-700);
+  --color-primary-hover: var(--color-forest-800);
+
+  --color-offwhite: var(--color-sand-25);
+  --color-cream: var(--color-sunlight-100);
+
+  --color-text-primary: var(--color-bark-900);
+  --color-text-secondary: var(--color-bark-600);
+
+  --color-success: var(--color-forest-700);
+  --color-border: var(--color-sand-200);
+}
+
+@layer base {
+  body {
+    @apply bg-sand-25 text-text-primary antialiased font-sans;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-serif;
+  }
+}
+
+@layer utilities {
+  .sparkle-field {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .sparkle {
+    position: absolute;
+    color: #ffffff;
+    opacity: 0.92;
+    animation-name: sparkle-drift;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+  }
+
+  .sparkle-core {
+    width: 100%;
+    height: 100%;
+    display: block;
+    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.95));
+    animation-name: sparkle-twinkle;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+    transform-origin: center;
+  }
+
+  @keyframes sparkle-twinkle {
+    0% {
+      opacity: 0.1;
+      transform: scale(0.7) rotate(0deg);
+    }
+    35% {
+      opacity: 0.9;
+      transform: scale(1.15) rotate(38deg);
+    }
+    70% {
+      opacity: 0.4;
+      transform: scale(0.9) rotate(-30deg);
+    }
+    100% {
+      opacity: 0.1;
+      transform: scale(0.7) rotate(0deg);
+    }
+  }
+
+  @keyframes sparkle-drift {
+    0% {
+      transform: translate3d(0, 0, 0);
+    }
+    50% {
+      transform: translate3d(6px, -8px, 0);
+    }
+    100% {
+      transform: translate3d(0, 0, 0);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .sparkle,
+    .sparkle-core {
+      animation: none;
+    }
+  }
+
+  .hero-brand-hover {
+    position: relative;
+    display: inline-block;
+    transition: color 220ms ease, transform 220ms ease;
+    transform-origin: center;
+  }
+
+  .hero-brand-hover::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    bottom: -0.08em;
+    width: 100%;
+    height: 2px;
+    background: #000;
+    border-radius: 999px;
+    transform: scaleX(0.35);
+    transform-origin: left;
+    opacity: 0.55;
+    transition: transform 240ms ease, opacity 240ms ease;
+  }
+
+  .hero-brand-hover:hover {
+    color: #ffffff;
+    animation: hero-brand-wobble 700ms ease;
+  }
+
+  .hero-brand-hover:hover::after {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+
+  @keyframes hero-brand-wobble {
+    0% {
+      transform: rotate(0deg) scale(1);
+    }
+    25% {
+      transform: rotate(-3deg) scale(1.03);
+    }
+    55% {
+      transform: rotate(2deg) scale(1.06);
+    }
+    100% {
+      transform: rotate(0deg) scale(1);
+    }
+  }
+}

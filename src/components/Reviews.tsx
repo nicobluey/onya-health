@@ -1,0 +1,230 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowRight, ChevronLeft, ChevronRight, Star } from 'lucide-react';
+import { Button } from './UI';
+import { useBooking } from '../state';
+
+const REVIEWS = [
+    {
+        title: 'Fast and straightforward',
+        body: 'Filled out the consult on my lunch break and had my certificate approved before my next meeting.',
+        name: 'Mia T.',
+        date: 'January 28, 2026'
+    },
+    {
+        title: 'No waiting room stress',
+        body: 'Everything was online, clear, and easy to follow. It felt professional from start to finish.',
+        name: 'Jordan L.',
+        date: 'January 31, 2026'
+    },
+    {
+        title: 'Actually helpful support',
+        body: 'I had one question and got a fast reply. The doctor notes were clear and accepted immediately.',
+        name: 'Ethan R.',
+        date: 'February 2, 2026'
+    },
+    {
+        title: 'Best option when sick',
+        body: 'Could not travel, so this saved me. Took minutes to submit and I received everything by email.',
+        name: 'Sophie K.',
+        date: 'February 5, 2026'
+    },
+    {
+        title: 'Quick approval after-hours',
+        body: 'Submitted late in the evening and still got everything reviewed quickly. Super convenient process.',
+        name: 'Daniel P.',
+        date: 'February 6, 2026'
+    },
+    {
+        title: 'Clear and professional',
+        body: 'The consult flow was easy and the doctor feedback was clear. This felt reliable and legitimate.',
+        name: 'Olivia S.',
+        date: 'February 7, 2026'
+    },
+    {
+        title: 'Great for busy schedules',
+        body: 'Saved me from missing more work. The whole experience was simple, quick, and very well designed.',
+        name: 'Noah B.',
+        date: 'February 8, 2026'
+    },
+    {
+        title: 'Smooth from start to finish',
+        body: 'No confusion, no waiting room, and no delays. Everything was handled exactly as promised.',
+        name: 'Ava M.',
+        date: 'February 8, 2026'
+    }
+];
+
+const getCardsPerView = (width: number) => {
+    if (width >= 1400) return 4;
+    if (width >= 1024) return 3;
+    if (width >= 768) return 2;
+    return 1;
+};
+
+export function Reviews() {
+    const { startBooking } = useBooking();
+    const totalReviews = REVIEWS.length;
+    const [cardsPerView, setCardsPerView] = useState(() => getCardsPerView(window.innerWidth));
+    const [activeIndex, setActiveIndex] = useState(0);
+    const [slideIndex, setSlideIndex] = useState(() => getCardsPerView(window.innerWidth));
+    const [isPaused, setIsPaused] = useState(false);
+    const [transitionEnabled, setTransitionEnabled] = useState(true);
+    const prevCardsPerView = useRef(cardsPerView);
+
+    const trackReviews = useMemo(
+        () => [...REVIEWS.slice(-cardsPerView), ...REVIEWS, ...REVIEWS.slice(0, cardsPerView)],
+        [cardsPerView]
+    );
+
+    const goNext = useCallback(() => {
+        setTransitionEnabled(true);
+        setSlideIndex((prev) => prev + 1);
+        setActiveIndex((prev) => (prev + 1) % totalReviews);
+    }, [totalReviews]);
+
+    const goPrev = useCallback(() => {
+        setTransitionEnabled(true);
+        setSlideIndex((prev) => prev - 1);
+        setActiveIndex((prev) => (prev - 1 + totalReviews) % totalReviews);
+    }, [totalReviews]);
+
+    const jumpTo = (index: number) => {
+        const normalized = ((index % totalReviews) + totalReviews) % totalReviews;
+        setTransitionEnabled(true);
+        setSlideIndex(cardsPerView + normalized);
+        setActiveIndex(normalized);
+    };
+
+    useEffect(() => {
+        const onResize = () => {
+            setCardsPerView(getCardsPerView(window.innerWidth));
+        };
+
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, []);
+
+    useEffect(() => {
+        if (prevCardsPerView.current === cardsPerView) return;
+
+        prevCardsPerView.current = cardsPerView;
+        setTransitionEnabled(false);
+        setSlideIndex(cardsPerView + activeIndex);
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => setTransitionEnabled(true));
+        });
+    }, [cardsPerView, activeIndex]);
+
+    useEffect(() => {
+        if (isPaused) return;
+
+        const interval = setInterval(goNext, 4800);
+        return () => clearInterval(interval);
+    }, [goNext, isPaused]);
+
+    const handleTrackTransitionEnd = () => {
+        if (slideIndex >= cardsPerView + totalReviews) {
+            setTransitionEnabled(false);
+            setSlideIndex(cardsPerView);
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => setTransitionEnabled(true));
+            });
+        }
+
+        if (slideIndex < cardsPerView) {
+            setTransitionEnabled(false);
+            setSlideIndex(cardsPerView + totalReviews - 1);
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => setTransitionEnabled(true));
+            });
+        }
+    };
+
+    return (
+        <section className="py-16 bg-sand-50 border-y border-border">
+            <div className="max-w-7xl mx-auto px-6 md:px-8">
+                <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-8">
+                    <div>
+                        <p className="text-xs font-bold uppercase tracking-[0.22em] text-forest-700 mb-2">Patient Reviews</p>
+                        <h2 className="text-3xl md:text-4xl font-serif font-bold text-text-primary">People trust Onya Health every day</h2>
+                        <p className="text-black font-bold mt-3 text-base md:text-lg">Real feedback from recent consults.</p>
+                    </div>
+                    <Button onClick={startBooking} className="h-11 px-6 w-full md:w-auto">
+                        Start Consult
+                        <ArrowRight size={16} className="ml-2" />
+                    </Button>
+                </div>
+
+                <div
+                    className="overflow-hidden"
+                    onMouseEnter={() => setIsPaused(true)}
+                    onMouseLeave={() => setIsPaused(false)}
+                >
+                    <div
+                        className="flex -mx-2"
+                        style={{
+                            transform: `translateX(-${(slideIndex * 100) / cardsPerView}%)`,
+                            transition: transitionEnabled ? 'transform 480ms cubic-bezier(0.22, 1, 0.36, 1)' : 'none'
+                        }}
+                        onTransitionEnd={handleTrackTransitionEnd}
+                    >
+                        {trackReviews.map((review, idx) => (
+                            <article
+                                key={`${review.name}-${review.date}-${idx}`}
+                                className="px-2"
+                                style={{ flex: `0 0 ${100 / cardsPerView}%` }}
+                            >
+                                <div className="h-full bg-white rounded-2xl border border-sand-200 p-6 shadow-sm hover:shadow-md transition-shadow">
+                                    <h3 className="text-2xl font-bold text-text-primary leading-tight mb-3">{review.title}</h3>
+                                    <div className="flex items-center gap-1 text-black mb-4">
+                                        {[1, 2, 3, 4, 5].map((star) => (
+                                            <Star key={star} size={16} className="fill-current stroke-none" />
+                                        ))}
+                                    </div>
+                                    <p className="text-text-secondary leading-relaxed mb-6 text-[15px] min-h-[96px]">{review.body}</p>
+                                    <div className="border-t border-sand-200 pt-4">
+                                        <p className="font-bold text-text-primary text-sm">{review.name}</p>
+                                        <p className="text-xs text-text-secondary mt-1">{review.date}</p>
+                                    </div>
+                                </div>
+                            </article>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="mt-8 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                        {Array.from({ length: totalReviews }).map((_, idx) => (
+                            <button
+                                key={idx}
+                                type="button"
+                                aria-label={`Go to review ${idx + 1}`}
+                                onClick={() => jumpTo(idx)}
+                                className={`h-2.5 rounded-full transition-all ${idx === activeIndex ? 'bg-black w-7' : 'bg-sand-300 w-2.5 hover:bg-sand-400'}`}
+                            />
+                        ))}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <button
+                            type="button"
+                            onClick={goPrev}
+                            className="h-12 w-12 rounded-xl border border-border bg-white text-text-primary hover:bg-sand-50 flex items-center justify-center"
+                            aria-label="Previous reviews"
+                        >
+                            <ChevronLeft size={20} />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={goNext}
+                            className="h-12 w-12 rounded-xl border border-border bg-white text-text-primary hover:bg-sand-50 flex items-center justify-center"
+                            aria-label="Next reviews"
+                        >
+                            <ChevronRight size={20} />
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    );
+}
