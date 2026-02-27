@@ -1,0 +1,106 @@
+{
+  "certificates": [
+    {
+      "id": "7139ddda-b25c-4b04-acce-039a7beadee2",
+      "createdAt": "2026-02-27T05:01:36.155Z",
+      "status": "pending",
+      "serviceType": "doctor",
+      "risk": {
+        "score": 4,
+        "level": "MEDIUM",
+        "reasons": [
+          "Required compliance checks were not completed"
+        ]
+      },
+      "certificateDraft": {
+        "fullName": "Test Patient",
+        "dob": "",
+        "email": "test@example.com",
+        "phone": "0400000000",
+        "address": "",
+        "purpose": "Work",
+        "symptom": "Flu",
+        "description": "Fever and cough",
+        "startDate": "2026-02-27",
+        "durationDays": 2
+      },
+      "rawSubmission": {
+        "serviceType": "doctor",
+        "patient": {
+          "fullName": "Test Patient",
+          "email": "test@example.com",
+          "phone": "0400000000"
+        },
+        "consult": {
+          "purpose": "Work",
+          "symptom": "Flu",
+          "description": "Fever and cough",
+          "durationDays": 2
+        }
+      },
+      "decision": null
+    },
+    {
+      "id": "1839813a-3cd8-4748-9391-af6ee9f5fb87",
+      "createdAt": "2026-02-27T05:08:31.179Z",
+      "status": "pending",
+      "serviceType": "doctor",
+      "risk": {
+        "score": 4,
+        "level": "MEDIUM",
+        "reasons": [
+          "Required compliance checks were not completed"
+        ]
+      },
+      "certificateDraft": {
+        "fullName": "Env Test",
+        "dob": "",
+        "email": "envtest@example.com",
+        "phone": "0400000000",
+        "address": "",
+        "purpose": "Work",
+        "symptom": "Flu",
+        "description": "Env key check",
+        "startDate": "2026-02-27",
+        "durationDays": 1
+      },
+      "rawSubmission": {
+        "serviceType": "doctor",
+        "patient": {
+          "fullName": "Env Test",
+          "email": "envtest@example.com",
+          "phone": "0400000000"
+        },
+        "consult": {
+          "purpose": "Work",
+          "symptom": "Flu",
+          "description": "Env key check",
+          "durationDays": 1
+        }
+      },
+      "decision": null
+    }
+  ],
+  "auditLog": [
+    {
+      "type": "CERTIFICATE_CREATED",
+      "certificateId": "7139ddda-b25c-4b04-acce-039a7beadee2",
+      "at": "2026-02-27T05:01:36.157Z"
+    },
+    {
+      "type": "DOCTOR_NOTIFICATION_TRIGGERED",
+      "certificateId": "7139ddda-b25c-4b04-acce-039a7beadee2",
+      "at": "2026-02-27T05:01:36.157Z"
+    },
+    {
+      "type": "CERTIFICATE_CREATED",
+      "certificateId": "1839813a-3cd8-4748-9391-af6ee9f5fb87",
+      "at": "2026-02-27T05:08:31.179Z"
+    },
+    {
+      "type": "DOCTOR_NOTIFICATION_TRIGGERED",
+      "certificateId": "1839813a-3cd8-4748-9391-af6ee9f5fb87",
+      "at": "2026-02-27T05:08:31.181Z"
+    }
+  ]
+}

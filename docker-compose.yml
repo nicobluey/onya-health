@@ -1,0 +1,32 @@
+services:
+  onya-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        VITE_API_BASE_URL: "http://localhost:8787"
+    ports:
+      - "5173:80"
+    depends_on:
+      - onya-backend
+
+  onya-backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8787:8787"
+    env_file:
+      - .env
+      - backend/.env
+    environment:
+      APP_BASE_URL: "http://localhost:8787"
+      CORS_ORIGIN: "http://localhost:5173"
+      DOCTOR_LOGIN_EMAIL: "doctor@onyahealth.com"
+      DOCTOR_LOGIN_PASSWORD: "ChangeMe123!"
+      DOCTOR_NOTIFICATION_EMAILS: "doctor@onyahealth.com"
+      EMAIL_FROM: "Onya Health <noreply@onyahealth.com>"
+      # RESEND_API_KEY: "set-me-to-send-real-emails"
+    volumes:
+      - ./backend:/app/backend
+      - ./backend/data:/app/backend/data

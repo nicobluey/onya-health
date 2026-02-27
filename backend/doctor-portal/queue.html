@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Doctor Queue - Onya Health</title>
+    <style>
+      body { font-family: Inter, Arial, sans-serif; margin: 0; background: #eef5ff; color: #12243f; }
+      header { padding: 18px 24px; border-bottom: 1px solid #cfe0ff; background: #fff; display: flex; justify-content: space-between; align-items: center; }
+      h1 { margin: 0; font-size: 24px; }
+      button { border: 1px solid #c4d8ff; background: #fff; color: #12356a; border-radius: 10px; padding: 8px 12px; font-weight: 600; cursor: pointer; }
+      .wrap { max-width: 980px; margin: 24px auto; padding: 0 16px; }
+      .meta { color: #5c77a7; margin-bottom: 14px; }
+      .list { display: grid; gap: 12px; }
+      .card { background: #fff; border: 1px solid #d6e4ff; border-radius: 14px; padding: 14px; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; }
+      .id { font-size: 12px; color: #607fb0; margin-top: 4px; }
+      .risk { padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; display: inline-block; }
+      .risk-low { background: #dcfce7; color: #166534; }
+      .risk-medium { background: #fef3c7; color: #92400e; }
+      .risk-high { background: #fee2e2; color: #991b1b; }
+      a.review-link { background: #0f66e8; color: white; text-decoration: none; border-radius: 10px; padding: 9px 12px; font-size: 13px; font-weight: 700; }
+      .empty { text-align: center; padding: 32px; border: 1px dashed #c4d8ff; border-radius: 12px; color: #6783ae; background: #fff; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Open Certificate Queue</h1>
+      <button id="logout">Logout</button>
+    </header>
+    <main class="wrap">
+      <p class="meta">Pending requests are sorted by newest first. Risk factor helps prioritize reviews.</p>
+      <div id="list" class="list"></div>
+    </main>
+    <script>
+      const token = localStorage.getItem('onyaDoctorToken');
+      const listNode = document.getElementById('list');
+
+      if (!token) {
+        window.location.href = '/doctor/login';
+      }
+
+      document.getElementById('logout').addEventListener('click', () => {
+        localStorage.removeItem('onyaDoctorToken');
+        window.location.href = '/doctor/login';
+      });
+
+      function riskClass(level) {
+        const normalized = String(level || '').toUpperCase();
+        if (normalized === 'HIGH') return 'risk-high';
+        if (normalized === 'MEDIUM') return 'risk-medium';
+        return 'risk-low';
+      }
+
+      async function loadQueue() {
+        const response = await fetch('/api/doctor/certificates?status=pending', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          localStorage.removeItem('onyaDoctorToken');
+          window.location.href = '/doctor/login';
+          return;
+        }
+
+        if (!payload.certificates.length) {
+          listNode.innerHTML = '<div class="empty">No pending certificates right now.</div>';
+          return;
+        }
+
+        listNode.innerHTML = payload.certificates.map((item) => `
+          <article class="card">
+            <div>
+              <strong>${item.patientName || 'Unnamed patient'}</strong>
+              <div class="id">Request ${item.id} · ${new Date(item.createdAt).toLocaleString()}</div>
+              <div style="margin-top:8px">
+                <span class="risk ${riskClass(item.risk.level)}">${String(item.risk.level || 'low').toUpperCase()} RISK (${item.risk.score})</span>
+              </div>
+            </div>
+            <div>
+              <a class="review-link" href="/doctor/review?id=${encodeURIComponent(item.id)}">Open Review</a>
+            </div>
+          </article>
+        `).join('');
+      }
+
+      loadQueue().catch(() => {
+        listNode.innerHTML = '<div class="empty">Failed to load queue.</div>';
+      });
+    </script>
+  </body>
+</html>

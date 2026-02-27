@@ -1,0 +1,537 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+
+const DATA_DIR = path.resolve(process.cwd(), 'backend', 'data');
+const DB_PATH = path.join(DATA_DIR, 'db.json');
+
+function getSupabaseConfig() {
+  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+  const key =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    process.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY ||
+    '';
+  return {
+    url,
+    key,
+    enabled: Boolean(url && key),
+  };
+}
+
+const EMPTY_DB = {
+  certificates: [],
+  auditLog: [],
+};
+
+let writeQueue = Promise.resolve();
+
+async function ensureDbFile() {
+  await fs.mkdir(DATA_DIR, { recursive: true });
+
+  try {
+    await fs.access(DB_PATH);
+  } catch {
+    await fs.writeFile(DB_PATH, JSON.stringify(EMPTY_DB, null, 2), 'utf8');
+  }
+}
+
+async function readDbRaw() {
+  await ensureDbFile();
+  const contents = await fs.readFile(DB_PATH, 'utf8');
+  return JSON.parse(contents);
+}
+
+async function writeDbRaw(db) {
+  await ensureDbFile();
+  const tempPath = `${DB_PATH}.tmp`;
+  await fs.writeFile(tempPath, JSON.stringify(db, null, 2), 'utf8');
+  await fs.rename(tempPath, DB_PATH);
+}
+
+async function mutateDb(mutator) {
+  const mutation = writeQueue.then(async () => {
+    const db = await readDbRaw();
+    const result = await mutator(db);
+    await writeDbRaw(db);
+    return result;
+  });
+
+  writeQueue = mutation.catch(() => undefined);
+  return mutation;
+}
+
+function mapDbToCertificate(item) {
+  return {
+    id: item.id,
+    createdAt: item.createdAt,
+    status: item.status,
+    serviceType: item.serviceType,
+    risk: item.risk,
+    certificateDraft: item.certificateDraft,
+    rawSubmission: item.rawSubmission,
+    decision: item.decision || null,
+  };
+}
+
+function mapSupabaseRowToCertificate(row) {
+  const med = row.medical_certificate_requests || {};
+
+  const createdAt = row.submitted_at || row.created_at || new Date().toISOString();
+  const status = row.status || 'submitted';
+  const durationDays =
+    med.days_requested ||
+    (med.certificate_start_date && med.certificate_end_date
+      ? Math.max(
+          1,
+          Math.ceil(
+            (new Date(med.certificate_end_date).getTime() - new Date(med.certificate_start_date).getTime()) /
+              (1000 * 60 * 60 * 24)
+          )
+        )
+      : 1);
+
+  return {
+    id: row.id,
+    createdAt,
+    status,
+    serviceType: row.service_type || 'doctor',
+    risk: {
+      score: row.risk_score ?? 0,
+      level: row.risk_level || 'low',
+      reasons: [],
+    },
+    certificateDraft: {
+      fullName: med.patient_full_name || '',
+      dob: med.patient_dob || '',
+      email: med.patient_email || '',
+      phone: med.patient_phone || '',
+      address: med.patient_address || '',
+      purpose: med.work_or_study_context || med.consult_reason || '',
+      symptom: med.symptoms || '',
+      description: med.supporting_notes || med.consult_reason || '',
+      startDate: med.certificate_start_date || createdAt.split('T')[0],
+      durationDays,
+    },
+    rawSubmission: med.raw_submission || null,
+    decision: row.reviewed_at
+      ? {
+          by: row.assigned_provider_id || 'provider',
+          at: row.reviewed_at,
+          notes: row.decision_reason || row.denial_reason || '',
+        }
+      : null,
+  };
+}
+
+function toSupabaseRequestStatus(status) {
+  if (status === 'pending') return 'submitted';
+  return status;
+}
+
+function toSupabaseRiskLevel(level) {
+  const normalized = String(level || 'low').toLowerCase();
+  if (['low', 'medium', 'high', 'urgent'].includes(normalized)) {
+    return normalized;
+  }
+  return 'low';
+}
+
+function fromSupabaseRequestStatus(status) {
+  if (!status) return 'submitted';
+  return status;
+}
+
+async function supabaseRequest(endpoint, options = {}) {
+  const config = getSupabaseConfig();
+  if (!config.enabled) {
+    throw new Error('Supabase config missing (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY)');
+  }
+
+  const response = await fetch(`${config.url}/rest/v1/${endpoint}`, {
+    method: options.method || 'GET',
+    headers: {
+      apikey: config.key,
+      Authorization: `Bearer ${config.key}`,
+      'Content-Type': 'application/json',
+      Prefer: options.prefer || 'return=representation',
+      ...(options.headers || {}),
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
+
+  const text = await response.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text;
+  }
+
+  if (!response.ok) {
+    const error = new Error(`Supabase request failed (${response.status}) ${JSON.stringify(data)}`);
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data;
+}
+
+async function supabaseAuthAdminRequest(endpoint, options = {}) {
+  const config = getSupabaseConfig();
+  if (!config.enabled) {
+    throw new Error('Supabase config missing (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY)');
+  }
+
+  const response = await fetch(`${config.url}/auth/v1/admin/${endpoint}`, {
+    method: options.method || 'GET',
+    headers: {
+      apikey: config.key,
+      Authorization: `Bearer ${config.key}`,
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
+
+  const text = await response.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = text;
+  }
+
+  if (!response.ok) {
+    const error = new Error(`Supabase auth admin request failed (${response.status}) ${JSON.stringify(data)}`);
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
+
+  return data;
+}
+
+async function listCertificatesLocal() {
+  const db = await readDbRaw();
+  return db.certificates.map(mapDbToCertificate);
+}
+
+async function getCertificateByIdLocal(id) {
+  const db = await readDbRaw();
+  const item = db.certificates.find((entry) => entry.id === id);
+  return item ? mapDbToCertificate(item) : null;
+}
+
+async function createCertificateLocal(certificate) {
+  return mutateDb((db) => {
+    db.certificates.push(certificate);
+    db.auditLog.push({
+      type: 'CERTIFICATE_CREATED',
+      certificateId: certificate.id,
+      at: new Date().toISOString(),
+    });
+    return certificate;
+  });
+}
+
+async function updateCertificateLocal(id, updater) {
+  return mutateDb((db) => {
+    const index = db.certificates.findIndex((item) => item.id === id);
+    if (index === -1) {
+      return null;
+    }
+
+    const current = db.certificates[index];
+    const updated = updater(current);
+    db.certificates[index] = updated;
+    db.auditLog.push({
+      type: 'CERTIFICATE_UPDATED',
+      certificateId: id,
+      at: new Date().toISOString(),
+      status: updated.status,
+    });
+    return updated;
+  });
+}
+
+async function appendAuditLocal(entry) {
+  return mutateDb((db) => {
+    db.auditLog.push({
+      ...entry,
+      at: new Date().toISOString(),
+    });
+  });
+}
+
+async function listCertificatesSupabase() {
+  const rows = await supabaseRequest(
+    'service_requests?select=*,medical_certificate_requests(*)&order=submitted_at.desc,created_at.desc'
+  );
+  return (rows || []).map(mapSupabaseRowToCertificate);
+}
+
+async function getCertificateByIdSupabase(id) {
+  const rows = await supabaseRequest(
+    `service_requests?select=*,medical_certificate_requests(*)&id=eq.${encodeURIComponent(id)}&limit=1`
+  );
+  if (!rows || rows.length === 0) return null;
+  return mapSupabaseRowToCertificate(rows[0]);
+}
+
+function toMedicalInsert(certificate) {
+  const draft = certificate.certificateDraft || {};
+  const startDate = draft.startDate || new Date().toISOString().split('T')[0];
+  const durationDays = Math.max(1, Number(draft.durationDays || 1));
+  const endDate = new Date(`${startDate}T00:00:00Z`);
+  endDate.setUTCDate(endDate.getUTCDate() + durationDays);
+
+  return {
+    request_id: certificate.id,
+    patient_email: draft.email || '',
+    patient_full_name: draft.fullName || '',
+    patient_dob: draft.dob || null,
+    patient_phone: draft.phone || null,
+    patient_address: draft.address || null,
+    symptoms: draft.symptom || null,
+    symptom_onset_date: null,
+    consult_reason: draft.description || null,
+    work_or_study_context: draft.purpose || null,
+    certificate_start_date: startDate,
+    certificate_end_date: endDate.toISOString().split('T')[0],
+    days_requested: durationDays,
+    supporting_notes: draft.description || null,
+    declaration_accepted: true,
+    raw_submission: certificate.rawSubmission || null,
+  };
+}
+
+function extractMissingColumnName(message) {
+  const text = String(message || '');
+  const match = text.match(/Could not find the '([^']+)' column/i);
+  return match ? match[1] : null;
+}
+
+async function insertMedicalRequestResilient(payload) {
+  const body = { ...payload };
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      await supabaseRequest('medical_certificate_requests', {
+        method: 'POST',
+        body,
+      });
+      return body;
+    } catch (error) {
+      const code = error?.data?.code;
+      const status = error?.status;
+      const missingColumn = extractMissingColumnName(error?.data?.message);
+      if (status === 400 && code === 'PGRST204' && missingColumn && missingColumn in body) {
+        delete body[missingColumn];
+        continue;
+      }
+      throw error;
+    }
+  }
+
+  throw new Error('Failed to insert medical certificate request after schema fallback attempts');
+}
+
+async function createPatientForSubmission(certificate) {
+  const draft = certificate.certificateDraft || {};
+  const patientEmail = String(draft.email || '').trim();
+  if (!patientEmail) {
+    throw new Error('Patient email is required to create a linked auth user');
+  }
+  const fullName = String(draft.fullName || '').trim();
+  const [firstName = '', ...rest] = fullName.split(/\s+/);
+  const lastName = rest.join(' ');
+  let patientId = null;
+
+  try {
+    const created = await supabaseAuthAdminRequest('users', {
+      method: 'POST',
+      body: {
+        email: patientEmail,
+        password: `Onya-${Date.now()}-Temp!`,
+        email_confirm: true,
+        user_metadata: { role: 'patient' },
+      },
+    });
+    patientId = created?.user?.id || created?.id || created?.data?.user?.id || created?.data?.id || null;
+  } catch (error) {
+    const message = String(error?.message || '');
+    const alreadyExists = message.includes('already') || message.includes('registered');
+    if (!alreadyExists) {
+      throw error;
+    }
+
+    const listed = await supabaseAuthAdminRequest('users?page=1&per_page=1000', {
+      method: 'GET',
+    });
+    const allUsers = Array.isArray(listed)
+      ? listed
+      : Array.isArray(listed?.users)
+      ? listed.users
+      : Array.isArray(listed?.data?.users)
+      ? listed.data.users
+      : [];
+    const match = allUsers.find((user) => user?.email?.toLowerCase() === patientEmail.toLowerCase());
+    patientId = match?.id || null;
+  }
+
+  if (!patientId) {
+    throw new Error('Failed to resolve patient auth user id');
+  }
+
+  await supabaseRequest('profiles', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates,return=representation',
+    body: {
+      id: patientId,
+      role: 'patient',
+      first_name: firstName || null,
+      last_name: lastName || null,
+      phone: draft.phone || null,
+      dob: draft.dob || null,
+      created_at: certificate.createdAt || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  });
+
+  await supabaseRequest('patients', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates,return=representation',
+    body: {
+      id: patientId,
+      consent_telehealth: true,
+      consent_marketing: false,
+    },
+  });
+
+  return patientId;
+}
+
+async function createCertificateSupabase(certificate) {
+  const patientId = certificate.rawSubmission?.patientId || (await createPatientForSubmission(certificate));
+
+  const serviceInsert = {
+    id: certificate.id,
+    patient_id: patientId,
+    service_type: certificate.serviceType || 'doctor',
+    status: toSupabaseRequestStatus(certificate.status || 'submitted'),
+    risk_score: certificate.risk?.score ?? 0,
+    risk_level: toSupabaseRiskLevel(certificate.risk?.level),
+    submitted_at: certificate.createdAt || new Date().toISOString(),
+    created_at: certificate.createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  const serviceRows = await supabaseRequest('service_requests', {
+    method: 'POST',
+    body: serviceInsert,
+  });
+
+  const insertedMedical = await insertMedicalRequestResilient(toMedicalInsert(certificate));
+
+  return mapSupabaseRowToCertificate({
+    ...serviceRows[0],
+    medical_certificate_requests: insertedMedical,
+  });
+}
+
+async function updateCertificateSupabase(id, updater) {
+  const current = await getCertificateByIdSupabase(id);
+  if (!current) return null;
+
+  const updatedCandidate = updater(current);
+  if (!updatedCandidate || updatedCandidate === current) {
+    return current;
+  }
+
+  const updatePayload = {
+    status: toSupabaseRequestStatus(updatedCandidate.status || current.status),
+    updated_at: new Date().toISOString(),
+  };
+
+  if (updatedCandidate.decision?.at) {
+    updatePayload.reviewed_at = updatedCandidate.decision.at;
+  }
+  if (updatePayload.status === 'approved') {
+    updatePayload.decision_reason = updatedCandidate.decision?.notes || null;
+    updatePayload.denial_reason = null;
+  }
+  if (updatePayload.status === 'denied') {
+    updatePayload.denial_reason = updatedCandidate.decision?.notes || null;
+    updatePayload.decision_reason = null;
+  }
+
+  const patchRows = await supabaseRequest(
+    `service_requests?id=eq.${encodeURIComponent(id)}&status=eq.${encodeURIComponent(toSupabaseRequestStatus(current.status))}`,
+    {
+      method: 'PATCH',
+      body: updatePayload,
+    }
+  );
+
+  if (!patchRows || patchRows.length === 0) {
+    return current;
+  }
+
+  const refreshed = await getCertificateByIdSupabase(id);
+  if (!refreshed) return null;
+  refreshed.status = fromSupabaseRequestStatus(refreshed.status);
+  return refreshed;
+}
+
+async function appendAuditSupabase(entry) {
+  const requestId = entry.certificateId || entry.requestId || null;
+  await supabaseRequest('request_events', {
+    method: 'POST',
+    body: {
+      request_id: requestId,
+      actor_user_id: null,
+      event_type: entry.type || 'AUDIT_EVENT',
+      payload: entry,
+      created_at: new Date().toISOString(),
+    },
+  });
+}
+
+export async function listCertificates() {
+  if (getSupabaseConfig().enabled) {
+    return listCertificatesSupabase();
+  }
+  return listCertificatesLocal();
+}
+
+export async function getCertificateById(id) {
+  if (getSupabaseConfig().enabled) {
+    return getCertificateByIdSupabase(id);
+  }
+  return getCertificateByIdLocal(id);
+}
+
+export async function createCertificate(certificate) {
+  if (getSupabaseConfig().enabled) {
+    return createCertificateSupabase(certificate);
+  }
+  return createCertificateLocal(certificate);
+}
+
+export async function updateCertificate(id, updater) {
+  if (getSupabaseConfig().enabled) {
+    return updateCertificateSupabase(id, updater);
+  }
+  return updateCertificateLocal(id, updater);
+}
+
+export async function appendAudit(entry) {
+  if (getSupabaseConfig().enabled) {
+    return appendAuditSupabase(entry);
+  }
+  return appendAuditLocal(entry);
+}
+
+export function isSupabaseStorageEnabled() {
+  return getSupabaseConfig().enabled;
+}

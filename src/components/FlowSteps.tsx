@@ -3,6 +3,7 @@ import { useBooking } from '../state';
 import { COPY } from '../copy';
 import { Button, SelectableCard, Checkbox, Input } from './UI';
 import { motion } from 'framer-motion';
+import { getServiceForPath } from '../services';
 
 // Transitions
 const fade = {
@@ -253,7 +254,60 @@ export const DetailsStep = () => {
 };
 
 export const CheckoutStep = () => {
-    const { nextStep, isUnlimited } = useBooking();
+    const {
+        nextStep,
+        isUnlimited,
+        purpose,
+        symptom,
+        complianceChecked,
+        description,
+        startDate,
+        durationDays,
+        details
+    } = useBooking();
+    const [submitting, setSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState('');
+
+    const handleCheckout = async () => {
+        setSubmitError('');
+        setSubmitting(true);
+
+        try {
+            const serviceType = getServiceForPath(window.location.pathname) || 'doctor';
+            const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+
+            const response = await fetch(`${apiBase}/api/certificates`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    serviceType,
+                    patient: details,
+                    consult: {
+                        purpose,
+                        symptom,
+                        complianceChecked,
+                        description,
+                        startDate: startDate?.toISOString() || null,
+                        durationDays,
+                        isUnlimited,
+                    }
+                }),
+            });
+
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.error || 'Unable to submit your certificate right now.');
+            }
+
+            nextStep();
+        } catch (error) {
+            setSubmitError(error instanceof Error ? error.message : 'Unable to submit your certificate right now.');
+        } finally {
+            setSubmitting(false);
+        }
+    };
 
     return (
         <motion.div {...fade} className="space-y-6">
@@ -277,12 +331,15 @@ export const CheckoutStep = () => {
                 <div className="h-10 bg-sand-100 rounded animate-pulse" />
             </div>
 
-            <Button fullWidth onClick={() => {
-                // Submit
-                nextStep();
-            }}>
+            <Button fullWidth onClick={handleCheckout} disabled={submitting}>
                 {COPY.steps.checkout.cta}
             </Button>
+            {submitError && (
+                <p className="text-sm text-red-600 font-medium">{submitError}</p>
+            )}
+            {submitting && (
+                <p className="text-sm text-text-secondary">Submitting your request for doctor review...</p>
+            )}
 
             <div className="text-center text-xs text-text-secondary flex items-center justify-center gap-2">
                 <span>🔒 Secure 256-bit SSL encryption</span>
