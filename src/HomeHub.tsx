@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, Check, Menu, Star, X } from 'lucide-react';
-import { AnimatePresence, motion } from 'framer-motion';
 import { SERVICE_LIST } from './services';
 import { Sparkles } from './components/Sparkles';
 import { LiveActivityToast } from './components/LiveActivityToast';
@@ -84,7 +83,7 @@ export default function HomeHub() {
 
     return (
         <div className="min-h-screen flex flex-col font-sans" style={{ backgroundColor: HOME_THEME.pageBg }}>
-            <header className="w-full bg-white/40 backdrop-blur-lg border-b border-white/60 shadow-sm sticky top-0 z-50">
+            <header className="w-full bg-white/95 border-b border-white/60 shadow-sm sticky top-0 z-50">
                 <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 flex justify-between items-center">
                     <a
                         href="/"
@@ -104,25 +103,19 @@ export default function HomeHub() {
                         {menuOpen ? <X size={18} /> : <Menu size={18} />}
                     </button>
                 </div>
-                <AnimatePresence initial={false}>
-                    {menuOpen && (
-                        <motion.nav
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            className="overflow-hidden border-t border-white/60 bg-white/85 backdrop-blur-md px-4 md:px-8 pb-4"
-                        >
-                            <div className="pt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                                <a href="/doctor" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">Doctor</a>
-                                <a href="/nutritionist" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">Nutritionist</a>
-                                <a href="/psychologist" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">Psychologist</a>
-                                <a href="#for-physicians" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">For Physicians</a>
-                                <a href="#how-it-works" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">How it works</a>
-                                <a href="#faq" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">FAQ</a>
-                            </div>
-                        </motion.nav>
-                    )}
-                </AnimatePresence>
+                {menuOpen && (
+                    <nav className="border-t border-white/60 bg-white px-4 md:px-8 pb-4">
+                        <div className="pt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                            <a href="/patient-login" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">Patient Login</a>
+                            <a href="/doctor" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">Doctor</a>
+                            <a href="/nutritionist" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">Nutritionist</a>
+                            <a href="/psychologist" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">Psychologist</a>
+                            <a href="#for-physicians" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">For Physicians</a>
+                            <a href="#how-it-works" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">How it works</a>
+                            <a href="#faq" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">FAQ</a>
+                        </div>
+                    </nav>
+                )}
             </header>
 
             <main className="flex-1">

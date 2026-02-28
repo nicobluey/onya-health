@@ -90,6 +90,10 @@ function mapSupabaseRowToCertificate(row) {
         )
       : 1);
 
+  const decisionNotes = row.decision_reason || row.denial_reason || '';
+  const decisionTimestamp = row.reviewed_at || row.updated_at || null;
+  const hasDecisionData = Boolean(decisionNotes || decisionTimestamp || row.assigned_provider_id);
+
   return {
     id: row.id,
     createdAt,
@@ -113,11 +117,11 @@ function mapSupabaseRowToCertificate(row) {
       durationDays,
     },
     rawSubmission: med.raw_submission || null,
-    decision: row.reviewed_at
+    decision: hasDecisionData
       ? {
           by: row.assigned_provider_id || 'provider',
-          at: row.reviewed_at,
-          notes: row.decision_reason || row.denial_reason || '',
+          at: decisionTimestamp,
+          notes: decisionNotes,
         }
       : null,
   };
@@ -453,16 +457,23 @@ async function updateCertificateSupabase(id, updater) {
     updated_at: new Date().toISOString(),
   };
 
-  if (updatedCandidate.decision?.at) {
+  const nextStatus = updatePayload.status;
+  const decisionNotes = String(updatedCandidate.decision?.notes || '').trim();
+  const isFinalDecision = nextStatus === 'approved' || nextStatus === 'denied';
+
+  if (isFinalDecision && updatedCandidate.decision?.at) {
     updatePayload.reviewed_at = updatedCandidate.decision.at;
   }
-  if (updatePayload.status === 'approved') {
-    updatePayload.decision_reason = updatedCandidate.decision?.notes || null;
+  if (nextStatus === 'approved') {
+    updatePayload.decision_reason = decisionNotes || null;
     updatePayload.denial_reason = null;
   }
-  if (updatePayload.status === 'denied') {
-    updatePayload.denial_reason = updatedCandidate.decision?.notes || null;
+  if (nextStatus === 'denied') {
+    updatePayload.denial_reason = decisionNotes || null;
     updatePayload.decision_reason = null;
+  }
+  if (!isFinalDecision && decisionNotes) {
+    updatePayload.decision_reason = decisionNotes;
   }
 
   const patchRows = await supabaseRequest(

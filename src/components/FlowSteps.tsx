@@ -276,7 +276,7 @@ export const CheckoutStep = () => {
             const serviceType = getServiceForPath(window.location.pathname) || 'doctor';
             const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
-            const response = await fetch(`${apiBase}/api/certificates`, {
+            const response = await fetch(`${apiBase}/api/checkout/session`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -299,6 +299,18 @@ export const CheckoutStep = () => {
             const payload = await response.json();
             if (!response.ok) {
                 throw new Error(payload.error || 'Unable to submit your certificate right now.');
+            }
+
+            if (details.email) {
+                window.localStorage.setItem('onya_patient_email', details.email);
+            }
+            if (payload?.patientToken) {
+                window.localStorage.setItem('onya_patient_token', payload.patientToken);
+            }
+
+            if (payload?.checkoutUrl) {
+                window.location.assign(payload.checkoutUrl);
+                return;
             }
 
             nextStep();
@@ -338,11 +350,20 @@ export const CheckoutStep = () => {
                 <p className="text-sm text-red-600 font-medium">{submitError}</p>
             )}
             {submitting && (
-                <p className="text-sm text-text-secondary">Submitting your request for doctor review...</p>
+                <p className="text-sm text-text-secondary">Preparing secure Stripe checkout...</p>
             )}
 
             <div className="text-center text-xs text-text-secondary flex items-center justify-center gap-2">
                 <span>🔒 Secure 256-bit SSL encryption</span>
+            </div>
+
+            <div className="text-center">
+                <a
+                    href="/patient-login"
+                    className="text-sm font-semibold text-forest-700 underline underline-offset-2"
+                >
+                    Already have an account? Patient login
+                </a>
             </div>
         </motion.div>
     );
@@ -360,6 +381,20 @@ export const ConfirmationStep = () => {
             </div>
             <div className="p-4 bg-sunlight-50 rounded-xl text-sm text-text-primary">
                 Check your email for confirmation and next steps.
+            </div>
+            <div className="space-y-3 max-w-sm mx-auto">
+                <a
+                    href="/patient"
+                    className="inline-flex w-full items-center justify-center rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-white"
+                >
+                    Open patient account
+                </a>
+                <a
+                    href="/patient-login"
+                    className="inline-flex w-full items-center justify-center rounded-xl border border-border bg-white px-4 py-3 text-sm font-semibold text-text-primary"
+                >
+                    Patient login
+                </a>
             </div>
         </motion.div>
     );

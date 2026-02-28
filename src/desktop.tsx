@@ -43,6 +43,7 @@ export default function DesktopView({ service }: DesktopViewProps) {
                         <div />
                     ) : (
                         <div className="flex items-center gap-6">
+                            <a href="/patient-login" className="text-text-primary hover:text-forest-700 transition-colors font-medium">Patient login</a>
                             <a href="#how-it-works" className="text-text-primary hover:text-forest-700 transition-colors font-medium">How it works</a>
                             <a href="#faq" className="text-text-primary hover:text-forest-700 transition-colors font-medium">FAQ</a>
                             <Button onClick={startBooking} className="px-6 h-10 text-sm">Book Appointment</Button>
@@ -80,7 +81,7 @@ export default function DesktopView({ service }: DesktopViewProps) {
                                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                                         <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
                                     </span>
-                                    {service.providerPlural} online now
+                                    {service.slug === 'doctor' ? 'Doctors online now' : `${service.providerPlural} online now`}
                                 </div>
 
                                 <div className="max-w-sm">

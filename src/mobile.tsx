@@ -12,7 +12,6 @@ import { Button } from './components/UI';
 import { Sparkles } from './components/Sparkles';
 import { useState, useEffect } from 'react';
 import type { CSSProperties } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import type { ServiceConfig } from './services';
 
 const STEP_IMAGES = ['/REQUEST%20A%20CONSULT.png', '/DOCTOR%20REVIEW.png', '/RELIEF.png'];
@@ -37,7 +36,7 @@ export default function MobileView({ service }: MobileViewProps) {
     return (
         <div className="min-h-screen flex flex-col font-sans" style={themedStyle}>
             {/* Header */}
-            <header className="sticky top-0 z-30 bg-white/35 backdrop-blur-lg border-b border-white/50 shadow-sm">
+            <header className="sticky top-0 z-30 bg-white/95 border-b border-white/50 shadow-sm">
                 <div className="flex items-center justify-between px-4 h-14">
                     <a
                         href="/"
@@ -48,12 +47,12 @@ export default function MobileView({ service }: MobileViewProps) {
                     </a>
                     <div className="flex items-center gap-1.5">
                         {view === 'landing' && (
-                            <div className="inline-flex items-center gap-1.5 text-xs font-semibold bg-white text-black px-2.5 py-1 rounded-full shadow-sm whitespace-nowrap">
+                            <div className="inline-flex items-center gap-1.5 text-sm font-semibold bg-white text-black px-3 py-1.5 rounded-full shadow-sm whitespace-nowrap">
                                 <span className="relative flex h-2 w-2 shrink-0">
                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                                     <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
                                 </span>
-                                <span>{service.providerPlural} online</span>
+                                <span>{service.slug === 'doctor' ? 'Doctors online now' : `${service.providerPlural} online`}</span>
                             </div>
                         )}
                         {view === 'landing' && (
@@ -70,43 +69,43 @@ export default function MobileView({ service }: MobileViewProps) {
                     </div>
                 </div>
                 {view === 'landing' && (
-                    <AnimatePresence initial={false}>
-                        {menuOpen && (
-                            <motion.nav
-                                initial={{ height: 0, opacity: 0 }}
-                                animate={{ height: 'auto', opacity: 1 }}
-                                exit={{ height: 0, opacity: 0 }}
-                                className="overflow-hidden border-t border-white/60 bg-white/75 backdrop-blur-md px-4 pb-4"
-                            >
-                                <div className="pt-3 space-y-2">
-                                    <a
-                                        href="#how-it-works"
-                                        onClick={() => setMenuOpen(false)}
-                                        className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary"
-                                    >
-                                        How it works
-                                    </a>
-                                    <a
-                                        href="#faq"
-                                        onClick={() => setMenuOpen(false)}
-                                        className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary"
-                                    >
-                                        FAQ
-                                    </a>
-                                    <Button
-                                        fullWidth
-                                        className="h-10 text-sm"
-                                        onClick={() => {
-                                            setMenuOpen(false);
-                                            startBooking();
-                                        }}
-                                    >
-                                        Book Appointment
-                                    </Button>
-                                </div>
-                            </motion.nav>
-                        )}
-                    </AnimatePresence>
+                    menuOpen && (
+                        <nav className="border-t border-white/60 bg-white px-4 pb-4">
+                            <div className="pt-3 space-y-2">
+                                <a
+                                    href="/patient-login"
+                                    onClick={() => setMenuOpen(false)}
+                                    className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary"
+                                >
+                                    Patient login
+                                </a>
+                                <a
+                                    href="#how-it-works"
+                                    onClick={() => setMenuOpen(false)}
+                                    className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary"
+                                >
+                                    How it works
+                                </a>
+                                <a
+                                    href="#faq"
+                                    onClick={() => setMenuOpen(false)}
+                                    className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary"
+                                >
+                                    FAQ
+                                </a>
+                                <Button
+                                    fullWidth
+                                    className="h-10 text-sm"
+                                    onClick={() => {
+                                        setMenuOpen(false);
+                                        startBooking();
+                                    }}
+                                >
+                                    Book Appointment
+                                </Button>
+                            </div>
+                        </nav>
+                    )
                 )}
                 {view === 'booking' && (
                     <div className="px-4 pb-3 pt-1">
