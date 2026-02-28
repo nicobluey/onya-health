@@ -6,6 +6,18 @@
       "dest": "/api/$1"
     },
     {
+      "src": "/doctor/login/?$",
+      "dest": "/doctor/login/index.html"
+    },
+    {
+      "src": "/doctor/queue/?$",
+      "dest": "/doctor/queue/index.html"
+    },
+    {
+      "src": "/doctor/review/?$",
+      "dest": "/doctor/review/index.html"
+    },
+    {
       "handle": "filesystem"
     },
     {

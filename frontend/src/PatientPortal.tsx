@@ -1,35 +1,35 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { ComponentType } from 'react';
+import type { ComponentType, FormEvent } from 'react';
 import {
     ArrowLeft,
+    CalendarDays,
+    CheckCircle2,
     ChevronRight,
+    Clock3,
+    ClipboardPlus,
+    FileText,
     Heart,
     Home,
+    Info,
+    MessageCircle,
+    MicOff,
     NotebookPen,
+    Phone,
     Pill,
     Plus,
-    Stethoscope,
-    TestTube2,
-    UserRound,
-    ClipboardPlus,
-    Phone,
-    Clock3,
-    MessageCircle,
-    CheckCircle2,
-    MicOff,
-    Info,
-    ExternalLink,
-    Pencil,
     Scale,
+    Stethoscope,
     Tag,
-    FileText,
-    CalendarDays,
+    TestTube2,
+    Upload,
+    UserRound,
 } from 'lucide-react';
 import { fetchApiJson } from './lib/api';
 
 type MainTab = 'home' | 'consult' | 'account';
-type AccountTab = 'activity' | 'profile' | 'billing';
 type PortalScreen = 'main' | 'call-prep' | 'queued';
+type RecordTab = 'medical-history' | 'allergies' | 'medications';
+type LayoutMode = 'desktop' | 'mobile';
 
 interface PortalRequest {
     id: string;
@@ -55,37 +55,77 @@ interface PatientProfile {
     phone?: string;
 }
 
-function isQueuedStatus(status: string) {
-    const normalized = String(status || '').toLowerCase();
-    return ['awaiting_payment', 'pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(normalized);
+interface TextEntry {
+    id: string;
+    title: string;
+    details: string;
+    createdAt: string;
 }
 
-function statusLabel(status: string) {
-    const normalized = String(status || '').toLowerCase();
-    if (normalized === 'awaiting_payment') return 'Awaiting payment confirmation';
-    if (['pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(normalized)) return 'Pending doctor review';
-    if (normalized === 'approved') return 'Approved and issued';
-    if (normalized === 'denied') return 'Not approved';
-    if (!normalized) return 'No active request';
-    return normalized.replace(/_/g, ' ');
+interface TestResultEntry {
+    id: string;
+    name: string;
+    summary: string;
+    testDate: string;
+    fileName: string;
+    createdAt: string;
 }
 
-function formatDate(value?: string | null) {
-    if (!value) return '—';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleDateString('en-AU', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-    });
+interface PortalProfileData {
+    medicalHistory: TextEntry[];
+    allergies: TextEntry[];
+    medications: TextEntry[];
+    lifestyleNotes: TextEntry[];
+    testResults: TestResultEntry[];
 }
+
+interface TestResultDraft {
+    name: string;
+    summary: string;
+    testDate: string;
+    fileName: string;
+}
+
+const MAIN_TABS: MainTab[] = ['home', 'consult', 'account'];
+
+const RECORD_TAB_META: Record<
+RecordTab,
+{
+    label: string;
+    emptyTitle: string;
+    emptyDescription: string;
+    ctaLabel: string;
+    placeholderTitle: string;
+}
+> = {
+    'medical-history': {
+        label: 'Medical History',
+        emptyTitle: 'No medical history yet',
+        emptyDescription: 'Add your past or ongoing conditions to build your profile.',
+        ctaLabel: 'Add condition',
+        placeholderTitle: 'e.g. Asthma',
+    },
+    allergies: {
+        label: 'Allergies',
+        emptyTitle: 'No allergies added yet',
+        emptyDescription: 'List allergies so doctors can avoid unsafe medication.',
+        ctaLabel: 'Add allergy',
+        placeholderTitle: 'e.g. Penicillin',
+    },
+    medications: {
+        label: 'Medications',
+        emptyTitle: 'No medications listed yet',
+        emptyDescription: 'Track your ongoing medication and dosage details.',
+        ctaLabel: 'Add medication',
+        placeholderTitle: 'e.g. Metformin 500mg',
+    },
+};
 
 const CONSULT_OPTIONS = [
     {
         id: 'medical-certificate',
         title: 'Medical Certificate',
-        subtitle: 'Get a medical certificate',
+        subtitle: 'Get a medical certificate reviewed by a doctor',
         icon: ClipboardPlus,
         active: true,
         badge: 'ACTIVE',
@@ -121,44 +161,304 @@ const CONSULT_OPTIONS = [
     },
 ];
 
-function BottomNav({
-    tab,
-    onChange,
-}: {
-    tab: MainTab;
-    onChange: (next: MainTab) => void;
-}) {
-    const Item = ({
-        id,
-        label,
-        icon: Icon,
-    }: {
-        id: MainTab;
-        label: string;
-        icon: ComponentType<{ size?: number; className?: string }>;
-    }) => {
-        const active = tab === id;
-        return (
-            <button
-                type="button"
-                onClick={() => onChange(id)}
-                className="flex flex-1 flex-col items-center justify-center gap-2 py-2"
-            >
-                <Icon size={30} className={active ? 'text-[#3e3e43]' : 'text-[#a3a3a8]'} />
-                <span className={`text-sm font-semibold tracking-tight leading-none ${active ? 'text-[#3e3e43]' : 'text-[#a3a3a8]'}`}>
-                    {label}
-                </span>
-                <span className={`h-1.5 w-16 rounded-full ${active ? 'bg-[#2f2f34]' : 'bg-transparent'}`} />
-            </button>
-        );
+function createEmptyPortalData(): PortalProfileData {
+    return {
+        medicalHistory: [],
+        allergies: [],
+        medications: [],
+        lifestyleNotes: [],
+        testResults: [],
     };
+}
+
+function createId() {
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function asText(value: unknown) {
+    return typeof value === 'string' ? value : '';
+}
+
+function parseTextEntries(source: unknown): TextEntry[] {
+    if (!Array.isArray(source)) return [];
+    return source
+        .map((item) => {
+            if (!item || typeof item !== 'object') return null;
+            const value = item as Record<string, unknown>;
+            const title = asText(value.title).trim();
+            const details = asText(value.details).trim();
+            if (!title && !details) return null;
+
+            return {
+                id: asText(value.id) || createId(),
+                title: title || 'Untitled',
+                details,
+                createdAt: asText(value.createdAt) || new Date().toISOString(),
+            };
+        })
+        .filter((item): item is TextEntry => Boolean(item));
+}
+
+function parseTestResults(source: unknown): TestResultEntry[] {
+    if (!Array.isArray(source)) return [];
+    return source
+        .map((item) => {
+            if (!item || typeof item !== 'object') return null;
+            const value = item as Record<string, unknown>;
+            const name = asText(value.name).trim();
+            const summary = asText(value.summary).trim();
+            const testDate = asText(value.testDate).trim();
+            if (!name && !summary) return null;
+
+            return {
+                id: asText(value.id) || createId(),
+                name: name || 'Untitled result',
+                summary,
+                testDate: testDate || new Date().toISOString(),
+                fileName: asText(value.fileName),
+                createdAt: asText(value.createdAt) || new Date().toISOString(),
+            };
+        })
+        .filter((item): item is TestResultEntry => Boolean(item));
+}
+
+function readPortalProfile(raw: string | null): PortalProfileData {
+    if (!raw) return createEmptyPortalData();
+
+    try {
+        const parsed: unknown = JSON.parse(raw);
+        if (!parsed || typeof parsed !== 'object') return createEmptyPortalData();
+        const value = parsed as Record<string, unknown>;
+        return {
+            medicalHistory: parseTextEntries(value.medicalHistory),
+            allergies: parseTextEntries(value.allergies),
+            medications: parseTextEntries(value.medications),
+            lifestyleNotes: parseTextEntries(value.lifestyleNotes),
+            testResults: parseTestResults(value.testResults),
+        };
+    } catch {
+        return createEmptyPortalData();
+    }
+}
+
+function getRecordEntries(data: PortalProfileData, tab: RecordTab): TextEntry[] {
+    if (tab === 'medical-history') return data.medicalHistory;
+    if (tab === 'allergies') return data.allergies;
+    return data.medications;
+}
+
+function appendRecordEntry(data: PortalProfileData, tab: RecordTab, entry: TextEntry): PortalProfileData {
+    if (tab === 'medical-history') {
+        return {
+            ...data,
+            medicalHistory: [entry, ...data.medicalHistory],
+        };
+    }
+    if (tab === 'allergies') {
+        return {
+            ...data,
+            allergies: [entry, ...data.allergies],
+        };
+    }
+    return {
+        ...data,
+        medications: [entry, ...data.medications],
+    };
+}
+
+function isQueuedStatus(status: string) {
+    const normalized = String(status || '').toLowerCase();
+    return ['awaiting_payment', 'pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(normalized);
+}
+
+function statusLabel(status: string) {
+    const normalized = String(status || '').toLowerCase();
+    if (normalized === 'awaiting_payment') return 'Awaiting payment confirmation';
+    if (['pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(normalized)) return 'Pending doctor review';
+    if (normalized === 'approved') return 'Approved and issued';
+    if (normalized === 'denied') return 'Not approved';
+    if (!normalized) return 'No active request';
+    return normalized.replace(/_/g, ' ');
+}
+
+function consultTitle(serviceType: string) {
+    if (serviceType === 'doctor' || !serviceType) return 'Medical Certificate';
+    return serviceType
+        .split('_')
+        .map((word) => word.slice(0, 1).toUpperCase() + word.slice(1))
+        .join(' ');
+}
+
+function formatDate(value?: string | null) {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString('en-AU', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+    });
+}
+
+function formatReadableDate(value?: string | null) {
+    if (!value) return 'Not provided';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString('en-AU', {
+        day: '2-digit',
+        month: 'long',
+        year: 'numeric',
+    });
+}
+
+function avatarInitials(fullName: string) {
+    const initials = fullName
+        .split(' ')
+        .map((part) => part.trim().charAt(0))
+        .filter(Boolean)
+        .slice(0, 2)
+        .join('')
+        .toUpperCase();
+    return initials || 'PT';
+}
+
+function firstName(fullName: string) {
+    const trimmed = fullName.trim();
+    if (!trimmed) return 'there';
+    return trimmed.split(' ')[0];
+}
+
+function sectionCardClassName(extraClassName = '') {
+    return `rounded-3xl border border-[#cfdcf2] bg-white shadow-sm ${extraClassName}`.trim();
+}
+
+function StatusPill({ status }: { status: string }) {
+    const normalized = String(status || '').toLowerCase();
+    const queued = isQueuedStatus(status);
+    const approved = normalized === 'approved';
+    const denied = normalized === 'denied';
+
+    let className = 'bg-[#edf4ff] text-[#1d4b8f]';
+    if (queued) className = 'bg-[#fff5db] text-[#8e5b02]';
+    if (approved) className = 'bg-[#ecfff0] text-[#1b7f3b]';
+    if (denied) className = 'bg-[#ffecec] text-[#b42323]';
 
     return (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#dadadd] bg-[#f7f7f8]">
-            <div className="mx-auto flex h-28 w-full max-w-[900px] items-center px-2">
-                <Item id="home" label="Home" icon={Home} />
-                <Item id="consult" label="Consult" icon={Stethoscope} />
-                <Item id="account" label="Account" icon={UserRound} />
+        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${className}`}>
+            <span className="h-2 w-2 rounded-full bg-current" />
+            {statusLabel(status)}
+        </span>
+    );
+}
+
+function DesktopSidebar({
+    activeTab,
+    onTabChange,
+    patient,
+}: {
+    activeTab: MainTab;
+    onTabChange: (next: MainTab) => void;
+    patient: PatientProfile;
+}) {
+    return (
+        <aside className="hidden md:flex w-[260px] shrink-0 flex-col border-r border-[#cfdcf2] bg-white/90 backdrop-blur">
+            <div className="px-5 pt-5">
+                <a href="/" className="inline-flex items-center" aria-label="Go to home page">
+                    <img src="/logo.png" alt="Onya Health" className="h-10 w-auto object-contain" />
+                </a>
+                <p className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-[#7b89a6]">Platform</p>
+                <nav className="mt-3 space-y-1">
+                    {[
+                        { id: 'home' as const, label: 'Home', icon: Home },
+                        { id: 'consult' as const, label: 'Consult', icon: Stethoscope },
+                        { id: 'account' as const, label: 'Account', icon: UserRound },
+                    ].map((item) => {
+                        const Icon = item.icon;
+                        const active = activeTab === item.id;
+                        return (
+                            <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => onTabChange(item.id)}
+                                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${
+                                    active
+                                        ? 'bg-[#eaf2ff] text-[#0f66e8]'
+                                        : 'text-[#55627f] hover:bg-[#f4f8ff] hover:text-[#1b3f7a]'
+                                }`}
+                            >
+                                <Icon size={16} />
+                                {item.label}
+                            </button>
+                        );
+                    })}
+                </nav>
+            </div>
+
+            <div className="mt-auto border-t border-[#d7e2f5] p-4">
+                <div className="rounded-2xl border border-[#dbe5f8] bg-[#f5f9ff] p-3">
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#deebff] text-sm font-semibold text-[#184487]">
+                            {avatarInitials(patient.fullName)}
+                        </div>
+                        <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-[#15284d]">{patient.fullName || 'Patient'}</p>
+                            <p className="truncate text-xs text-[#607194]">{patient.email || 'No email'}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+    );
+}
+
+function MobileTopBar({ activeTab }: { activeTab: MainTab }) {
+    const label = activeTab.slice(0, 1).toUpperCase() + activeTab.slice(1);
+
+    return (
+        <header className="sticky top-0 z-40 border-b border-[#cfdcf2] bg-white/95 backdrop-blur">
+            <div className="flex h-14 items-center justify-between px-4">
+                <a href="/" className="inline-flex items-center" aria-label="Go to home page">
+                    <img src="/logo.png" alt="Onya Health" className="h-10 w-auto object-contain" />
+                </a>
+                <span className="rounded-full border border-[#d7e2f5] bg-[#f5f9ff] px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#3b5382]">
+                    {label}
+                </span>
+            </div>
+        </header>
+    );
+}
+
+function MobileBottomNav({
+    activeTab,
+    onTabChange,
+}: {
+    activeTab: MainTab;
+    onTabChange: (next: MainTab) => void;
+}) {
+    return (
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#cfdcf2] bg-white">
+            <div className="mx-auto flex h-16 w-full max-w-[740px] items-center px-1">
+                {[
+                    { id: 'home' as const, label: 'Home', icon: Home },
+                    { id: 'consult' as const, label: 'Consult', icon: Stethoscope },
+                    { id: 'account' as const, label: 'Account', icon: UserRound },
+                ].map((item) => {
+                    const Icon = item.icon;
+                    const active = activeTab === item.id;
+                    return (
+                        <button
+                            key={item.id}
+                            type="button"
+                            onClick={() => onTabChange(item.id)}
+                            className={`flex flex-1 flex-col items-center justify-center gap-1.5 py-2 ${
+                                active ? 'text-[#0f66e8]' : 'text-[#7382a0]'
+                            }`}
+                        >
+                            <Icon size={20} />
+                            <span className="text-[11px] font-semibold tracking-[0.08em] uppercase">{item.label}</span>
+                        </button>
+                    );
+                })}
             </div>
         </div>
     );
@@ -169,80 +469,534 @@ function QueueBanner({ onTap }: { onTap: () => void }) {
         <button
             type="button"
             onClick={onTap}
-            className="fixed bottom-28 left-0 right-0 z-40 border border-[#b7cdf4] bg-[#eaf2ff] py-4 text-left"
+            className="fixed bottom-16 left-3 right-3 z-40 rounded-2xl border border-[#bfd2f3] bg-[#eaf2ff] px-4 py-3 text-left shadow-lg"
         >
-            <div className="mx-auto flex w-full max-w-[900px] items-center gap-5 px-4 md:px-6">
-                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-[#d9e8ff] text-[#0f66e8]">
-                    <Heart size={34} className="fill-current stroke-current" />
+            <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#d9e8ff] text-[#0f66e8]">
+                    <Heart size={18} className="fill-current stroke-current" />
                 </div>
                 <div className="min-w-0">
-                    <p className="text-xl md:text-2xl font-semibold tracking-tight leading-none text-[#123a7d]">
-                        You&apos;re in the queue
-                    </p>
-                    <p className="mt-2 text-xl md:text-2xl text-[#0f66e8] leading-none">Tap to view</p>
+                    <p className="text-sm font-semibold text-[#123a7d]">You&apos;re in the queue</p>
+                    <p className="text-xs text-[#0f66e8]">Tap to view status</p>
                 </div>
-                <ChevronRight size={36} className="ml-auto text-[#0f66e8]" />
+                <ChevronRight size={18} className="ml-auto text-[#0f66e8]" />
             </div>
         </button>
     );
 }
 
-function HomeTab({
-    firstName,
-    latestRequest,
+function EmptySectionState({
+    icon: Icon,
+    title,
+    description,
+    buttonLabel,
+    onAdd,
 }: {
-    firstName: string;
-    latestRequest: PortalRequest | null;
+    icon: ComponentType<{ size?: number; className?: string }>;
+    title: string;
+    description: string;
+    buttonLabel: string;
+    onAdd: () => void;
 }) {
     return (
-        <section className="space-y-8">
+        <div className="px-4 py-10 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-[#dbe4f6] bg-[#f5f9ff] text-[#8fa0c2]">
+                <Icon size={20} />
+            </div>
+            <h3 className="mt-4 text-lg font-semibold text-[#1a315f]">{title}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-[#6a7a9a]">{description}</p>
+            <button
+                type="button"
+                onClick={onAdd}
+                className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[#d1def6] bg-white px-4 py-2 text-sm font-semibold text-[#123a7d]"
+            >
+                <Plus size={16} />
+                {buttonLabel}
+            </button>
+        </div>
+    );
+}
+
+function ProfileCard({ patient }: { patient: PatientProfile }) {
+    const rows = [
+        { label: 'Full name', value: patient.fullName || 'Patient' },
+        { label: 'Email', value: patient.email || 'Not provided' },
+        { label: 'Date of birth', value: formatReadableDate(patient.dob) },
+        { label: 'Phone', value: patient.phone || 'Not provided' },
+    ];
+
+    return (
+        <section className={sectionCardClassName()}>
+            <div className="border-b border-[#dbe4f6] px-5 py-4">
+                <h2 className="text-lg font-semibold text-[#14264a]">Account Info</h2>
+            </div>
+            <div className="divide-y divide-[#e3ebf8]">
+                {rows.map((row) => (
+                    <div key={row.label} className="px-5 py-3">
+                        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7d8cac]">{row.label}</p>
+                        <p className="mt-1 text-sm font-medium text-[#1f355f]">{row.value}</p>
+                    </div>
+                ))}
+            </div>
+        </section>
+    );
+}
+
+function PreviousConsults({ requests }: { requests: PortalRequest[] }) {
+    const recent = requests.slice(0, 2);
+
+    return (
+        <section>
+            <h2 className="text-xl font-semibold text-[#14264a]">Previous Consults</h2>
+            {recent.length === 0 ? (
+                <div className={`${sectionCardClassName('mt-3 p-5')} text-sm text-[#63759b]`}>No consult history yet.</div>
+            ) : (
+                <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                    {recent.map((request) => (
+                        <article key={request.id} className={sectionCardClassName('p-4')}>
+                            <div className="flex items-center justify-between gap-2">
+                                <StatusPill status={request.status} />
+                                <span className="text-xs text-[#6d7f9f]">{formatDate(request.createdAt)}</span>
+                            </div>
+                            <h3 className="mt-4 text-base font-semibold text-[#15284d]">{consultTitle(request.serviceType)}</h3>
+                            <p className="mt-1 text-sm text-[#63759b]">
+                                {request.decision?.by || (isQueuedStatus(request.status) ? 'Unassigned' : 'Completed')}
+                            </p>
+                        </article>
+                    ))}
+                </div>
+            )}
+        </section>
+    );
+}
+
+function MedicalRecordsSection({
+    data,
+    recordTab,
+    onRecordTabChange,
+    onAddEntry,
+}: {
+    data: PortalProfileData;
+    recordTab: RecordTab;
+    onRecordTabChange: (tab: RecordTab) => void;
+    onAddEntry: (tab: RecordTab, title: string, details: string) => void;
+}) {
+    const [isAdding, setIsAdding] = useState(false);
+    const [title, setTitle] = useState('');
+    const [details, setDetails] = useState('');
+    const activeEntries = getRecordEntries(data, recordTab);
+    const tabMeta = RECORD_TAB_META[recordTab];
+
+    const submit = (event: FormEvent) => {
+        event.preventDefault();
+        if (!title.trim()) return;
+        onAddEntry(recordTab, title.trim(), details.trim());
+        setTitle('');
+        setDetails('');
+        setIsAdding(false);
+    };
+
+    return (
+        <section className={sectionCardClassName()}>
+            <div className="flex items-center gap-2 overflow-x-auto border-b border-[#dbe4f6] px-3 py-3">
+                {(Object.keys(RECORD_TAB_META) as RecordTab[]).map((tab) => {
+                    const active = tab === recordTab;
+                    return (
+                        <button
+                            key={tab}
+                            type="button"
+                            onClick={() => onRecordTabChange(tab)}
+                            className={`shrink-0 rounded-xl px-3 py-1.5 text-sm font-semibold ${
+                                active
+                                    ? 'border border-[#c7d9f8] bg-[#edf4ff] text-[#0f66e8]'
+                                    : 'text-[#7080a0] hover:bg-[#f4f8ff]'
+                            }`}
+                        >
+                            {RECORD_TAB_META[tab].label}
+                        </button>
+                    );
+                })}
+                <button
+                    type="button"
+                    onClick={() => setIsAdding((value) => !value)}
+                    className="ml-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#d1def6] text-[#123a7d]"
+                    aria-label="Add health item"
+                >
+                    <Plus size={16} />
+                </button>
+            </div>
+
+            <div className="p-4">
+                {isAdding && (
+                    <form onSubmit={submit} className="mb-4 space-y-3 rounded-2xl border border-[#dbe6fb] bg-[#f7faff] p-3">
+                        <input
+                            value={title}
+                            onChange={(event) => setTitle(event.target.value)}
+                            className="h-10 w-full rounded-xl border border-[#cfdcf2] bg-white px-3 text-sm outline-none focus:border-[#86aef2]"
+                            placeholder={tabMeta.placeholderTitle}
+                        />
+                        <textarea
+                            value={details}
+                            onChange={(event) => setDetails(event.target.value)}
+                            className="min-h-20 w-full rounded-xl border border-[#cfdcf2] bg-white px-3 py-2 text-sm outline-none focus:border-[#86aef2]"
+                            placeholder="Optional details for your care team"
+                        />
+                        <div className="flex items-center justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setIsAdding(false)}
+                                className="rounded-lg border border-[#d1def6] px-3 py-1.5 text-xs font-semibold text-[#5b6f95]"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                className="rounded-lg bg-[#0f66e8] px-3 py-1.5 text-xs font-semibold text-white"
+                            >
+                                Save
+                            </button>
+                        </div>
+                    </form>
+                )}
+
+                {activeEntries.length === 0 ? (
+                    <EmptySectionState
+                        icon={Stethoscope}
+                        title={tabMeta.emptyTitle}
+                        description={tabMeta.emptyDescription}
+                        buttonLabel={tabMeta.ctaLabel}
+                        onAdd={() => setIsAdding(true)}
+                    />
+                ) : (
+                    <ul className="space-y-2">
+                        {activeEntries.map((entry) => (
+                            <li key={entry.id} className="rounded-2xl border border-[#dbe4f6] bg-[#f8fbff] px-4 py-3">
+                                <p className="text-sm font-semibold text-[#16305f]">{entry.title}</p>
+                                {entry.details && <p className="mt-1 text-sm text-[#5f739b]">{entry.details}</p>}
+                                <p className="mt-2 text-xs text-[#8090b1]">Added {formatDate(entry.createdAt)}</p>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
+        </section>
+    );
+}
+
+function LifestyleNotesSection({
+    entries,
+    onAddEntry,
+}: {
+    entries: TextEntry[];
+    onAddEntry: (title: string, details: string) => void;
+}) {
+    const [isAdding, setIsAdding] = useState(false);
+    const [title, setTitle] = useState('');
+    const [details, setDetails] = useState('');
+
+    const submit = (event: FormEvent) => {
+        event.preventDefault();
+        if (!title.trim()) return;
+        onAddEntry(title.trim(), details.trim());
+        setTitle('');
+        setDetails('');
+        setIsAdding(false);
+    };
+
+    return (
+        <section className={sectionCardClassName()}>
+            <div className="flex items-center border-b border-[#dbe4f6] px-5 py-4">
+                <h2 className="text-lg font-semibold text-[#14264a]">Lifestyle Notes</h2>
+                <button
+                    type="button"
+                    onClick={() => setIsAdding((value) => !value)}
+                    className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#d1def6] text-[#123a7d]"
+                    aria-label="Add lifestyle note"
+                >
+                    <Plus size={16} />
+                </button>
+            </div>
+
+            <div className="p-4">
+                {isAdding && (
+                    <form onSubmit={submit} className="mb-4 space-y-3 rounded-2xl border border-[#dbe6fb] bg-[#f7faff] p-3">
+                        <input
+                            value={title}
+                            onChange={(event) => setTitle(event.target.value)}
+                            className="h-10 w-full rounded-xl border border-[#cfdcf2] bg-white px-3 text-sm outline-none focus:border-[#86aef2]"
+                            placeholder="e.g. Sleep routine"
+                        />
+                        <textarea
+                            value={details}
+                            onChange={(event) => setDetails(event.target.value)}
+                            className="min-h-20 w-full rounded-xl border border-[#cfdcf2] bg-white px-3 py-2 text-sm outline-none focus:border-[#86aef2]"
+                            placeholder="Share habits, sleep, activity, nutrition, or triggers"
+                        />
+                        <div className="flex items-center justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setIsAdding(false)}
+                                className="rounded-lg border border-[#d1def6] px-3 py-1.5 text-xs font-semibold text-[#5b6f95]"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                className="rounded-lg bg-[#0f66e8] px-3 py-1.5 text-xs font-semibold text-white"
+                            >
+                                Save
+                            </button>
+                        </div>
+                    </form>
+                )}
+
+                {entries.length === 0 ? (
+                    <EmptySectionState
+                        icon={NotebookPen}
+                        title="No lifestyle notes yet"
+                        description="Add lifestyle details to help personalize your care."
+                        buttonLabel="Add lifestyle note"
+                        onAdd={() => setIsAdding(true)}
+                    />
+                ) : (
+                    <ul className="space-y-2">
+                        {entries.map((entry) => (
+                            <li key={entry.id} className="rounded-2xl border border-[#dbe4f6] bg-[#f8fbff] px-4 py-3">
+                                <p className="text-sm font-semibold text-[#16305f]">{entry.title}</p>
+                                {entry.details && <p className="mt-1 text-sm text-[#5f739b]">{entry.details}</p>}
+                                <p className="mt-2 text-xs text-[#8090b1]">Added {formatDate(entry.createdAt)}</p>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
+        </section>
+    );
+}
+
+function TestResultsSection({
+    entries,
+    onAddResult,
+}: {
+    entries: TestResultEntry[];
+    onAddResult: (draft: TestResultDraft) => void;
+}) {
+    const [isAdding, setIsAdding] = useState(false);
+    const [name, setName] = useState('');
+    const [summary, setSummary] = useState('');
+    const [testDate, setTestDate] = useState('');
+    const [fileName, setFileName] = useState('');
+
+    const submit = (event: FormEvent) => {
+        event.preventDefault();
+        if (!name.trim()) return;
+
+        onAddResult({
+            name: name.trim(),
+            summary: summary.trim(),
+            testDate: testDate || new Date().toISOString(),
+            fileName: fileName.trim(),
+        });
+
+        setName('');
+        setSummary('');
+        setTestDate('');
+        setFileName('');
+        setIsAdding(false);
+    };
+
+    return (
+        <section className={sectionCardClassName()}>
+            <div className="flex items-center border-b border-[#dbe4f6] px-5 py-4">
+                <h2 className="text-lg font-semibold text-[#14264a]">Your Test Results</h2>
+                <button
+                    type="button"
+                    onClick={() => setIsAdding((value) => !value)}
+                    className="ml-auto inline-flex items-center gap-2 rounded-lg border border-[#d1def6] px-3 py-1.5 text-xs font-semibold text-[#123a7d]"
+                >
+                    <Upload size={14} />
+                    Upload Test
+                </button>
+            </div>
+
+            <div className="p-4">
+                {isAdding && (
+                    <form onSubmit={submit} className="mb-4 space-y-3 rounded-2xl border border-[#dbe6fb] bg-[#f7faff] p-3">
+                        <input
+                            value={name}
+                            onChange={(event) => setName(event.target.value)}
+                            className="h-10 w-full rounded-xl border border-[#cfdcf2] bg-white px-3 text-sm outline-none focus:border-[#86aef2]"
+                            placeholder="e.g. Full Blood Count"
+                        />
+                        <input
+                            type="date"
+                            value={testDate}
+                            onChange={(event) => setTestDate(event.target.value)}
+                            className="h-10 w-full rounded-xl border border-[#cfdcf2] bg-white px-3 text-sm outline-none focus:border-[#86aef2]"
+                        />
+                        <textarea
+                            value={summary}
+                            onChange={(event) => setSummary(event.target.value)}
+                            className="min-h-20 w-full rounded-xl border border-[#cfdcf2] bg-white px-3 py-2 text-sm outline-none focus:border-[#86aef2]"
+                            placeholder="Add a short summary of this result"
+                        />
+                        <div className="space-y-2">
+                            <label className="block text-xs font-semibold uppercase tracking-[0.08em] text-[#6c7da1]">
+                                Attachment
+                            </label>
+                            <input
+                                type="file"
+                                onChange={(event) => setFileName(event.target.files?.[0]?.name || '')}
+                                className="block w-full text-xs text-[#5f739b] file:mr-3 file:rounded-lg file:border-0 file:bg-[#eaf2ff] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[#0f66e8]"
+                            />
+                            {fileName && <p className="text-xs text-[#7386ab]">Selected: {fileName}</p>}
+                        </div>
+                        <div className="flex items-center justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setIsAdding(false)}
+                                className="rounded-lg border border-[#d1def6] px-3 py-1.5 text-xs font-semibold text-[#5b6f95]"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                className="rounded-lg bg-[#0f66e8] px-3 py-1.5 text-xs font-semibold text-white"
+                            >
+                                Save result
+                            </button>
+                        </div>
+                    </form>
+                )}
+
+                {entries.length === 0 ? (
+                    <EmptySectionState
+                        icon={TestTube2}
+                        title="No test results yet"
+                        description="Upload your radiology or pathology reports to keep your records organised."
+                        buttonLabel="Upload result"
+                        onAdd={() => setIsAdding(true)}
+                    />
+                ) : (
+                    <ul className="space-y-2">
+                        {entries.map((entry) => (
+                            <li key={entry.id} className="rounded-2xl border border-[#dbe4f6] bg-[#f8fbff] px-4 py-3">
+                                <div className="flex items-start gap-2">
+                                    <div className="min-w-0">
+                                        <p className="text-sm font-semibold text-[#16305f]">{entry.name}</p>
+                                        {entry.summary && <p className="mt-1 text-sm text-[#5f739b]">{entry.summary}</p>}
+                                    </div>
+                                    <span className="ml-auto shrink-0 text-xs text-[#6f82a8]">{formatDate(entry.testDate)}</span>
+                                </div>
+                                {entry.fileName && <p className="mt-2 text-xs text-[#7d8eb0]">Attachment: {entry.fileName}</p>}
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
+        </section>
+    );
+}
+
+function HomeTab({
+    mode,
+    firstNameValue,
+    requests,
+    queuedRequest,
+    patient,
+    data,
+    recordTab,
+    onRecordTabChange,
+    onAddRecordEntry,
+    onAddLifestyleNote,
+    onAddTestResult,
+    onOpenQueue,
+}: {
+    mode: LayoutMode;
+    firstNameValue: string;
+    requests: PortalRequest[];
+    queuedRequest: PortalRequest | null;
+    patient: PatientProfile;
+    data: PortalProfileData;
+    recordTab: RecordTab;
+    onRecordTabChange: (tab: RecordTab) => void;
+    onAddRecordEntry: (tab: RecordTab, title: string, details: string) => void;
+    onAddLifestyleNote: (title: string, details: string) => void;
+    onAddTestResult: (draft: TestResultDraft) => void;
+    onOpenQueue: () => void;
+}) {
+    const desktop = mode === 'desktop';
+
+    return (
+        <section className="space-y-6">
             <header>
-                <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-[#18181d]">Hey, {firstName}</h1>
-                <p className="mt-2 text-2xl md:text-3xl text-[#737378] leading-tight">Here&apos;s your Onya Health profile.</p>
+                <h1 className="text-3xl font-semibold tracking-tight text-[#14264a]">Hey, {firstNameValue}</h1>
+                <p className="mt-1 text-base text-[#5f739b]">Here&apos;s your Onya Health profile.</p>
             </header>
 
-            <div>
-                <h2 className="text-3xl md:text-4xl font-semibold tracking-tight text-[#18181d]">Previous Consults</h2>
-                <article className="mt-4 rounded-3xl border border-[#cfdcf2] bg-white p-5">
-                    <div className="flex items-center justify-between">
-                        <div className="inline-flex items-center gap-2 text-[#0f66e8]">
-                            <Stethoscope size={23} />
-                            <span className="text-base md:text-lg font-semibold leading-none">
-                                {latestRequest && isQueuedStatus(latestRequest.status) ? 'Active' : 'Completed'}
-                            </span>
-                        </div>
-                        <span className="text-base md:text-lg text-[#737378] leading-none">
-                            {latestRequest ? formatDate(latestRequest.createdAt) : '—'}
-                        </span>
+            {desktop ? (
+                <div className="grid gap-6 xl:grid-cols-[1.65fr_1fr]">
+                    <div className="space-y-6">
+                        <PreviousConsults requests={requests} />
+                        <MedicalRecordsSection
+                            data={data}
+                            recordTab={recordTab}
+                            onRecordTabChange={onRecordTabChange}
+                            onAddEntry={onAddRecordEntry}
+                        />
+                        <LifestyleNotesSection
+                            entries={data.lifestyleNotes}
+                            onAddEntry={onAddLifestyleNote}
+                        />
+                        <TestResultsSection
+                            entries={data.testResults}
+                            onAddResult={onAddTestResult}
+                        />
                     </div>
-                    <h3 className="mt-8 text-2xl md:text-3xl font-semibold tracking-tight text-[#18181d]">
-                        {latestRequest?.serviceType === 'doctor' ? 'Medical Certificate' : (latestRequest?.serviceType || 'Consult')}
-                    </h3>
-                    <p className="text-lg md:text-xl text-[#737378] leading-none mt-2">
-                        {latestRequest ? statusLabel(latestRequest.status) : 'No consults yet'}
-                    </p>
-                </article>
-            </div>
 
-            <div className="rounded-3xl border border-[#d8d8dc] bg-[#f8f8f9]">
-                <div className="flex items-center gap-2 border-b border-[#dfdfe3] p-3">
-                    <button className="rounded-2xl border border-[#d8d8dc] bg-white px-4 py-2 text-base md:text-lg font-semibold leading-none text-[#1f1f24]">
-                        Medical History
-                    </button>
-                    <button className="px-3 text-base md:text-lg font-semibold leading-none text-[#8a8a8f]">Allergies</button>
-                    <button className="px-3 text-base md:text-lg font-semibold leading-none text-[#8a8a8f]">Medical</button>
-                    <button className="ml-auto px-2 text-[#2a2a2e]"><Plus size={32} /></button>
-                </div>
-                <div className="px-4 py-12 text-center">
-                    <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-[#dedee2] bg-[#f0f0f2] text-[#85858b]">
-                        <Stethoscope size={36} />
+                    <div className="space-y-6">
+                        <ProfileCard patient={patient} />
+                        {queuedRequest && (
+                            <section className={sectionCardClassName()}>
+                                <div className="p-5">
+                                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7588ad]">Queue status</p>
+                                    <h2 className="mt-2 text-lg font-semibold text-[#14264a]">You are in the doctor queue</h2>
+                                    <p className="mt-1 text-sm text-[#60739a]">
+                                        Status: {statusLabel(queuedRequest.status)}
+                                    </p>
+                                    <button
+                                        type="button"
+                                        onClick={onOpenQueue}
+                                        className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#0f66e8] px-4 py-2 text-sm font-semibold text-white"
+                                    >
+                                        View queue
+                                        <ChevronRight size={16} />
+                                    </button>
+                                </div>
+                            </section>
+                        )}
                     </div>
-                    <h3 className="mt-5 text-2xl md:text-3xl font-semibold tracking-tight text-[#1e1e23]">No medical history yet</h3>
-                    <p className="mt-3 text-xl md:text-2xl leading-tight text-[#737378]">
-                        Add your past or ongoing conditions to build your profile.
-                    </p>
                 </div>
-            </div>
+            ) : (
+                <div className="space-y-5">
+                    <PreviousConsults requests={requests} />
+                    <MedicalRecordsSection
+                        data={data}
+                        recordTab={recordTab}
+                        onRecordTabChange={onRecordTabChange}
+                        onAddEntry={onAddRecordEntry}
+                    />
+                    <LifestyleNotesSection
+                        entries={data.lifestyleNotes}
+                        onAddEntry={onAddLifestyleNote}
+                    />
+                    <TestResultsSection
+                        entries={data.testResults}
+                        onAddResult={onAddTestResult}
+                    />
+                    <ProfileCard patient={patient} />
+                </div>
+            )}
         </section>
     );
 }
@@ -250,44 +1004,45 @@ function HomeTab({
 function ConsultTab({ onOpenCall }: { onOpenCall: () => void }) {
     return (
         <section>
-            <header className="text-center">
-                <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-[#1d1d22]">Book a consultation</h1>
-                <p className="mt-2 text-2xl md:text-3xl text-[#6f6f73] leading-tight">Choose the type of consultation you need</p>
+            <header>
+                <h1 className="text-3xl font-semibold tracking-tight text-[#14264a]">Book a consultation</h1>
+                <p className="mt-1 text-base text-[#5f739b]">Choose the type of consultation you need</p>
             </header>
 
-            <div className="mt-6 space-y-4">
+            <div className="mt-5 space-y-3">
                 {CONSULT_OPTIONS.map((option) => {
                     const Icon = option.icon;
+                    const clickable = option.id === 'medical-certificate';
                     return (
                         <article
                             key={option.id}
-                            onClick={option.id === 'medical-certificate' ? onOpenCall : undefined}
-                            className={`rounded-3xl border p-5 ${option.active
-                                ? 'border-[#b7cdf4] bg-white'
-                                : 'border-[#d8d8dc] bg-[#f6f6f7]'
-                                } ${option.id === 'medical-certificate' ? 'cursor-pointer' : ''}`}
+                            onClick={clickable ? onOpenCall : undefined}
+                            className={`${sectionCardClassName('p-4')} ${
+                                clickable ? 'cursor-pointer' : ''
+                            } ${option.active ? 'border-[#b7cdf4] bg-[#f8fbff]' : ''}`}
                         >
-                            <div className="flex items-start gap-4">
-                                <Icon size={38} className={option.active ? 'text-[#0f66e8]' : 'text-[#a0a0a5]'} />
+                            <div className="flex items-start gap-3">
+                                <div
+                                    className={`flex h-10 w-10 items-center justify-center rounded-xl ${
+                                        option.active ? 'bg-[#eaf2ff] text-[#0f66e8]' : 'bg-[#f0f4fa] text-[#8a9abc]'
+                                    }`}
+                                >
+                                    <Icon size={18} />
+                                </div>
                                 <div className="min-w-0">
-                                    <h2 className={`text-2xl md:text-3xl font-semibold tracking-tight ${option.active ? 'text-[#123a7d]' : 'text-[#1f1f24]'}`}>
-                                        {option.title}
-                                    </h2>
-                                    <p className={`mt-1 text-xl md:text-2xl leading-tight ${option.active ? 'text-[#0f66e8]' : 'text-[#6f6f73]'}`}>
-                                        {option.subtitle}
-                                    </p>
+                                    <h2 className="text-base font-semibold text-[#16305f]">{option.title}</h2>
+                                    <p className="mt-1 text-sm text-[#60739a]">{option.subtitle}</p>
                                 </div>
                                 {option.badge ? (
                                     <span
-                                        className={`ml-auto shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${option.active
-                                            ? 'bg-[#deebff] text-[#123a7d]'
-                                            : 'bg-[#d9d9dc] text-[#57575c]'
-                                            }`}
+                                        className={`ml-auto shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${
+                                            option.active ? 'bg-[#deebff] text-[#143c7d]' : 'bg-[#e5ebf6] text-[#5b6f95]'
+                                        }`}
                                     >
                                         {option.badge}
                                     </span>
                                 ) : (
-                                    <ChevronRight size={30} className="ml-auto text-[#c2c2c6]" />
+                                    <ChevronRight size={18} className="ml-auto text-[#90a2c6]" />
                                 )}
                             </div>
                         </article>
@@ -298,154 +1053,58 @@ function ConsultTab({ onOpenCall }: { onOpenCall: () => void }) {
     );
 }
 
-function AccountHeader({
-    active,
-    onChange,
-    email,
-    fullName,
-}: {
-    active: AccountTab;
-    onChange: (tab: AccountTab) => void;
-    email: string;
-    fullName: string;
-}) {
-    const initials = fullName
-        .split(' ')
-        .map((part) => part.trim().charAt(0))
-        .filter(Boolean)
-        .slice(0, 2)
-        .join('')
-        .toUpperCase() || 'JV';
-
-    return (
-        <header className="text-center">
-            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-3xl bg-[#e2c96d] text-lg md:text-xl font-semibold text-white">
-                {initials}
-            </div>
-            <h1 className="mt-4 text-3xl md:text-4xl font-semibold tracking-tight text-[#1d1d22]">{fullName || 'Patient'}</h1>
-            <p className="mt-1 text-2xl md:text-3xl text-[#6f6f73] leading-none">{email}</p>
-
-            <div className="mt-5 grid grid-cols-3 border-b border-[#dbdbdf]">
-                {(['activity', 'profile', 'billing'] as AccountTab[]).map((tab) => (
-                    <button
-                        key={tab}
-                        type="button"
-                        onClick={() => onChange(tab)}
-                        className={`relative pb-3 text-2xl md:text-3xl font-semibold capitalize ${active === tab ? 'text-[#1f1f23]' : 'text-[#a0a0a5]'}`}
-                    >
-                        {tab}
-                        {active === tab && (
-                            <span className="absolute left-1/2 bottom-0 h-1.5 w-32 -translate-x-1/2 rounded-full bg-[#1f1f23]" />
-                        )}
-                    </button>
-                ))}
-            </div>
-        </header>
-    );
-}
-
-function BillingPanel({
+function AccountTab({
+    patient,
     latestRequest,
+    data,
 }: {
+    patient: PatientProfile;
     latestRequest: PortalRequest | null;
+    data: PortalProfileData;
 }) {
+    const stats = [
+        { label: 'Medical history', value: data.medicalHistory.length },
+        { label: 'Lifestyle notes', value: data.lifestyleNotes.length },
+        { label: 'Test results', value: data.testResults.length },
+    ];
+
     return (
-        <section className="space-y-4">
-            <article className="rounded-3xl border border-[#d8d8dc] bg-[#f6f6f7] px-5 py-7 text-center">
-                <p className="text-2xl md:text-3xl text-[#6f6f73] leading-none">No active subscriptions</p>
-            </article>
+        <section className="space-y-5">
+            <header>
+                <h1 className="text-3xl font-semibold tracking-tight text-[#14264a]">Account</h1>
+                <p className="mt-1 text-base text-[#5f739b]">View your personal details and profile activity</p>
+            </header>
 
-            <article className="rounded-3xl border border-[#d8d8dc] bg-[#f6f6f7] p-5">
-                <div className="flex items-center">
-                    <div>
-                        <h2 className="text-2xl md:text-3xl font-semibold tracking-tight text-[#1e1e23]">Med Cert</h2>
-                        <p className="text-base md:text-lg text-[#707075] leading-none mt-1">
-                            {latestRequest ? formatDate(latestRequest.createdAt) : '—'}
-                        </p>
-                    </div>
-                    <p className="ml-auto text-2xl md:text-3xl font-semibold tracking-tight text-[#1e1e23]">$12.90</p>
-                    <button className="ml-5 inline-flex items-center gap-2 text-base md:text-lg font-medium text-[#59595f]">
-                        <ExternalLink size={22} />
-                        Receipt
-                    </button>
+            <ProfileCard patient={patient} />
+
+            <section className={sectionCardClassName()}>
+                <div className="border-b border-[#dbe4f6] px-5 py-4">
+                    <h2 className="text-lg font-semibold text-[#14264a]">Profile Summary</h2>
                 </div>
-            </article>
-
-            <article className="rounded-3xl border border-[#d8d8dc] bg-[#f6f6f7] px-5 py-6 text-center">
-                <p className="text-xl md:text-2xl text-[#707075] leading-tight">Need to update your payment method?</p>
-                <a href="#" className="mt-2 inline-flex items-center gap-2 text-2xl md:text-3xl font-semibold underline text-[#1f1f24]">
-                    Manage in Stripe
-                    <ExternalLink size={22} />
-                </a>
-            </article>
-        </section>
-    );
-}
-
-function ProfilePanel() {
-    return (
-        <section className="rounded-3xl border border-[#d8d8dc] bg-[#f6f6f7]">
-            <div className="space-y-0 divide-y divide-[#dbdbdf]">
-                {[
-                    { label: 'First name', value: 'John' },
-                    { label: 'Last name', value: 'Von' },
-                    { label: 'Date of birth', value: '14/06/2000' },
-                ].map((row) => (
-                    <div key={row.label} className="flex items-end justify-between px-5 py-4">
-                        <div>
-                            <p className="text-xl md:text-2xl text-[#707075] leading-none">{row.label}</p>
-                            <p className="mt-3 text-2xl md:text-3xl font-semibold tracking-tight text-[#1e1e23]">{row.value}</p>
-                        </div>
-                        <button className="text-[#9a9aa0]">
-                            <Pencil size={28} />
-                        </button>
-                    </div>
-                ))}
-
-                <div className="px-5 py-4">
-                    <p className="text-xl md:text-2xl text-[#707075] leading-none">Gender</p>
-                    <div className="mt-4 grid grid-cols-3 gap-2">
-                        <button className="h-16 rounded-2xl bg-[#e8e8ea] text-xl md:text-2xl font-semibold text-[#56565c]">Male</button>
-                        <button className="h-16 rounded-2xl border-2 border-[#0f66e8] bg-[#eaf2ff] text-xl md:text-2xl font-semibold text-[#123a7d]">Female</button>
-                        <button className="h-16 rounded-2xl bg-[#e8e8ea] text-xl md:text-2xl font-semibold text-[#56565c]">Other</button>
-                    </div>
+                <div className="grid gap-3 px-5 py-4 sm:grid-cols-3">
+                    {stats.map((item) => (
+                        <article key={item.label} className="rounded-2xl border border-[#dbe4f6] bg-[#f8fbff] p-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7080a2]">{item.label}</p>
+                            <p className="mt-2 text-2xl font-semibold text-[#173362]">{item.value}</p>
+                        </article>
+                    ))}
                 </div>
-            </div>
-        </section>
-    );
-}
+            </section>
 
-function ActivityPanel({
-    latestRequest,
-}: {
-    latestRequest: PortalRequest | null;
-}) {
-    return (
-        <section className="space-y-4">
-            <article className="rounded-3xl border border-[#d8d8dc] bg-[#f6f6f7] p-5">
-                <div className="flex items-center justify-between">
-                    <p className="inline-flex items-center gap-2 text-base md:text-lg font-semibold text-[#0f66e8]">
-                        <Stethoscope size={22} />
-                        {latestRequest && isQueuedStatus(latestRequest.status) ? 'In queue' : 'Reviewed'}
-                    </p>
-                    <p className="text-sm md:text-base text-[#737378] leading-none">
-                        {latestRequest ? `Updated ${formatDate(latestRequest.createdAt)}` : 'No updates yet'}
-                    </p>
+            <section className={sectionCardClassName()}>
+                <div className="p-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7588ad]">Latest consult</p>
+                    {latestRequest ? (
+                        <>
+                            <h2 className="mt-2 text-lg font-semibold text-[#14264a]">{consultTitle(latestRequest.serviceType)}</h2>
+                            <p className="mt-1 text-sm text-[#5f739b]">{statusLabel(latestRequest.status)}</p>
+                            <p className="mt-1 text-xs text-[#7a8bab]">Updated {formatDate(latestRequest.createdAt)}</p>
+                        </>
+                    ) : (
+                        <p className="mt-2 text-sm text-[#63759b]">No consult history yet.</p>
+                    )}
                 </div>
-                <h2 className="mt-4 text-2xl md:text-3xl font-semibold tracking-tight text-[#1e1e23]">Medical Certificate</h2>
-                <p className="mt-1 text-lg md:text-xl text-[#737378] leading-none">
-                    {latestRequest ? statusLabel(latestRequest.status) : 'No active request'}
-                </p>
-            </article>
-
-            <article className="rounded-3xl border border-[#d8d8dc] bg-[#f6f6f7] p-5">
-                <h3 className="text-xl md:text-2xl font-semibold text-[#1e1e23]">What happens next</h3>
-                <ul className="mt-4 space-y-3 text-base md:text-lg text-[#646469] leading-tight">
-                    <li className="flex items-center gap-2"><CheckCircle2 size={22} className="text-[#0f66e8]" /> Payment confirmed</li>
-                    <li className="flex items-center gap-2"><Clock3 size={22} className="text-[#0f66e8]" /> Queue position updates</li>
-                    <li className="flex items-center gap-2"><NotebookPen size={22} className="text-[#0f66e8]" /> Certificate delivery by email</li>
-                </ul>
-            </article>
+            </section>
         </section>
     );
 }
@@ -453,23 +1112,23 @@ function ActivityPanel({
 function CallPrepScreen({ onBack }: { onBack: () => void }) {
     return (
         <section className="space-y-5">
-            <div className="grid grid-cols-3 gap-3">
-                <div className="h-2 rounded-full bg-[#0f66e8]" />
-                <div className="h-2 rounded-full bg-[#0f66e8]" />
-                <div className="h-2 rounded-full bg-[#d9d9dc]" />
+            <div className="grid grid-cols-3 gap-2">
+                <div className="h-1.5 rounded-full bg-[#0f66e8]" />
+                <div className="h-1.5 rounded-full bg-[#0f66e8]" />
+                <div className="h-1.5 rounded-full bg-[#d4dff3]" />
             </div>
 
-            <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-base md:text-lg text-[#5f5f64]">
-                <ArrowLeft size={30} />
+            <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-[#5f739b]">
+                <ArrowLeft size={16} />
                 Back
             </button>
 
-            <header className="text-center">
-                <h1 className="text-4xl md:text-5xl font-semibold tracking-tight text-[#121217]">Ready to start?</h1>
-                <p className="mt-3 text-2xl md:text-3xl text-[#6f6f73] leading-tight">A quick chat with AI to help your doctor prepare</p>
+            <header>
+                <h1 className="text-3xl font-semibold tracking-tight text-[#14264a]">Ready to start?</h1>
+                <p className="mt-2 text-base text-[#5f739b]">A quick chat with AI to help your doctor prepare</p>
             </header>
 
-            <article className="overflow-hidden rounded-3xl border border-[#d8d8dc] bg-[#f6f6f7]">
+            <article className={sectionCardClassName('overflow-hidden')}>
                 {[
                     { icon: Phone, text: '2-3 minute voice call' },
                     { icon: Clock3, text: 'Confirm your certificate dates' },
@@ -478,28 +1137,28 @@ function CallPrepScreen({ onBack }: { onBack: () => void }) {
                 ].map((item, index) => {
                     const Icon = item.icon;
                     return (
-                        <div key={item.text} className={`flex items-center gap-3 px-4 py-4 ${index > 0 ? 'border-t border-[#dfdfe3]' : ''}`}>
-                            <Icon size={26} className="text-[#0f66e8]" />
-                            <p className="text-2xl md:text-3xl text-[#56565b] leading-none">{item.text}</p>
+                        <div key={item.text} className={`flex items-center gap-3 px-4 py-3 ${index > 0 ? 'border-t border-[#e1e9f7]' : ''}`}>
+                            <Icon size={18} className="text-[#0f66e8]" />
+                            <p className="text-sm text-[#455c88]">{item.text}</p>
                         </div>
                     );
                 })}
             </article>
 
-            <article className="overflow-hidden rounded-3xl border-2 border-dashed border-[#f1a3a3] bg-[#fff1f1]">
-                <div className="flex items-center gap-4 px-4 py-4">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#ffdede] text-[#ef3b3b]">
-                        <MicOff size={30} />
+            <article className="overflow-hidden rounded-3xl border border-[#f2c2c2] bg-[#fff5f5]">
+                <div className="flex items-center gap-3 px-4 py-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#ffdede] text-[#dc3f3f]">
+                        <MicOff size={18} />
                     </div>
                     <div>
-                        <h3 className="text-2xl md:text-3xl font-semibold tracking-tight text-[#d80000]">Tap to try again</h3>
-                        <p className="text-xl md:text-2xl text-[#6f6f73] leading-none mt-2">Microphone blocked</p>
+                        <h3 className="text-sm font-semibold text-[#ba2a2a]">Tap to try again</h3>
+                        <p className="text-xs text-[#9e3b3b]">Microphone blocked</p>
                     </div>
                 </div>
-                <div className="border-t border-[#f3b4b4] px-4 py-4">
-                    <p className="flex items-start gap-3 text-base md:text-lg leading-tight text-[#ef1a1a]">
-                        <Info size={22} className="mt-1 shrink-0" />
-                        Allow access in your browser settings - look for the lock icon in the address bar
+                <div className="border-t border-[#f3d1d1] px-4 py-3">
+                    <p className="flex items-start gap-2 text-xs leading-relaxed text-[#be3333]">
+                        <Info size={14} className="mt-0.5 shrink-0" />
+                        Allow access in your browser settings to continue.
                     </p>
                 </div>
             </article>
@@ -507,27 +1166,25 @@ function CallPrepScreen({ onBack }: { onBack: () => void }) {
             <button
                 type="button"
                 disabled
-                className="mt-1 inline-flex h-20 w-full items-center justify-center gap-2 rounded-3xl border border-[#e3e3e6] bg-[#efeff0] text-2xl md:text-3xl font-semibold text-[#a0a0a5]"
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#d6e2f7] bg-[#eef3fc] text-sm font-semibold text-[#8da1c4]"
             >
-                <Phone size={26} />
+                <Phone size={16} />
                 Start call
             </button>
-
-            <p className="text-center text-base md:text-lg text-[#737378] leading-none">
-                Private &amp; Secure <span className="mx-2">|</span> ~2 minutes
-            </p>
         </section>
     );
 }
 
 function QueuedWaitingScreen({
     request,
+    onBack,
     onSendMessage,
 }: {
     request: PortalRequest | null;
+    onBack: () => void;
     onSendMessage: () => void;
 }) {
-    const detailRows = [
+    const rows = [
         { label: 'Type', value: 'Medical Certificate', icon: Tag },
         { label: 'Leave type', value: request?.purpose || '—', icon: FileText },
         { label: 'Main symptom', value: request?.symptom || '—', icon: FileText },
@@ -536,53 +1193,37 @@ function QueuedWaitingScreen({
 
     return (
         <section className="space-y-5">
-            <div className="grid grid-cols-3 gap-3">
-                <div className="h-2 rounded-full bg-[#0f66e8]" />
-                <div className="h-2 rounded-full bg-[#0f66e8]" />
-                <div className="h-2 rounded-full bg-[#0f66e8]" />
+            <div className="grid grid-cols-3 gap-2">
+                <div className="h-1.5 rounded-full bg-[#0f66e8]" />
+                <div className="h-1.5 rounded-full bg-[#0f66e8]" />
+                <div className="h-1.5 rounded-full bg-[#0f66e8]" />
             </div>
 
-            <article className="rounded-3xl border border-[#b7cdf4] bg-[#eaf2ff] px-5 py-5">
+            <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-[#5f739b]">
+                <ArrowLeft size={16} />
+                Back
+            </button>
+
+            <article className="rounded-3xl border border-[#b7cdf4] bg-[#eaf2ff] px-5 py-4">
                 <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#d9e8ff] text-[#0f66e8]">
+                        <Heart size={20} className="fill-current stroke-current" />
+                    </div>
                     <div className="min-w-0">
-                        <h1 className="text-3xl font-semibold tracking-tight text-[#1c1c20]">Queued</h1>
-                        <p className="mt-1 text-xl text-[#68686d]">A doctor will be assigned shortly</p>
-                    </div>
-                    <div className="ml-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#d9e8ff] text-[#0f66e8]">
-                        <Heart size={30} className="fill-current stroke-current" />
+                        <h1 className="text-lg font-semibold text-[#1b3f7a]">Queued</h1>
+                        <p className="text-sm text-[#2b58a2]">A doctor will be assigned shortly</p>
                     </div>
                 </div>
             </article>
 
-            <article className="overflow-hidden rounded-3xl border border-[#0f66e8] bg-[#0f66e8] md:grid md:grid-cols-[1.45fr_1fr]">
-                <div className="relative min-h-[220px] bg-[linear-gradient(135deg,#2f2f35,#838388)]">
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_10%_15%,rgba(15,102,232,0.45),transparent_40%)]" />
-                    <div className="absolute left-6 top-1/2 -translate-y-1/2 text-white text-6xl font-light tracking-tight">
-                        doccy
-                    </div>
-                </div>
-                <div className="p-5 md:p-6">
-                    <p className="text-2xl md:text-3xl font-semibold tracking-tight text-white leading-tight">
-                        Upgrade to jump to the front of the queue.
-                    </p>
-                    <button
-                        type="button"
-                        className="mt-6 inline-flex h-16 w-full items-center justify-between rounded-2xl bg-white px-5 text-2xl font-semibold text-[#0f66e8]"
-                    >
-                        Skip the queue
-                        <ArrowLeft size={28} className="rotate-180" />
-                    </button>
-                </div>
-            </article>
-
-            <article className="overflow-hidden rounded-3xl border border-[#d7d7db] bg-[#f6f6f7]">
-                {detailRows.map((row, index) => {
+            <article className={sectionCardClassName('overflow-hidden')}>
+                {rows.map((row, index) => {
                     const Icon = row.icon;
                     return (
-                        <div key={row.label} className={`flex items-center gap-3 px-5 py-4 ${index > 0 ? 'border-t border-[#dfdfe3]' : ''}`}>
-                            <Icon size={23} className="text-[#a0a0a5]" />
-                            <span className="text-xl text-[#95959b]">{row.label}</span>
-                            <span className="ml-auto text-2xl font-semibold text-[#3c3c40]">{row.value}</span>
+                        <div key={row.label} className={`flex items-center gap-3 px-4 py-3 ${index > 0 ? 'border-t border-[#e1e9f7]' : ''}`}>
+                            <Icon size={16} className="text-[#8ca0c6]" />
+                            <span className="text-sm text-[#6d7f9f]">{row.label}</span>
+                            <span className="ml-auto text-sm font-semibold text-[#1f355f]">{row.value}</span>
                         </div>
                     );
                 })}
@@ -591,9 +1232,9 @@ function QueuedWaitingScreen({
             <button
                 type="button"
                 onClick={onSendMessage}
-                className="inline-flex h-16 w-full items-center justify-center gap-3 rounded-3xl bg-[#232428] text-2xl font-semibold text-white"
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#0f66e8] text-sm font-semibold text-white"
             >
-                <MessageCircle size={28} />
+                <MessageCircle size={16} />
                 Message Doctor
             </button>
         </section>
@@ -602,7 +1243,6 @@ function QueuedWaitingScreen({
 
 export default function PatientPortal() {
     const [mainTab, setMainTab] = useState<MainTab>('home');
-    const [accountTab, setAccountTab] = useState<AccountTab>('billing');
     const [portalScreen, setPortalScreen] = useState<PortalScreen>('main');
     const [lastMainTab, setLastMainTab] = useState<MainTab>('home');
     const [loading, setLoading] = useState(true);
@@ -613,8 +1253,26 @@ export default function PatientPortal() {
     });
     const [requests, setRequests] = useState<PortalRequest[]>([]);
     const [activeQueuedRequest, setActiveQueuedRequest] = useState<PortalRequest | null>(null);
+    const [recordTab, setRecordTab] = useState<RecordTab>('medical-history');
+    const [portalData, setPortalData] = useState<PortalProfileData>(createEmptyPortalData);
+    const [portalDataReady, setPortalDataReady] = useState(false);
 
     const token = useMemo(() => window.localStorage.getItem('onya_patient_token') || '', []);
+    const profileStorageKey = useMemo(() => {
+        const emailPart = (patient.email || 'guest').trim().toLowerCase() || 'guest';
+        return `onya_patient_profile:${emailPart}`;
+    }, [patient.email]);
+
+    useEffect(() => {
+        const saved = window.localStorage.getItem(profileStorageKey);
+        setPortalData(readPortalProfile(saved));
+        setPortalDataReady(true);
+    }, [profileStorageKey]);
+
+    useEffect(() => {
+        if (!portalDataReady) return;
+        window.localStorage.setItem(profileStorageKey, JSON.stringify(portalData));
+    }, [portalDataReady, portalData, profileStorageKey]);
 
     useEffect(() => {
         if (!token) {
@@ -695,9 +1353,7 @@ export default function PatientPortal() {
                 setPatient(patientProfile);
                 window.localStorage.setItem('onya_patient_email', patientProfile.email);
 
-                const items: PortalRequest[] = Array.isArray(requestsPayload?.requests)
-                    ? requestsPayload.requests
-                    : [];
+                const items: PortalRequest[] = Array.isArray(requestsPayload?.requests) ? requestsPayload.requests : [];
                 setRequests(items);
                 const firstQueued = items.find((item) => isQueuedStatus(item.status)) || null;
                 setActiveQueuedRequest(firstQueued);
@@ -723,11 +1379,7 @@ export default function PatientPortal() {
         };
     }, [token]);
 
-    const firstName = useMemo(() => {
-        const value = String(patient.fullName || '').trim();
-        return value ? value.split(' ')[0] : 'there';
-    }, [patient.fullName]);
-
+    const firstNameValue = useMemo(() => firstName(patient.fullName || ''), [patient.fullName]);
     const latestRequest = useMemo(() => (requests.length > 0 ? requests[0] : null), [requests]);
     const queuedRequest = useMemo(
         () => activeQueuedRequest || requests.find((item) => isQueuedStatus(item.status)) || null,
@@ -755,6 +1407,44 @@ export default function PatientPortal() {
         setPortalScreen('main');
     };
 
+    const addRecordEntry = (tab: RecordTab, title: string, details: string) => {
+        const entry: TextEntry = {
+            id: createId(),
+            title,
+            details,
+            createdAt: new Date().toISOString(),
+        };
+        setPortalData((current) => appendRecordEntry(current, tab, entry));
+    };
+
+    const addLifestyleNote = (title: string, details: string) => {
+        const entry: TextEntry = {
+            id: createId(),
+            title,
+            details,
+            createdAt: new Date().toISOString(),
+        };
+        setPortalData((current) => ({
+            ...current,
+            lifestyleNotes: [entry, ...current.lifestyleNotes],
+        }));
+    };
+
+    const addTestResult = (draft: TestResultDraft) => {
+        const entry: TestResultEntry = {
+            id: createId(),
+            name: draft.name,
+            summary: draft.summary,
+            testDate: draft.testDate,
+            fileName: draft.fileName,
+            createdAt: new Date().toISOString(),
+        };
+        setPortalData((current) => ({
+            ...current,
+            testResults: [entry, ...current.testResults],
+        }));
+    };
+
     const sendMessageToDoctor = async () => {
         if (!queuedRequest || !token) return;
         const message = window.prompt('Message for the doctor');
@@ -764,13 +1454,14 @@ export default function PatientPortal() {
             const { response, payload } = await fetchApiJson(
                 `/api/patient/requests/${encodeURIComponent(queuedRequest.id)}/message`,
                 {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({ message }),
-            });
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({ message }),
+                }
+            );
             if (!response.ok) {
                 throw new Error(payload.error || 'Unable to send message');
             }
@@ -780,11 +1471,51 @@ export default function PatientPortal() {
         }
     };
 
+    const renderPortalContent = (mode: LayoutMode) => {
+        if (portalScreen === 'call-prep') {
+            return <CallPrepScreen onBack={closeOverlayScreen} />;
+        }
+        if (portalScreen === 'queued') {
+            return (
+                <QueuedWaitingScreen
+                    request={queuedRequest}
+                    onBack={closeOverlayScreen}
+                    onSendMessage={sendMessageToDoctor}
+                />
+            );
+        }
+
+        if (mainTab === 'home') {
+            return (
+                <HomeTab
+                    mode={mode}
+                    firstNameValue={firstNameValue}
+                    requests={requests}
+                    queuedRequest={queuedRequest}
+                    patient={patient}
+                    data={portalData}
+                    recordTab={recordTab}
+                    onRecordTabChange={setRecordTab}
+                    onAddRecordEntry={addRecordEntry}
+                    onAddLifestyleNote={addLifestyleNote}
+                    onAddTestResult={addTestResult}
+                    onOpenQueue={openQueuedScreen}
+                />
+            );
+        }
+
+        if (mainTab === 'consult') {
+            return <ConsultTab onOpenCall={openCallScreen} />;
+        }
+
+        return <AccountTab patient={patient} latestRequest={latestRequest} data={portalData} />;
+    };
+
     if (loading) {
         return (
-            <div className="min-h-screen bg-[#e8f1ff] text-[#1f1f23] px-4 py-8 font-sans">
+            <div className="min-h-screen bg-[#e8f1ff] px-4 py-8 font-sans text-[#1f1f23]">
                 <div className="mx-auto max-w-[900px] rounded-3xl border border-[#cfdcf2] bg-white p-6">
-                    <p className="text-lg text-[#5e6980]">Loading your patient account...</p>
+                    <p className="text-sm text-[#5e6980]">Loading your patient account...</p>
                 </div>
             </div>
         );
@@ -792,7 +1523,7 @@ export default function PatientPortal() {
 
     if (loadError) {
         return (
-            <div className="min-h-screen bg-[#e8f1ff] text-[#1f1f23] px-4 py-8 font-sans">
+            <div className="min-h-screen bg-[#e8f1ff] px-4 py-8 font-sans text-[#1f1f23]">
                 <div className="mx-auto max-w-[900px] rounded-3xl border border-[#cfdcf2] bg-white p-6">
                     <h1 className="text-2xl font-semibold text-[#162848]">Unable to load account</h1>
                     <p className="mt-2 text-[#5e6980]">{loadError}</p>
@@ -817,39 +1548,28 @@ export default function PatientPortal() {
     }
 
     return (
-        <div className="min-h-screen bg-[#e8f1ff] pb-[230px] text-[#1f1f23] font-sans">
-            <div className="mx-auto w-full max-w-[900px] px-4 pt-6 md:px-6 md:pt-8">
-                {portalScreen === 'main' && (
-                    <>
-                        {mainTab === 'home' && <HomeTab firstName={firstName} latestRequest={latestRequest} />}
-                        {mainTab === 'consult' && <ConsultTab onOpenCall={openCallScreen} />}
-                        {mainTab === 'account' && (
-                            <section className="space-y-5">
-                                <AccountHeader
-                                    active={accountTab}
-                                    onChange={setAccountTab}
-                                    email={patient.email}
-                                    fullName={patient.fullName}
-                                />
-                                {accountTab === 'billing' && <BillingPanel latestRequest={latestRequest} />}
-                                {accountTab === 'profile' && <ProfilePanel />}
-                                {accountTab === 'activity' && <ActivityPanel latestRequest={latestRequest} />}
-                            </section>
+        <>
+            <div className="hidden min-h-screen bg-[#e8f1ff] text-[#1f1f23] md:flex">
+                <DesktopSidebar activeTab={mainTab} onTabChange={setTab} patient={patient} />
+                <main className="flex-1">
+                    <div className="mx-auto w-full max-w-[1160px] px-8 py-7">
+                        {portalScreen === 'main' && (
+                            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#d5e2f8] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#62779f]">
+                                <Home size={14} />
+                                {MAIN_TABS.find((tab) => tab === mainTab)?.toUpperCase()}
+                            </div>
                         )}
-                    </>
-                )}
-
-                {portalScreen === 'call-prep' && <CallPrepScreen onBack={closeOverlayScreen} />}
-                {portalScreen === 'queued' && (
-                    <QueuedWaitingScreen
-                        request={queuedRequest}
-                        onSendMessage={sendMessageToDoctor}
-                    />
-                )}
+                        {renderPortalContent('desktop')}
+                    </div>
+                </main>
             </div>
 
-            {portalScreen === 'main' && queuedRequest && <QueueBanner onTap={openQueuedScreen} />}
-            {portalScreen === 'main' && <BottomNav tab={mainTab} onChange={setTab} />}
-        </div>
+            <div className={`min-h-screen bg-[#e8f1ff] text-[#1f1f23] md:hidden ${portalScreen === 'main' ? 'pb-28' : 'pb-6'}`}>
+                <MobileTopBar activeTab={mainTab} />
+                <main className="px-4 py-5">{renderPortalContent('mobile')}</main>
+                {portalScreen === 'main' && queuedRequest && <QueueBanner onTap={openQueuedScreen} />}
+                {portalScreen === 'main' && <MobileBottomNav activeTab={mainTab} onTabChange={setTab} />}
+            </div>
+        </>
     );
 }

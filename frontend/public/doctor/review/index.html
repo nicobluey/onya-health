@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Certificate Review - Onya Health</title>
+    <style>
+      body { font-family: Inter, Arial, sans-serif; margin: 0; background: #eef5ff; color: #12243f; }
+      header { padding: 18px 24px; border-bottom: 1px solid #cfe0ff; background: #fff; display: flex; justify-content: space-between; align-items: center; }
+      main { max-width: 980px; margin: 24px auto; padding: 0 16px; }
+      .panel { background: #fff; border: 1px solid #d6e4ff; border-radius: 14px; padding: 18px; margin-bottom: 14px; }
+      .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+      .label { font-size: 12px; text-transform: uppercase; color: #5d78a6; letter-spacing: 0.08em; margin-bottom: 4px; }
+      .value { font-weight: 600; }
+      textarea { width: 100%; min-height: 140px; border: 1px solid #c4d8ff; border-radius: 10px; padding: 10px; box-sizing: border-box; }
+      .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+      button { border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 700; cursor: pointer; }
+      .approve { background: #0f9f6e; color: #fff; }
+      .deny { background: #d94848; color: #fff; }
+      .secondary { border: 1px solid #c4d8ff; background: #fff; color: #12356a; }
+      .orange { background: #f59e0b; color: #fff; }
+      button:disabled { opacity: 0.6; cursor: not-allowed; }
+      .status { margin-top: 12px; font-size: 13px; min-height: 18px; }
+      .muted { color: #617da9; }
+      .success { color: #106d44; }
+      .error { color: #b3122f; }
+      iframe { width: 100%; min-height: 640px; border: 1px solid #c9dcff; border-radius: 10px; background: #fff; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1 style="margin:0;font-size:24px">Certificate Review</h1>
+      <button class="secondary" onclick="window.location.href='/doctor/queue'">Back to Queue</button>
+    </header>
+    <main>
+      <div id="content" class="panel">Loading certificate...</div>
+      <div class="panel">
+        <label class="label" for="notes">Doctor Notes</label>
+        <textarea id="notes" placeholder="Add your clinical review notes here..."></textarea>
+        <div class="actions">
+          <button id="auto-notes" class="secondary">AI summary</button>
+          <button id="more-info" class="orange">Send more info request</button>
+          <button id="preview-pdf" class="secondary">Preview PDF</button>
+          <button id="approve" class="approve">Approve & Send Certificate</button>
+          <button id="deny" class="deny">Deny Request</button>
+        </div>
+        <div id="status" class="status muted"></div>
+      </div>
+      <div id="preview-panel" class="panel" style="display:none">
+        <div class="label">PDF Preview</div>
+        <iframe id="preview-frame" title="PDF preview"></iframe>
+      </div>
+    </main>
+    <script>
+      const token = localStorage.getItem('onyaDoctorToken');
+      if (!token) {
+        window.location.href = '/doctor/login';
+      }
+
+      const params = new URLSearchParams(window.location.search);
+      const id = params.get('id');
+      const contentNode = document.getElementById('content');
+      const statusNode = document.getElementById('status');
+      const notesNode = document.getElementById('notes');
+      const previewPanel = document.getElementById('preview-panel');
+      const previewFrame = document.getElementById('preview-frame');
+
+      const buttonIds = ['auto-notes', 'more-info', 'preview-pdf', 'approve', 'deny'];
+      const actionButtons = buttonIds.map((buttonId) => document.getElementById(buttonId));
+      let previewObjectUrl = null;
+      let currentStatus = null;
+
+      if (!id) {
+        contentNode.textContent = 'Missing certificate ID.';
+      }
+
+      function formatReasons(reasons) {
+        if (!reasons || !reasons.length) return 'No additional flags';
+        return reasons.join(', ');
+      }
+
+      function isOpenStatus(status) {
+        const value = String(status || '').toLowerCase();
+        return ['pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(value);
+      }
+
+      function setBusy(isBusy) {
+        actionButtons.forEach((button) => {
+          button.disabled = isBusy;
+        });
+      }
+
+      function setStatus(message, tone) {
+        statusNode.textContent = message;
+        statusNode.className = 'status';
+        if (tone === 'success') {
+          statusNode.classList.add('success');
+          return;
+        }
+        if (tone === 'error') {
+          statusNode.classList.add('error');
+          return;
+        }
+        statusNode.classList.add('muted');
+      }
+
+      function disableDecisionButtons() {
+        document.getElementById('approve').disabled = true;
+        document.getElementById('deny').disabled = true;
+      }
+
+      async function loadCertificate() {
+        const response = await fetch(`/api/doctor/certificates/${encodeURIComponent(id)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          contentNode.textContent = payload.error || 'Failed to load certificate';
+          return;
+        }
+
+        const cert = payload.certificate;
+        currentStatus = cert.status;
+        if (cert.decision?.notes) {
+          notesNode.value = cert.decision.notes;
+        }
+
+        contentNode.innerHTML = `
+          <div class="grid">
+            <div><div class="label">Patient</div><div class="value">${cert.patientName || '-'}</div></div>
+            <div><div class="label">Email</div><div class="value">${cert.patientEmail || '-'}</div></div>
+            <div><div class="label">Purpose</div><div class="value">${cert.purpose || '-'}</div></div>
+            <div><div class="label">Symptom</div><div class="value">${cert.symptom || '-'}</div></div>
+            <div><div class="label">Start Date</div><div class="value">${cert.startDate}</div></div>
+            <div><div class="label">Duration</div><div class="value">${cert.durationDays} day(s)</div></div>
+            <div><div class="label">Risk</div><div class="value">${String(cert.risk.level || '').toUpperCase()} (${cert.risk.score})</div></div>
+            <div><div class="label">Risk Notes</div><div class="value">${formatReasons(cert.risk.reasons)}</div></div>
+          </div>
+          <div style="margin-top:14px">
+            <div class="label">Prefilled Certificate Summary</div>
+            <div class="value">${cert.description || 'No summary provided.'}</div>
+          </div>
+        `;
+
+        if (!isOpenStatus(cert.status)) {
+          disableDecisionButtons();
+          setStatus(`This certificate is already ${cert.status}.`, 'error');
+        }
+      }
+
+      async function submitDecision(decision) {
+        if (!isOpenStatus(currentStatus)) {
+          setStatus(`This certificate is already ${currentStatus}.`, 'error');
+          return;
+        }
+
+        setStatus('Submitting decision...', 'muted');
+        setBusy(true);
+
+        try {
+          const response = await fetch(`/api/doctor/certificates/${encodeURIComponent(id)}/decision`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              decision,
+              notes: notesNode.value,
+            }),
+          });
+
+          const payload = await response.json();
+          if (!response.ok) {
+            const reviewedStatus = payload.status ? ` (${payload.status})` : '';
+            throw new Error((payload.error || 'Failed to submit decision') + reviewedStatus);
+          }
+
+          currentStatus = payload?.certificate?.status || decision;
+          setStatus(payload.message, 'success');
+          disableDecisionButtons();
+        } catch (error) {
+          setStatus(error.message || 'Failed to submit decision.', 'error');
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function autoGenerateNotes() {
+        setStatus('Generating doctor notes...', 'muted');
+        setBusy(true);
+        try {
+          const response = await fetch(`/api/doctor/certificates/${encodeURIComponent(id)}/auto-notes`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ currentNotes: notesNode.value }),
+          });
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload.error || 'Failed to generate notes');
+          }
+          notesNode.value = payload.notes || notesNode.value;
+          setStatus('Doctor notes generated.', 'success');
+        } catch (error) {
+          setStatus(error.message || 'Failed to generate notes.', 'error');
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function addMoreInfoDraft() {
+        setStatus('Sending more-info request to patient...', 'muted');
+        setBusy(true);
+        try {
+          let notes = notesNode.value.trim();
+          if (!notes) {
+            const autoResponse = await fetch(`/api/doctor/certificates/${encodeURIComponent(id)}/auto-notes`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({}),
+            });
+            const autoPayload = await autoResponse.json();
+            if (autoResponse.ok && autoPayload.notes) {
+              notes = autoPayload.notes;
+              notesNode.value = notes;
+            }
+          }
+
+          const response = await fetch(`/api/doctor/certificates/${encodeURIComponent(id)}/request-more-info`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ notes }),
+          });
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload.error || 'Failed to send more-info request');
+          }
+          currentStatus = payload?.certificate?.status || 'in_review';
+          setStatus(payload.message || 'More information request sent.', 'success');
+        } catch (error) {
+          setStatus(error.message || 'Failed to send more-info request.', 'error');
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function previewPdf() {
+        setStatus('Generating PDF preview...', 'muted');
+        setBusy(true);
+        try {
+          const response = await fetch(`/api/doctor/certificates/${encodeURIComponent(id)}/pdf-preview`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ notes: notesNode.value }),
+          });
+
+          if (!response.ok) {
+            let payload = {};
+            try {
+              payload = await response.json();
+            } catch {
+              payload = {};
+            }
+            throw new Error(payload.error || 'Failed to generate PDF preview');
+          }
+
+          const pdfBlob = await response.blob();
+          if (previewObjectUrl) {
+            URL.revokeObjectURL(previewObjectUrl);
+          }
+          previewObjectUrl = URL.createObjectURL(pdfBlob);
+          previewFrame.src = previewObjectUrl;
+          previewPanel.style.display = 'block';
+          setStatus('Preview generated.', 'success');
+        } catch (error) {
+          setStatus(error.message || 'Failed to generate PDF preview.', 'error');
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      document.getElementById('approve').addEventListener('click', () => submitDecision('approved'));
+      document.getElementById('deny').addEventListener('click', () => submitDecision('denied'));
+      document.getElementById('auto-notes').addEventListener('click', autoGenerateNotes);
+      document.getElementById('more-info').addEventListener('click', addMoreInfoDraft);
+      document.getElementById('preview-pdf').addEventListener('click', previewPdf);
+
+      loadCertificate().catch(() => {
+        contentNode.textContent = 'Failed to load certificate.';
+      });
+    </script>
+  </body>
+</html>
