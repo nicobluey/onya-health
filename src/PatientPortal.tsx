@@ -25,6 +25,7 @@ import {
     FileText,
     CalendarDays,
 } from 'lucide-react';
+import { fetchApiJson } from './lib/api';
 
 type MainTab = 'home' | 'consult' | 'account';
 type AccountTab = 'activity' | 'profile' | 'billing';
@@ -52,10 +53,6 @@ interface PatientProfile {
     email: string;
     dob?: string;
     phone?: string;
-}
-
-function getApiBase() {
-    return (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
 }
 
 function isQueuedStatus(status: string) {
@@ -622,12 +619,12 @@ export default function PatientPortal() {
                 const headers = {
                     Authorization: `Bearer ${token}`,
                 };
-                const apiBase = getApiBase();
-
-                const [meRes, requestsRes] = await Promise.all([
-                    fetch(`${apiBase}/api/patient/me`, { headers }),
-                    fetch(`${apiBase}/api/patient/requests`, { headers }),
+                const [meResult, requestsResult] = await Promise.all([
+                    fetchApiJson('/api/patient/me', { headers }),
+                    fetchApiJson('/api/patient/requests', { headers }),
                 ]);
+                const meRes = meResult.response;
+                const requestsRes = requestsResult.response;
 
                 if (meRes.status === 401 || requestsRes.status === 401) {
                     window.localStorage.removeItem('onya_patient_token');
@@ -635,8 +632,8 @@ export default function PatientPortal() {
                     return;
                 }
 
-                const mePayload = await meRes.json();
-                const requestsPayload = await requestsRes.json();
+                const mePayload = meResult.payload;
+                const requestsPayload = requestsResult.payload;
 
                 if (!meRes.ok) {
                     throw new Error(mePayload.error || 'Unable to load patient account');
@@ -708,7 +705,9 @@ export default function PatientPortal() {
         if (!message || !message.trim()) return;
 
         try {
-            const response = await fetch(`${getApiBase()}/api/patient/requests/${encodeURIComponent(queuedRequest.id)}/message`, {
+            const { response, payload } = await fetchApiJson(
+                `/api/patient/requests/${encodeURIComponent(queuedRequest.id)}/message`,
+                {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -716,7 +715,6 @@ export default function PatientPortal() {
                 },
                 body: JSON.stringify({ message }),
             });
-            const payload = await response.json();
             if (!response.ok) {
                 throw new Error(payload.error || 'Unable to send message');
             }

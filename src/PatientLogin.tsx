@@ -1,12 +1,9 @@
 import { useState } from 'react';
 import { ArrowRight, Lock, Mail } from 'lucide-react';
+import { fetchApiJson } from './lib/api';
 
 const DEMO_EMAIL = 'john@gmail.com';
 const DEMO_DOB = '2000-06-14';
-
-function getApiBase() {
-    return (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
-}
 
 export default function PatientLogin() {
     const [email, setEmail] = useState(DEMO_EMAIL);
@@ -30,7 +27,7 @@ export default function PatientLogin() {
 
         try {
             setLoading(true);
-            const response = await fetch(`${getApiBase()}/api/patient/login`, {
+            const { response, payload } = await fetchApiJson('/api/patient/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -38,7 +35,6 @@ export default function PatientLogin() {
                     dob,
                 }),
             });
-            const payload = await response.json();
             if (!response.ok) {
                 throw new Error(payload.error || 'Unable to log in right now');
             }
