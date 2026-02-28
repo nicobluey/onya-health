@@ -808,7 +808,9 @@ async function authenticateDoctorViaSupabase(email, password) {
 
 function parseApiRoute(req) {
   const url = new URL(req.url || '/api', getRequestBaseUrl(req));
-  const routePath = url.pathname.replace(/^\/api\/?/, '').replace(/\/+$/, '');
+  const forcedPath = String(url.searchParams.get('__route') || '').replace(/^\/+/, '').replace(/\/+$/, '');
+  const directPath = url.pathname.replace(/^\/api\/?/, '').replace(/\/+$/, '');
+  const routePath = (forcedPath || directPath).replace(/^index\/?/, '');
   const segments = routePath ? routePath.split('/').filter(Boolean) : [];
   return { url, routePath, segments };
 }
