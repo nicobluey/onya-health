@@ -139,7 +139,6 @@ function mapSupabaseRowToCertificate(row) {
 
 function toSupabaseRequestStatus(status) {
   if (status === 'pending') return 'submitted';
-  if (status === 'awaiting_payment') return 'submitted';
   return status;
 }
 

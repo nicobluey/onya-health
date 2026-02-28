@@ -216,8 +216,6 @@ async function createStripeCheckoutSession({ certificate, body, pricing }) {
   params.set('line_items[0][price_data][currency]', 'aud');
   params.set('line_items[0][price_data][unit_amount]', String(pricing.unitAmount));
   params.set('line_items[0][price_data][product]', pricing.productId);
-  params.set('line_items[0][price_data][product_data][name]', pricing.displayName);
-  params.set('line_items[0][price_data][product_data][description]', pricing.description);
   params.set('metadata[certificate_id]', certificate.id);
   params.set('metadata[patient_email]', certificate.certificateDraft.email || '');
   params.set('metadata[service_type]', certificate.serviceType || 'doctor');
