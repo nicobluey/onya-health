@@ -77,7 +77,17 @@ function mapSupabaseRowToCertificate(row) {
   const med = row.medical_certificate_requests || {};
 
   const createdAt = row.submitted_at || row.created_at || new Date().toISOString();
-  const status = row.status || 'submitted';
+  const rawSubmission = med.raw_submission || null;
+  let status = row.status || 'submitted';
+  // Supabase enum may not include "awaiting_payment"; infer it from payment metadata.
+  if (
+    status === 'submitted' &&
+    rawSubmission?.payment?.provider === 'stripe' &&
+    rawSubmission?.payment?.status &&
+    rawSubmission.payment.status !== 'paid'
+  ) {
+    status = 'awaiting_payment';
+  }
   const durationDays =
     med.days_requested ||
     (med.certificate_start_date && med.certificate_end_date
@@ -116,7 +126,7 @@ function mapSupabaseRowToCertificate(row) {
       startDate: med.certificate_start_date || createdAt.split('T')[0],
       durationDays,
     },
-    rawSubmission: med.raw_submission || null,
+    rawSubmission,
     decision: hasDecisionData
       ? {
           by: row.assigned_provider_id || 'provider',
@@ -129,6 +139,7 @@ function mapSupabaseRowToCertificate(row) {
 
 function toSupabaseRequestStatus(status) {
   if (status === 'pending') return 'submitted';
+  if (status === 'awaiting_payment') return 'submitted';
   return status;
 }
 
