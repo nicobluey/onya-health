@@ -307,6 +307,9 @@ export const CheckoutStep = () => {
             if (payload?.patientToken) {
                 window.localStorage.setItem('onya_patient_token', payload.patientToken);
             }
+            if (payload?.sessionId) {
+                window.localStorage.setItem('onya_last_checkout_session_id', payload.sessionId);
+            }
 
             if (payload?.checkoutUrl) {
                 window.location.assign(payload.checkoutUrl);

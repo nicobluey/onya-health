@@ -57,7 +57,17 @@ interface PatientProfile {
 
 function isQueuedStatus(status: string) {
     const normalized = String(status || '').toLowerCase();
-    return ['pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(normalized);
+    return ['awaiting_payment', 'pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(normalized);
+}
+
+function statusLabel(status: string) {
+    const normalized = String(status || '').toLowerCase();
+    if (normalized === 'awaiting_payment') return 'Awaiting payment confirmation';
+    if (['pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(normalized)) return 'Pending doctor review';
+    if (normalized === 'approved') return 'Approved and issued';
+    if (normalized === 'denied') return 'Not approved';
+    if (!normalized) return 'No active request';
+    return normalized.replace(/_/g, ' ');
 }
 
 function formatDate(value?: string | null) {
@@ -159,19 +169,19 @@ function QueueBanner({ onTap }: { onTap: () => void }) {
         <button
             type="button"
             onClick={onTap}
-            className="fixed bottom-28 left-0 right-0 z-40 border border-[#b6dc79] bg-[#e9f2d6] py-4 text-left"
+            className="fixed bottom-28 left-0 right-0 z-40 border border-[#b7cdf4] bg-[#eaf2ff] py-4 text-left"
         >
             <div className="mx-auto flex w-full max-w-[900px] items-center gap-5 px-4 md:px-6">
-                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-[#d9edbb] text-[#59a400]">
+                <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-[#d9e8ff] text-[#0f66e8]">
                     <Heart size={34} className="fill-current stroke-current" />
                 </div>
                 <div className="min-w-0">
-                    <p className="text-xl md:text-2xl font-semibold tracking-tight leading-none text-[#365b1d]">
+                    <p className="text-xl md:text-2xl font-semibold tracking-tight leading-none text-[#123a7d]">
                         You&apos;re in the queue
                     </p>
-                    <p className="mt-2 text-xl md:text-2xl text-[#5aa000] leading-none">Tap to view</p>
+                    <p className="mt-2 text-xl md:text-2xl text-[#0f66e8] leading-none">Tap to view</p>
                 </div>
-                <ChevronRight size={36} className="ml-auto text-[#5aa000]" />
+                <ChevronRight size={36} className="ml-auto text-[#0f66e8]" />
             </div>
         </button>
     );
@@ -193,9 +203,9 @@ function HomeTab({
 
             <div>
                 <h2 className="text-3xl md:text-4xl font-semibold tracking-tight text-[#18181d]">Previous Consults</h2>
-                <article className="mt-4 rounded-3xl border border-[#d8d8dc] bg-[#f6f6f7] p-5">
+                <article className="mt-4 rounded-3xl border border-[#cfdcf2] bg-white p-5">
                     <div className="flex items-center justify-between">
-                        <div className="inline-flex items-center gap-2 text-[#69b700]">
+                        <div className="inline-flex items-center gap-2 text-[#0f66e8]">
                             <Stethoscope size={23} />
                             <span className="text-base md:text-lg font-semibold leading-none">
                                 {latestRequest && isQueuedStatus(latestRequest.status) ? 'Active' : 'Completed'}
@@ -209,7 +219,7 @@ function HomeTab({
                         {latestRequest?.serviceType === 'doctor' ? 'Medical Certificate' : (latestRequest?.serviceType || 'Consult')}
                     </h3>
                     <p className="text-lg md:text-xl text-[#737378] leading-none mt-2">
-                        {latestRequest ? (isQueuedStatus(latestRequest.status) ? 'Unassigned' : latestRequest.status) : 'No consults yet'}
+                        {latestRequest ? statusLabel(latestRequest.status) : 'No consults yet'}
                     </p>
                 </article>
             </div>
@@ -253,24 +263,24 @@ function ConsultTab({ onOpenCall }: { onOpenCall: () => void }) {
                             key={option.id}
                             onClick={option.id === 'medical-certificate' ? onOpenCall : undefined}
                             className={`rounded-3xl border p-5 ${option.active
-                                ? 'border-[#b6dc79] bg-[#f4faeb]'
+                                ? 'border-[#b7cdf4] bg-white'
                                 : 'border-[#d8d8dc] bg-[#f6f6f7]'
                                 } ${option.id === 'medical-certificate' ? 'cursor-pointer' : ''}`}
                         >
                             <div className="flex items-start gap-4">
-                                <Icon size={38} className={option.active ? 'text-[#5aa000]' : 'text-[#a0a0a5]'} />
+                                <Icon size={38} className={option.active ? 'text-[#0f66e8]' : 'text-[#a0a0a5]'} />
                                 <div className="min-w-0">
-                                    <h2 className={`text-2xl md:text-3xl font-semibold tracking-tight ${option.active ? 'text-[#3f6f10]' : 'text-[#1f1f24]'}`}>
+                                    <h2 className={`text-2xl md:text-3xl font-semibold tracking-tight ${option.active ? 'text-[#123a7d]' : 'text-[#1f1f24]'}`}>
                                         {option.title}
                                     </h2>
-                                    <p className={`mt-1 text-xl md:text-2xl leading-tight ${option.active ? 'text-[#5aa000]' : 'text-[#6f6f73]'}`}>
+                                    <p className={`mt-1 text-xl md:text-2xl leading-tight ${option.active ? 'text-[#0f66e8]' : 'text-[#6f6f73]'}`}>
                                         {option.subtitle}
                                     </p>
                                 </div>
                                 {option.badge ? (
                                     <span
                                         className={`ml-auto shrink-0 rounded-full px-3 py-1 text-xs font-semibold ${option.active
-                                            ? 'bg-[#deefbd] text-[#3f6f10]'
+                                            ? 'bg-[#deebff] text-[#123a7d]'
                                             : 'bg-[#d9d9dc] text-[#57575c]'
                                             }`}
                                     >
@@ -396,7 +406,7 @@ function ProfilePanel() {
                     <p className="text-xl md:text-2xl text-[#707075] leading-none">Gender</p>
                     <div className="mt-4 grid grid-cols-3 gap-2">
                         <button className="h-16 rounded-2xl bg-[#e8e8ea] text-xl md:text-2xl font-semibold text-[#56565c]">Male</button>
-                        <button className="h-16 rounded-2xl border-2 border-[#72c100] bg-[#eef7df] text-xl md:text-2xl font-semibold text-[#4c8d00]">Female</button>
+                        <button className="h-16 rounded-2xl border-2 border-[#0f66e8] bg-[#eaf2ff] text-xl md:text-2xl font-semibold text-[#123a7d]">Female</button>
                         <button className="h-16 rounded-2xl bg-[#e8e8ea] text-xl md:text-2xl font-semibold text-[#56565c]">Other</button>
                     </div>
                 </div>
@@ -414,7 +424,7 @@ function ActivityPanel({
         <section className="space-y-4">
             <article className="rounded-3xl border border-[#d8d8dc] bg-[#f6f6f7] p-5">
                 <div className="flex items-center justify-between">
-                    <p className="inline-flex items-center gap-2 text-base md:text-lg font-semibold text-[#69b700]">
+                    <p className="inline-flex items-center gap-2 text-base md:text-lg font-semibold text-[#0f66e8]">
                         <Stethoscope size={22} />
                         {latestRequest && isQueuedStatus(latestRequest.status) ? 'In queue' : 'Reviewed'}
                     </p>
@@ -424,16 +434,16 @@ function ActivityPanel({
                 </div>
                 <h2 className="mt-4 text-2xl md:text-3xl font-semibold tracking-tight text-[#1e1e23]">Medical Certificate</h2>
                 <p className="mt-1 text-lg md:text-xl text-[#737378] leading-none">
-                    {latestRequest ? (isQueuedStatus(latestRequest.status) ? 'Awaiting doctor assignment' : latestRequest.status) : 'No active request'}
+                    {latestRequest ? statusLabel(latestRequest.status) : 'No active request'}
                 </p>
             </article>
 
             <article className="rounded-3xl border border-[#d8d8dc] bg-[#f6f6f7] p-5">
                 <h3 className="text-xl md:text-2xl font-semibold text-[#1e1e23]">What happens next</h3>
                 <ul className="mt-4 space-y-3 text-base md:text-lg text-[#646469] leading-tight">
-                    <li className="flex items-center gap-2"><CheckCircle2 size={22} className="text-[#69b700]" /> Payment confirmed</li>
-                    <li className="flex items-center gap-2"><Clock3 size={22} className="text-[#69b700]" /> Queue position updates</li>
-                    <li className="flex items-center gap-2"><NotebookPen size={22} className="text-[#69b700]" /> Certificate delivery by email</li>
+                    <li className="flex items-center gap-2"><CheckCircle2 size={22} className="text-[#0f66e8]" /> Payment confirmed</li>
+                    <li className="flex items-center gap-2"><Clock3 size={22} className="text-[#0f66e8]" /> Queue position updates</li>
+                    <li className="flex items-center gap-2"><NotebookPen size={22} className="text-[#0f66e8]" /> Certificate delivery by email</li>
                 </ul>
             </article>
         </section>
@@ -444,8 +454,8 @@ function CallPrepScreen({ onBack }: { onBack: () => void }) {
     return (
         <section className="space-y-5">
             <div className="grid grid-cols-3 gap-3">
-                <div className="h-2 rounded-full bg-[#72c100]" />
-                <div className="h-2 rounded-full bg-[#72c100]" />
+                <div className="h-2 rounded-full bg-[#0f66e8]" />
+                <div className="h-2 rounded-full bg-[#0f66e8]" />
                 <div className="h-2 rounded-full bg-[#d9d9dc]" />
             </div>
 
@@ -469,7 +479,7 @@ function CallPrepScreen({ onBack }: { onBack: () => void }) {
                     const Icon = item.icon;
                     return (
                         <div key={item.text} className={`flex items-center gap-3 px-4 py-4 ${index > 0 ? 'border-t border-[#dfdfe3]' : ''}`}>
-                            <Icon size={26} className="text-[#61a700]" />
+                            <Icon size={26} className="text-[#0f66e8]" />
                             <p className="text-2xl md:text-3xl text-[#56565b] leading-none">{item.text}</p>
                         </div>
                     );
@@ -527,26 +537,26 @@ function QueuedWaitingScreen({
     return (
         <section className="space-y-5">
             <div className="grid grid-cols-3 gap-3">
-                <div className="h-2 rounded-full bg-[#72c100]" />
-                <div className="h-2 rounded-full bg-[#72c100]" />
-                <div className="h-2 rounded-full bg-[#72c100]" />
+                <div className="h-2 rounded-full bg-[#0f66e8]" />
+                <div className="h-2 rounded-full bg-[#0f66e8]" />
+                <div className="h-2 rounded-full bg-[#0f66e8]" />
             </div>
 
-            <article className="rounded-3xl border border-[#b6dc79] bg-[#eef4df] px-5 py-5">
+            <article className="rounded-3xl border border-[#b7cdf4] bg-[#eaf2ff] px-5 py-5">
                 <div className="flex items-center gap-3">
                     <div className="min-w-0">
                         <h1 className="text-3xl font-semibold tracking-tight text-[#1c1c20]">Queued</h1>
                         <p className="mt-1 text-xl text-[#68686d]">A doctor will be assigned shortly</p>
                     </div>
-                    <div className="ml-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#d8ecb8] text-[#59a400]">
+                    <div className="ml-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#d9e8ff] text-[#0f66e8]">
                         <Heart size={30} className="fill-current stroke-current" />
                     </div>
                 </div>
             </article>
 
-            <article className="overflow-hidden rounded-3xl border border-[#7ec800] bg-[#7ad200] md:grid md:grid-cols-[1.45fr_1fr]">
+            <article className="overflow-hidden rounded-3xl border border-[#0f66e8] bg-[#0f66e8] md:grid md:grid-cols-[1.45fr_1fr]">
                 <div className="relative min-h-[220px] bg-[linear-gradient(135deg,#2f2f35,#838388)]">
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_10%_15%,rgba(121,210,0,0.45),transparent_40%)]" />
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_10%_15%,rgba(15,102,232,0.45),transparent_40%)]" />
                     <div className="absolute left-6 top-1/2 -translate-y-1/2 text-white text-6xl font-light tracking-tight">
                         doccy
                     </div>
@@ -557,7 +567,7 @@ function QueuedWaitingScreen({
                     </p>
                     <button
                         type="button"
-                        className="mt-6 inline-flex h-16 w-full items-center justify-between rounded-2xl bg-white px-5 text-2xl font-semibold text-[#4e8b00]"
+                        className="mt-6 inline-flex h-16 w-full items-center justify-between rounded-2xl bg-white px-5 text-2xl font-semibold text-[#0f66e8]"
                     >
                         Skip the queue
                         <ArrowLeft size={28} className="rotate-180" />
@@ -612,9 +622,41 @@ export default function PatientPortal() {
             return;
         }
 
-        const fetchPortalData = async () => {
-            setLoading(true);
-            setLoadError('');
+        let disposed = false;
+
+        const confirmCheckoutIfPresent = async () => {
+            const url = new URL(window.location.href);
+            const checkout = url.searchParams.get('checkout');
+            const sessionId =
+                url.searchParams.get('session_id') ||
+                window.localStorage.getItem('onya_last_checkout_session_id');
+            if (checkout !== 'success' || !sessionId) {
+                return;
+            }
+
+            try {
+                await fetchApiJson(`/api/checkout/confirm?session_id=${encodeURIComponent(sessionId)}`, {
+                    method: 'POST',
+                });
+            } catch {
+                // Keep polling for status updates even if confirmation fails once.
+            } finally {
+                window.localStorage.removeItem('onya_last_checkout_session_id');
+                url.searchParams.delete('checkout');
+                url.searchParams.delete('session_id');
+                const nextSearch = url.searchParams.toString();
+                const nextUrl = `${url.pathname}${nextSearch ? `?${nextSearch}` : ''}${url.hash || ''}`;
+                window.history.replaceState({}, '', nextUrl);
+            }
+        };
+
+        const fetchPortalData = async (silent = false) => {
+            if (!silent) {
+                setLoading(true);
+                setLoadError('');
+                await confirmCheckoutIfPresent();
+            }
+
             try {
                 const headers = {
                     Authorization: `Bearer ${token}`,
@@ -642,6 +684,8 @@ export default function PatientPortal() {
                     throw new Error(requestsPayload.error || 'Unable to load patient requests');
                 }
 
+                if (disposed) return;
+
                 const patientProfile: PatientProfile = {
                     fullName: mePayload?.patient?.fullName || 'Patient',
                     email: mePayload?.patient?.email || window.localStorage.getItem('onya_patient_email') || '',
@@ -658,13 +702,25 @@ export default function PatientPortal() {
                 const firstQueued = items.find((item) => isQueuedStatus(item.status)) || null;
                 setActiveQueuedRequest(firstQueued);
             } catch (errorObject) {
-                setLoadError(errorObject instanceof Error ? errorObject.message : 'Unable to load patient account');
+                if (!disposed && !silent) {
+                    setLoadError(errorObject instanceof Error ? errorObject.message : 'Unable to load patient account');
+                }
             } finally {
-                setLoading(false);
+                if (!disposed && !silent) {
+                    setLoading(false);
+                }
             }
         };
 
-        fetchPortalData();
+        fetchPortalData(false);
+        const pollTimer = window.setInterval(() => {
+            fetchPortalData(true);
+        }, 10000);
+
+        return () => {
+            disposed = true;
+            window.clearInterval(pollTimer);
+        };
     }, [token]);
 
     const firstName = useMemo(() => {
@@ -726,7 +782,7 @@ export default function PatientPortal() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-[#e8f1ff] text-[#1f1f23] px-4 py-8">
+            <div className="min-h-screen bg-[#e8f1ff] text-[#1f1f23] px-4 py-8 font-sans">
                 <div className="mx-auto max-w-[900px] rounded-3xl border border-[#cfdcf2] bg-white p-6">
                     <p className="text-lg text-[#5e6980]">Loading your patient account...</p>
                 </div>
@@ -736,7 +792,7 @@ export default function PatientPortal() {
 
     if (loadError) {
         return (
-            <div className="min-h-screen bg-[#e8f1ff] text-[#1f1f23] px-4 py-8">
+            <div className="min-h-screen bg-[#e8f1ff] text-[#1f1f23] px-4 py-8 font-sans">
                 <div className="mx-auto max-w-[900px] rounded-3xl border border-[#cfdcf2] bg-white p-6">
                     <h1 className="text-2xl font-semibold text-[#162848]">Unable to load account</h1>
                     <p className="mt-2 text-[#5e6980]">{loadError}</p>
@@ -761,7 +817,7 @@ export default function PatientPortal() {
     }
 
     return (
-        <div className="min-h-screen bg-[#e8f1ff] pb-[230px] text-[#1f1f23]">
+        <div className="min-h-screen bg-[#e8f1ff] pb-[230px] text-[#1f1f23] font-sans">
             <div className="mx-auto w-full max-w-[900px] px-4 pt-6 md:px-6 md:pt-8">
                 {portalScreen === 'main' && (
                     <>

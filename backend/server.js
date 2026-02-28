@@ -208,7 +208,10 @@ function stripePricingFromRequest(body) {
 async function createStripeCheckoutSession({ certificate, body, pricing }) {
   const params = new URLSearchParams();
   params.set('mode', pricing.mode);
-  params.set('success_url', `${FRONTEND_BASE_URL.replace(/\/$/, '')}/patient?checkout=success`);
+  params.set(
+    'success_url',
+    `${FRONTEND_BASE_URL.replace(/\/$/, '')}/patient?checkout=success&session_id={CHECKOUT_SESSION_ID}`
+  );
   params.set('cancel_url', `${FRONTEND_BASE_URL.replace(/\/$/, '')}/doctor?checkout=cancelled`);
   params.set('client_reference_id', certificate.id);
   params.set('payment_method_types[0]', 'card');
@@ -483,6 +486,96 @@ async function sendPatientMoreInfoEmail(certificate, doctorEmail, notes) {
   });
 }
 
+async function markPaidFromStripeSession(session, trigger = 'stripe_event') {
+  const certificateId =
+    session?.metadata?.certificate_id ||
+    session?.client_reference_id ||
+    session?.subscription_details?.metadata?.certificate_id ||
+    null;
+
+  if (!certificateId) {
+    return { ok: false, reason: 'missing_certificate_id' };
+  }
+
+  const current = await getCertificateById(certificateId);
+  if (!current) {
+    return { ok: false, reason: 'certificate_not_found', certificateId };
+  }
+
+  const alreadyPaid = current?.rawSubmission?.payment?.status === 'paid';
+  if (alreadyPaid) {
+    return { ok: true, updated: false, certificateId, status: current.status };
+  }
+
+  const updated = await updateCertificate(certificateId, (certificate) => ({
+    ...certificate,
+    status: isOpenForReview(certificate.status) ? certificate.status : 'pending',
+    rawSubmission: {
+      ...(certificate.rawSubmission || {}),
+      payment: {
+        provider: 'stripe',
+        status: 'paid',
+        stripeSessionId: session.id || null,
+        stripeCustomerId: session.customer || null,
+        stripePaymentIntentId: session.payment_intent || null,
+        stripeSubscriptionId: session.subscription || null,
+        paidAt: new Date().toISOString(),
+        amountTotal: session.amount_total || null,
+        currency: session.currency || 'aud',
+      },
+    },
+  }));
+
+  if (updated && isOpenForReview(updated.status)) {
+    await appendAudit({
+      type: 'PAYMENT_CONFIRMED',
+      certificateId: updated.id,
+      provider: 'stripe',
+      stripeSessionId: session.id || null,
+      trigger,
+    });
+    await sendDoctorReviewEmail(updated);
+    info('stripe.payment.confirmed', {
+      certificateId: updated.id,
+      stripeSessionId: session.id || null,
+      trigger,
+      status: updated.status,
+    });
+  }
+
+  return { ok: true, updated: true, certificateId: updated?.id || certificateId, status: updated?.status || null };
+}
+
+async function fetchStripeCheckoutSession(sessionId) {
+  if (!STRIPE_SECRET_KEY) {
+    throw new Error('Stripe is not configured on the server');
+  }
+
+  const response = await fetch(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+    },
+  });
+
+  const text = await response.text();
+  let payload = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    payload = { raw: text };
+  }
+
+  if (!response.ok) {
+    const message = payload?.error?.message || `Unable to load Stripe session (${response.status})`;
+    const errorObject = new Error(message);
+    errorObject.status = response.status;
+    throw errorObject;
+  }
+
+  return payload;
+}
+
 async function handleApi(req, res, url) {
   if (req.method === 'OPTIONS') {
     setCors(res);
@@ -499,52 +592,7 @@ async function handleApi(req, res, url) {
 
       if (event?.type === 'checkout.session.completed') {
         const session = event?.data?.object || {};
-        const certificateId =
-          session?.metadata?.certificate_id ||
-          session?.client_reference_id ||
-          session?.subscription_details?.metadata?.certificate_id ||
-          null;
-
-        if (certificateId) {
-          const current = await getCertificateById(certificateId);
-          if (current) {
-            const alreadyPaid = current?.rawSubmission?.payment?.status === 'paid';
-            if (!alreadyPaid) {
-              const updated = await updateCertificate(certificateId, (certificate) => ({
-                ...certificate,
-                status: isOpenForReview(certificate.status) ? certificate.status : 'pending',
-                rawSubmission: {
-                  ...(certificate.rawSubmission || {}),
-                  payment: {
-                    provider: 'stripe',
-                    status: 'paid',
-                    stripeSessionId: session.id || null,
-                    stripeCustomerId: session.customer || null,
-                    stripePaymentIntentId: session.payment_intent || null,
-                    stripeSubscriptionId: session.subscription || null,
-                    paidAt: new Date().toISOString(),
-                    amountTotal: session.amount_total || null,
-                    currency: session.currency || 'aud',
-                  },
-                },
-              }));
-
-              if (updated && isOpenForReview(updated.status)) {
-                await appendAudit({
-                  type: 'PAYMENT_CONFIRMED',
-                  certificateId: updated.id,
-                  provider: 'stripe',
-                  stripeSessionId: session.id || null,
-                });
-                await sendDoctorReviewEmail(updated);
-                info('stripe.webhook.checkout_completed', {
-                  certificateId: updated.id,
-                  stripeSessionId: session.id || null,
-                });
-              }
-            }
-          }
-        }
+        await markPaidFromStripeSession(session, 'stripe_webhook');
       }
 
       res.statusCode = 200;
@@ -681,6 +729,39 @@ async function handleApi(req, res, url) {
       checkoutUrl: session.url,
       sessionId: session.id,
       patientToken,
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/checkout/confirm') {
+    const body = await parseJsonBody(req);
+    const sessionId =
+      String(url.searchParams.get('session_id') || '').trim() ||
+      String(body?.sessionId || body?.session_id || '').trim();
+
+    if (!sessionId) {
+      sendJson(res, 400, { error: 'session_id is required' });
+      return;
+    }
+
+    const session = await fetchStripeCheckoutSession(sessionId);
+    const paymentStatus = String(session?.payment_status || '').toLowerCase();
+    if (!['paid', 'no_payment_required'].includes(paymentStatus)) {
+      sendJson(res, 409, {
+        error: 'Payment is not completed yet',
+        paymentStatus: session?.payment_status || null,
+      });
+      return;
+    }
+
+    const result = await markPaidFromStripeSession(session, 'checkout_success_confirm');
+    sendJson(res, 200, {
+      ok: true,
+      sessionId,
+      paymentStatus: session?.payment_status || null,
+      certificateId: result?.certificateId || null,
+      status: result?.status || null,
+      updated: Boolean(result?.updated),
     });
     return;
   }

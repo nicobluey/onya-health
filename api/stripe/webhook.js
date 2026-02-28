@@ -1,15 +1,9 @@
 import crypto from 'node:crypto';
-import { appendAudit, getCertificateById, updateCertificate } from '../../backend/lib/storage.js';
-import { sendEmail } from '../../backend/lib/email.js';
 import { error, info } from '../../backend/lib/logger.js';
+import { markCertificatePaidFromStripeSession } from '../_lib/reviewWorkflow.js';
 
-const APP_BASE_URL = String(process.env.APP_BASE_URL || 'https://onya-health.vercel.app').replace(/\/$/, '');
-const DOCTOR_NOTIFICATION_EMAILS = (process.env.DOCTOR_NOTIFICATION_EMAILS || 'doctor@onyahealth.com')
-  .split(',')
-  .map((item) => item.trim())
-  .filter(Boolean);
 const STRIPE_WEBHOOK_SECRET = String(process.env.STRIPE_WEBHOOK_SECRET || '');
-const OPEN_REVIEW_STATUSES = new Set(['pending', 'submitted', 'triaged', 'assigned', 'in_review']);
+const STRIPE_SECRET_KEY = String(process.env.STRIPE_SECRET_KEY || '');
 
 function sendJson(res, statusCode, payload) {
   res.status(statusCode).json(payload);
@@ -80,36 +74,30 @@ function verifyStripeEvent(rawBodyBuffer, signatureHeader) {
   return JSON.parse(rawBody);
 }
 
-function isOpenForReview(status) {
-  return OPEN_REVIEW_STATUSES.has(String(status || '').toLowerCase());
-}
-
-function currentEmailProvider() {
-  return process.env.RESEND_API_KEY ? 'resend' : 'mock-outbox';
-}
-
-async function sendDoctorReviewEmail(certificate) {
-  const reviewUrl = `${APP_BASE_URL}/doctor/login`;
-  const html = `
-    <p>A new medical certificate requires review.</p>
-    <p><strong>Request ID:</strong> ${certificate.id}</p>
-    <p><strong>Patient:</strong> ${certificate.certificateDraft.fullName}</p>
-    <p><strong>Risk:</strong> ${certificate.risk.level} (${certificate.risk.score})</p>
-    <p><a href="${reviewUrl}">Open doctor review queue</a></p>
-  `;
-
-  await sendEmail({
-    to: DOCTOR_NOTIFICATION_EMAILS,
-    subject: `Medical certificate review needed: ${certificate.id}`,
-    html,
-    text: `A new medical certificate (${certificate.id}) is ready for review. Visit ${reviewUrl}`,
+async function fetchStripeEvent(eventId) {
+  if (!STRIPE_SECRET_KEY) {
+    throw new Error('Stripe secret key is not configured');
+  }
+  const response = await fetch(`https://api.stripe.com/v1/events/${encodeURIComponent(eventId)}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+    },
   });
 
-  info('certificate.doctor_review_email.sent', {
-    certificateId: certificate.id,
-    provider: currentEmailProvider(),
-    recipients: DOCTOR_NOTIFICATION_EMAILS,
-  });
+  const text = await response.text();
+  let payload = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    payload = { raw: text };
+  }
+
+  if (!response.ok) {
+    throw new Error(payload?.error?.message || `Unable to verify Stripe event (${response.status})`);
+  }
+
+  return payload;
 }
 
 export default async function handler(req, res) {
@@ -125,58 +113,29 @@ export default async function handler(req, res) {
   }
 
   try {
-    const rawBody = await parseRawBody(req);
     const signature = req.headers['stripe-signature'];
-    const event = verifyStripeEvent(rawBody, signature);
+    let event = null;
+
+    try {
+      const rawBody = await parseRawBody(req);
+      event = verifyStripeEvent(rawBody, signature);
+    } catch (signatureError) {
+      // Fallback: if middleware transformed the body, verify by fetching the event from Stripe.
+      const parsedBody = req.body && typeof req.body === 'object' ? req.body : null;
+      const eventId = parsedBody?.id;
+      if (!eventId) {
+        throw signatureError;
+      }
+      event = await fetchStripeEvent(eventId);
+      info('stripe.webhook.signature_fallback', {
+        eventId,
+        message: signatureError?.message || String(signatureError),
+      });
+    }
 
     if (event?.type === 'checkout.session.completed') {
       const session = event?.data?.object || {};
-      const certificateId =
-        session?.metadata?.certificate_id ||
-        session?.client_reference_id ||
-        session?.subscription_details?.metadata?.certificate_id ||
-        null;
-
-      if (certificateId) {
-        const current = await getCertificateById(certificateId);
-        if (current) {
-          const alreadyPaid = current?.rawSubmission?.payment?.status === 'paid';
-          if (!alreadyPaid) {
-            const updated = await updateCertificate(certificateId, (certificate) => ({
-              ...certificate,
-              status: isOpenForReview(certificate.status) ? certificate.status : 'pending',
-              rawSubmission: {
-                ...(certificate.rawSubmission || {}),
-                payment: {
-                  provider: 'stripe',
-                  status: 'paid',
-                  stripeSessionId: session.id || null,
-                  stripeCustomerId: session.customer || null,
-                  stripePaymentIntentId: session.payment_intent || null,
-                  stripeSubscriptionId: session.subscription || null,
-                  paidAt: new Date().toISOString(),
-                  amountTotal: session.amount_total || null,
-                  currency: session.currency || 'aud',
-                },
-              },
-            }));
-
-            if (updated && isOpenForReview(updated.status)) {
-              await appendAudit({
-                type: 'PAYMENT_CONFIRMED',
-                certificateId: updated.id,
-                provider: 'stripe',
-                stripeSessionId: session.id || null,
-              });
-              await sendDoctorReviewEmail(updated);
-              info('stripe.webhook.checkout_completed', {
-                certificateId: updated.id,
-                stripeSessionId: session.id || null,
-              });
-            }
-          }
-        }
-      }
+      await markCertificatePaidFromStripeSession(session, 'stripe_webhook');
     }
 
     sendJson(res, 200, { received: true });

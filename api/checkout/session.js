@@ -112,7 +112,7 @@ async function createStripeCheckoutSession({ req, certificate, pricing }) {
   const frontendBase = inferFrontendBaseUrl(req);
   const params = new URLSearchParams();
   params.set('mode', pricing.mode);
-  params.set('success_url', `${frontendBase}/patient?checkout=success`);
+  params.set('success_url', `${frontendBase}/patient?checkout=success&session_id={CHECKOUT_SESSION_ID}`);
   params.set('cancel_url', `${frontendBase}/doctor?checkout=cancelled`);
   params.set('client_reference_id', certificate.id);
   params.set('payment_method_types[0]', 'card');
