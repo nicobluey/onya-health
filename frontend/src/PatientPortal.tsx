@@ -46,6 +46,7 @@ interface PortalRequest {
         at?: string;
         notes?: string;
     } | null;
+    certificatePdfUrl?: string | null;
 }
 
 interface PatientProfile {
@@ -276,6 +277,7 @@ function statusLabel(status: string) {
     if (normalized === 'awaiting_payment') return 'Awaiting payment confirmation';
     if (['pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(normalized)) return 'Pending doctor review';
     if (normalized === 'approved') return 'Approved and issued';
+    if (normalized === 'closed') return 'Completed';
     if (normalized === 'denied') return 'Not approved';
     if (!normalized) return 'No active request';
     return normalized.replace(/_/g, ' ');
@@ -562,6 +564,15 @@ function PreviousConsults({ requests }: { requests: PortalRequest[] }) {
                             <p className="mt-1 text-sm text-[#63759b]">
                                 {request.decision?.by || (isQueuedStatus(request.status) ? 'Unassigned' : 'Completed')}
                             </p>
+                            {request.certificatePdfUrl && (
+                                <a
+                                    href={request.certificatePdfUrl}
+                                    className="mt-3 inline-flex items-center gap-1 rounded-lg border border-[#bfd3f3] bg-[#eef5ff] px-2.5 py-1.5 text-xs font-semibold text-[#0f66e8]"
+                                >
+                                    <FileText size={14} />
+                                    Download certificate PDF
+                                </a>
+                            )}
                         </article>
                     ))}
                 </div>
@@ -1099,6 +1110,15 @@ function AccountTab({
                             <h2 className="mt-2 text-lg font-semibold text-[#14264a]">{consultTitle(latestRequest.serviceType)}</h2>
                             <p className="mt-1 text-sm text-[#5f739b]">{statusLabel(latestRequest.status)}</p>
                             <p className="mt-1 text-xs text-[#7a8bab]">Updated {formatDate(latestRequest.createdAt)}</p>
+                            {latestRequest.certificatePdfUrl && (
+                                <a
+                                    href={latestRequest.certificatePdfUrl}
+                                    className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[#0f66e8] px-3 py-2 text-sm font-semibold text-white"
+                                >
+                                    <FileText size={15} />
+                                    Download Medical Certificate
+                                </a>
+                            )}
                         </>
                     ) : (
                         <p className="mt-2 text-sm text-[#63759b]">No consult history yet.</p>
