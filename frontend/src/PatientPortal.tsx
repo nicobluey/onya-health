@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { ComponentType, FormEvent } from 'react';
 import {
     ArrowLeft,
     CalendarDays,
@@ -13,18 +12,16 @@ import {
     Info,
     MessageCircle,
     MicOff,
-    NotebookPen,
     Phone,
     Pill,
-    Plus,
     Scale,
     Stethoscope,
     Tag,
     TestTube2,
-    Upload,
     UserRound,
 } from 'lucide-react';
 import { fetchApiJson, getApiBase } from './lib/api';
+import HomeTab from './patient-portal/home/HomeTab';
 
 type MainTab = 'home' | 'consult' | 'account';
 type PortalScreen = 'main' | 'call-prep' | 'queued';
@@ -88,39 +85,6 @@ interface TestResultDraft {
 }
 
 const MAIN_TABS: MainTab[] = ['home', 'consult', 'account'];
-
-const RECORD_TAB_META: Record<
-RecordTab,
-{
-    label: string;
-    emptyTitle: string;
-    emptyDescription: string;
-    ctaLabel: string;
-    placeholderTitle: string;
-}
-> = {
-    'medical-history': {
-        label: 'Medical History',
-        emptyTitle: 'No medical history yet',
-        emptyDescription: 'Add your past or ongoing conditions to build your profile.',
-        ctaLabel: 'Add condition',
-        placeholderTitle: 'e.g. Asthma',
-    },
-    allergies: {
-        label: 'Allergies',
-        emptyTitle: 'No allergies added yet',
-        emptyDescription: 'List allergies so doctors can avoid unsafe medication.',
-        ctaLabel: 'Add allergy',
-        placeholderTitle: 'e.g. Penicillin',
-    },
-    medications: {
-        label: 'Medications',
-        emptyTitle: 'No medications listed yet',
-        emptyDescription: 'Track your ongoing medication and dosage details.',
-        ctaLabel: 'Add medication',
-        placeholderTitle: 'e.g. Metformin 500mg',
-    },
-};
 
 const CONSULT_OPTIONS = [
     {
@@ -240,12 +204,6 @@ function readPortalProfile(raw: string | null): PortalProfileData {
     } catch {
         return createEmptyPortalData();
     }
-}
-
-function getRecordEntries(data: PortalProfileData, tab: RecordTab): TextEntry[] {
-    if (tab === 'medical-history') return data.medicalHistory;
-    if (tab === 'allergies') return data.allergies;
-    return data.medications;
 }
 
 function appendRecordEntry(data: PortalProfileData, tab: RecordTab, entry: TextEntry): PortalProfileData {
@@ -484,540 +442,6 @@ function QueueBanner({ onTap }: { onTap: () => void }) {
                 <ChevronRight size={18} className="ml-auto text-[#0f66e8]" />
             </div>
         </button>
-    );
-}
-
-function EmptySectionState({
-    icon: Icon,
-    title,
-    description,
-    buttonLabel,
-    onAdd,
-}: {
-    icon: ComponentType<{ size?: number; className?: string }>;
-    title: string;
-    description: string;
-    buttonLabel: string;
-    onAdd: () => void;
-}) {
-    return (
-        <div className="px-4 py-10 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-[#dbe4f6] bg-[#f5f9ff] text-[#8fa0c2]">
-                <Icon size={20} />
-            </div>
-            <h3 className="mt-4 text-lg font-semibold text-[#1a315f]">{title}</h3>
-            <p className="mt-2 text-sm leading-relaxed text-[#6a7a9a]">{description}</p>
-            <button
-                type="button"
-                onClick={onAdd}
-                className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[#d1def6] bg-white px-4 py-2 text-sm font-semibold text-[#123a7d]"
-            >
-                <Plus size={16} />
-                {buttonLabel}
-            </button>
-        </div>
-    );
-}
-
-function ProfileCard({ patient }: { patient: PatientProfile }) {
-    const rows = [
-        { label: 'Full name', value: patient.fullName || 'Patient' },
-        { label: 'Email', value: patient.email || 'Not provided' },
-        { label: 'Date of birth', value: formatReadableDate(patient.dob) },
-        { label: 'Phone', value: patient.phone || 'Not provided' },
-    ];
-
-    return (
-        <section className={sectionCardClassName()}>
-            <div className="border-b border-[#dbe4f6] px-5 py-4">
-                <h2 className="text-lg font-semibold text-[#14264a]">Account Info</h2>
-            </div>
-            <div className="divide-y divide-[#e3ebf8]">
-                {rows.map((row) => (
-                    <div key={row.label} className="px-5 py-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7d8cac]">{row.label}</p>
-                        <p className="mt-1 text-sm font-medium text-[#1f355f]">{row.value}</p>
-                    </div>
-                ))}
-            </div>
-        </section>
-    );
-}
-
-function PreviousConsults({
-    requests,
-    onDownloadCertificate,
-}: {
-    requests: PortalRequest[];
-    onDownloadCertificate: (request: PortalRequest) => void;
-}) {
-    const recent = requests.slice(0, 2);
-
-    return (
-        <section>
-            <h2 className="text-xl font-semibold text-[#14264a]">Previous Consults</h2>
-            {recent.length === 0 ? (
-                <div className={`${sectionCardClassName('mt-3 p-5')} text-sm text-[#63759b]`}>No consult history yet.</div>
-            ) : (
-                <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                    {recent.map((request) => (
-                        <article key={request.id} className={sectionCardClassName('p-4')}>
-                            <div className="flex items-center justify-between gap-2">
-                                <StatusPill status={request.status} />
-                                <span className="text-xs text-[#6d7f9f]">{formatDate(request.createdAt)}</span>
-                            </div>
-                            <h3 className="mt-4 text-base font-semibold text-[#15284d]">{consultTitle(request.serviceType)}</h3>
-                            <p className="mt-1 text-sm text-[#63759b]">
-                                {request.decision?.by || (isQueuedStatus(request.status) ? 'Unassigned' : 'Completed')}
-                            </p>
-                            {request.certificatePdfUrl && (
-                                <button
-                                    type="button"
-                                    onClick={() => onDownloadCertificate(request)}
-                                    className="mt-3 inline-flex items-center gap-1 rounded-lg border border-[#bfd3f3] bg-[#eef5ff] px-2.5 py-1.5 text-xs font-semibold text-[#0f66e8]"
-                                >
-                                    <FileText size={14} />
-                                    Download certificate PDF
-                                </button>
-                            )}
-                        </article>
-                    ))}
-                </div>
-            )}
-        </section>
-    );
-}
-
-function MedicalRecordsSection({
-    data,
-    recordTab,
-    onRecordTabChange,
-    onAddEntry,
-}: {
-    data: PortalProfileData;
-    recordTab: RecordTab;
-    onRecordTabChange: (tab: RecordTab) => void;
-    onAddEntry: (tab: RecordTab, title: string, details: string) => void;
-}) {
-    const [isAdding, setIsAdding] = useState(false);
-    const [title, setTitle] = useState('');
-    const [details, setDetails] = useState('');
-    const activeEntries = getRecordEntries(data, recordTab);
-    const tabMeta = RECORD_TAB_META[recordTab];
-
-    const submit = (event: FormEvent) => {
-        event.preventDefault();
-        if (!title.trim()) return;
-        onAddEntry(recordTab, title.trim(), details.trim());
-        setTitle('');
-        setDetails('');
-        setIsAdding(false);
-    };
-
-    return (
-        <section className={sectionCardClassName()}>
-            <div className="flex items-center gap-2 overflow-x-auto border-b border-[#dbe4f6] px-3 py-3">
-                {(Object.keys(RECORD_TAB_META) as RecordTab[]).map((tab) => {
-                    const active = tab === recordTab;
-                    return (
-                        <button
-                            key={tab}
-                            type="button"
-                            onClick={() => onRecordTabChange(tab)}
-                            className={`shrink-0 rounded-xl px-3 py-1.5 text-sm font-semibold ${
-                                active
-                                    ? 'border border-[#c7d9f8] bg-[#edf4ff] text-[#0f66e8]'
-                                    : 'text-[#7080a0] hover:bg-[#f4f8ff]'
-                            }`}
-                        >
-                            {RECORD_TAB_META[tab].label}
-                        </button>
-                    );
-                })}
-                <button
-                    type="button"
-                    onClick={() => setIsAdding((value) => !value)}
-                    className="ml-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#d1def6] text-[#123a7d]"
-                    aria-label="Add health item"
-                >
-                    <Plus size={16} />
-                </button>
-            </div>
-
-            <div className="p-4">
-                {isAdding && (
-                    <form onSubmit={submit} className="mb-4 space-y-3 rounded-2xl border border-[#dbe6fb] bg-[#f7faff] p-3">
-                        <input
-                            value={title}
-                            onChange={(event) => setTitle(event.target.value)}
-                            className="h-10 w-full rounded-xl border border-[#cfdcf2] bg-white px-3 text-sm outline-none focus:border-[#86aef2]"
-                            placeholder={tabMeta.placeholderTitle}
-                        />
-                        <textarea
-                            value={details}
-                            onChange={(event) => setDetails(event.target.value)}
-                            className="min-h-20 w-full rounded-xl border border-[#cfdcf2] bg-white px-3 py-2 text-sm outline-none focus:border-[#86aef2]"
-                            placeholder="Optional details for your care team"
-                        />
-                        <div className="flex items-center justify-end gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setIsAdding(false)}
-                                className="rounded-lg border border-[#d1def6] px-3 py-1.5 text-xs font-semibold text-[#5b6f95]"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                className="rounded-lg bg-[#0f66e8] px-3 py-1.5 text-xs font-semibold text-white"
-                            >
-                                Save
-                            </button>
-                        </div>
-                    </form>
-                )}
-
-                {activeEntries.length === 0 ? (
-                    <EmptySectionState
-                        icon={Stethoscope}
-                        title={tabMeta.emptyTitle}
-                        description={tabMeta.emptyDescription}
-                        buttonLabel={tabMeta.ctaLabel}
-                        onAdd={() => setIsAdding(true)}
-                    />
-                ) : (
-                    <ul className="space-y-2">
-                        {activeEntries.map((entry) => (
-                            <li key={entry.id} className="rounded-2xl border border-[#dbe4f6] bg-[#f8fbff] px-4 py-3">
-                                <p className="text-sm font-semibold text-[#16305f]">{entry.title}</p>
-                                {entry.details && <p className="mt-1 text-sm text-[#5f739b]">{entry.details}</p>}
-                                <p className="mt-2 text-xs text-[#8090b1]">Added {formatDate(entry.createdAt)}</p>
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </div>
-        </section>
-    );
-}
-
-function LifestyleNotesSection({
-    entries,
-    onAddEntry,
-}: {
-    entries: TextEntry[];
-    onAddEntry: (title: string, details: string) => void;
-}) {
-    const [isAdding, setIsAdding] = useState(false);
-    const [title, setTitle] = useState('');
-    const [details, setDetails] = useState('');
-
-    const submit = (event: FormEvent) => {
-        event.preventDefault();
-        if (!title.trim()) return;
-        onAddEntry(title.trim(), details.trim());
-        setTitle('');
-        setDetails('');
-        setIsAdding(false);
-    };
-
-    return (
-        <section className={sectionCardClassName()}>
-            <div className="flex items-center border-b border-[#dbe4f6] px-5 py-4">
-                <h2 className="text-lg font-semibold text-[#14264a]">Lifestyle Notes</h2>
-                <button
-                    type="button"
-                    onClick={() => setIsAdding((value) => !value)}
-                    className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#d1def6] text-[#123a7d]"
-                    aria-label="Add lifestyle note"
-                >
-                    <Plus size={16} />
-                </button>
-            </div>
-
-            <div className="p-4">
-                {isAdding && (
-                    <form onSubmit={submit} className="mb-4 space-y-3 rounded-2xl border border-[#dbe6fb] bg-[#f7faff] p-3">
-                        <input
-                            value={title}
-                            onChange={(event) => setTitle(event.target.value)}
-                            className="h-10 w-full rounded-xl border border-[#cfdcf2] bg-white px-3 text-sm outline-none focus:border-[#86aef2]"
-                            placeholder="e.g. Sleep routine"
-                        />
-                        <textarea
-                            value={details}
-                            onChange={(event) => setDetails(event.target.value)}
-                            className="min-h-20 w-full rounded-xl border border-[#cfdcf2] bg-white px-3 py-2 text-sm outline-none focus:border-[#86aef2]"
-                            placeholder="Share habits, sleep, activity, nutrition, or triggers"
-                        />
-                        <div className="flex items-center justify-end gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setIsAdding(false)}
-                                className="rounded-lg border border-[#d1def6] px-3 py-1.5 text-xs font-semibold text-[#5b6f95]"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                className="rounded-lg bg-[#0f66e8] px-3 py-1.5 text-xs font-semibold text-white"
-                            >
-                                Save
-                            </button>
-                        </div>
-                    </form>
-                )}
-
-                {entries.length === 0 ? (
-                    <EmptySectionState
-                        icon={NotebookPen}
-                        title="No lifestyle notes yet"
-                        description="Add lifestyle details to help personalize your care."
-                        buttonLabel="Add lifestyle note"
-                        onAdd={() => setIsAdding(true)}
-                    />
-                ) : (
-                    <ul className="space-y-2">
-                        {entries.map((entry) => (
-                            <li key={entry.id} className="rounded-2xl border border-[#dbe4f6] bg-[#f8fbff] px-4 py-3">
-                                <p className="text-sm font-semibold text-[#16305f]">{entry.title}</p>
-                                {entry.details && <p className="mt-1 text-sm text-[#5f739b]">{entry.details}</p>}
-                                <p className="mt-2 text-xs text-[#8090b1]">Added {formatDate(entry.createdAt)}</p>
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </div>
-        </section>
-    );
-}
-
-function TestResultsSection({
-    entries,
-    onAddResult,
-}: {
-    entries: TestResultEntry[];
-    onAddResult: (draft: TestResultDraft) => void;
-}) {
-    const [isAdding, setIsAdding] = useState(false);
-    const [name, setName] = useState('');
-    const [summary, setSummary] = useState('');
-    const [testDate, setTestDate] = useState('');
-    const [fileName, setFileName] = useState('');
-
-    const submit = (event: FormEvent) => {
-        event.preventDefault();
-        if (!name.trim()) return;
-
-        onAddResult({
-            name: name.trim(),
-            summary: summary.trim(),
-            testDate: testDate || new Date().toISOString(),
-            fileName: fileName.trim(),
-        });
-
-        setName('');
-        setSummary('');
-        setTestDate('');
-        setFileName('');
-        setIsAdding(false);
-    };
-
-    return (
-        <section className={sectionCardClassName()}>
-            <div className="flex items-center border-b border-[#dbe4f6] px-5 py-4">
-                <h2 className="text-lg font-semibold text-[#14264a]">Your Test Results</h2>
-                <button
-                    type="button"
-                    onClick={() => setIsAdding((value) => !value)}
-                    className="ml-auto inline-flex items-center gap-2 rounded-lg border border-[#d1def6] px-3 py-1.5 text-xs font-semibold text-[#123a7d]"
-                >
-                    <Upload size={14} />
-                    Upload Test
-                </button>
-            </div>
-
-            <div className="p-4">
-                {isAdding && (
-                    <form onSubmit={submit} className="mb-4 space-y-3 rounded-2xl border border-[#dbe6fb] bg-[#f7faff] p-3">
-                        <input
-                            value={name}
-                            onChange={(event) => setName(event.target.value)}
-                            className="h-10 w-full rounded-xl border border-[#cfdcf2] bg-white px-3 text-sm outline-none focus:border-[#86aef2]"
-                            placeholder="e.g. Full Blood Count"
-                        />
-                        <input
-                            type="date"
-                            value={testDate}
-                            onChange={(event) => setTestDate(event.target.value)}
-                            className="h-10 w-full rounded-xl border border-[#cfdcf2] bg-white px-3 text-sm outline-none focus:border-[#86aef2]"
-                        />
-                        <textarea
-                            value={summary}
-                            onChange={(event) => setSummary(event.target.value)}
-                            className="min-h-20 w-full rounded-xl border border-[#cfdcf2] bg-white px-3 py-2 text-sm outline-none focus:border-[#86aef2]"
-                            placeholder="Add a short summary of this result"
-                        />
-                        <div className="space-y-2">
-                            <label className="block text-xs font-semibold uppercase tracking-[0.08em] text-[#6c7da1]">
-                                Attachment
-                            </label>
-                            <input
-                                type="file"
-                                onChange={(event) => setFileName(event.target.files?.[0]?.name || '')}
-                                className="block w-full text-xs text-[#5f739b] file:mr-3 file:rounded-lg file:border-0 file:bg-[#eaf2ff] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[#0f66e8]"
-                            />
-                            {fileName && <p className="text-xs text-[#7386ab]">Selected: {fileName}</p>}
-                        </div>
-                        <div className="flex items-center justify-end gap-2">
-                            <button
-                                type="button"
-                                onClick={() => setIsAdding(false)}
-                                className="rounded-lg border border-[#d1def6] px-3 py-1.5 text-xs font-semibold text-[#5b6f95]"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                type="submit"
-                                className="rounded-lg bg-[#0f66e8] px-3 py-1.5 text-xs font-semibold text-white"
-                            >
-                                Save result
-                            </button>
-                        </div>
-                    </form>
-                )}
-
-                {entries.length === 0 ? (
-                    <EmptySectionState
-                        icon={TestTube2}
-                        title="No test results yet"
-                        description="Upload your radiology or pathology reports to keep your records organised."
-                        buttonLabel="Upload result"
-                        onAdd={() => setIsAdding(true)}
-                    />
-                ) : (
-                    <ul className="space-y-2">
-                        {entries.map((entry) => (
-                            <li key={entry.id} className="rounded-2xl border border-[#dbe4f6] bg-[#f8fbff] px-4 py-3">
-                                <div className="flex items-start gap-2">
-                                    <div className="min-w-0">
-                                        <p className="text-sm font-semibold text-[#16305f]">{entry.name}</p>
-                                        {entry.summary && <p className="mt-1 text-sm text-[#5f739b]">{entry.summary}</p>}
-                                    </div>
-                                    <span className="ml-auto shrink-0 text-xs text-[#6f82a8]">{formatDate(entry.testDate)}</span>
-                                </div>
-                                {entry.fileName && <p className="mt-2 text-xs text-[#7d8eb0]">Attachment: {entry.fileName}</p>}
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </div>
-        </section>
-    );
-}
-
-function HomeTab({
-    mode,
-    firstNameValue,
-    requests,
-    queuedRequest,
-    patient,
-    data,
-    recordTab,
-    onRecordTabChange,
-    onAddRecordEntry,
-    onAddLifestyleNote,
-    onAddTestResult,
-    onOpenQueue,
-    onDownloadCertificate,
-}: {
-    mode: LayoutMode;
-    firstNameValue: string;
-    requests: PortalRequest[];
-    queuedRequest: PortalRequest | null;
-    patient: PatientProfile;
-    data: PortalProfileData;
-    recordTab: RecordTab;
-    onRecordTabChange: (tab: RecordTab) => void;
-    onAddRecordEntry: (tab: RecordTab, title: string, details: string) => void;
-    onAddLifestyleNote: (title: string, details: string) => void;
-    onAddTestResult: (draft: TestResultDraft) => void;
-    onOpenQueue: () => void;
-    onDownloadCertificate: (request: PortalRequest) => void;
-}) {
-    const desktop = mode === 'desktop';
-
-    return (
-        <section className="space-y-6">
-            <header>
-                <h1 className="text-3xl font-semibold tracking-tight text-[#14264a]">Hey, {firstNameValue}</h1>
-                <p className="mt-1 text-base text-[#5f739b]">Here&apos;s your Onya Health profile.</p>
-            </header>
-
-            {desktop ? (
-                <div className="grid gap-6 xl:grid-cols-[1.65fr_1fr]">
-                    <div className="space-y-6">
-                        <PreviousConsults requests={requests} onDownloadCertificate={onDownloadCertificate} />
-                        <MedicalRecordsSection
-                            data={data}
-                            recordTab={recordTab}
-                            onRecordTabChange={onRecordTabChange}
-                            onAddEntry={onAddRecordEntry}
-                        />
-                        <LifestyleNotesSection
-                            entries={data.lifestyleNotes}
-                            onAddEntry={onAddLifestyleNote}
-                        />
-                        <TestResultsSection
-                            entries={data.testResults}
-                            onAddResult={onAddTestResult}
-                        />
-                    </div>
-
-                    <div className="space-y-6">
-                        <ProfileCard patient={patient} />
-                        {queuedRequest && (
-                            <section className={sectionCardClassName()}>
-                                <div className="p-5">
-                                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7588ad]">Queue status</p>
-                                    <h2 className="mt-2 text-lg font-semibold text-[#14264a]">You are in the doctor queue</h2>
-                                    <p className="mt-1 text-sm text-[#60739a]">
-                                        Status: {statusLabel(queuedRequest.status)}
-                                    </p>
-                                    <button
-                                        type="button"
-                                        onClick={onOpenQueue}
-                                        className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#0f66e8] px-4 py-2 text-sm font-semibold text-white"
-                                    >
-                                        View queue
-                                        <ChevronRight size={16} />
-                                    </button>
-                                </div>
-                            </section>
-                        )}
-                    </div>
-                </div>
-            ) : (
-                <div className="space-y-5">
-                    <PreviousConsults requests={requests} onDownloadCertificate={onDownloadCertificate} />
-                    <MedicalRecordsSection
-                        data={data}
-                        recordTab={recordTab}
-                        onRecordTabChange={onRecordTabChange}
-                        onAddEntry={onAddRecordEntry}
-                    />
-                    <LifestyleNotesSection
-                        entries={data.lifestyleNotes}
-                        onAddEntry={onAddLifestyleNote}
-                    />
-                    <TestResultsSection
-                        entries={data.testResults}
-                        onAddResult={onAddTestResult}
-                    />
-                    <ProfileCard patient={patient} />
-                </div>
-            )}
-        </section>
     );
 }
 
@@ -1289,7 +713,7 @@ export default function PatientPortal() {
     const [portalData, setPortalData] = useState<PortalProfileData>(createEmptyPortalData);
     const [portalDataReady, setPortalDataReady] = useState(false);
 
-    const token = useMemo(() => window.localStorage.getItem('onya_patient_token') || '', []);
+    const [token, setToken] = useState(() => window.localStorage.getItem('onya_patient_token') || '');
     const profileStorageKey = useMemo(() => {
         const emailPart = (patient.email || 'guest').trim().toLowerCase() || 'guest';
         return `onya_patient_profile:${emailPart}`;
@@ -1307,14 +731,9 @@ export default function PatientPortal() {
     }, [portalDataReady, portalData, profileStorageKey]);
 
     useEffect(() => {
-        if (!token) {
-            window.location.href = '/patient-login';
-            return;
-        }
-
         let disposed = false;
 
-        const confirmCheckoutIfPresent = async () => {
+        const bootstrapCheckoutTokenIfPresent = async () => {
             const url = new URL(window.location.href);
             const checkout = url.searchParams.get('checkout');
             const sessionId =
@@ -1325,9 +744,17 @@ export default function PatientPortal() {
             }
 
             try {
-                await fetchApiJson(`/api/checkout/confirm?session_id=${encodeURIComponent(sessionId)}`, {
+                const { response, payload } = await fetchApiJson(`/api/checkout/confirm?session_id=${encodeURIComponent(sessionId)}`, {
                     method: 'POST',
                 });
+                if (response.ok && payload?.patientToken) {
+                    const nextToken = String(payload.patientToken);
+                    window.localStorage.setItem('onya_patient_token', nextToken);
+                    setToken(nextToken);
+                }
+                if (payload?.patientEmail) {
+                    window.localStorage.setItem('onya_patient_email', String(payload.patientEmail));
+                }
             } catch {
                 // Keep polling for status updates even if confirmation fails once.
             } finally {
@@ -1344,12 +771,21 @@ export default function PatientPortal() {
             if (!silent) {
                 setLoading(true);
                 setLoadError('');
-                await confirmCheckoutIfPresent();
+                await bootstrapCheckoutTokenIfPresent();
+            }
+
+            const activeToken = token || window.localStorage.getItem('onya_patient_token') || '';
+            if (!activeToken) {
+                window.location.href = '/patient-login';
+                return;
+            }
+            if (activeToken !== token) {
+                setToken(activeToken);
             }
 
             try {
                 const headers = {
-                    Authorization: `Bearer ${token}`,
+                    Authorization: `Bearer ${activeToken}`,
                 };
                 const [meResult, requestsResult] = await Promise.all([
                     fetchApiJson('/api/patient/me', { headers }),
@@ -1360,6 +796,7 @@ export default function PatientPortal() {
 
                 if (meRes.status === 401 || requestsRes.status === 401) {
                     window.localStorage.removeItem('onya_patient_token');
+                    setToken('');
                     window.location.href = '/patient-login';
                     return;
                 }

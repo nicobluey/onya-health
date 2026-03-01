@@ -205,14 +205,23 @@ function stripePricingFromRequest(body) {
   };
 }
 
-async function createStripeCheckoutSession({ certificate, body, pricing }) {
+async function createStripeCheckoutSession({ certificate, body, pricing, uiMode = 'hosted' }) {
   const params = new URLSearchParams();
   params.set('mode', pricing.mode);
-  params.set(
-    'success_url',
-    `${FRONTEND_BASE_URL.replace(/\/$/, '')}/patient?checkout=success&session_id={CHECKOUT_SESSION_ID}`
-  );
-  params.set('cancel_url', `${FRONTEND_BASE_URL.replace(/\/$/, '')}/doctor?checkout=cancelled`);
+  if (uiMode === 'embedded') {
+    params.set('ui_mode', 'embedded');
+    params.set(
+      'return_url',
+      `${FRONTEND_BASE_URL.replace(/\/$/, '')}/patient?checkout=success&session_id={CHECKOUT_SESSION_ID}`
+    );
+    params.set('redirect_on_completion', 'if_required');
+  } else {
+    params.set(
+      'success_url',
+      `${FRONTEND_BASE_URL.replace(/\/$/, '')}/patient?checkout=success&session_id={CHECKOUT_SESSION_ID}`
+    );
+    params.set('cancel_url', `${FRONTEND_BASE_URL.replace(/\/$/, '')}/doctor?checkout=cancelled`);
+  }
   params.set('client_reference_id', certificate.id);
   params.set('payment_method_types[0]', 'card');
   params.set('line_items[0][quantity]', '1');
@@ -504,7 +513,13 @@ async function markPaidFromStripeSession(session, trigger = 'stripe_event') {
 
   const alreadyPaid = current?.rawSubmission?.payment?.status === 'paid';
   if (alreadyPaid) {
-    return { ok: true, updated: false, certificateId, status: current.status };
+    return {
+      ok: true,
+      updated: false,
+      certificateId,
+      status: current.status,
+      patientEmail: normalizeEmail(current?.certificateDraft?.email || ''),
+    };
   }
 
   const updated = await updateCertificate(certificateId, (certificate) => ({
@@ -543,7 +558,13 @@ async function markPaidFromStripeSession(session, trigger = 'stripe_event') {
     });
   }
 
-  return { ok: true, updated: true, certificateId: updated?.id || certificateId, status: updated?.status || null };
+  return {
+    ok: true,
+    updated: true,
+    certificateId: updated?.id || certificateId,
+    status: updated?.status || null,
+    patientEmail: normalizeEmail(updated?.certificateDraft?.email || current?.certificateDraft?.email || ''),
+  };
 }
 
 async function fetchStripeCheckoutSession(sessionId) {
@@ -664,6 +685,7 @@ async function handleApi(req, res, url) {
 
   if (req.method === 'POST' && url.pathname === '/api/checkout/session') {
     const body = await parseJsonBody(req);
+    const requestedUiMode = body?.uiMode === 'embedded' ? 'embedded' : 'hosted';
     const patient = body.patient || {};
 
     if (!isStripeEnabled()) {
@@ -696,7 +718,7 @@ async function handleApi(req, res, url) {
 
     await createCertificate(certificate);
     const pricing = stripePricingFromRequest(body);
-    const session = await createStripeCheckoutSession({ certificate, body, pricing });
+    const session = await createStripeCheckoutSession({ certificate, body, pricing, uiMode: requestedUiMode });
 
     await updateCertificate(certificate.id, (current) => ({
       ...current,
@@ -728,6 +750,8 @@ async function handleApi(req, res, url) {
       certificateId: certificate.id,
       checkoutUrl: session.url,
       sessionId: session.id,
+      clientSecret: session.client_secret || null,
+      uiMode: requestedUiMode,
       patientToken,
     });
     return;
@@ -755,6 +779,7 @@ async function handleApi(req, res, url) {
     }
 
     const result = await markPaidFromStripeSession(session, 'checkout_success_confirm');
+    const patientEmail = normalizeEmail(result?.patientEmail || session?.metadata?.patient_email || '');
     sendJson(res, 200, {
       ok: true,
       sessionId,
@@ -762,6 +787,8 @@ async function handleApi(req, res, url) {
       certificateId: result?.certificateId || null,
       status: result?.status || null,
       updated: Boolean(result?.updated),
+      patientEmail,
+      patientToken: patientEmail ? issuePatientToken(patientEmail) : null,
     });
     return;
   }
@@ -784,6 +811,10 @@ async function handleApi(req, res, url) {
     }
 
     const latest = patientCertificates[0];
+    if (latest?.certificateDraft?.dob && !dob) {
+      sendJson(res, 400, { error: 'Date of birth is required for this account' });
+      return;
+    }
     if (dob && latest?.certificateDraft?.dob && latest.certificateDraft.dob !== dob) {
       sendJson(res, 401, { error: 'Date of birth did not match our records' });
       return;

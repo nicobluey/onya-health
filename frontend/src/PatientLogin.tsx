@@ -2,12 +2,9 @@ import { useState } from 'react';
 import { ArrowRight, Lock, Mail } from 'lucide-react';
 import { fetchApiJson } from './lib/api';
 
-const DEMO_EMAIL = 'john@gmail.com';
-const DEMO_DOB = '2000-06-14';
-
 export default function PatientLogin() {
-    const [email, setEmail] = useState(DEMO_EMAIL);
-    const [dob, setDob] = useState(DEMO_DOB);
+    const [email, setEmail] = useState('');
+    const [dob, setDob] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -104,7 +101,10 @@ export default function PatientLogin() {
                 </div>
 
                 <p className="mt-4 text-center text-xs text-[#7c7c81]">
-                    After payment, use the same email address to access your account.
+                    Your account is created automatically after checkout using your consult email.
+                </p>
+                <p className="mt-1 text-center text-xs text-[#7c7c81]">
+                    New patient? <a href="/doctor" className="underline underline-offset-2">Start a consult to create your account</a>.
                 </p>
             </div>
         </div>

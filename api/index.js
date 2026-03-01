@@ -304,12 +304,18 @@ function isStripeEnabled() {
   return Boolean(STRIPE_SECRET_KEY);
 }
 
-async function createStripeCheckoutSession({ req, certificate, pricing }) {
+async function createStripeCheckoutSession({ req, certificate, pricing, uiMode = 'hosted' }) {
   const frontendBase = getFrontendBaseUrl(req);
   const params = new URLSearchParams();
   params.set('mode', pricing.mode);
-  params.set('success_url', `${frontendBase}/patient?checkout=success&session_id={CHECKOUT_SESSION_ID}`);
-  params.set('cancel_url', `${frontendBase}/doctor?checkout=cancelled`);
+  if (uiMode === 'embedded') {
+    params.set('ui_mode', 'embedded');
+    params.set('return_url', `${frontendBase}/patient?checkout=success&session_id={CHECKOUT_SESSION_ID}`);
+    params.set('redirect_on_completion', 'if_required');
+  } else {
+    params.set('success_url', `${frontendBase}/patient?checkout=success&session_id={CHECKOUT_SESSION_ID}`);
+    params.set('cancel_url', `${frontendBase}/doctor?checkout=cancelled`);
+  }
   params.set('client_reference_id', certificate.id);
   params.set('payment_method_types[0]', 'card');
   params.set('line_items[0][quantity]', '1');
@@ -568,7 +574,13 @@ async function markPaidFromStripeSession(session, trigger, req) {
 
   const alreadyPaid = current?.rawSubmission?.payment?.status === 'paid';
   if (alreadyPaid) {
-    return { ok: true, updated: false, certificateId, status: current.status };
+    return {
+      ok: true,
+      updated: false,
+      certificateId,
+      status: current.status,
+      patientEmail: normalizeEmail(current?.certificateDraft?.email || ''),
+    };
   }
 
   const updated = await updateCertificate(certificateId, (certificate) => ({
@@ -607,7 +619,13 @@ async function markPaidFromStripeSession(session, trigger, req) {
     });
   }
 
-  return { ok: true, updated: true, certificateId: updated?.id || certificateId, status: updated?.status || null };
+  return {
+    ok: true,
+    updated: true,
+    certificateId: updated?.id || certificateId,
+    status: updated?.status || null,
+    patientEmail: normalizeEmail(updated?.certificateDraft?.email || current?.certificateDraft?.email || ''),
+  };
 }
 
 function getSupabaseConfig() {
@@ -888,6 +906,7 @@ export default async function handler(req, res) {
       }
 
       const body = await parseJsonBody(req);
+      const requestedUiMode = body?.uiMode === 'embedded' ? 'embedded' : 'hosted';
       const patient = body?.patient || {};
 
       if (!patient.fullName || !patient.email) {
@@ -915,7 +934,12 @@ export default async function handler(req, res) {
 
       await createCertificate(certificate);
       const pricing = stripePricingFromRequest(body);
-      const session = await createStripeCheckoutSession({ req, certificate, pricing });
+      const session = await createStripeCheckoutSession({
+        req,
+        certificate,
+        pricing,
+        uiMode: requestedUiMode,
+      });
 
       await updateCertificate(certificate.id, (current) => ({
         ...current,
@@ -954,6 +978,8 @@ export default async function handler(req, res) {
         certificateId: certificate.id,
         checkoutUrl: session.url,
         sessionId: session.id,
+        clientSecret: session.client_secret || null,
+        uiMode: requestedUiMode,
         patientToken,
       });
       return;
@@ -981,6 +1007,7 @@ export default async function handler(req, res) {
       }
 
       const result = await markPaidFromStripeSession(session, 'checkout_success_confirm', req);
+      const patientEmail = normalizeEmail(result?.patientEmail || session?.metadata?.patient_email || '');
       sendJson(res, 200, {
         ok: true,
         sessionId,
@@ -988,6 +1015,8 @@ export default async function handler(req, res) {
         certificateId: result?.certificateId || null,
         status: result?.status || null,
         updated: Boolean(result?.updated),
+        patientEmail,
+        patientToken: patientEmail ? issuePatientToken(patientEmail) : null,
       });
       return;
     }
@@ -1010,6 +1039,10 @@ export default async function handler(req, res) {
       }
 
       const latest = patientCertificates[0];
+      if (latest?.certificateDraft?.dob && !dob) {
+        sendJson(res, 400, { error: 'Date of birth is required for this account' });
+        return;
+      }
       if (dob && latest?.certificateDraft?.dob && latest.certificateDraft.dob !== dob) {
         sendJson(res, 401, { error: 'Date of birth did not match our records' });
         return;
