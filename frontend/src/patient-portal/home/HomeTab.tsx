@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import type { ComponentType, FormEvent } from 'react';
 import {
-    CalendarDays,
     ChevronRight,
     ClipboardPlus,
     FileText,
@@ -162,17 +161,6 @@ function formatReadableDate(value?: string | null) {
         month: 'long',
         year: 'numeric',
     });
-}
-
-function avatarInitials(fullName: string) {
-    const initials = fullName
-        .split(' ')
-        .map((part) => part.trim().charAt(0))
-        .filter(Boolean)
-        .slice(0, 2)
-        .join('')
-        .toUpperCase();
-    return initials || 'PT';
 }
 
 function getRecordEntries(data: PortalProfileData, tab: RecordTab): TextEntry[] {

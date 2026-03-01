@@ -289,26 +289,7 @@ function firstName(fullName: string) {
 }
 
 function sectionCardClassName(extraClassName = '') {
-    return `rounded-3xl border border-[#cfdcf2] bg-white shadow-sm ${extraClassName}`.trim();
-}
-
-function StatusPill({ status }: { status: string }) {
-    const normalized = String(status || '').toLowerCase();
-    const queued = isQueuedStatus(status);
-    const approved = normalized === 'approved';
-    const denied = normalized === 'denied';
-
-    let className = 'bg-[#edf4ff] text-[#1d4b8f]';
-    if (queued) className = 'bg-[#fff5db] text-[#8e5b02]';
-    if (approved) className = 'bg-[#ecfff0] text-[#1b7f3b]';
-    if (denied) className = 'bg-[#ffecec] text-[#b42323]';
-
-    return (
-        <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${className}`}>
-            <span className="h-2 w-2 rounded-full bg-current" />
-            {statusLabel(status)}
-        </span>
-    );
+    return `rounded-3xl border border-[#dbe2d9] bg-white shadow-[0_24px_42px_-34px_rgba(17,27,20,0.45)] ${extraClassName}`.trim();
 }
 
 function DesktopSidebar({
@@ -321,12 +302,12 @@ function DesktopSidebar({
     patient: PatientProfile;
 }) {
     return (
-        <aside className="hidden md:flex w-[260px] shrink-0 flex-col border-r border-[#cfdcf2] bg-white/90 backdrop-blur">
+        <aside className="hidden md:flex w-[260px] shrink-0 flex-col border-r border-[#d8e0d7] bg-[#f7faf6]/95 backdrop-blur">
             <div className="px-5 pt-5">
                 <a href="/" className="inline-flex items-center" aria-label="Go to home page">
                     <img src="/logo.png" alt="Onya Health" className="h-10 w-auto object-contain" />
                 </a>
-                <p className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-[#7b89a6]">Platform</p>
+                <p className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-[#6a786d]">Platform</p>
                 <nav className="mt-3 space-y-1">
                     {[
                         { id: 'home' as const, label: 'Home', icon: Home },
@@ -342,8 +323,8 @@ function DesktopSidebar({
                                 onClick={() => onTabChange(item.id)}
                                 className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${
                                     active
-                                        ? 'bg-[#eaf2ff] text-[#0f66e8]'
-                                        : 'text-[#55627f] hover:bg-[#f4f8ff] hover:text-[#1b3f7a]'
+                                        ? 'bg-[#141f18] text-white'
+                                        : 'text-[#4c5d52] hover:bg-[#edf3ec] hover:text-[#1a2a21]'
                                 }`}
                             >
                                 <Icon size={16} />
@@ -354,15 +335,15 @@ function DesktopSidebar({
                 </nav>
             </div>
 
-            <div className="mt-auto border-t border-[#d7e2f5] p-4">
-                <div className="rounded-2xl border border-[#dbe5f8] bg-[#f5f9ff] p-3">
+            <div className="mt-auto border-t border-[#d8e0d7] p-4">
+                <div className="rounded-2xl border border-[#d7dfd6] bg-[#f1f6f0] p-3">
                     <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#deebff] text-sm font-semibold text-[#184487]">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#dce7db] text-sm font-semibold text-[#1f5f3f]">
                             {avatarInitials(patient.fullName)}
                         </div>
                         <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-[#15284d]">{patient.fullName || 'Patient'}</p>
-                            <p className="truncate text-xs text-[#607194]">{patient.email || 'No email'}</p>
+                            <p className="truncate text-sm font-semibold text-[#1a2a21]">{patient.fullName || 'Patient'}</p>
+                            <p className="truncate text-xs text-[#5f7063]">{patient.email || 'No email'}</p>
                         </div>
                     </div>
                 </div>
@@ -375,12 +356,12 @@ function MobileTopBar({ activeTab }: { activeTab: MainTab }) {
     const label = activeTab.slice(0, 1).toUpperCase() + activeTab.slice(1);
 
     return (
-        <header className="sticky top-0 z-40 border-b border-[#cfdcf2] bg-white/95 backdrop-blur">
+        <header className="sticky top-0 z-40 border-b border-[#d8e0d7] bg-[#f7faf6]/95 backdrop-blur">
             <div className="flex h-14 items-center justify-between px-4">
                 <a href="/" className="inline-flex items-center" aria-label="Go to home page">
                     <img src="/logo.png" alt="Onya Health" className="h-10 w-auto object-contain" />
                 </a>
-                <span className="rounded-full border border-[#d7e2f5] bg-[#f5f9ff] px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#3b5382]">
+                <span className="rounded-full border border-[#d8e0d7] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#465549]">
                     {label}
                 </span>
             </div>
@@ -396,7 +377,7 @@ function MobileBottomNav({
     onTabChange: (next: MainTab) => void;
 }) {
     return (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#cfdcf2] bg-white">
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#d8e0d7] bg-[#f7faf6]">
             <div className="mx-auto flex h-16 w-full max-w-[740px] items-center px-1">
                 {[
                     { id: 'home' as const, label: 'Home', icon: Home },
@@ -411,7 +392,7 @@ function MobileBottomNav({
                             type="button"
                             onClick={() => onTabChange(item.id)}
                             className={`flex flex-1 flex-col items-center justify-center gap-1.5 py-2 ${
-                                active ? 'text-[#0f66e8]' : 'text-[#7382a0]'
+                                active ? 'text-[#1f5f3f]' : 'text-[#667669]'
                             }`}
                         >
                             <Icon size={20} />
@@ -429,17 +410,17 @@ function QueueBanner({ onTap }: { onTap: () => void }) {
         <button
             type="button"
             onClick={onTap}
-            className="fixed bottom-16 left-3 right-3 z-40 rounded-2xl border border-[#bfd2f3] bg-[#eaf2ff] px-4 py-3 text-left shadow-lg"
+            className="fixed bottom-16 left-3 right-3 z-40 rounded-2xl border border-[#d8c79f] bg-[#fff7e8] px-4 py-3 text-left shadow-lg"
         >
             <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#d9e8ff] text-[#0f66e8]">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f6e5bf] text-[#8d5c0a]">
                     <Heart size={18} className="fill-current stroke-current" />
                 </div>
                 <div className="min-w-0">
-                    <p className="text-sm font-semibold text-[#123a7d]">You&apos;re in the queue</p>
-                    <p className="text-xs text-[#0f66e8]">Tap to view status</p>
+                    <p className="text-sm font-semibold text-[#5d420f]">You&apos;re in the queue</p>
+                    <p className="text-xs text-[#7f5b1a]">Tap to view status</p>
                 </div>
-                <ChevronRight size={18} className="ml-auto text-[#0f66e8]" />
+                <ChevronRight size={18} className="ml-auto text-[#7f5b1a]" />
             </div>
         </button>
     );
@@ -492,6 +473,31 @@ function ConsultTab({ onOpenCall }: { onOpenCall: () => void }) {
                         </article>
                     );
                 })}
+            </div>
+        </section>
+    );
+}
+
+function ProfileCard({ patient }: { patient: PatientProfile }) {
+    const rows = [
+        { label: 'Full name', value: patient.fullName || 'Patient' },
+        { label: 'Email', value: patient.email || 'Not provided' },
+        { label: 'Date of birth', value: formatReadableDate(patient.dob) },
+        { label: 'Phone', value: patient.phone || 'Not provided' },
+    ];
+
+    return (
+        <section className={sectionCardClassName()}>
+            <div className="border-b border-[#e3e8e2] px-5 py-4">
+                <h2 className="text-lg font-semibold text-[#18251e]">Account Info</h2>
+            </div>
+            <div className="space-y-1 p-4">
+                {rows.map((row) => (
+                    <div key={row.label} className="rounded-xl border border-[#edf1ec] bg-[#f8faf7] px-3 py-2.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-[#6f7e71]">{row.label}</p>
+                        <p className="mt-1 text-sm font-medium text-[#213128]">{row.value}</p>
+                    </div>
+                ))}
             </div>
         </section>
     );
@@ -1009,6 +1015,7 @@ export default function PatientPortal() {
                     onAddTestResult={addTestResult}
                     onOpenQueue={openQueuedScreen}
                     onDownloadCertificate={downloadCertificatePdf}
+                    onGoToTab={setTab}
                 />
             );
         }
@@ -1029,9 +1036,9 @@ export default function PatientPortal() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-[#e8f1ff] px-4 py-8 font-sans text-[#1f1f23]">
-                <div className="mx-auto max-w-[900px] rounded-3xl border border-[#cfdcf2] bg-white p-6">
-                    <p className="text-sm text-[#5e6980]">Loading your patient account...</p>
+            <div className="min-h-screen bg-[#eef3ec] px-4 py-8 font-sans text-[#1f1f23]">
+                <div className="mx-auto max-w-[900px] rounded-3xl border border-[#dbe2d9] bg-white p-6">
+                    <p className="text-sm text-[#5f7063]">Loading your patient account...</p>
                 </div>
             </div>
         );
@@ -1039,21 +1046,21 @@ export default function PatientPortal() {
 
     if (loadError) {
         return (
-            <div className="min-h-screen bg-[#e8f1ff] px-4 py-8 font-sans text-[#1f1f23]">
-                <div className="mx-auto max-w-[900px] rounded-3xl border border-[#cfdcf2] bg-white p-6">
-                    <h1 className="text-2xl font-semibold text-[#162848]">Unable to load account</h1>
-                    <p className="mt-2 text-[#5e6980]">{loadError}</p>
+            <div className="min-h-screen bg-[#eef3ec] px-4 py-8 font-sans text-[#1f1f23]">
+                <div className="mx-auto max-w-[900px] rounded-3xl border border-[#dbe2d9] bg-white p-6">
+                    <h1 className="text-2xl font-semibold text-[#1a2a21]">Unable to load account</h1>
+                    <p className="mt-2 text-[#5f7063]">{loadError}</p>
                     <div className="mt-4 flex gap-3">
                         <button
                             type="button"
                             onClick={() => window.location.reload()}
-                            className="rounded-xl bg-[#0f66e8] px-4 py-2 text-sm font-semibold text-white"
+                            className="rounded-xl bg-[#1f5f3f] px-4 py-2 text-sm font-semibold text-white"
                         >
                             Retry
                         </button>
                         <a
                             href="/patient-login"
-                            className="rounded-xl border border-[#cfdcf2] bg-white px-4 py-2 text-sm font-semibold text-[#162848]"
+                            className="rounded-xl border border-[#dbe2d9] bg-white px-4 py-2 text-sm font-semibold text-[#1a2a21]"
                         >
                             Back to login
                         </a>
@@ -1065,12 +1072,12 @@ export default function PatientPortal() {
 
     return (
         <>
-            <div className="hidden min-h-screen bg-[#e8f1ff] text-[#1f1f23] md:flex">
+            <div className="hidden min-h-screen bg-[#eef3ec] text-[#1f1f23] md:flex">
                 <DesktopSidebar activeTab={mainTab} onTabChange={setTab} patient={patient} />
                 <main className="flex-1">
                     <div className="mx-auto w-full max-w-[1160px] px-8 py-7">
                         {portalScreen === 'main' && (
-                            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#d5e2f8] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#62779f]">
+                            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#d5ddd4] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#5d6d60]">
                                 <Home size={14} />
                                 {MAIN_TABS.find((tab) => tab === mainTab)?.toUpperCase()}
                             </div>
@@ -1080,7 +1087,7 @@ export default function PatientPortal() {
                 </main>
             </div>
 
-            <div className={`min-h-screen bg-[#e8f1ff] text-[#1f1f23] md:hidden ${portalScreen === 'main' ? 'pb-28' : 'pb-6'}`}>
+            <div className={`min-h-screen bg-[#eef3ec] text-[#1f1f23] md:hidden ${portalScreen === 'main' ? 'pb-28' : 'pb-6'}`}>
                 <MobileTopBar activeTab={mainTab} />
                 <main className="px-4 py-5">{renderPortalContent('mobile')}</main>
                 {portalScreen === 'main' && queuedRequest && <QueueBanner onTap={openQueuedScreen} />}
