@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 
 const LEVELS = {
@@ -11,7 +12,10 @@ const LEVELS = {
 const configuredLevel = String(process.env.LOG_LEVEL || 'info').toLowerCase();
 const activeLevel = LEVELS[configuredLevel] || LEVELS.info;
 const logToFile = String(process.env.LOG_TO_FILE || '1') !== '0';
-const logFilePath = process.env.BACKEND_LOG_FILE || path.resolve(process.cwd(), 'backend', 'data', 'backend.log');
+const defaultLogFilePath = process.env.VERCEL
+  ? path.join(os.tmpdir(), 'onya-health-backend.log')
+  : path.resolve(process.cwd(), 'backend', 'data', 'backend.log');
+const logFilePath = process.env.BACKEND_LOG_FILE || defaultLogFilePath;
 
 let fileWriteQueue = Promise.resolve();
 

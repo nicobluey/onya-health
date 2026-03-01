@@ -1,13 +1,34 @@
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { error, info } from './logger.js';
 
-const OUTBOX_PATH = path.resolve(process.cwd(), 'backend', 'data', 'outbox.log');
+function defaultOutboxPath() {
+  if (process.env.VERCEL) {
+    return path.join(os.tmpdir(), 'onya-health-outbox.log');
+  }
+  return path.resolve(process.cwd(), 'backend', 'data', 'outbox.log');
+}
+
+const OUTBOX_PATH = process.env.OUTBOX_PATH || defaultOutboxPath();
 const RESEND_API_URL = 'https://api.resend.com/emails';
 
 async function appendOutbox(entry) {
-  await fs.mkdir(path.dirname(OUTBOX_PATH), { recursive: true });
-  await fs.appendFile(OUTBOX_PATH, `${JSON.stringify(entry)}\n`, 'utf8');
+  try {
+    await fs.mkdir(path.dirname(OUTBOX_PATH), { recursive: true });
+    await fs.appendFile(OUTBOX_PATH, `${JSON.stringify(entry)}\n`, 'utf8');
+    return true;
+  } catch (err) {
+    if (['EROFS', 'EACCES', 'EPERM'].includes(err?.code)) {
+      info('email.outbox.unwritable', {
+        code: err.code,
+        message: err.message,
+        outboxPath: OUTBOX_PATH,
+      });
+      return false;
+    }
+    throw err;
+  }
 }
 
 export async function sendEmail({ to, subject, html, text, attachments = [] }) {
@@ -25,7 +46,7 @@ export async function sendEmail({ to, subject, html, text, attachments = [] }) {
   });
 
   if (!apiKey) {
-    await appendOutbox({
+    const saved = await appendOutbox({
       at: new Date().toISOString(),
       mode: 'mock',
       to: recipients,
@@ -35,7 +56,7 @@ export async function sendEmail({ to, subject, html, text, attachments = [] }) {
       text,
       attachmentNames: attachments.map((item) => item.filename),
     });
-    info('email.dispatch.mock_saved', {
+    info(saved ? 'email.dispatch.mock_saved' : 'email.dispatch.mock_unsaved', {
       provider,
       to: recipients,
       subject,

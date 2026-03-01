@@ -88,6 +88,16 @@ function mapSupabaseRowToCertificate(row) {
   ) {
     status = 'awaiting_payment';
   }
+  if (
+    ['submitted', 'pending', 'in_review', 'assigned', 'triaged'].includes(String(status).toLowerCase()) &&
+    row.reviewed_at
+  ) {
+    if (row.denial_reason) {
+      status = 'denied';
+    } else if (row.decision_reason) {
+      status = 'approved';
+    }
+  }
   const durationDays =
     med.days_requested ||
     (med.certificate_start_date && med.certificate_end_date

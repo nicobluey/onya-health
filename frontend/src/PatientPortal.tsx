@@ -24,7 +24,7 @@ import {
     Upload,
     UserRound,
 } from 'lucide-react';
-import { fetchApiJson } from './lib/api';
+import { fetchApiJson, getApiBase } from './lib/api';
 
 type MainTab = 'home' | 'consult' | 'account';
 type PortalScreen = 'main' | 'call-prep' | 'queued';
@@ -544,7 +544,13 @@ function ProfileCard({ patient }: { patient: PatientProfile }) {
     );
 }
 
-function PreviousConsults({ requests }: { requests: PortalRequest[] }) {
+function PreviousConsults({
+    requests,
+    onDownloadCertificate,
+}: {
+    requests: PortalRequest[];
+    onDownloadCertificate: (request: PortalRequest) => void;
+}) {
     const recent = requests.slice(0, 2);
 
     return (
@@ -565,13 +571,14 @@ function PreviousConsults({ requests }: { requests: PortalRequest[] }) {
                                 {request.decision?.by || (isQueuedStatus(request.status) ? 'Unassigned' : 'Completed')}
                             </p>
                             {request.certificatePdfUrl && (
-                                <a
-                                    href={request.certificatePdfUrl}
+                                <button
+                                    type="button"
+                                    onClick={() => onDownloadCertificate(request)}
                                     className="mt-3 inline-flex items-center gap-1 rounded-lg border border-[#bfd3f3] bg-[#eef5ff] px-2.5 py-1.5 text-xs font-semibold text-[#0f66e8]"
                                 >
                                     <FileText size={14} />
                                     Download certificate PDF
-                                </a>
+                                </button>
                             )}
                         </article>
                     ))}
@@ -922,6 +929,7 @@ function HomeTab({
     onAddLifestyleNote,
     onAddTestResult,
     onOpenQueue,
+    onDownloadCertificate,
 }: {
     mode: LayoutMode;
     firstNameValue: string;
@@ -935,6 +943,7 @@ function HomeTab({
     onAddLifestyleNote: (title: string, details: string) => void;
     onAddTestResult: (draft: TestResultDraft) => void;
     onOpenQueue: () => void;
+    onDownloadCertificate: (request: PortalRequest) => void;
 }) {
     const desktop = mode === 'desktop';
 
@@ -948,7 +957,7 @@ function HomeTab({
             {desktop ? (
                 <div className="grid gap-6 xl:grid-cols-[1.65fr_1fr]">
                     <div className="space-y-6">
-                        <PreviousConsults requests={requests} />
+                        <PreviousConsults requests={requests} onDownloadCertificate={onDownloadCertificate} />
                         <MedicalRecordsSection
                             data={data}
                             recordTab={recordTab}
@@ -990,7 +999,7 @@ function HomeTab({
                 </div>
             ) : (
                 <div className="space-y-5">
-                    <PreviousConsults requests={requests} />
+                    <PreviousConsults requests={requests} onDownloadCertificate={onDownloadCertificate} />
                     <MedicalRecordsSection
                         data={data}
                         recordTab={recordTab}
@@ -1068,10 +1077,12 @@ function AccountTab({
     patient,
     latestRequest,
     data,
+    onDownloadCertificate,
 }: {
     patient: PatientProfile;
     latestRequest: PortalRequest | null;
     data: PortalProfileData;
+    onDownloadCertificate: (request: PortalRequest) => void;
 }) {
     const stats = [
         { label: 'Medical history', value: data.medicalHistory.length },
@@ -1111,13 +1122,14 @@ function AccountTab({
                             <p className="mt-1 text-sm text-[#5f739b]">{statusLabel(latestRequest.status)}</p>
                             <p className="mt-1 text-xs text-[#7a8bab]">Updated {formatDate(latestRequest.createdAt)}</p>
                             {latestRequest.certificatePdfUrl && (
-                                <a
-                                    href={latestRequest.certificatePdfUrl}
+                                <button
+                                    type="button"
+                                    onClick={() => onDownloadCertificate(latestRequest)}
                                     className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[#0f66e8] px-3 py-2 text-sm font-semibold text-white"
                                 >
                                     <FileText size={15} />
                                     Download Medical Certificate
-                                </a>
+                                </button>
                             )}
                         </>
                     ) : (
@@ -1491,6 +1503,45 @@ export default function PatientPortal() {
         }
     };
 
+    const downloadCertificatePdf = async (request: PortalRequest) => {
+        if (!request.certificatePdfUrl || !token) return;
+
+        try {
+            const response = await fetch(`${getApiBase()}${request.certificatePdfUrl}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+
+            if (!response.ok) {
+                let message = 'Unable to download certificate';
+                const contentType = response.headers.get('content-type') || '';
+                if (contentType.includes('application/json')) {
+                    const payload = await response.json();
+                    message = payload?.error || message;
+                } else {
+                    const text = await response.text();
+                    if (text) {
+                        message = text.slice(0, 180);
+                    }
+                }
+                throw new Error(message);
+            }
+
+            const blob = await response.blob();
+            const objectUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = objectUrl;
+            link.download = `medical-certificate-${request.id}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(objectUrl);
+        } catch (errorObject) {
+            window.alert(errorObject instanceof Error ? errorObject.message : 'Unable to download certificate');
+        }
+    };
+
     const renderPortalContent = (mode: LayoutMode) => {
         if (portalScreen === 'call-prep') {
             return <CallPrepScreen onBack={closeOverlayScreen} />;
@@ -1520,6 +1571,7 @@ export default function PatientPortal() {
                     onAddLifestyleNote={addLifestyleNote}
                     onAddTestResult={addTestResult}
                     onOpenQueue={openQueuedScreen}
+                    onDownloadCertificate={downloadCertificatePdf}
                 />
             );
         }
@@ -1528,7 +1580,14 @@ export default function PatientPortal() {
             return <ConsultTab onOpenCall={openCallScreen} />;
         }
 
-        return <AccountTab patient={patient} latestRequest={latestRequest} data={portalData} />;
+        return (
+            <AccountTab
+                patient={patient}
+                latestRequest={latestRequest}
+                data={portalData}
+                onDownloadCertificate={downloadCertificatePdf}
+            />
+        );
     };
 
     if (loading) {
