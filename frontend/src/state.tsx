@@ -3,7 +3,7 @@ import type { BookingState, BookingStep, CertificatePurpose, Symptom, UserDetail
 
 interface BookingContextType extends BookingState {
     setPurpose: (p: CertificatePurpose) => void;
-    setSymptom: (s: Symptom) => void;
+    setSymptom: (s: Symptom[]) => void;
     setComplianceChecked: (checked: boolean) => void;
     setDescription: (d: string) => void;
     setDates: (start: Date, duration: number) => void;
@@ -20,7 +20,6 @@ const BookingContext = createContext<BookingContextType | undefined>(undefined);
 
 const FLOW_ORDER: BookingStep[] = [
     'purpose',
-    'symptom',
     'compliance',
     'description',
     'dates',
@@ -34,7 +33,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
     const [state, setState] = useState<BookingState>({
         step: 'purpose',
         purpose: null,
-        symptom: null,
+        symptom: [],
         complianceChecked: false,
         description: '',
         startDate: new Date(),
@@ -83,7 +82,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
     const value: BookingContextType = {
         ...state,
         setPurpose: (purpose: CertificatePurpose) => updateState({ purpose }),
-        setSymptom: (symptom: Symptom) => updateState({ symptom }),
+        setSymptom: (symptom: Symptom[]) => updateState({ symptom }),
         setComplianceChecked: (complianceChecked: boolean) => updateState({ complianceChecked }),
         setDescription: (description: string) => updateState({ description }),
         setDates: (startDate: Date, durationDays: number) => updateState({ startDate, durationDays }),

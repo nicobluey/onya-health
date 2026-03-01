@@ -6,17 +6,15 @@ export type CertificatePurpose =
     | 'Other';
 
 export type Symptom =
-    | 'Flu-like symptoms'
-    | 'COVID-19'
-    | 'Back pain'
+    | 'Cold / Flu'
+    | 'Gastro'
+    | 'Migraine'
+    | 'Mental Health'
     | 'Injury'
-    | 'Period pain'
-    | 'Mental health'
     | 'Other';
 
 export type BookingStep =
     | 'purpose'
-    | 'symptom'
     | 'compliance'
     | 'description'
     | 'dates'
@@ -37,7 +35,7 @@ export interface UserDetails {
 export interface BookingState {
     step: BookingStep;
     purpose: CertificatePurpose | null;
-    symptom: Symptom | null;
+    symptom: Symptom[];
     complianceChecked: boolean;
     description: string;
     startDate: Date | null;

@@ -3,18 +3,23 @@ import { Stepper } from './components/Stepper';
 import { StepRenderer } from './components/FlowSteps';
 import { UpsellModal } from './components/UpsellModal';
 import { FAQ } from './components/FAQ';
+import { HowItWorks } from './components/HowItWorks';
 import { Reviews } from './components/Reviews';
 import { LiveActivityToast } from './components/LiveActivityToast';
+import {
+    BlogsSection,
+    LeadingClinicSection,
+    ReadyToSkipWaitingRoomSection,
+    UsedByPatientsSection,
+} from './components/LandingExtras';
+import { Footer } from './components/Footer';
 
 import { COPY } from './copy';
-import { Check, ArrowRight, Menu, X } from 'lucide-react';
+import { Check, ArrowRight, Grid2x2, X } from 'lucide-react';
 import { Button } from './components/UI';
-import { Sparkles } from './components/Sparkles';
 import { useState, useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import type { ServiceConfig } from './services';
-
-const STEP_IMAGES = ['/REQUEST%20A%20CONSULT.png', '/DOCTOR%20REVIEW.png', '/RELIEF.png'];
 
 interface MobileViewProps {
     service: ServiceConfig;
@@ -36,7 +41,7 @@ export default function MobileView({ service }: MobileViewProps) {
     return (
         <div className="min-h-screen flex flex-col font-sans" style={themedStyle}>
             {/* Header */}
-            <header className="sticky top-0 z-30 bg-white/95 border-b border-white/50 shadow-sm">
+            <header className="sticky top-0 z-30 border-b border-white/30 bg-white/30 shadow-sm backdrop-blur-xl">
                 <div className="flex items-center justify-between px-4 h-14">
                     <a
                         href="/"
@@ -59,18 +64,18 @@ export default function MobileView({ service }: MobileViewProps) {
                             <button
                                 type="button"
                                 onClick={() => setMenuOpen((prev) => !prev)}
-                                className="ml-1 h-9 w-9 rounded-lg border border-border bg-white/90 text-text-primary flex items-center justify-center"
+                                className="ml-1 h-9 w-9 rounded-lg text-text-primary/90 flex items-center justify-center hover:bg-white/30 transition-colors"
                                 aria-label="Toggle navigation"
                                 aria-expanded={menuOpen}
                             >
-                                {menuOpen ? <X size={18} /> : <Menu size={18} />}
+                                {menuOpen ? <X size={18} /> : <Grid2x2 size={18} />}
                             </button>
                         )}
                     </div>
                 </div>
                 {view === 'landing' && (
                     menuOpen && (
-                        <nav className="border-t border-white/60 bg-white px-4 pb-4">
+                        <nav className="border-t border-white/40 bg-white/70 backdrop-blur-xl px-4 pb-4">
                             <div className="pt-3 space-y-2">
                                 <a
                                     href="/patient-login"
@@ -101,7 +106,7 @@ export default function MobileView({ service }: MobileViewProps) {
                                         startBooking();
                                     }}
                                 >
-                                    Book Appointment
+                                    Book now
                                 </Button>
                             </div>
                         </nav>
@@ -117,92 +122,53 @@ export default function MobileView({ service }: MobileViewProps) {
             {view === 'landing' ? (
                 <main className="flex-1">
                     {/* Hero Mobile */}
-                    <section className="pt-8 pb-12 px-5 text-center relative overflow-hidden" style={{ backgroundColor: service.theme.heroBg }}>
-                        <div
-                            className="absolute -top-20 -right-20 h-56 w-56 rounded-full blur-3xl opacity-80"
-                            style={{ backgroundColor: service.theme.heroTopGlow }}
-                        />
-                        <Sparkles />
-                        <h1 className="text-4xl font-serif font-bold leading-tight text-white mb-4 z-10 relative">
-                            Talk to a {service.providerName} covered by <span className="hero-brand-hover inline-block">Onya Health</span>.
-                        </h1>
-                        <p className="text-lg text-white font-semibold mb-8 leading-relaxed z-10 relative">
-                            {service.heroSubtitle}
-                        </p>
-
-                        <div className="mb-6 z-10 relative">
-                            <Button
-                                fullWidth
-                                onClick={startBooking}
-                                className="h-14 text-lg rounded-3xl shadow-lg bg-white hover:bg-slate-100 border border-white"
-                                style={{ color: service.theme.heroBg }}
-                            >
-                                {service.mobileCta}
-                                <ArrowRight size={18} className="ml-2" />
-                            </Button>
-                        </div>
-
-                        {/* Doctor Image Mobile */}
-                        <div className="relative mx-auto w-full max-w-[360px] aspect-[4/3] mt-4">
-                            <div
-                                className="absolute inset-0 rounded-[2rem] rotate-3 translate-y-4"
-                                style={{ backgroundColor: service.theme.heroPanelTint }}
-                            />
+                    <section className="pb-16 pt-16 text-center relative overflow-hidden" style={{ backgroundColor: service.theme.heroBg }}>
+                        <div className="absolute inset-0">
                             <img
-                                src="/DOCTORHERO.png"
-                                className="relative w-full h-full object-cover rounded-[2rem] shadow-lg z-10"
-                                alt={`${service.providerName} hero`}
+                                src="/HERO.png"
+                                alt=""
+                                aria-hidden="true"
+                                className="h-full w-full object-cover"
+                                style={{ objectPosition: '60% 84%' }}
                             />
+                            <div className="absolute inset-0 bg-bark-900/26" />
+                        </div>
+                        <div className="relative z-10 px-5">
+                            <h1 className="text-4xl font-serif font-bold leading-tight text-white mb-4">
+                                Talk to a {service.providerName} covered by <span className="hero-brand-hover inline-block">Onya Health</span>.
+                            </h1>
+                            <p className="text-lg text-white font-semibold mb-8 leading-relaxed">
+                                {service.heroSubtitle}
+                            </p>
+
+                            <div className="mb-6">
+                                <Button
+                                    fullWidth
+                                    onClick={startBooking}
+                                    className="h-11 text-base rounded-xl shadow-lg"
+                                >
+                                    {service.mobileCta}
+                                    <ArrowRight size={18} className="ml-2" />
+                                </Button>
+                            </div>
                         </div>
                     </section>
 
-                    {/* Benefit Banner Mobile */}
-                    <div className="bg-white border-b border-border py-2 px-4 overflow-hidden">
-                        <div className="grid grid-cols-2 gap-y-3 gap-x-2">
-                            {service.benefitItems.map((text, i) => (
-                                <div key={i} className="flex flex-col items-center text-center gap-1">
-                                    <div className="w-5 h-5 rounded-full bg-green-50 flex items-center justify-center text-green-600">
-                                        <Check size={14} strokeWidth={3} />
-                                    </div>
-                                    <span className="text-xs font-bold text-text-primary leading-tight">{text}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+                    <UsedByPatientsSection />
 
-                    {/* As Seen In Mobile */}
-                    <div className="bg-sand-50 py-5 border-b border-border">
-                        <div className="px-6 text-center">
-                            <p className="text-[10px] font-bold text-text-secondary uppercase tracking-[0.28em] mb-4">As seen in</p>
-                            <div className="flex flex-wrap justify-center items-center gap-6 grayscale opacity-60 mix-blend-multiply">
-                                <span className="text-xl font-serif font-bold italic">SMH</span>
-                                <span className="text-xl font-serif font-bold">news<span className="text-text-primary">.com.au</span></span>
-                                <span className="text-xl font-serif font-black tracking-tighter">ABC</span>
-                                <span className="text-xl font-serif font-bold italic">The Age</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="how-it-works" className="px-5 py-12 bg-white">
-                        <h2 className="text-2xl font-serif font-bold mb-8 text-center">How it works</h2>
-                        <div className="space-y-8">
-                            {COPY.howItWorks.steps.map((stepItem, i) => (
-                                <div key={stepItem.title} className="text-center">
-                                    <img
-                                        src={STEP_IMAGES[i]}
-                                        alt={`Step ${i + 1}: ${stepItem.title}`}
-                                        className="mx-auto w-full max-w-sm rounded-3xl mb-4"
-                                    />
-                                    <h3 className="font-bold text-lg mb-1">{i + 1}. {stepItem.title}</h3>
-                                    <p className="text-text-secondary">{stepItem.text}</p>
-                                </div>
-                            ))}
-                        </div>
+                    <div id="how-it-works">
+                        <HowItWorks onStartConsult={startBooking} />
                     </div>
 
                     <Reviews />
 
-                    <div id="faq" className="bg-sunlight-50 py-12 px-4">
+                    <BlogsSection onStartConsult={startBooking} />
+
+                    <LeadingClinicSection />
+
+                    <ReadyToSkipWaitingRoomSection onStartConsult={startBooking} />
+
+                    <div id="faq" className="bg-white py-12 px-4 border-t border-border">
                         <FAQ />
                     </div>
                     <LiveActivityToast mobile />
@@ -213,7 +179,7 @@ export default function MobileView({ service }: MobileViewProps) {
                         <StepRenderer />
                     </div>
                     {/* Trust Chips Mobile */}
-                    <div className="bg-sunlight-50 p-4 rounded-xl space-y-3">
+                    <div className="bg-white p-4 rounded-xl border border-border space-y-3">
                         <div className="text-xs font-bold uppercase text-bark-700 tracking-wider mb-1">Why Onya?</div>
                         {COPY.hero.trust.map(item => (
                             <div key={item} className="flex items-center gap-2 text-sm font-medium text-text-primary">
@@ -226,10 +192,7 @@ export default function MobileView({ service }: MobileViewProps) {
             )}
 
             <UpsellModal />
-
-            <footer className="py-8 text-center text-bark-500 text-xs bg-white border-t border-border">
-                &copy; {new Date().getFullYear()} Onya Health. Australia.
-            </footer>
+            <Footer onStartConsult={view === 'landing' ? startBooking : undefined} consultHref={`/${service.slug}`} />
         </div>
     );
 }

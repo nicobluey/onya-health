@@ -141,15 +141,24 @@ export function Reviews() {
     };
 
     return (
-        <section className="py-16 bg-sand-50 border-y border-border">
-            <div className="max-w-7xl mx-auto px-6 md:px-8">
+        <section className="relative overflow-hidden border-y border-border py-16">
+            <div className="absolute inset-0">
+                <img
+                    src="/HERO.png"
+                    alt=""
+                    aria-hidden="true"
+                    className="h-full w-full object-cover"
+                    style={{ objectPosition: '60% 77%' }}
+                />
+            </div>
+            <div className="relative mx-auto max-w-7xl px-6 md:px-8">
                 <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-8">
                     <div>
-                        <p className="text-xs font-bold uppercase tracking-[0.22em] text-forest-700 mb-2">Patient Reviews</p>
-                        <h2 className="text-3xl md:text-4xl font-serif font-bold text-text-primary">People trust Onya Health every day</h2>
-                        <p className="text-black font-bold mt-3 text-base md:text-lg">Real feedback from recent consults.</p>
+                        <p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-white/85">Patient Reviews</p>
+                        <h2 className="text-3xl font-serif font-bold text-white md:text-4xl">People trust Onya Health every day</h2>
+                        <p className="mt-3 text-base font-bold text-white md:text-lg">Real feedback from recent consults.</p>
                     </div>
-                    <Button onClick={startBooking} className="h-11 px-6 w-full md:w-auto">
+                    <Button onClick={startBooking} className="hidden h-11 px-6 md:inline-flex">
                         Start Consult
                         <ArrowRight size={16} className="ml-2" />
                     </Button>
@@ -223,6 +232,13 @@ export function Reviews() {
                             <ChevronRight size={20} />
                         </button>
                     </div>
+                </div>
+
+                <div className="mt-6 md:hidden">
+                    <Button onClick={startBooking} fullWidth className="h-11">
+                        Start Consult
+                        <ArrowRight size={16} className="ml-2" />
+                    </Button>
                 </div>
             </div>
         </section>

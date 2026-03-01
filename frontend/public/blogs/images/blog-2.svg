@@ -1,0 +1,13 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg2" x1="1200" y1="0" x2="0" y2="800" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#020617" />
+      <stop offset="1" stop-color="#1d4ed8" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" fill="url(#bg2)"/>
+  <circle cx="970" cy="180" r="110" fill="#60A5FA" fill-opacity="0.22"/>
+  <rect x="120" y="180" width="960" height="440" rx="36" fill="#0B1220" stroke="#60A5FA" stroke-width="4"/>
+  <text x="170" y="320" fill="#F8FAFC" font-family="Arial, sans-serif" font-size="54" font-weight="700">Affordable quality telehealth</text>
+  <text x="170" y="390" fill="#BFDBFE" font-family="Arial, sans-serif" font-size="34">Access care without waiting-room delays</text>
+</svg>

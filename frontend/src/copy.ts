@@ -23,12 +23,11 @@ export const COPY = {
         symptom: {
             question: "What’s your main symptom?",
             options: [
-                "Flu-like symptoms",
-                "COVID-19",
-                "Back pain",
+                "Cold / Flu",
+                "Gastro",
+                "Migraine",
+                "Mental Health",
                 "Injury",
-                "Period pain",
-                "Mental health",
                 "Other"
             ]
         },
@@ -43,8 +42,8 @@ export const COPY = {
             ]
         },
         description: {
-            prompt: "Briefly describe your symptoms",
-            helper: "This information is reviewed by the doctor and may appear on your medical certificate."
+            prompt: "Tell us about your symptoms",
+            helper: "Select one or more symptoms that match your condition. You can add optional notes for the doctor."
         },
         dates: {
             question: "When do you need the certificate for?"

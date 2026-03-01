@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
+import { Check } from 'lucide-react';
 import { useBooking } from '../state';
 import { COPY } from '../copy';
-import { Button, SelectableCard, Checkbox, Input } from './UI';
-import { motion } from 'framer-motion';
+import { Button, SelectableCard, Input } from './UI';
+import { AnimatePresence, motion } from 'framer-motion';
 import { getServiceForPath } from '../services';
 
 // Transitions
@@ -92,58 +93,45 @@ export const PurposeStep = () => {
     );
 };
 
-export const SymptomStep = () => {
-    const { setSymptom, nextStep, symptom } = useBooking();
-    return (
-        <motion.div {...fade} className="space-y-4">
-            <h2 className="text-2xl font-bold text-text-primary">{COPY.steps.symptom.question}</h2>
-            <div className="grid grid-cols-1 gap-3">
-                {COPY.steps.symptom.options.map((opt) => (
-                    <SelectableCard
-                        key={opt}
-                        selected={symptom === opt}
-                        onClick={() => { setSymptom(opt as any); nextStep(); }}
-                    >
-                        {opt}
-                    </SelectableCard>
-                ))}
-            </div>
-        </motion.div>
-    );
-};
-
 export const ComplianceStep = () => {
     const { nextStep, setComplianceChecked } = useBooking();
-    // We need to track individual checks locally or assume all must be checked logic in store. 
-    // Store just has `complianceChecked` boolean.
-    // The UI needs 5 separate checkboxes. Let's track them locally.
-
     const [checks, setChecks] = useState<boolean[]>(new Array(COPY.steps.compliance.checks.length).fill(false));
 
     const handleCheck = (idx: number, checked: boolean) => {
         const newChecks = [...checks];
         newChecks[idx] = checked;
         setChecks(newChecks);
-
-        // If all checked, update store
-        if (newChecks.every(c => c)) {
-            setComplianceChecked(true);
-        } else {
-            setComplianceChecked(false);
-        }
+        setComplianceChecked(newChecks.every(c => c));
     };
 
     return (
         <motion.div {...fade} className="space-y-6">
             <h2 className="text-2xl font-bold text-text-primary">{COPY.steps.compliance.title}</h2>
-            <div className="space-y-4">
+            <div className="space-y-3" role="group" aria-label="Before you continue confirmations">
                 {COPY.steps.compliance.checks.map((text, idx) => (
-                    <Checkbox
+                    <button
                         key={idx}
-                        label={text}
-                        checked={checks[idx]}
-                        onChange={(c) => handleCheck(idx, c)}
-                    />
+                        type="button"
+                        aria-pressed={checks[idx]}
+                        onClick={() => handleCheck(idx, !checks[idx])}
+                        className={`flex w-full min-h-14 items-start justify-between gap-3 rounded-xl border px-4 py-3 text-left text-sm font-medium leading-snug transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
+                            checks[idx]
+                                ? 'border-primary bg-white text-text-primary shadow-sm'
+                                : 'border-border bg-white text-text-secondary hover:border-sand-300 hover:bg-sand-50'
+                        }`}
+                    >
+                        <span>{text}</span>
+                        <span
+                            className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-all ${
+                                checks[idx]
+                                    ? 'border-primary bg-primary text-sand-50'
+                                    : 'border-sand-300 bg-white text-transparent'
+                            }`}
+                            aria-hidden="true"
+                        >
+                            <Check size={13} />
+                        </span>
+                    </button>
                 ))}
             </div>
             <Button
@@ -158,12 +146,18 @@ export const ComplianceStep = () => {
 };
 
 export const DescriptionStep = () => {
-    const { description, setDescription, nextStep } = useBooking();
+    const {
+        symptom,
+        setSymptom,
+        description,
+        setDescription,
+        nextStep
+    } = useBooking();
     const [error, setError] = useState('');
 
     const handleNext = () => {
-        if (!description.trim()) {
-            setError('Please describe your symptoms');
+        if (symptom.length === 0) {
+            setError('Please choose at least one symptom');
             return;
         }
         nextStep();
@@ -172,15 +166,45 @@ export const DescriptionStep = () => {
     return (
         <motion.div {...fade} className="space-y-6">
             <h2 className="text-2xl font-bold text-text-primary">{COPY.steps.description.prompt}</h2>
-            <div className="space-y-2">
-                <textarea
-                    autoFocus
-                    className="w-full h-32 p-4 rounded-xl border border-border resize-none focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
-                    placeholder="I have a sore throat and fever..."
-                    value={description}
-                    onChange={(e) => { setDescription(e.target.value); setError(''); }}
-                />
-                <p className="text-sm text-text-secondary">{COPY.steps.description.helper}</p>
+            <p className="text-sm text-text-secondary">{COPY.steps.description.helper}</p>
+
+            <div className="space-y-4">
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Symptoms">
+                    {COPY.steps.symptom.options.map((opt) => {
+                        const selected = symptom.includes(opt as any);
+                        return (
+                            <button
+                                key={opt}
+                                type="button"
+                                aria-pressed={selected}
+                                onClick={() => {
+                                    const next = selected
+                                        ? symptom.filter((value) => value !== (opt as any))
+                                        : [...symptom, opt as any];
+                                    setSymptom(next);
+                                    setError('');
+                                }}
+                                className={`rounded-full border px-4 py-2 text-sm font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
+                                    selected
+                                        ? 'border-primary bg-primary text-sand-50 shadow-sm'
+                                        : 'border-border bg-white text-text-primary hover:border-sand-300 hover:bg-sand-50'
+                                }`}
+                            >
+                                {opt}
+                            </button>
+                        );
+                    })}
+                </div>
+
+                <div className="space-y-2">
+                    <label className="block text-sm font-medium text-text-secondary">Additional notes (optional)</label>
+                    <textarea
+                        className="w-full h-28 p-4 rounded-xl border border-border resize-none focus:ring-2 focus:ring-primary focus:border-transparent outline-none"
+                        placeholder="Add anything useful for the doctor (optional)"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                    />
+                </div>
                 {error && <p className="text-xs text-red-500">{error}</p>}
             </div>
             <Button fullWidth onClick={handleNext}>Continue</Button>
@@ -190,12 +214,50 @@ export const DescriptionStep = () => {
 
 export const DatesStep = () => {
     const { setDates, nextStep, startDate, durationDays } = useBooking();
-    // Simple date picker simulation
     const today = new Date();
-    // Just show Today, Tomorrow, Next Day as buttons for start date? 
-    // User asked for "Calendar start date" and "Duration selector".
-    // For simplicity/speed in this demo, I will use native date input or simple buttons.
-    // "Calendar start date" implies a picker.
+    const [durationOpen, setDurationOpen] = useState(false);
+    const durationMenuRef = useRef<HTMLDivElement | null>(null);
+    const durationOptions = [
+        { value: 1, label: '1 day' },
+        { value: 2, label: '2 days' },
+        { value: 3, label: '3 days' },
+        { value: 4, label: '4 days' },
+        { value: 5, label: '5 days' },
+        { value: 6, label: '6 days' },
+        { value: 7, label: '7 days' },
+        { value: 8, label: 'More than 7 days' },
+    ];
+
+    const selectedDuration = durationOptions.find((option) => option.value === durationDays) || durationOptions[0];
+    const durationLabel = durationDays > 7 ? 'More than 7 days' : `${durationDays} day${durationDays > 1 ? 's' : ''}`;
+
+    const dateToInputValue = (value: Date | null) => {
+        const source = value || today;
+        const normalized = new Date(source.getTime() - source.getTimezoneOffset() * 60000);
+        return normalized.toISOString().split('T')[0];
+    };
+
+    useEffect(() => {
+        if (!durationOpen) return;
+
+        const handleClickOutside = (event: MouseEvent) => {
+            if (!durationMenuRef.current) return;
+            if (durationMenuRef.current.contains(event.target as Node)) return;
+            setDurationOpen(false);
+        };
+
+        const handleEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setDurationOpen(false);
+        };
+
+        window.addEventListener('mousedown', handleClickOutside);
+        window.addEventListener('keydown', handleEscape);
+
+        return () => {
+            window.removeEventListener('mousedown', handleClickOutside);
+            window.removeEventListener('keydown', handleEscape);
+        };
+    }, [durationOpen]);
 
     return (
         <motion.div {...fade} className="space-y-6">
@@ -207,37 +269,84 @@ export const DatesStep = () => {
                     <input
                         type="date"
                         className="w-full p-3 rounded-lg border border-border bg-white"
-                        defaultValue={today.toISOString().split('T')[0]} // Default to today
+                        value={dateToInputValue(startDate)}
                         onChange={(e) => setDates(new Date(e.target.value), durationDays)}
                     />
                 </div>
 
                 <div className="space-y-2">
                     <label className="text-sm font-medium text-text-secondary">Duration</label>
-                    <div className="grid grid-cols-3 gap-2">
-                        {[1, 2, 3].map(d => (
-                            <button
-                                key={d}
-                                onClick={() => setDates(startDate || new Date(), d)}
-                                className={`py-3 rounded-lg border font-medium transition-all ${durationDays === d
-                                    ? 'bg-primary border-primary text-sand-50'
-                                    : 'bg-white border-border text-text-secondary hover:border-sand-300'
-                                    }`}
-                            >
-                                {d} Day{d > 1 ? 's' : ''}
-                            </button>
-                        ))}
+                    <div className="relative" ref={durationMenuRef}>
+                        <button
+                            type="button"
+                            className="flex w-full items-center justify-between rounded-xl border border-border bg-white px-4 py-3 text-left text-sm font-semibold text-text-primary transition-all duration-200 hover:border-sand-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                            aria-haspopup="listbox"
+                            aria-expanded={durationOpen}
+                            aria-label="Certificate duration"
+                            onClick={() => setDurationOpen((current) => !current)}
+                        >
+                            <span>{selectedDuration.label}</span>
+                            <span aria-hidden="true" className={`text-xs transition-transform duration-200 ${durationOpen ? 'rotate-180' : ''}`}>
+                                ▾
+                            </span>
+                        </button>
+
+                        <AnimatePresence>
+                            {durationOpen && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -6 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -6 }}
+                                    transition={{ duration: 0.16 }}
+                                    className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-border bg-white shadow-lg"
+                                    role="listbox"
+                                    aria-label="Certificate duration options"
+                                >
+                                    {durationOptions.map((option) => {
+                                        const active = selectedDuration.value === option.value;
+                                        return (
+                                            <button
+                                                key={option.value}
+                                                type="button"
+                                                role="option"
+                                                aria-selected={active}
+                                                onClick={() => {
+                                                    setDates(startDate || today, option.value);
+                                                    setDurationOpen(false);
+                                                }}
+                                                className={`flex w-full items-center justify-between px-4 py-3 text-left text-sm transition-colors ${
+                                                    active
+                                                        ? 'bg-white font-semibold text-primary'
+                                                        : 'text-text-secondary hover:bg-sand-50'
+                                                }`}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        );
+                                    })}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </div>
                 </div>
 
-                <div className="bg-sunlight-50 p-4 rounded-lg">
+                <div className="rounded-lg border border-border bg-white p-4">
                     <p className="text-sm text-text-primary font-medium">
                         Certificate valid from: <span className="font-bold">{startDate ? startDate.toLocaleDateString() : 'Select date'}</span>
                     </p>
                     <p className="text-sm text-text-secondary">
-                        Length: {durationDays} day{durationDays > 1 ? 's' : ''}
+                        Length: {durationLabel}
                     </p>
                 </div>
+
+                {durationDays > 7 && (
+                    <div className="rounded-lg border border-border bg-white p-4">
+                        <p className="text-sm font-semibold text-text-primary">Doctor review required for longer durations</p>
+                        <p className="mt-1 text-sm text-text-secondary">
+                            Requests over 7 days may need a follow-up assessment before approval.
+                        </p>
+                    </div>
+                )}
             </div>
             <Button fullWidth onClick={nextStep}>Continue</Button>
         </motion.div>
@@ -247,13 +356,23 @@ export const DatesStep = () => {
 export const DetailsStep = () => {
     const { details, setDetails, nextStep } = useBooking();
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [genderOpen, setGenderOpen] = useState(false);
+    const genderMenuRef = useRef<HTMLDivElement | null>(null);
+    const genderOptions = ['Male', 'Female', 'Other'];
 
     const validate = () => {
         const newErrors: Record<string, string> = {};
-        if (!details.fullName) newErrors.fullName = "Name is required";
-        if (!details.email || !details.email.includes('@')) newErrors.email = "Valid email is required";
-        if (!details.phone) newErrors.phone = "Phone is required";
-        if (!details.address) newErrors.address = "Address is required";
+        const fullName = details.fullName.trim();
+        const dob = details.dob.trim();
+        const gender = details.gender.trim();
+        const email = details.email.trim();
+        const phone = details.phone.trim();
+
+        if (!fullName) newErrors.fullName = "Full legal name is required";
+        if (!dob) newErrors.dob = "Date of birth is required";
+        if (!gender) newErrors.gender = "Gender is required";
+        if (!email || !email.includes('@')) newErrors.email = "Valid email is required";
+        if (!phone) newErrors.phone = "Phone is required";
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -261,6 +380,28 @@ export const DetailsStep = () => {
     const handleSubmit = () => {
         if (validate()) nextStep();
     };
+
+    useEffect(() => {
+        if (!genderOpen) return;
+
+        const handleClickOutside = (event: MouseEvent) => {
+            if (!genderMenuRef.current) return;
+            if (genderMenuRef.current.contains(event.target as Node)) return;
+            setGenderOpen(false);
+        };
+
+        const handleEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') setGenderOpen(false);
+        };
+
+        window.addEventListener('mousedown', handleClickOutside);
+        window.addEventListener('keydown', handleEscape);
+
+        return () => {
+            window.removeEventListener('mousedown', handleClickOutside);
+            window.removeEventListener('keydown', handleEscape);
+        };
+    }, [genderOpen]);
 
     return (
         <motion.div {...fade} className="space-y-6">
@@ -271,41 +412,95 @@ export const DetailsStep = () => {
                     value={details.fullName}
                     onChange={(e) => setDetails({ fullName: e.target.value })}
                     error={errors.fullName}
+                    required
                 />
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <Input
                         label={COPY.steps.details.fields.dob}
                         type="date"
                         value={details.dob}
                         onChange={(e) => setDetails({ dob: e.target.value })}
+                        error={errors.dob}
+                        required
                     />
-                    <Input
-                        label={COPY.steps.details.fields.gender}
-                        placeholder="e.g. Female"
-                        value={details.gender}
-                        onChange={(e) => setDetails({ gender: e.target.value })}
-                    />
+                    <div className="relative w-full space-y-1.5" ref={genderMenuRef}>
+                        <label className="block text-sm font-medium text-text-secondary">{COPY.steps.details.fields.gender}</label>
+                        <button
+                            type="button"
+                            className={`flex h-12 w-full items-center justify-between rounded-lg border bg-white px-3 py-2 text-left text-sm transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:border-transparent ${
+                                errors.gender ? 'border-red-500 text-text-secondary' : 'border-border text-text-primary'
+                            }`}
+                            aria-haspopup="listbox"
+                            aria-expanded={genderOpen}
+                            aria-label="Gender"
+                            onClick={() => setGenderOpen((current) => !current)}
+                        >
+                            <span>{details.gender || 'Select gender'}</span>
+                            <span aria-hidden="true" className={`text-xs transition-transform duration-200 ${genderOpen ? 'rotate-180' : ''}`}>
+                                ▾
+                            </span>
+                        </button>
+                        <AnimatePresence>
+                            {genderOpen && (
+                                <motion.div
+                                    initial={{ opacity: 0, y: -6 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -6 }}
+                                    transition={{ duration: 0.16 }}
+                                    className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-border bg-white shadow-lg"
+                                    role="listbox"
+                                    aria-label="Gender options"
+                                >
+                                    {genderOptions.map((option) => {
+                                        const active = details.gender === option;
+                                        return (
+                                            <button
+                                                key={option}
+                                                type="button"
+                                                role="option"
+                                                aria-selected={active}
+                                                onClick={() => {
+                                                    setDetails({ gender: option });
+                                                    setGenderOpen(false);
+                                                }}
+                                                className={`flex w-full items-center justify-between px-4 py-3 text-left text-sm transition-colors ${
+                                                    active
+                                                        ? 'bg-white font-semibold text-primary'
+                                                        : 'text-text-secondary hover:bg-sand-50'
+                                                }`}
+                                            >
+                                                {option}
+                                            </button>
+                                        );
+                                    })}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                        {errors.gender && <p className="text-xs text-red-500">{errors.gender}</p>}
+                    </div>
                 </div>
-                <Input
-                    label={COPY.steps.details.fields.email}
-                    type="email"
-                    value={details.email}
-                    onChange={(e) => setDetails({ email: e.target.value })}
-                    error={errors.email}
-                />
-                <Input
-                    label={COPY.steps.details.fields.phone}
-                    type="tel"
-                    value={details.phone}
-                    onChange={(e) => setDetails({ phone: e.target.value })}
-                    error={errors.phone}
-                />
-                <Input
-                    label={COPY.steps.details.fields.address}
-                    value={details.address}
-                    onChange={(e) => setDetails({ address: e.target.value })}
-                    error={errors.address}
-                />
+                <div className="space-y-1.5">
+                    <Input
+                        label={COPY.steps.details.fields.email}
+                        type="email"
+                        value={details.email}
+                        onChange={(e) => setDetails({ email: e.target.value })}
+                        error={errors.email}
+                        required
+                    />
+                    {details.email.trim() && <p className="text-xs font-semibold text-amber-600">Verification pending</p>}
+                </div>
+                <div className="space-y-1.5">
+                    <Input
+                        label={COPY.steps.details.fields.phone}
+                        type="tel"
+                        value={details.phone}
+                        onChange={(e) => setDetails({ phone: e.target.value })}
+                        error={errors.phone}
+                        required
+                    />
+                    {details.phone.trim() && <p className="text-xs font-semibold text-amber-600">Verification pending</p>}
+                </div>
             </div>
             <Button fullWidth onClick={handleSubmit}>{COPY.steps.details.cta}</Button>
         </motion.div>
@@ -337,6 +532,14 @@ export const CheckoutStep = () => {
         setSubmitting(true);
 
         try {
+            const symptomSummary = symptom.join(', ');
+            const consultDescription = [
+                symptomSummary ? `Symptoms: ${symptomSummary}` : '',
+                description.trim(),
+            ]
+                .filter(Boolean)
+                .join('\n\n');
+
             const serviceType = getServiceForPath(window.location.pathname) || 'doctor';
             const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
             const uiMode = stripePublishableKey ? 'embedded' : 'hosted';
@@ -352,9 +555,9 @@ export const CheckoutStep = () => {
                     patient: details,
                     consult: {
                         purpose,
-                        symptom,
+                        symptom: symptomSummary,
                         complianceChecked,
-                        description,
+                        description: consultDescription,
                         startDate: startDate?.toISOString() || null,
                         durationDays,
                         isUnlimited,
@@ -505,7 +708,7 @@ export const ConfirmationStep = () => {
                 <h2 className="text-2xl font-bold text-text-primary mb-2">{COPY.steps.confirmation.title}</h2>
                 <p className="text-text-secondary">{COPY.steps.confirmation.message}</p>
             </div>
-            <div className="p-4 bg-sunlight-50 rounded-xl text-sm text-text-primary">
+            <div className="rounded-xl border border-border bg-white p-4 text-sm text-text-primary">
                 Check your email for confirmation and next steps.
             </div>
             <div className="space-y-3 max-w-sm mx-auto">
@@ -526,13 +729,10 @@ export const ConfirmationStep = () => {
     );
 }
 
-import { Check } from 'lucide-react';
-
 export const StepRenderer = () => {
     const { step } = useBooking();
     switch (step) {
         case 'purpose': return <PurposeStep />;
-        case 'symptom': return <SymptomStep />;
         case 'compliance': return <ComplianceStep />;
         case 'description': return <DescriptionStep />;
         case 'dates': return <DatesStep />;

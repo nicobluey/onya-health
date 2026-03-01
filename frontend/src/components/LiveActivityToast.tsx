@@ -8,7 +8,7 @@ interface LiveActivityToastProps {
 }
 
 function randomDelay() {
-    return Math.floor(Math.random() * 5001) + 5000;
+    return Math.floor(Math.random() * 3001) + 7000;
 }
 
 export function LiveActivityToast({ mobile = false }: LiveActivityToastProps) {
