@@ -289,7 +289,26 @@ function firstName(fullName: string) {
 }
 
 function sectionCardClassName(extraClassName = '') {
-    return `rounded-3xl border border-[#dbe2d9] bg-white shadow-[0_24px_42px_-34px_rgba(17,27,20,0.45)] ${extraClassName}`.trim();
+    return `rounded-3xl border border-[#cbd5e1] bg-white shadow-[0_24px_42px_-34px_rgba(15,23,42,0.24)] ${extraClassName}`.trim();
+}
+
+function PortalBackdropArt() {
+    return (
+        <>
+            <img
+                src="/Blue%20Cells.png"
+                alt=""
+                aria-hidden="true"
+                className="pointer-events-none absolute -left-24 top-24 h-72 w-72 object-cover opacity-20"
+            />
+            <img
+                src="/Microscope.png"
+                alt=""
+                aria-hidden="true"
+                className="pointer-events-none absolute -right-40 bottom-0 hidden h-[520px] w-auto object-contain opacity-12 lg:block"
+            />
+        </>
+    );
 }
 
 function DesktopSidebar({
@@ -302,12 +321,12 @@ function DesktopSidebar({
     patient: PatientProfile;
 }) {
     return (
-        <aside className="hidden md:flex w-[260px] shrink-0 flex-col border-r border-[#d8e0d7] bg-[#f7faf6]/95 backdrop-blur">
+        <aside className="hidden md:flex w-[260px] shrink-0 flex-col border-r border-[#cbd5e1] bg-[#f8fbff]/95 backdrop-blur">
             <div className="px-5 pt-5">
                 <a href="/" className="inline-flex items-center" aria-label="Go to home page">
                     <img src="/logo.png" alt="Onya Health" className="h-10 w-auto object-contain" />
                 </a>
-                <p className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-[#6a786d]">Platform</p>
+                <p className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-[#475569]">Platform</p>
                 <nav className="mt-3 space-y-1">
                     {[
                         { id: 'home' as const, label: 'Home', icon: Home },
@@ -323,8 +342,8 @@ function DesktopSidebar({
                                 onClick={() => onTabChange(item.id)}
                                 className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${
                                     active
-                                        ? 'bg-[#141f18] text-white'
-                                        : 'text-[#4c5d52] hover:bg-[#edf3ec] hover:text-[#1a2a21]'
+                                        ? 'bg-[#0f172a] text-white'
+                                        : 'text-[#334155] hover:bg-[#f1f8ff] hover:text-[#020617]'
                                 }`}
                             >
                                 <Icon size={16} />
@@ -335,15 +354,15 @@ function DesktopSidebar({
                 </nav>
             </div>
 
-            <div className="mt-auto border-t border-[#d8e0d7] p-4">
-                <div className="rounded-2xl border border-[#d7dfd6] bg-[#f1f6f0] p-3">
+            <div className="mt-auto border-t border-[#cbd5e1] p-4">
+                <div className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3">
                     <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#dce7db] text-sm font-semibold text-[#1f5f3f]">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#dbeeff] text-sm font-semibold text-[#2e8cff]">
                             {avatarInitials(patient.fullName)}
                         </div>
                         <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-[#1a2a21]">{patient.fullName || 'Patient'}</p>
-                            <p className="truncate text-xs text-[#5f7063]">{patient.email || 'No email'}</p>
+                            <p className="truncate text-sm font-semibold text-[#020617]">{patient.fullName || 'Patient'}</p>
+                            <p className="truncate text-xs text-[#475569]">{patient.email || 'No email'}</p>
                         </div>
                     </div>
                 </div>
@@ -356,12 +375,12 @@ function MobileTopBar({ activeTab }: { activeTab: MainTab }) {
     const label = activeTab.slice(0, 1).toUpperCase() + activeTab.slice(1);
 
     return (
-        <header className="sticky top-0 z-40 border-b border-[#d8e0d7] bg-[#f7faf6]/95 backdrop-blur">
+        <header className="sticky top-0 z-40 border-b border-[#cbd5e1] bg-[#f8fbff]/95 backdrop-blur">
             <div className="flex h-14 items-center justify-between px-4">
                 <a href="/" className="inline-flex items-center" aria-label="Go to home page">
                     <img src="/logo.png" alt="Onya Health" className="h-10 w-auto object-contain" />
                 </a>
-                <span className="rounded-full border border-[#d8e0d7] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#465549]">
+                <span className="rounded-full border border-[#cbd5e1] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#334155]">
                     {label}
                 </span>
             </div>
@@ -377,7 +396,7 @@ function MobileBottomNav({
     onTabChange: (next: MainTab) => void;
 }) {
     return (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#d8e0d7] bg-[#f7faf6]">
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#cbd5e1] bg-[#f8fbff]">
             <div className="mx-auto flex h-16 w-full max-w-[740px] items-center px-1">
                 {[
                     { id: 'home' as const, label: 'Home', icon: Home },
@@ -392,7 +411,7 @@ function MobileBottomNav({
                             type="button"
                             onClick={() => onTabChange(item.id)}
                             className={`flex flex-1 flex-col items-center justify-center gap-1.5 py-2 ${
-                                active ? 'text-[#1f5f3f]' : 'text-[#667669]'
+                                active ? 'text-[#2e8cff]' : 'text-[#475569]'
                             }`}
                         >
                             <Icon size={20} />
@@ -430,8 +449,8 @@ function ConsultTab({ onOpenCall }: { onOpenCall: () => void }) {
     return (
         <section>
             <header>
-                <h1 className="text-3xl font-semibold tracking-tight text-[#14264a]">Book a consultation</h1>
-                <p className="mt-1 text-base text-[#5f739b]">Choose the type of consultation you need</p>
+                <h1 className="text-3xl font-semibold tracking-tight text-[#020617]">Book a consultation</h1>
+                <p className="mt-1 text-base text-[#475569]">Choose the type of consultation you need</p>
             </header>
 
             <div className="mt-5 space-y-3">
@@ -444,30 +463,30 @@ function ConsultTab({ onOpenCall }: { onOpenCall: () => void }) {
                             onClick={clickable ? onOpenCall : undefined}
                             className={`${sectionCardClassName('p-4')} ${
                                 clickable ? 'cursor-pointer' : ''
-                            } ${option.active ? 'border-[#b7cdf4] bg-[#f8fbff]' : ''}`}
+                            } ${option.active ? 'border-[#b7dcff] bg-[#f8fbff]' : ''}`}
                         >
                             <div className="flex items-start gap-3">
                                 <div
                                     className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-                                        option.active ? 'bg-[#eaf2ff] text-[#0f66e8]' : 'bg-[#f0f4fa] text-[#8a9abc]'
+                                        option.active ? 'bg-[#eaf4ff] text-[#2e8cff]' : 'bg-[#f1f8ff] text-[#64748b]'
                                     }`}
                                 >
                                     <Icon size={18} />
                                 </div>
                                 <div className="min-w-0">
-                                    <h2 className="text-base font-semibold text-[#16305f]">{option.title}</h2>
-                                    <p className="mt-1 text-sm text-[#60739a]">{option.subtitle}</p>
+                                    <h2 className="text-base font-semibold text-[#020617]">{option.title}</h2>
+                                    <p className="mt-1 text-sm text-[#475569]">{option.subtitle}</p>
                                 </div>
                                 {option.badge ? (
                                     <span
                                         className={`ml-auto shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${
-                                            option.active ? 'bg-[#deebff] text-[#143c7d]' : 'bg-[#e5ebf6] text-[#5b6f95]'
+                                            option.active ? 'bg-[#dbeeff] text-[#165fad]' : 'bg-[#eaf4ff] text-[#64748b]'
                                         }`}
                                     >
                                         {option.badge}
                                     </span>
                                 ) : (
-                                    <ChevronRight size={18} className="ml-auto text-[#90a2c6]" />
+                                    <ChevronRight size={18} className="ml-auto text-[#94a3b8]" />
                                 )}
                             </div>
                         </article>
@@ -488,14 +507,14 @@ function ProfileCard({ patient }: { patient: PatientProfile }) {
 
     return (
         <section className={sectionCardClassName()}>
-            <div className="border-b border-[#e3e8e2] px-5 py-4">
-                <h2 className="text-lg font-semibold text-[#18251e]">Account Info</h2>
+            <div className="border-b border-[#dbeeff] px-5 py-4">
+                <h2 className="text-lg font-semibold text-[#020617]">Account Info</h2>
             </div>
             <div className="space-y-1 p-4">
                 {rows.map((row) => (
-                    <div key={row.label} className="rounded-xl border border-[#edf1ec] bg-[#f8faf7] px-3 py-2.5">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-[#6f7e71]">{row.label}</p>
-                        <p className="mt-1 text-sm font-medium text-[#213128]">{row.value}</p>
+                    <div key={row.label} className="rounded-xl border border-[#f1f8ff] bg-[#f8fbff] px-3 py-2.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-[#64748b]">{row.label}</p>
+                        <p className="mt-1 text-sm font-medium text-[#020617]">{row.value}</p>
                     </div>
                 ))}
             </div>
@@ -523,21 +542,21 @@ function AccountTab({
     return (
         <section className="space-y-5">
             <header>
-                <h1 className="text-3xl font-semibold tracking-tight text-[#14264a]">Account</h1>
-                <p className="mt-1 text-base text-[#5f739b]">View your personal details and profile activity</p>
+                <h1 className="text-3xl font-semibold tracking-tight text-[#020617]">Account</h1>
+                <p className="mt-1 text-base text-[#475569]">View your personal details and profile activity</p>
             </header>
 
             <ProfileCard patient={patient} />
 
             <section className={sectionCardClassName()}>
-                <div className="border-b border-[#dbe4f6] px-5 py-4">
-                    <h2 className="text-lg font-semibold text-[#14264a]">Profile Summary</h2>
+                <div className="border-b border-[#dbeeff] px-5 py-4">
+                    <h2 className="text-lg font-semibold text-[#020617]">Profile Summary</h2>
                 </div>
                 <div className="grid gap-3 px-5 py-4 sm:grid-cols-3">
                     {stats.map((item) => (
-                        <article key={item.label} className="rounded-2xl border border-[#dbe4f6] bg-[#f8fbff] p-3">
-                            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7080a2]">{item.label}</p>
-                            <p className="mt-2 text-2xl font-semibold text-[#173362]">{item.value}</p>
+                        <article key={item.label} className="rounded-2xl border border-[#dbeeff] bg-[#f8fbff] p-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">{item.label}</p>
+                            <p className="mt-2 text-2xl font-semibold text-[#020617]">{item.value}</p>
                         </article>
                     ))}
                 </div>
@@ -545,17 +564,17 @@ function AccountTab({
 
             <section className={sectionCardClassName()}>
                 <div className="p-5">
-                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#7588ad]">Latest consult</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">Latest consult</p>
                     {latestRequest ? (
                         <>
-                            <h2 className="mt-2 text-lg font-semibold text-[#14264a]">{consultTitle(latestRequest.serviceType)}</h2>
-                            <p className="mt-1 text-sm text-[#5f739b]">{statusLabel(latestRequest.status)}</p>
-                            <p className="mt-1 text-xs text-[#7a8bab]">Updated {formatDate(latestRequest.createdAt)}</p>
+                            <h2 className="mt-2 text-lg font-semibold text-[#020617]">{consultTitle(latestRequest.serviceType)}</h2>
+                            <p className="mt-1 text-sm text-[#475569]">{statusLabel(latestRequest.status)}</p>
+                            <p className="mt-1 text-xs text-[#64748b]">Updated {formatDate(latestRequest.createdAt)}</p>
                             {latestRequest.certificatePdfUrl && (
                                 <button
                                     type="button"
                                     onClick={() => onDownloadCertificate(latestRequest)}
-                                    className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[#0f66e8] px-3 py-2 text-sm font-semibold text-white"
+                                    className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[#2e8cff] px-3 py-2 text-sm font-semibold text-white"
                                 >
                                     <FileText size={15} />
                                     Download Medical Certificate
@@ -563,7 +582,7 @@ function AccountTab({
                             )}
                         </>
                     ) : (
-                        <p className="mt-2 text-sm text-[#63759b]">No consult history yet.</p>
+                        <p className="mt-2 text-sm text-[#475569]">No consult history yet.</p>
                     )}
                 </div>
             </section>
@@ -575,19 +594,19 @@ function CallPrepScreen({ onBack }: { onBack: () => void }) {
     return (
         <section className="space-y-5">
             <div className="grid grid-cols-3 gap-2">
-                <div className="h-1.5 rounded-full bg-[#0f66e8]" />
-                <div className="h-1.5 rounded-full bg-[#0f66e8]" />
-                <div className="h-1.5 rounded-full bg-[#d4dff3]" />
+                <div className="h-1.5 rounded-full bg-[#2e8cff]" />
+                <div className="h-1.5 rounded-full bg-[#2e8cff]" />
+                <div className="h-1.5 rounded-full bg-[#dbeeff]" />
             </div>
 
-            <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-[#5f739b]">
+            <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-[#475569]">
                 <ArrowLeft size={16} />
                 Back
             </button>
 
             <header>
-                <h1 className="text-3xl font-semibold tracking-tight text-[#14264a]">Ready to start?</h1>
-                <p className="mt-2 text-base text-[#5f739b]">A quick chat with AI to help your doctor prepare</p>
+                <h1 className="text-3xl font-semibold tracking-tight text-[#020617]">Ready to start?</h1>
+                <p className="mt-2 text-base text-[#475569]">A quick chat with AI to help your doctor prepare</p>
             </header>
 
             <article className={sectionCardClassName('overflow-hidden')}>
@@ -599,9 +618,9 @@ function CallPrepScreen({ onBack }: { onBack: () => void }) {
                 ].map((item, index) => {
                     const Icon = item.icon;
                     return (
-                        <div key={item.text} className={`flex items-center gap-3 px-4 py-3 ${index > 0 ? 'border-t border-[#e1e9f7]' : ''}`}>
-                            <Icon size={18} className="text-[#0f66e8]" />
-                            <p className="text-sm text-[#455c88]">{item.text}</p>
+                        <div key={item.text} className={`flex items-center gap-3 px-4 py-3 ${index > 0 ? 'border-t border-[#dbeeff]' : ''}`}>
+                            <Icon size={18} className="text-[#2e8cff]" />
+                            <p className="text-sm text-[#475569]">{item.text}</p>
                         </div>
                     );
                 })}
@@ -628,7 +647,7 @@ function CallPrepScreen({ onBack }: { onBack: () => void }) {
             <button
                 type="button"
                 disabled
-                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#d6e2f7] bg-[#eef3fc] text-sm font-semibold text-[#8da1c4]"
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-[#dbeeff] bg-[#f1f8ff] text-sm font-semibold text-[#94a3b8]"
             >
                 <Phone size={16} />
                 Start call
@@ -656,24 +675,24 @@ function QueuedWaitingScreen({
     return (
         <section className="space-y-5">
             <div className="grid grid-cols-3 gap-2">
-                <div className="h-1.5 rounded-full bg-[#0f66e8]" />
-                <div className="h-1.5 rounded-full bg-[#0f66e8]" />
-                <div className="h-1.5 rounded-full bg-[#0f66e8]" />
+                <div className="h-1.5 rounded-full bg-[#2e8cff]" />
+                <div className="h-1.5 rounded-full bg-[#2e8cff]" />
+                <div className="h-1.5 rounded-full bg-[#2e8cff]" />
             </div>
 
-            <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-[#5f739b]">
+            <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-[#475569]">
                 <ArrowLeft size={16} />
                 Back
             </button>
 
-            <article className="rounded-3xl border border-[#b7cdf4] bg-[#eaf2ff] px-5 py-4">
+            <article className="rounded-3xl border border-[#b7dcff] bg-[#eaf4ff] px-5 py-4">
                 <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#d9e8ff] text-[#0f66e8]">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#dbeeff] text-[#2e8cff]">
                         <Heart size={20} className="fill-current stroke-current" />
                     </div>
                     <div className="min-w-0">
-                        <h1 className="text-lg font-semibold text-[#1b3f7a]">Queued</h1>
-                        <p className="text-sm text-[#2b58a2]">A doctor will be assigned shortly</p>
+                        <h1 className="text-lg font-semibold text-[#165fad]">Queued</h1>
+                        <p className="text-sm text-[#2e8cff]">A doctor will be assigned shortly</p>
                     </div>
                 </div>
             </article>
@@ -682,10 +701,10 @@ function QueuedWaitingScreen({
                 {rows.map((row, index) => {
                     const Icon = row.icon;
                     return (
-                        <div key={row.label} className={`flex items-center gap-3 px-4 py-3 ${index > 0 ? 'border-t border-[#e1e9f7]' : ''}`}>
-                            <Icon size={16} className="text-[#8ca0c6]" />
-                            <span className="text-sm text-[#6d7f9f]">{row.label}</span>
-                            <span className="ml-auto text-sm font-semibold text-[#1f355f]">{row.value}</span>
+                        <div key={row.label} className={`flex items-center gap-3 px-4 py-3 ${index > 0 ? 'border-t border-[#dbeeff]' : ''}`}>
+                            <Icon size={16} className="text-[#94a3b8]" />
+                            <span className="text-sm text-[#475569]">{row.label}</span>
+                            <span className="ml-auto text-sm font-semibold text-[#020617]">{row.value}</span>
                         </div>
                     );
                 })}
@@ -694,7 +713,7 @@ function QueuedWaitingScreen({
             <button
                 type="button"
                 onClick={onSendMessage}
-                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#0f66e8] text-sm font-semibold text-white"
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#2e8cff] text-sm font-semibold text-white"
             >
                 <MessageCircle size={16} />
                 Message Doctor
@@ -1036,9 +1055,10 @@ export default function PatientPortal() {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-[#eef3ec] px-4 py-8 font-sans text-[#1f1f23]">
-                <div className="mx-auto max-w-[900px] rounded-3xl border border-[#dbe2d9] bg-white p-6">
-                    <p className="text-sm text-[#5f7063]">Loading your patient account...</p>
+            <div className="relative min-h-screen overflow-hidden bg-[#f8fbff] px-4 py-8 font-sans text-[#020617]">
+                <PortalBackdropArt />
+                <div className="relative z-10 mx-auto max-w-[900px] rounded-3xl border border-[#cbd5e1] bg-white p-6">
+                    <p className="text-sm text-[#475569]">Loading your patient account...</p>
                 </div>
             </div>
         );
@@ -1046,21 +1066,22 @@ export default function PatientPortal() {
 
     if (loadError) {
         return (
-            <div className="min-h-screen bg-[#eef3ec] px-4 py-8 font-sans text-[#1f1f23]">
-                <div className="mx-auto max-w-[900px] rounded-3xl border border-[#dbe2d9] bg-white p-6">
-                    <h1 className="text-2xl font-semibold text-[#1a2a21]">Unable to load account</h1>
-                    <p className="mt-2 text-[#5f7063]">{loadError}</p>
+            <div className="relative min-h-screen overflow-hidden bg-[#f8fbff] px-4 py-8 font-sans text-[#020617]">
+                <PortalBackdropArt />
+                <div className="relative z-10 mx-auto max-w-[900px] rounded-3xl border border-[#cbd5e1] bg-white p-6">
+                    <h1 className="text-2xl font-semibold text-[#020617]">Unable to load account</h1>
+                    <p className="mt-2 text-[#475569]">{loadError}</p>
                     <div className="mt-4 flex gap-3">
                         <button
                             type="button"
                             onClick={() => window.location.reload()}
-                            className="rounded-xl bg-[#1f5f3f] px-4 py-2 text-sm font-semibold text-white"
+                            className="rounded-xl bg-[#2e8cff] px-4 py-2 text-sm font-semibold text-white"
                         >
                             Retry
                         </button>
                         <a
                             href="/patient-login"
-                            className="rounded-xl border border-[#dbe2d9] bg-white px-4 py-2 text-sm font-semibold text-[#1a2a21]"
+                            className="rounded-xl border border-[#cbd5e1] bg-white px-4 py-2 text-sm font-semibold text-[#020617]"
                         >
                             Back to login
                         </a>
@@ -1072,12 +1093,13 @@ export default function PatientPortal() {
 
     return (
         <>
-            <div className="hidden min-h-screen bg-[#eef3ec] text-[#1f1f23] md:flex">
+            <div className="relative hidden min-h-screen overflow-hidden bg-[#f8fbff] text-[#020617] md:flex">
+                <PortalBackdropArt />
                 <DesktopSidebar activeTab={mainTab} onTabChange={setTab} patient={patient} />
-                <main className="flex-1">
+                <main className="relative z-10 flex-1">
                     <div className="mx-auto w-full max-w-[1160px] px-8 py-7">
                         {portalScreen === 'main' && (
-                            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#d5ddd4] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#5d6d60]">
+                            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#cbd5e1] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#475569]">
                                 <Home size={14} />
                                 {MAIN_TABS.find((tab) => tab === mainTab)?.toUpperCase()}
                             </div>
@@ -1087,9 +1109,10 @@ export default function PatientPortal() {
                 </main>
             </div>
 
-            <div className={`min-h-screen bg-[#eef3ec] text-[#1f1f23] md:hidden ${portalScreen === 'main' ? 'pb-28' : 'pb-6'}`}>
+            <div className={`relative min-h-screen overflow-hidden bg-[#f8fbff] text-[#020617] md:hidden ${portalScreen === 'main' ? 'pb-28' : 'pb-6'}`}>
+                <PortalBackdropArt />
                 <MobileTopBar activeTab={mainTab} />
-                <main className="px-4 py-5">{renderPortalContent('mobile')}</main>
+                <main className="relative z-10 px-4 py-5">{renderPortalContent('mobile')}</main>
                 {portalScreen === 'main' && queuedRequest && <QueueBanner onTap={openQueuedScreen} />}
                 {portalScreen === 'main' && <MobileBottomNav activeTab={mainTab} onTabChange={setTab} />}
             </div>
