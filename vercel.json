@@ -2,10 +2,6 @@
   "version": 2,
   "routes": [
     {
-      "src": "/api/(.*)",
-      "dest": "/api/index?__route=$1"
-    },
-    {
       "src": "/doctor/login/?$",
       "dest": "/doctor/login/index.html"
     },

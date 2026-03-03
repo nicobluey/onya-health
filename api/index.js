@@ -307,7 +307,7 @@ function userHasDoctorRole(user) {
 function userHasPatientRole(user) {
   const metadataRole = String(user?.user_metadata?.role || user?.app_metadata?.role || '').toLowerCase();
   if (!metadataRole) return !userHasDoctorRole(user);
-  return ['patient', 'member', 'consumer'].includes(metadataRole);
+  return !['provider', 'doctor', 'admin'].includes(metadataRole);
 }
 
 function parseSupabaseUsersPayload(payload) {
@@ -1773,7 +1773,44 @@ export default async function handler(req, res) {
       let canIssueReset = false;
 
       if (supabaseConfig.enabled) {
-        const supabasePatient = await findSupabasePatientByEmail(email);
+        let supabasePatient = await findSupabasePatientByEmail(email);
+        if (!supabasePatient) {
+          const certificates = await listCertificates();
+          const patientCertificates = getPatientCertificatesForEmail(certificates, email);
+          const latest = patientCertificates[0] || null;
+
+          if (latest?.certificateDraft?.email) {
+            try {
+              await createPatientAccountViaSupabase({
+                email,
+                password: createBootstrapPassword(),
+                fullName: latest.certificateDraft.fullName || '',
+                dob: latest.certificateDraft.dob || '',
+                phone: latest.certificateDraft.phone || '',
+              });
+            } catch (errorObject) {
+              // Account may already exist in Supabase auth with different metadata.
+              if (errorObject?.status === 409) {
+                await upsertSupabasePatientMetadata({
+                  email,
+                  fullName: latest.certificateDraft.fullName || '',
+                  dob: latest.certificateDraft.dob || '',
+                  phone: latest.certificateDraft.phone || '',
+                });
+              } else {
+                throw errorObject;
+              }
+            }
+
+            supabasePatient = await findSupabasePatientByEmail(email);
+            if (supabasePatient) {
+              await appendAudit({
+                type: 'PATIENT_ACCOUNT_BOOTSTRAPPED_FOR_RESET',
+                email,
+              });
+            }
+          }
+        }
         canIssueReset = Boolean(supabasePatient);
       } else {
         let localAccount = await getPatientAccountByEmail(email);

@@ -69,19 +69,11 @@
   ],
   "resetTokens": [
     {
-      "id": "55ab6d32-ba90-4e9e-b1e6-c353180ee377",
-      "email": "legacy.24719@example.com",
-      "tokenHash": "e2ed5b19031b88a6bacef2f85ec3d8f80dc8f550afd77af6f3531448b9e5f1fc",
-      "createdAt": "2026-03-02T23:51:19.715Z",
-      "expiresAt": "2026-03-03T00:51:19.715Z",
-      "usedAt": null
-    },
-    {
-      "id": "ee49fdcf-c1ad-4d60-90ae-3bead3325232",
+      "id": "a8b11d97-39e9-4846-ae21-e079ff55b0f0",
       "email": "kingnicobluey@gmail.com",
-      "tokenHash": "dda8b73d871341273ccc824fc8d2fc5f89553e9e2367a66898c7e44de8d459a7",
-      "createdAt": "2026-03-02T23:56:00.081Z",
-      "expiresAt": "2026-03-03T00:56:00.081Z",
+      "tokenHash": "f9891c2b6a6a062603ed2924cbb7ba8b705455303ac0270177735c0895ba7b39",
+      "createdAt": "2026-03-03T13:56:18.586Z",
+      "expiresAt": "2026-03-03T14:56:18.586Z",
       "usedAt": null
     }
   ]

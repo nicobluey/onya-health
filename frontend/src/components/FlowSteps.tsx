@@ -5,6 +5,7 @@ import { COPY } from '../copy';
 import { Button, SelectableCard, Input } from './UI';
 import { AnimatePresence, motion } from 'framer-motion';
 import { getServiceForPath } from '../services';
+import { fetchApiJson } from '../lib/api';
 
 // Transitions
 const fade = {
@@ -13,65 +14,6 @@ const fade = {
     exit: { opacity: 0, y: -10 },
     transition: { duration: 0.3 }
 };
-
-type EmbeddedCheckoutInstance = {
-    mount: (element: HTMLElement | string) => void;
-    destroy: () => void;
-};
-
-type StripeLike = {
-    initEmbeddedCheckout: (config: {
-        fetchClientSecret: () => Promise<string>;
-        onComplete?: () => void;
-    }) => Promise<EmbeddedCheckoutInstance>;
-};
-
-let stripeLoaderPromise: Promise<StripeLike> | null = null;
-
-function loadStripe(publishableKey: string): Promise<StripeLike> {
-    if (!publishableKey) {
-        return Promise.reject(new Error('Stripe publishable key is missing'));
-    }
-
-    if (stripeLoaderPromise) return stripeLoaderPromise;
-
-    stripeLoaderPromise = new Promise((resolve, reject) => {
-        const existingStripe = (window as any).Stripe;
-        if (typeof existingStripe === 'function') {
-            resolve(existingStripe(publishableKey));
-            return;
-        }
-
-        const scriptId = 'stripe-js';
-        let script = document.getElementById(scriptId) as HTMLScriptElement | null;
-        if (!script) {
-            script = document.createElement('script');
-            script.id = scriptId;
-            script.src = 'https://js.stripe.com/clover/stripe.js';
-            script.async = true;
-            document.head.appendChild(script);
-        } else if (typeof (window as any).Stripe === 'function') {
-            resolve((window as any).Stripe(publishableKey));
-            return;
-        }
-
-        const onLoad = () => {
-            const stripeFactory = (window as any).Stripe;
-            if (typeof stripeFactory !== 'function') {
-                reject(new Error('Stripe.js failed to initialise'));
-                return;
-            }
-            resolve(stripeFactory(publishableKey));
-        };
-
-        const onError = () => reject(new Error('Unable to load Stripe.js'));
-
-        script.addEventListener('load', onLoad, { once: true });
-        script.addEventListener('error', onError, { once: true });
-    });
-
-    return stripeLoaderPromise;
-}
 
 export const PurposeStep = () => {
     const { setPurpose, nextStep, purpose } = useBooking();
@@ -520,14 +462,8 @@ export const CheckoutStep = () => {
     } = useBooking();
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState('');
-    const [embeddedClientSecret, setEmbeddedClientSecret] = useState('');
-    const [embeddedSessionId, setEmbeddedSessionId] = useState('');
-    const checkoutContainerRef = useRef<HTMLDivElement | null>(null);
-    const embeddedCheckoutRef = useRef<EmbeddedCheckoutInstance | null>(null);
-    const stripePublishableKey = String(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '');
 
     const handleCheckout = async () => {
-        if (embeddedClientSecret) return;
         setSubmitError('');
         setSubmitting(true);
 
@@ -541,16 +477,13 @@ export const CheckoutStep = () => {
                 .join('\n\n');
 
             const serviceType = getServiceForPath(window.location.pathname) || 'doctor';
-            const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
-            const uiMode = stripePublishableKey ? 'embedded' : 'hosted';
-
-            const response = await fetch(`${apiBase}/api/checkout/session`, {
+            const { response, payload } = await fetchApiJson('/api/checkout/session', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    uiMode,
+                    uiMode: 'hosted',
                     serviceType,
                     patient: details,
                     consult: {
@@ -564,8 +497,6 @@ export const CheckoutStep = () => {
                     }
                 }),
             });
-
-            const payload = await response.json();
             if (!response.ok) {
                 throw new Error(payload.error || 'Unable to submit your certificate right now.');
             }
@@ -575,12 +506,6 @@ export const CheckoutStep = () => {
             }
             if (payload?.sessionId) {
                 window.localStorage.setItem('onya_last_checkout_session_id', payload.sessionId);
-            }
-
-            if (uiMode === 'embedded' && payload?.clientSecret) {
-                setEmbeddedClientSecret(payload.clientSecret);
-                setEmbeddedSessionId(payload.sessionId || '');
-                return;
             }
 
             if (payload?.checkoutUrl) {
@@ -595,52 +520,6 @@ export const CheckoutStep = () => {
             setSubmitting(false);
         }
     };
-
-    useEffect(() => {
-        if (!embeddedClientSecret) return;
-
-        let cancelled = false;
-
-        const mountEmbeddedCheckout = async () => {
-            try {
-                const stripe = await loadStripe(stripePublishableKey);
-                const checkout = await stripe.initEmbeddedCheckout({
-                    fetchClientSecret: async () => embeddedClientSecret,
-                    onComplete: () => {
-                        const search = new URLSearchParams();
-                        search.set('checkout', 'success');
-                        if (embeddedSessionId) {
-                            search.set('session_id', embeddedSessionId);
-                            window.localStorage.setItem('onya_last_checkout_session_id', embeddedSessionId);
-                        }
-                        window.location.assign(`/patient?${search.toString()}`);
-                    },
-                });
-
-                if (cancelled) {
-                    checkout.destroy();
-                    return;
-                }
-
-                embeddedCheckoutRef.current = checkout;
-                if (checkoutContainerRef.current) {
-                    checkout.mount(checkoutContainerRef.current);
-                }
-            } catch (errorObject) {
-                setSubmitError(errorObject instanceof Error ? errorObject.message : 'Unable to load Stripe checkout');
-            }
-        };
-
-        mountEmbeddedCheckout();
-
-        return () => {
-            cancelled = true;
-            if (embeddedCheckoutRef.current) {
-                embeddedCheckoutRef.current.destroy();
-                embeddedCheckoutRef.current = null;
-            }
-        };
-    }, [embeddedClientSecret, embeddedSessionId, stripePublishableKey]);
 
     return (
         <motion.div {...fade} className="space-y-6">
@@ -658,25 +537,14 @@ export const CheckoutStep = () => {
                 {isUnlimited && <div className="text-xs text-forest-700 font-medium">Billed monthly</div>}
             </div>
 
-            <div className="border border-border rounded-xl p-4 space-y-4">
-                {embeddedClientSecret ? (
-                    <div ref={checkoutContainerRef} className="min-h-[420px]" />
-                ) : (
-                    <>
-                        <div className="h-10 bg-sand-100 rounded animate-pulse" />
-                        <div className="h-10 bg-sand-100 rounded animate-pulse" />
-                    </>
-                )}
-            </div>
-
-            <Button fullWidth onClick={handleCheckout} disabled={submitting || Boolean(embeddedClientSecret)}>
-                {submitting ? 'Preparing checkout...' : embeddedClientSecret ? 'Checkout loaded below' : COPY.steps.checkout.cta}
+            <Button fullWidth onClick={handleCheckout} disabled={submitting}>
+                {submitting ? 'Redirecting to secure checkout...' : COPY.steps.checkout.cta}
             </Button>
             {submitError && (
                 <p className="text-sm text-red-600 font-medium">{submitError}</p>
             )}
-            {submitting && !embeddedClientSecret && (
-                <p className="text-sm text-text-secondary">Preparing secure Stripe checkout...</p>
+            {submitting && (
+                <p className="text-sm text-text-secondary">Opening Stripe checkout...</p>
             )}
 
             <div className="text-center text-xs text-text-secondary flex items-center justify-center gap-2">
