@@ -2,7 +2,21 @@ import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-const DATA_DIR = path.resolve(process.cwd(), 'backend', 'data');
+function resolveAuthDataDir() {
+  const configuredDir = String(
+    process.env.ONYA_AUTH_DATA_DIR || process.env.ONYA_DATA_DIR || ''
+  ).trim();
+  if (configuredDir) return configuredDir;
+
+  // Serverless runtimes (like Vercel) mount /var/task as read-only.
+  if (process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME) {
+    return path.resolve('/tmp', 'onya-health', 'auth');
+  }
+
+  return path.resolve(process.cwd(), 'backend', 'data');
+}
+
+const DATA_DIR = resolveAuthDataDir();
 const AUTH_DB_PATH = path.join(DATA_DIR, 'doctor-auth.json');
 
 const EMPTY_AUTH_DB = {

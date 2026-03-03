@@ -12,10 +12,9 @@ import {
   createPatientAccount,
   getPatientAccountByEmail,
   isLikelyEmail as isLikelyPatientEmail,
-  issuePasswordResetToken,
-  resetPasswordWithToken,
   setPatientAccountPassword,
   updatePatientAccountProfile,
+  validatePassword as validatePatientPassword,
 } from '../backend/lib/patient-auth.js';
 import {
   authenticateDoctorAccount,
@@ -76,6 +75,11 @@ const PATIENT_PASSWORD_RESET_TTL_MS = Math.max(
   Number(process.env.PATIENT_PASSWORD_RESET_TTL_MS || 1000 * 60 * 60)
 );
 const PATIENT_PASSWORD_RESET_PATH = process.env.PATIENT_PASSWORD_RESET_PATH || '/patient/reset-password';
+const PATIENT_PASSWORD_RESET_SIGNING_SECRET =
+  process.env.PATIENT_PASSWORD_RESET_SIGNING_SECRET ||
+  process.env.PATIENT_SESSION_SECRET ||
+  process.env.DOCTOR_SESSION_SECRET ||
+  'change-this-patient-reset-secret';
 const DOCTOR_PASSWORD_RESET_TTL_MS = Math.max(
   1000 * 60 * 5,
   Number(process.env.DOCTOR_PASSWORD_RESET_TTL_MS || 1000 * 60 * 60)
@@ -142,6 +146,60 @@ function buildDoctorPasswordResetUrl(req, token) {
   const baseUrl = getAppBaseUrl(req);
   const joiner = pathSegment.includes('?') ? '&' : '?';
   return `${baseUrl}${pathSegment}${joiner}token=${encodedToken}`;
+}
+
+function encodeBase64Url(value) {
+  return Buffer.from(String(value || ''), 'utf8').toString('base64url');
+}
+
+function decodeBase64Url(value) {
+  return Buffer.from(String(value || ''), 'base64url').toString('utf8');
+}
+
+function signResetTokenPayload(encodedPayload) {
+  return crypto
+    .createHmac('sha256', PATIENT_PASSWORD_RESET_SIGNING_SECRET)
+    .update(encodedPayload)
+    .digest('base64url');
+}
+
+function issueStatelessPatientResetToken(email) {
+  const payload = {
+    email: normalizeEmail(email),
+    exp: Date.now() + PATIENT_PASSWORD_RESET_TTL_MS,
+  };
+  const encodedPayload = encodeBase64Url(JSON.stringify(payload));
+  const signature = signResetTokenPayload(encodedPayload);
+  return `${encodedPayload}.${signature}`;
+}
+
+function verifyStatelessPatientResetToken(token) {
+  if (!token || typeof token !== 'string' || !token.includes('.')) {
+    return null;
+  }
+
+  const [encodedPayload, incomingSignature] = token.split('.');
+  const expectedSignature = signResetTokenPayload(encodedPayload);
+  const incomingBuffer = Buffer.from(String(incomingSignature || ''), 'utf8');
+  const expectedBuffer = Buffer.from(String(expectedSignature || ''), 'utf8');
+  if (
+    incomingBuffer.length !== expectedBuffer.length ||
+    !crypto.timingSafeEqual(incomingBuffer, expectedBuffer)
+  ) {
+    return null;
+  }
+
+  let payload = null;
+  try {
+    payload = JSON.parse(decodeBase64Url(encodedPayload));
+  } catch {
+    payload = null;
+  }
+  if (!payload || typeof payload !== 'object') return null;
+  if (!payload.exp || Number(payload.exp) < Date.now()) return null;
+  const email = normalizeEmail(payload.email);
+  if (!isLikelyPatientEmail(email)) return null;
+  return { email };
 }
 
 function safeTimingCompare(a, b) {
@@ -246,21 +304,45 @@ function userHasDoctorRole(user) {
   return ['provider', 'doctor', 'admin'].includes(metadataRole);
 }
 
+function userHasPatientRole(user) {
+  const metadataRole = String(user?.user_metadata?.role || user?.app_metadata?.role || '').toLowerCase();
+  if (!metadataRole) return !userHasDoctorRole(user);
+  return ['patient', 'member', 'consumer'].includes(metadataRole);
+}
+
+function parseSupabaseUsersPayload(payload) {
+  return Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.users)
+    ? payload.users
+    : Array.isArray(payload?.data?.users)
+    ? payload.data.users
+    : [];
+}
+
+function toPatientAccountFromSupabaseUser(user, fallbackEmail = '') {
+  if (!user) return null;
+  const metadata = user?.user_metadata || {};
+  return {
+    email: normalizeEmail(user?.email || fallbackEmail),
+    fullName: String(metadata?.full_name || '').trim(),
+    dob: String(metadata?.dob || '').trim(),
+    phone: String(metadata?.phone || '').trim(),
+    source: 'supabase',
+    createdAt: String(user?.created_at || ''),
+    updatedAt: String(user?.updated_at || ''),
+    lastLoginAt: '',
+    lastPasswordResetAt: '',
+    hasPassword: true,
+  };
+}
+
 async function listSupabaseDoctorEmails() {
   const config = getSupabaseConfig();
   if (!config.enabled) return [];
 
   try {
-    const listed = await supabaseAuthAdminRequest(config, 'users?page=1&per_page=1000', {
-      method: 'GET',
-    });
-    const users = Array.isArray(listed)
-      ? listed
-      : Array.isArray(listed?.users)
-      ? listed.users
-      : Array.isArray(listed?.data?.users)
-      ? listed.data.users
-      : [];
+    const users = await listSupabaseAuthUsers(config);
 
     return users
       .filter((entry) => userHasDoctorRole(entry))
@@ -811,6 +893,13 @@ async function supabaseAuthAdminRequest(config, endpoint, options = {}) {
   return data;
 }
 
+async function listSupabaseAuthUsers(config) {
+  const payload = await supabaseAuthAdminRequest(config, 'users?page=1&per_page=1000', {
+    method: 'GET',
+  });
+  return parseSupabaseUsersPayload(payload);
+}
+
 async function supabaseRestRequest(config, endpoint, options = {}) {
   const response = await fetch(`${config.url}/rest/v1/${endpoint}`, {
     method: options.method || 'GET',
@@ -966,16 +1055,7 @@ async function findSupabaseDoctorByEmail(email) {
   const config = getSupabaseConfig();
   if (!config.enabled) return null;
 
-  const listed = await supabaseAuthAdminRequest(config, 'users?page=1&per_page=1000', {
-    method: 'GET',
-  });
-  const users = Array.isArray(listed)
-    ? listed
-    : Array.isArray(listed?.users)
-    ? listed.users
-    : Array.isArray(listed?.data?.users)
-    ? listed.data.users
-    : [];
+  const users = await listSupabaseAuthUsers(config);
 
   const normalized = normalizeEmail(email);
   const match = users.find((entry) => normalizeEmail(entry?.email) === normalized && userHasDoctorRole(entry));
@@ -1001,6 +1081,136 @@ async function updateSupabaseDoctorPasswordByEmail(email, password) {
   });
 
   return doctor;
+}
+
+async function findSupabasePatientByEmail(email) {
+  const config = getSupabaseConfig();
+  if (!config.enabled) return null;
+
+  const users = await listSupabaseAuthUsers(config);
+  const normalized = normalizeEmail(email);
+  const match = users.find((entry) => normalizeEmail(entry?.email) === normalized && userHasPatientRole(entry));
+  if (!match) return null;
+
+  return {
+    id: match.id || null,
+    ...toPatientAccountFromSupabaseUser(match, email),
+  };
+}
+
+async function createPatientAccountViaSupabase({ email, password, fullName = '', dob = '', phone = '' }) {
+  const config = getSupabaseConfig();
+  if (!config.enabled) return null;
+
+  let created;
+  try {
+    created = await supabaseAuthAdminRequest(config, 'users', {
+      method: 'POST',
+      body: {
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: {
+          role: 'patient',
+          full_name: String(fullName || '').trim(),
+          dob: String(dob || '').trim(),
+          phone: String(phone || '').trim(),
+        },
+      },
+    });
+  } catch (errorObject) {
+    const message = String(errorObject?.message || '').toLowerCase();
+    if (errorObject?.status === 422 || message.includes('already')) {
+      const conflict = new Error('Patient account already exists');
+      conflict.status = 409;
+      throw conflict;
+    }
+    throw errorObject;
+  }
+
+  const user = created?.user || created?.data?.user || created || null;
+  return toPatientAccountFromSupabaseUser(user, email);
+}
+
+async function authenticatePatientViaSupabase(email, password) {
+  const config = getSupabaseConfig();
+  if (!config.url || !config.anonKey) {
+    return null;
+  }
+
+  const loginResponse = await fetch(`${config.url}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: {
+      apikey: config.anonKey,
+      Authorization: `Bearer ${config.anonKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, password }),
+  });
+
+  const text = await loginResponse.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = null;
+  }
+
+  if (!loginResponse.ok) return null;
+  const user = data?.user || null;
+  if (!user) return null;
+  if (userHasDoctorRole(user)) return null;
+
+  return toPatientAccountFromSupabaseUser(user, email);
+}
+
+async function updateSupabasePatientPasswordByEmail(email, password) {
+  const account = await findSupabasePatientByEmail(email);
+  if (!account?.id) return null;
+
+  const config = getSupabaseConfig();
+  await supabaseAuthAdminRequest(config, `users/${account.id}`, {
+    method: 'PUT',
+    body: { password },
+  });
+
+  return account;
+}
+
+async function upsertSupabasePatientMetadata({ email, fullName, dob, phone }) {
+  const existing = await findSupabasePatientByEmail(email);
+  if (!existing?.id) return null;
+
+  const usersConfig = getSupabaseConfig();
+  const users = await listSupabaseAuthUsers(usersConfig);
+  const user = users.find((entry) => String(entry?.id || '') === String(existing.id)) || null;
+  if (!user) return existing;
+
+  const currentMetadata = user?.user_metadata || {};
+  const nextMetadata = {
+    ...currentMetadata,
+    role: String(currentMetadata?.role || 'patient'),
+    full_name: String(fullName || currentMetadata?.full_name || '').trim(),
+    dob: String(dob || currentMetadata?.dob || '').trim(),
+    phone: String(phone || currentMetadata?.phone || '').trim(),
+  };
+
+  const changed = JSON.stringify(currentMetadata) !== JSON.stringify(nextMetadata);
+  if (changed) {
+    await supabaseAuthAdminRequest(usersConfig, `users/${existing.id}`, {
+      method: 'PUT',
+      body: {
+        user_metadata: nextMetadata,
+      },
+    });
+  }
+
+  return {
+    ...existing,
+    fullName: String(nextMetadata.full_name || '').trim(),
+    dob: String(nextMetadata.dob || '').trim(),
+    phone: String(nextMetadata.phone || '').trim(),
+  };
 }
 
 function parseApiRoute(req) {
@@ -1213,6 +1423,11 @@ export default async function handler(req, res) {
         sendJson(res, 400, { error: 'Email confirmation does not match' });
         return;
       }
+      const passwordError = validatePatientPassword(password);
+      if (passwordError) {
+        sendJson(res, 400, { error: passwordError });
+        return;
+      }
 
       const session = await fetchStripeCheckoutSession(sessionId);
       const paymentStatus = String(session?.payment_status || '').toLowerCase();
@@ -1242,47 +1457,88 @@ export default async function handler(req, res) {
       const dob = String(latest?.certificateDraft?.dob || '').trim();
       const phone = String(latest?.certificateDraft?.phone || '').trim();
 
-      let account = await getPatientAccountByEmail(expectedEmail);
-      if (account) {
-        try {
-          account = await setPatientAccountPassword({ email: expectedEmail, password });
-        } catch (errorObject) {
-          if (errorObject?.code === 'PASSWORD_INVALID') {
-            sendJson(res, 400, { error: errorObject.message });
-            return;
-          }
-          throw errorObject;
-        }
-        await updatePatientAccountProfile({
-          email: expectedEmail,
-          fullName,
-          dob,
-          phone,
-        });
-      } else {
-        try {
-          account = await createPatientAccount({
+      let account = null;
+      const supabaseConfig = getSupabaseConfig();
+      if (supabaseConfig.enabled) {
+        const existingSupabasePatient = await findSupabasePatientByEmail(expectedEmail);
+        if (existingSupabasePatient) {
+          await updateSupabasePatientPasswordByEmail(expectedEmail, password);
+          account = await upsertSupabasePatientMetadata({
             email: expectedEmail,
-            password,
             fullName,
             dob,
             phone,
           });
-        } catch (errorObject) {
-          if (errorObject?.code === 'PASSWORD_INVALID') {
-            sendJson(res, 400, { error: errorObject.message });
-            return;
-          }
-          if (errorObject?.code === 'ACCOUNT_EXISTS') {
-            account = await setPatientAccountPassword({ email: expectedEmail, password });
-            await updatePatientAccountProfile({
+        } else {
+          try {
+            account = await createPatientAccountViaSupabase({
               email: expectedEmail,
+              password,
               fullName,
               dob,
               phone,
             });
-          } else {
+          } catch (errorObject) {
+            if (errorObject?.status === 409) {
+              await updateSupabasePatientPasswordByEmail(expectedEmail, password);
+              account = await upsertSupabasePatientMetadata({
+                email: expectedEmail,
+                fullName,
+                dob,
+                phone,
+              });
+            } else {
+              throw errorObject;
+            }
+          }
+        }
+
+        if (!account) {
+          account = await findSupabasePatientByEmail(expectedEmail);
+        }
+      } else {
+        account = await getPatientAccountByEmail(expectedEmail);
+        if (account) {
+          try {
+            account = await setPatientAccountPassword({ email: expectedEmail, password });
+          } catch (errorObject) {
+            if (errorObject?.code === 'PASSWORD_INVALID') {
+              sendJson(res, 400, { error: errorObject.message });
+              return;
+            }
             throw errorObject;
+          }
+          await updatePatientAccountProfile({
+            email: expectedEmail,
+            fullName,
+            dob,
+            phone,
+          });
+        } else {
+          try {
+            account = await createPatientAccount({
+              email: expectedEmail,
+              password,
+              fullName,
+              dob,
+              phone,
+            });
+          } catch (errorObject) {
+            if (errorObject?.code === 'PASSWORD_INVALID') {
+              sendJson(res, 400, { error: errorObject.message });
+              return;
+            }
+            if (errorObject?.code === 'ACCOUNT_EXISTS') {
+              account = await setPatientAccountPassword({ email: expectedEmail, password });
+              await updatePatientAccountProfile({
+                email: expectedEmail,
+                fullName,
+                dob,
+                phone,
+              });
+            } else {
+              throw errorObject;
+            }
           }
         }
       }
@@ -1325,21 +1581,37 @@ export default async function handler(req, res) {
       const certificates = await listCertificates();
       const patientCertificates = getPatientCertificatesForEmail(certificates, email);
       const latest = patientCertificates[0] || null;
+      const supabaseConfig = getSupabaseConfig();
 
       if (password) {
-        const account = await authenticatePatientAccount({ email, password });
+        let account = null;
+        if (supabaseConfig.url && supabaseConfig.anonKey) {
+          account = await authenticatePatientViaSupabase(email, password);
+        }
+        if (!account) {
+          account = await authenticatePatientAccount({ email, password });
+        }
         if (!account) {
           sendJson(res, 401, { error: 'Invalid email or password' });
           return;
         }
 
         if (latest?.certificateDraft) {
-          await updatePatientAccountProfile({
-            email,
-            fullName: latest.certificateDraft.fullName || '',
-            dob: latest.certificateDraft.dob || '',
-            phone: latest.certificateDraft.phone || '',
-          });
+          if (supabaseConfig.enabled) {
+            await upsertSupabasePatientMetadata({
+              email,
+              fullName: latest.certificateDraft.fullName || '',
+              dob: latest.certificateDraft.dob || '',
+              phone: latest.certificateDraft.phone || '',
+            });
+          } else {
+            await updatePatientAccountProfile({
+              email,
+              fullName: latest.certificateDraft.fullName || '',
+              dob: latest.certificateDraft.dob || '',
+              phone: latest.certificateDraft.phone || '',
+            });
+          }
         }
 
         const token = issuePatientToken(email);
@@ -1369,12 +1641,21 @@ export default async function handler(req, res) {
         return;
       }
 
-      await updatePatientAccountProfile({
-        email,
-        fullName: latest?.certificateDraft?.fullName || '',
-        dob: latest?.certificateDraft?.dob || '',
-        phone: latest?.certificateDraft?.phone || '',
-      });
+      if (supabaseConfig.enabled) {
+        await upsertSupabasePatientMetadata({
+          email,
+          fullName: latest?.certificateDraft?.fullName || '',
+          dob: latest?.certificateDraft?.dob || '',
+          phone: latest?.certificateDraft?.phone || '',
+        });
+      } else {
+        await updatePatientAccountProfile({
+          email,
+          fullName: latest?.certificateDraft?.fullName || '',
+          dob: latest?.certificateDraft?.dob || '',
+          phone: latest?.certificateDraft?.phone || '',
+        });
+      }
 
       const token = issuePatientToken(email);
       sendJson(res, 200, {
@@ -1397,26 +1678,50 @@ export default async function handler(req, res) {
         sendJson(res, 400, { error: 'A valid email is required' });
         return;
       }
+      const passwordError = validatePatientPassword(password);
+      if (passwordError) {
+        sendJson(res, 400, { error: passwordError });
+        return;
+      }
 
       let account;
-      try {
-        account = await createPatientAccount({
-          email,
-          password,
-          fullName,
-          dob,
-          phone,
-        });
-      } catch (errorObject) {
-        if (errorObject?.code === 'ACCOUNT_EXISTS') {
-          sendJson(res, 409, { error: 'An account already exists for this email' });
-          return;
+      const supabaseConfig = getSupabaseConfig();
+      if (supabaseConfig.enabled) {
+        try {
+          account = await createPatientAccountViaSupabase({
+            email,
+            password,
+            fullName,
+            dob,
+            phone,
+          });
+        } catch (errorObject) {
+          if (errorObject?.status === 409) {
+            sendJson(res, 409, { error: 'An account already exists for this email' });
+            return;
+          }
+          throw errorObject;
         }
-        if (errorObject?.code === 'PASSWORD_INVALID') {
-          sendJson(res, 400, { error: errorObject.message });
-          return;
+      } else {
+        try {
+          account = await createPatientAccount({
+            email,
+            password,
+            fullName,
+            dob,
+            phone,
+          });
+        } catch (errorObject) {
+          if (errorObject?.code === 'ACCOUNT_EXISTS') {
+            sendJson(res, 409, { error: 'An account already exists for this email' });
+            return;
+          }
+          if (errorObject?.code === 'PASSWORD_INVALID') {
+            sendJson(res, 400, { error: errorObject.message });
+            return;
+          }
+          throw errorObject;
         }
-        throw errorObject;
       }
 
       await appendAudit({
@@ -1464,46 +1769,56 @@ export default async function handler(req, res) {
         return;
       }
 
-      let resetPayload = await issuePasswordResetToken(email, PATIENT_PASSWORD_RESET_TTL_MS);
-      if (!resetPayload) {
-        const certificates = await listCertificates();
-        const patientCertificates = getPatientCertificatesForEmail(certificates, email);
-        const latest = patientCertificates[0] || null;
+      const supabaseConfig = getSupabaseConfig();
+      let canIssueReset = false;
 
-        if (latest?.certificateDraft?.email) {
-          try {
-            await createPatientAccount({
+      if (supabaseConfig.enabled) {
+        const supabasePatient = await findSupabasePatientByEmail(email);
+        canIssueReset = Boolean(supabasePatient);
+      } else {
+        let localAccount = await getPatientAccountByEmail(email);
+        if (!localAccount) {
+          const certificates = await listCertificates();
+          const patientCertificates = getPatientCertificatesForEmail(certificates, email);
+          const latest = patientCertificates[0] || null;
+
+          if (latest?.certificateDraft?.email) {
+            try {
+              await createPatientAccount({
+                email,
+                password: createBootstrapPassword(),
+                fullName: latest.certificateDraft.fullName || '',
+                dob: latest.certificateDraft.dob || '',
+                phone: latest.certificateDraft.phone || '',
+              });
+            } catch (errorObject) {
+              if (errorObject?.code !== 'ACCOUNT_EXISTS') {
+                throw errorObject;
+              }
+            }
+
+            await updatePatientAccountProfile({
               email,
-              password: createBootstrapPassword(),
               fullName: latest.certificateDraft.fullName || '',
               dob: latest.certificateDraft.dob || '',
               phone: latest.certificateDraft.phone || '',
             });
-          } catch (errorObject) {
-            if (errorObject?.code !== 'ACCOUNT_EXISTS') {
-              throw errorObject;
+
+            localAccount = await getPatientAccountByEmail(email);
+            if (localAccount) {
+              await appendAudit({
+                type: 'PATIENT_ACCOUNT_BOOTSTRAPPED_FOR_RESET',
+                email,
+              });
             }
           }
-
-          await updatePatientAccountProfile({
-            email,
-            fullName: latest.certificateDraft.fullName || '',
-            dob: latest.certificateDraft.dob || '',
-            phone: latest.certificateDraft.phone || '',
-          });
-
-          resetPayload = await issuePasswordResetToken(email, PATIENT_PASSWORD_RESET_TTL_MS);
-          if (resetPayload) {
-            await appendAudit({
-              type: 'PATIENT_ACCOUNT_BOOTSTRAPPED_FOR_RESET',
-              email,
-            });
-          }
         }
+        canIssueReset = Boolean(localAccount);
       }
 
-      if (resetPayload) {
-        const resetUrl = buildPatientPasswordResetUrl(req, resetPayload.token);
+      if (canIssueReset) {
+        const token = issueStatelessPatientResetToken(email);
+        const resetUrl = buildPatientPasswordResetUrl(req, token);
         const resetEmail = renderPatientPasswordResetEmail({
           baseUrl: getFrontendBaseUrl(req),
           resetUrl,
@@ -1526,7 +1841,7 @@ export default async function handler(req, res) {
       } else {
         info('patient.password_reset.request_skipped', {
           email,
-          reason: 'no_patient_account_or_certificate',
+          reason: 'no_patient_account',
         });
       }
 
@@ -1545,40 +1860,63 @@ export default async function handler(req, res) {
         sendJson(res, 400, { error: 'token and password are required' });
         return;
       }
+      const passwordError = validatePatientPassword(nextPassword);
+      if (passwordError) {
+        sendJson(res, 400, { error: passwordError });
+        return;
+      }
 
-      let account;
-      try {
-        account = await resetPasswordWithToken({
-          token,
-          newPassword: nextPassword,
-        });
-      } catch (errorObject) {
-        if (errorObject?.code === 'PASSWORD_INVALID') {
-          sendJson(res, 400, { error: errorObject.message });
-          return;
-        }
-        if (['TOKEN_INVALID', 'TOKEN_EXPIRED', 'ACCOUNT_NOT_FOUND'].includes(String(errorObject?.code || ''))) {
+      const decoded = verifyStatelessPatientResetToken(token);
+      if (!decoded?.email) {
+        sendJson(res, 400, { error: 'Invalid or expired reset token' });
+        return;
+      }
+      const email = normalizeEmail(decoded.email);
+
+      let account = null;
+      const supabaseConfig = getSupabaseConfig();
+      if (supabaseConfig.enabled) {
+        const existing = await findSupabasePatientByEmail(email);
+        if (!existing) {
           sendJson(res, 400, { error: 'Invalid or expired reset token' });
           return;
         }
-        throw errorObject;
+        await updateSupabasePatientPasswordByEmail(email, nextPassword);
+        account = await findSupabasePatientByEmail(email);
+      } else {
+        try {
+          account = await setPatientAccountPassword({
+            email,
+            password: nextPassword,
+          });
+        } catch (errorObject) {
+          if (errorObject?.code === 'PASSWORD_INVALID') {
+            sendJson(res, 400, { error: errorObject.message });
+            return;
+          }
+          throw errorObject;
+        }
+        if (!account) {
+          sendJson(res, 400, { error: 'Invalid or expired reset token' });
+          return;
+        }
       }
 
       await appendAudit({
         type: 'PATIENT_PASSWORD_RESET_COMPLETED',
-        email: account.email,
+        email,
       });
 
-      const patientToken = issuePatientToken(account.email);
+      const patientToken = issuePatientToken(email);
       sendJson(res, 200, {
         token: patientToken,
         patient: buildPatientIdentity({
-          email: account.email,
+          email,
           latestCertificate: null,
           account,
         }),
       });
-      info('patient.password_reset.completed', { email: account.email });
+      info('patient.password_reset.completed', { email });
       return;
     }
 
@@ -1586,7 +1924,14 @@ export default async function handler(req, res) {
       const patient = await requirePatient(req, res);
       if (!patient) return;
 
-      const account = await getPatientAccountByEmail(patient.email);
+      const supabaseConfig = getSupabaseConfig();
+      let account = null;
+      if (supabaseConfig.enabled) {
+        account = await findSupabasePatientByEmail(patient.email);
+      }
+      if (!account) {
+        account = await getPatientAccountByEmail(patient.email);
+      }
       const certificates = await listCertificates();
       const patientCertificates = getPatientCertificatesForEmail(certificates, patient.email);
       if (patientCertificates.length === 0 && !account) {
@@ -1596,12 +1941,21 @@ export default async function handler(req, res) {
 
       const latest = patientCertificates[0] || null;
       if (latest?.certificateDraft) {
-        await updatePatientAccountProfile({
-          email: patient.email,
-          fullName: latest.certificateDraft.fullName || '',
-          dob: latest.certificateDraft.dob || '',
-          phone: latest.certificateDraft.phone || '',
-        });
+        if (supabaseConfig.enabled) {
+          account = await upsertSupabasePatientMetadata({
+            email: patient.email,
+            fullName: latest.certificateDraft.fullName || '',
+            dob: latest.certificateDraft.dob || '',
+            phone: latest.certificateDraft.phone || '',
+          });
+        } else {
+          await updatePatientAccountProfile({
+            email: patient.email,
+            fullName: latest.certificateDraft.fullName || '',
+            dob: latest.certificateDraft.dob || '',
+            phone: latest.certificateDraft.phone || '',
+          });
+        }
       }
 
       sendJson(res, 200, {
