@@ -4,6 +4,7 @@ import DesktopView from './desktop';
 import HomeHub from './HomeHub';
 import PatientPortal from './PatientPortal';
 import PatientLogin from './PatientLogin';
+import PatientResetPassword from './PatientResetPassword';
 import { getServiceForPath, SERVICE_CONFIGS } from './services';
 import { BlogIndexPage } from './components/blog/BlogIndexPage';
 import { BlogArticlePage } from './components/blog/BlogArticlePage';
@@ -22,6 +23,10 @@ function App() {
 
   if (pathname === '/patient-login') {
     return <PatientLogin />;
+  }
+
+  if (pathname === '/patient/reset-password') {
+    return <PatientResetPassword />;
   }
 
   if (pathname === '/patient' || pathname.startsWith('/patient/')) {

@@ -3,72 +3,354 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Doctor Login - Onya Health</title>
+    <title>Doctor Portal - Onya Health</title>
     <style>
-      body { font-family: Inter, Arial, sans-serif; margin: 0; background: #eef5ff; color: #12243f; }
-      .container { max-width: 420px; margin: 10vh auto; background: #fff; border: 1px solid #d9e7ff; border-radius: 18px; padding: 28px; box-shadow: 0 12px 30px rgba(16, 70, 170, 0.08); }
-      h1 { margin: 0 0 8px; font-size: 28px; }
-      p { margin: 0 0 20px; color: #4f6fa6; }
-      label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
-      input { width: 100%; box-sizing: border-box; border: 1px solid #c4d8ff; border-radius: 12px; padding: 12px; margin-bottom: 14px; }
-      button { width: 100%; border: 0; border-radius: 12px; padding: 12px 14px; background: #0f66e8; color: #fff; font-weight: 700; cursor: pointer; }
-      button:disabled { opacity: 0.6; cursor: not-allowed; }
-      .error { margin-top: 12px; color: #b3122f; font-size: 13px; min-height: 16px; }
-      .help { margin-top: 16px; font-size: 12px; color: #6b86b1; }
-      code { background: #f4f8ff; padding: 2px 6px; border-radius: 6px; }
+      :root {
+        --bg: #f4f7fb;
+        --card: #ffffff;
+        --line: #d9e3f2;
+        --text: #0f172a;
+        --muted: #475569;
+        --primary: #3b82f6;
+        --primary-hover: #2563eb;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Basic Commercial Pro", Arial, sans-serif;
+      }
+
+      .container {
+        width: 100%;
+        max-width: 470px;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: var(--card);
+        box-shadow: 0 26px 60px -40px rgba(15, 23, 42, 0.45);
+        overflow: hidden;
+      }
+
+      .hero {
+        padding: 20px 22px 10px;
+      }
+
+      .logo {
+        width: 170px;
+        max-width: 100%;
+        height: auto;
+        display: block;
+      }
+
+      h1 {
+        margin: 14px 0 8px;
+        font-size: 30px;
+        line-height: 1.08;
+      }
+
+      p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 8px;
+        padding: 14px 22px 0;
+      }
+
+      .tab {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #fff;
+        color: var(--text);
+        padding: 8px 14px;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .tab.active {
+        border-color: #bfd6ff;
+        background: #eaf3ff;
+        color: #1d4ed8;
+      }
+
+      .panel {
+        padding: 18px 22px 22px;
+        display: none;
+      }
+
+      .panel.active {
+        display: block;
+      }
+
+      label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      input {
+        width: 100%;
+        margin-bottom: 12px;
+        padding: 12px;
+        border: 1px solid #c8d7ed;
+        border-radius: 12px;
+        font: inherit;
+      }
+
+      .actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      button[type="submit"], .link-button {
+        border: 0;
+        border-radius: 12px;
+        padding: 12px 16px;
+        background: var(--primary);
+        color: #fff;
+        font: inherit;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      button[type="submit"]:hover,
+      .link-button:hover {
+        background: var(--primary-hover);
+      }
+
+      button[type="submit"]:disabled {
+        opacity: 0.65;
+        cursor: not-allowed;
+      }
+
+      .link-button {
+        background: transparent;
+        color: var(--primary-hover);
+        padding: 0;
+      }
+
+      .status {
+        min-height: 18px;
+        margin-top: 12px;
+        font-size: 13px;
+      }
+
+      .status.error { color: #be123c; }
+      .status.success { color: #15803d; }
+
+      .foot {
+        border-top: 1px solid var(--line);
+        padding: 14px 22px 18px;
+        font-size: 12px;
+        color: #64748b;
+      }
     </style>
   </head>
   <body>
     <main class="container">
-      <h1>Doctor Review Login</h1>
-      <p>Sign in to review pending medical certificates.</p>
-      <form id="login-form">
-        <label for="email">Doctor Email</label>
-        <input id="email" name="email" type="email" placeholder="doctor@onyahealth.com" required />
+      <section class="hero">
+        <img src="/logo.png" alt="Onya Health" class="logo" />
+        <h1>Doctor portal</h1>
+        <p>Sign in to review certificates. New doctors can create an account below.</p>
+      </section>
 
-        <label for="password">Password</label>
-        <input id="password" name="password" type="password" placeholder="••••••••" required />
+      <div class="tabs" id="tabs">
+        <button class="tab active" data-target="signin">Sign in</button>
+        <button class="tab" data-target="signup">Sign up</button>
+        <button class="tab" data-target="forgot">Reset password</button>
+      </div>
 
-        <button id="login-button" type="submit">Sign in</button>
-        <div id="error" class="error"></div>
-      </form>
-      <p class="help">Default local credentials: <code>doctor@onyahealth.com</code> / <code>ChangeMe123!</code></p>
+      <section id="signin" class="panel active">
+        <form id="signin-form">
+          <label for="signin-email">Doctor email</label>
+          <input id="signin-email" name="email" type="email" autocomplete="username" required />
+          <label for="signin-password">Password</label>
+          <input id="signin-password" name="password" type="password" autocomplete="current-password" required />
+          <div class="actions">
+            <button id="signin-button" type="submit">Sign in</button>
+            <button class="link-button" type="button" data-open="forgot">Forgot password?</button>
+          </div>
+          <div class="status" id="signin-status"></div>
+        </form>
+      </section>
+
+      <section id="signup" class="panel">
+        <form id="signup-form">
+          <label for="signup-name">Full name</label>
+          <input id="signup-name" name="fullName" type="text" autocomplete="name" required />
+          <label for="signup-email">Doctor email</label>
+          <input id="signup-email" name="email" type="email" autocomplete="username" required />
+          <label for="signup-password">Password</label>
+          <input id="signup-password" name="password" type="password" autocomplete="new-password" required />
+          <button id="signup-button" type="submit">Create doctor account</button>
+          <div class="status" id="signup-status"></div>
+        </form>
+      </section>
+
+      <section id="forgot" class="panel">
+        <form id="forgot-form">
+          <label for="forgot-email">Doctor email</label>
+          <input id="forgot-email" name="email" type="email" autocomplete="email" required />
+          <button id="forgot-button" type="submit">Send reset link</button>
+          <div class="status" id="forgot-status"></div>
+        </form>
+      </section>
+
+      <section id="reset" class="panel">
+        <form id="reset-form">
+          <input id="reset-token" name="token" type="hidden" />
+          <label for="reset-password">New password</label>
+          <input id="reset-password" name="password" type="password" autocomplete="new-password" required />
+          <label for="reset-confirm-password">Confirm password</label>
+          <input id="reset-confirm-password" name="confirmPassword" type="password" autocomplete="new-password" required />
+          <button id="reset-button" type="submit">Update password</button>
+          <div class="status" id="reset-status"></div>
+        </form>
+      </section>
+
+      <div class="foot">
+        Every signed-up doctor is automatically included in certificate notification emails.
+      </div>
     </main>
+
     <script>
-      const form = document.getElementById('login-form');
-      const button = document.getElementById('login-button');
-      const error = document.getElementById('error');
+      const params = new URLSearchParams(window.location.search);
+      const resetTokenFromUrl = String(params.get('token') || '').trim();
 
-      form.addEventListener('submit', async (event) => {
+      const tabs = document.querySelectorAll('.tab');
+      const panels = document.querySelectorAll('.panel');
+
+      const openPanel = (targetId) => {
+        tabs.forEach((tab) => tab.classList.toggle('active', tab.dataset.target === targetId));
+        panels.forEach((panel) => panel.classList.toggle('active', panel.id === targetId));
+      };
+
+      tabs.forEach((tab) => {
+        tab.addEventListener('click', () => openPanel(tab.dataset.target));
+      });
+      document.querySelectorAll('[data-open]').forEach((button) => {
+        button.addEventListener('click', () => openPanel(button.dataset.open));
+      });
+
+      const setStatus = (id, message, isError = false) => {
+        const node = document.getElementById(id);
+        node.textContent = message || '';
+        node.classList.toggle('error', Boolean(message && isError));
+        node.classList.toggle('success', Boolean(message && !isError));
+      };
+
+      async function submitJson(url, payload) {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(data.error || 'Request failed');
+        }
+        return data;
+      }
+
+      document.getElementById('signin-form').addEventListener('submit', async (event) => {
         event.preventDefault();
-        error.textContent = '';
+        setStatus('signin-status', '');
+        const button = document.getElementById('signin-button');
         button.disabled = true;
-
-        const formData = new FormData(form);
-        const payload = {
-          email: String(formData.get('email') || ''),
-          password: String(formData.get('password') || ''),
-        };
+        const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
 
         try {
-          const response = await fetch('/api/doctor/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          });
-          const data = await response.json();
-          if (!response.ok) {
-            throw new Error(data.error || 'Login failed');
-          }
-
+          const data = await submitJson('/api/doctor/login', payload);
           localStorage.setItem('onyaDoctorToken', data.token);
           window.location.href = '/doctor/queue';
-        } catch (err) {
-          error.textContent = err.message || 'Login failed';
+        } catch (error) {
+          setStatus('signin-status', error.message || 'Login failed', true);
         } finally {
           button.disabled = false;
         }
       });
+
+      document.getElementById('signup-form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        setStatus('signup-status', '');
+        const button = document.getElementById('signup-button');
+        button.disabled = true;
+        const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+
+        try {
+          const data = await submitJson('/api/doctor/register', payload);
+          localStorage.setItem('onyaDoctorToken', data.token);
+          window.location.href = '/doctor/queue';
+        } catch (error) {
+          setStatus('signup-status', error.message || 'Unable to create account', true);
+        } finally {
+          button.disabled = false;
+        }
+      });
+
+      document.getElementById('forgot-form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        setStatus('forgot-status', '');
+        const button = document.getElementById('forgot-button');
+        button.disabled = true;
+        const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+
+        try {
+          await submitJson('/api/doctor/password/reset/request', payload);
+          setStatus('forgot-status', 'If an account exists, a reset link has been sent.');
+        } catch (error) {
+          setStatus('forgot-status', error.message || 'Unable to send reset link', true);
+        } finally {
+          button.disabled = false;
+        }
+      });
+
+      document.getElementById('reset-form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        setStatus('reset-status', '');
+        const button = document.getElementById('reset-button');
+        button.disabled = true;
+
+        const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+        if (String(payload.password || '') !== String(payload.confirmPassword || '')) {
+          setStatus('reset-status', 'Passwords do not match', true);
+          button.disabled = false;
+          return;
+        }
+
+        try {
+          const data = await submitJson('/api/doctor/password/reset/confirm', {
+            token: payload.token,
+            password: payload.password,
+          });
+          localStorage.setItem('onyaDoctorToken', data.token);
+          window.location.href = '/doctor/queue';
+        } catch (error) {
+          setStatus('reset-status', error.message || 'Unable to reset password', true);
+        } finally {
+          button.disabled = false;
+        }
+      });
+
+      if (resetTokenFromUrl) {
+        document.getElementById('reset-token').value = resetTokenFromUrl;
+        openPanel('reset');
+      }
     </script>
   </body>
 </html>

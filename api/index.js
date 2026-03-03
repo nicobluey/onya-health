@@ -7,6 +7,25 @@ import {
   verifyDoctorToken,
   verifyPatientToken,
 } from '../backend/lib/auth.js';
+import {
+  authenticatePatientAccount,
+  createPatientAccount,
+  getPatientAccountByEmail,
+  isLikelyEmail as isLikelyPatientEmail,
+  issuePasswordResetToken,
+  resetPasswordWithToken,
+  setPatientAccountPassword,
+  updatePatientAccountProfile,
+} from '../backend/lib/patient-auth.js';
+import {
+  authenticateDoctorAccount,
+  createDoctorAccount,
+  isLikelyEmail as isLikelyDoctorEmail,
+  issueDoctorPasswordResetToken,
+  listDoctorEmails,
+  resetDoctorPasswordWithToken,
+  upsertDoctorAccount,
+} from '../backend/lib/doctor-auth.js';
 import { calculateRisk } from '../backend/lib/risk.js';
 import { buildCertificatePdf } from '../backend/lib/pdf.js';
 import { generateDoctorNotes, generateMoreInfoDraft } from '../backend/lib/notes.js';
@@ -19,13 +38,24 @@ import {
   updateCertificate,
 } from '../backend/lib/storage.js';
 import { sendEmail } from '../backend/lib/email.js';
+import {
+  renderDoctorPatientMessageEmail,
+  renderDoctorPasswordResetEmail,
+  renderDoctorReviewEmail,
+  renderDoctorWelcomeEmail,
+  renderPatientCertificateDeniedEmail,
+  renderPatientCertificateReadyEmail,
+  renderPatientMoreInfoEmail,
+  renderPatientPasswordResetEmail,
+  renderPatientWelcomeEmail,
+} from '../backend/lib/email-templates.js';
 import { error, info } from '../backend/lib/logger.js';
 
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 const FRONTEND_BASE_URL = (process.env.FRONTEND_BASE_URL || '').replace(/\/$/, '');
 const APP_BASE_URL = (process.env.APP_BASE_URL || '').replace(/\/$/, '');
 
-const DOCTOR_NOTIFICATION_EMAILS = (process.env.DOCTOR_NOTIFICATION_EMAILS || 'doctor@onyahealth.com')
+const DOCTOR_NOTIFICATION_EMAILS_CONFIGURED = (process.env.DOCTOR_NOTIFICATION_EMAILS || 'doctor@onyahealth.com')
   .split(',')
   .map((item) => item.trim())
   .filter(Boolean);
@@ -41,6 +71,16 @@ const STRIPE_PRICE_PRODUCT_MULTI_DAY_RECURRING =
 const STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS || 1121);
 const STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS || 2711);
 const STRIPE_AMOUNT_RECURRING_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_RECURRING_AUD_CENTS || 1917);
+const PATIENT_PASSWORD_RESET_TTL_MS = Math.max(
+  1000 * 60 * 5,
+  Number(process.env.PATIENT_PASSWORD_RESET_TTL_MS || 1000 * 60 * 60)
+);
+const PATIENT_PASSWORD_RESET_PATH = process.env.PATIENT_PASSWORD_RESET_PATH || '/patient/reset-password';
+const DOCTOR_PASSWORD_RESET_TTL_MS = Math.max(
+  1000 * 60 * 5,
+  Number(process.env.DOCTOR_PASSWORD_RESET_TTL_MS || 1000 * 60 * 60)
+);
+const DOCTOR_PASSWORD_RESET_PATH = process.env.DOCTOR_PASSWORD_RESET_PATH || '/doctor/login';
 
 const OPEN_REVIEW_STATUSES = new Set(['pending', 'submitted', 'triaged', 'assigned', 'in_review']);
 
@@ -74,6 +114,34 @@ function getAppBaseUrl(req) {
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
+}
+
+function buildPatientPasswordResetUrl(req, token) {
+  const encodedToken = encodeURIComponent(String(token || '').trim());
+  const configuredPath = String(PATIENT_PASSWORD_RESET_PATH || '').trim();
+
+  if (configuredPath.startsWith('https://') || configuredPath.startsWith('http://')) {
+    const joiner = configuredPath.includes('?') ? '&' : '?';
+    return `${configuredPath}${joiner}token=${encodedToken}`;
+  }
+
+  const pathSegment = configuredPath.startsWith('/') ? configuredPath : `/${configuredPath}`;
+  return `${getFrontendBaseUrl(req)}${pathSegment}?token=${encodedToken}`;
+}
+
+function buildDoctorPasswordResetUrl(req, token) {
+  const encodedToken = encodeURIComponent(String(token || '').trim());
+  const configuredPath = String(DOCTOR_PASSWORD_RESET_PATH || '').trim();
+
+  if (configuredPath.startsWith('https://') || configuredPath.startsWith('http://')) {
+    const joiner = configuredPath.includes('?') ? '&' : '?';
+    return `${configuredPath}${joiner}token=${encodedToken}`;
+  }
+
+  const pathSegment = configuredPath.startsWith('/') ? configuredPath : `/${configuredPath}`;
+  const baseUrl = getAppBaseUrl(req);
+  const joiner = pathSegment.includes('?') ? '&' : '?';
+  return `${baseUrl}${pathSegment}${joiner}token=${encodedToken}`;
 }
 
 function safeTimingCompare(a, b) {
@@ -167,7 +235,60 @@ function isOpenForReview(status) {
 }
 
 function currentEmailProvider() {
+  if (String(process.env.SMTP_HOST || '').trim() && String(process.env.SMTP_USER || '').trim() && String(process.env.SMTP_PASS || '').trim()) {
+    return 'smtp';
+  }
   return process.env.RESEND_API_KEY ? 'resend' : 'mock-outbox';
+}
+
+function userHasDoctorRole(user) {
+  const metadataRole = String(user?.user_metadata?.role || user?.app_metadata?.role || '').toLowerCase();
+  return ['provider', 'doctor', 'admin'].includes(metadataRole);
+}
+
+async function listSupabaseDoctorEmails() {
+  const config = getSupabaseConfig();
+  if (!config.enabled) return [];
+
+  try {
+    const listed = await supabaseAuthAdminRequest(config, 'users?page=1&per_page=1000', {
+      method: 'GET',
+    });
+    const users = Array.isArray(listed)
+      ? listed
+      : Array.isArray(listed?.users)
+      ? listed.users
+      : Array.isArray(listed?.data?.users)
+      ? listed.data.users
+      : [];
+
+    return users
+      .filter((entry) => userHasDoctorRole(entry))
+      .map((entry) => normalizeEmail(entry?.email))
+      .filter((email) => isLikelyDoctorEmail(email));
+  } catch (errorObject) {
+    info('doctor.notifications.supabase_list_failed', {
+      message: errorObject?.message || String(errorObject),
+    });
+    return [];
+  }
+}
+
+async function resolveDoctorNotificationEmails() {
+  const localEmails = await listDoctorEmails();
+  const supabaseEmails = await listSupabaseDoctorEmails();
+  const deduped = Array.from(
+    new Set(
+      [...DOCTOR_NOTIFICATION_EMAILS_CONFIGURED, ...localEmails, ...supabaseEmails]
+        .map((email) => normalizeEmail(email))
+        .filter((email) => isLikelyDoctorEmail(email))
+    )
+  );
+
+  if (deduped.length === 0) {
+    return ['doctor@onyahealth.com'];
+  }
+  return deduped;
 }
 
 function getPatientCertificatesForEmail(certificates, email) {
@@ -204,6 +325,20 @@ function patientSummaryFromCertificate(certificate) {
       ? `/api/patient/requests/${encodeURIComponent(certificate.id)}/certificate.pdf`
       : null,
   };
+}
+
+function buildPatientIdentity({ email, latestCertificate, account }) {
+  const draft = latestCertificate?.certificateDraft || {};
+  return {
+    fullName: String(account?.fullName || draft.fullName || '').trim(),
+    email: normalizeEmail(email || account?.email || draft.email || ''),
+    dob: String(account?.dob || draft.dob || '').trim(),
+    phone: String(account?.phone || draft.phone || '').trim(),
+  };
+}
+
+function createBootstrapPassword() {
+  return `Temp${crypto.randomBytes(12).toString('hex')}9A`;
 }
 
 function doctorPayloadFromRequest(cert) {
@@ -450,25 +585,26 @@ async function fetchStripeEvent(eventId) {
 
 async function sendDoctorReviewEmail(certificate, req) {
   const reviewUrl = `${getAppBaseUrl(req)}/doctor/login`;
-  const html = `
-    <p>A new medical certificate requires review.</p>
-    <p><strong>Request ID:</strong> ${certificate.id}</p>
-    <p><strong>Patient:</strong> ${certificate.certificateDraft.fullName}</p>
-    <p><strong>Risk:</strong> ${certificate.risk.level} (${certificate.risk.score})</p>
-    <p><a href="${reviewUrl}">Open doctor review queue</a></p>
-  `;
+  const recipients = await resolveDoctorNotificationEmails();
+  const emailContent = renderDoctorReviewEmail({
+    baseUrl: getFrontendBaseUrl(req),
+    requestId: certificate.id,
+    patientName: certificate.certificateDraft.fullName || 'Unknown patient',
+    riskLabel: `${certificate.risk.level} (${certificate.risk.score})`,
+    reviewUrl,
+  });
 
   await sendEmail({
-    to: DOCTOR_NOTIFICATION_EMAILS,
+    to: recipients,
     subject: `Medical certificate review needed: ${certificate.id}`,
-    html,
-    text: `A new medical certificate (${certificate.id}) is ready for review. Visit ${reviewUrl}`,
+    html: emailContent.html,
+    text: emailContent.text,
   });
 
   info('certificate.doctor_review_email.sent', {
     certificateId: certificate.id,
     provider: currentEmailProvider(),
-    recipients: DOCTOR_NOTIFICATION_EMAILS,
+    recipients,
   });
 }
 
@@ -482,15 +618,16 @@ async function sendPatientDecisionEmail(certificate) {
       doctorNotes: certificate?.decision?.notes || '',
     });
 
+    const emailContent = renderPatientCertificateReadyEmail({
+      baseUrl: FRONTEND_BASE_URL || APP_BASE_URL || '',
+      requestId: certificate.id,
+    });
+
     await sendEmail({
       to: patientEmail,
       subject: 'Your medical certificate is ready',
-      html: `
-        <p>Your medical certificate is ready.</p>
-        <p>Request ID: <strong>${certificate.id}</strong></p>
-        <p>Please find your certificate PDF attached to this email.</p>
-      `,
-      text: `Your medical certificate (${certificate.id}) is ready. The certificate PDF is attached.`,
+      html: emailContent.html,
+      text: emailContent.text,
       attachments: [
         {
           filename: `medical-certificate-${certificate.id}.pdf`,
@@ -509,16 +646,15 @@ async function sendPatientDecisionEmail(certificate) {
     return;
   }
 
+  const emailContent = renderPatientCertificateDeniedEmail({
+    baseUrl: FRONTEND_BASE_URL || APP_BASE_URL || '',
+    requestId: certificate.id,
+  });
   await sendEmail({
     to: patientEmail,
     subject: 'Update on your medical certificate request',
-    html: `
-      <p>Your medical certificate request has been reviewed.</p>
-      <p>Request ID: <strong>${certificate.id}</strong></p>
-      <p>Outcome: <strong>Not approved</strong></p>
-      <p>Please book another consult if your condition changes.</p>
-    `,
-    text: `Your medical certificate request (${certificate.id}) was reviewed and not approved.`,
+    html: emailContent.html,
+    text: emailContent.text,
   });
 
   info('certificate.patient_email.sent', {
@@ -534,18 +670,18 @@ async function sendPatientMoreInfoEmail(certificate, doctorEmail, notes) {
   const patientEmail = certificate?.certificateDraft?.email;
   if (!patientEmail) return;
 
+  const emailContent = renderPatientMoreInfoEmail({
+    baseUrl: FRONTEND_BASE_URL || APP_BASE_URL || '',
+    requestId: certificate.id,
+    doctorEmail,
+    notes,
+  });
+
   await sendEmail({
     to: patientEmail,
     subject: 'More information requested for your medical certificate',
-    html: `
-      <p>Your doctor needs a little more information before finalising your medical certificate.</p>
-      <p>Request ID: <strong>${certificate.id}</strong></p>
-      <p><strong>Doctor note:</strong></p>
-      <p>${String(notes || 'Please provide additional details to continue your review.').replace(/\n/g, '<br/>')}</p>
-      <p>Reply with the requested details and we will continue your review.</p>
-      <p>Reviewed by: ${doctorEmail}</p>
-    `,
-    text: `More information is required for request ${certificate.id}. Doctor note: ${notes || 'Please provide additional details.'}`,
+    html: emailContent.html,
+    text: emailContent.text,
   });
 
   info('certificate.more_info_email.sent', {
@@ -821,7 +957,50 @@ async function authenticateDoctorViaSupabase(email, password) {
 
   return {
     email: normalizeEmail(loginData?.user?.email || email),
+    fullName: String(loginData?.user?.user_metadata?.full_name || '').trim(),
+    source: 'supabase',
   };
+}
+
+async function findSupabaseDoctorByEmail(email) {
+  const config = getSupabaseConfig();
+  if (!config.enabled) return null;
+
+  const listed = await supabaseAuthAdminRequest(config, 'users?page=1&per_page=1000', {
+    method: 'GET',
+  });
+  const users = Array.isArray(listed)
+    ? listed
+    : Array.isArray(listed?.users)
+    ? listed.users
+    : Array.isArray(listed?.data?.users)
+    ? listed.data.users
+    : [];
+
+  const normalized = normalizeEmail(email);
+  const match = users.find((entry) => normalizeEmail(entry?.email) === normalized && userHasDoctorRole(entry));
+  if (!match) return null;
+
+  return {
+    id: match.id || null,
+    email: normalizeEmail(match.email),
+    fullName: String(match?.user_metadata?.full_name || '').trim(),
+  };
+}
+
+async function updateSupabaseDoctorPasswordByEmail(email, password) {
+  const doctor = await findSupabaseDoctorByEmail(email);
+  if (!doctor?.id) return null;
+
+  const config = getSupabaseConfig();
+  await supabaseAuthAdminRequest(config, `users/${doctor.id}`, {
+    method: 'PUT',
+    body: {
+      password,
+    },
+  });
+
+  return doctor;
 }
 
 function parseApiRoute(req) {
@@ -965,8 +1144,6 @@ export default async function handler(req, res) {
         mode: pricing.mode,
       });
 
-      const patientToken = issuePatientToken(normalizeEmail(patient.email));
-
       info('checkout.session.created', {
         certificateId: certificate.id,
         stripeSessionId: session.id || null,
@@ -980,7 +1157,6 @@ export default async function handler(req, res) {
         sessionId: session.id,
         clientSecret: session.client_secret || null,
         uiMode: requestedUiMode,
-        patientToken,
       });
       return;
     }
@@ -1016,7 +1192,121 @@ export default async function handler(req, res) {
         status: result?.status || null,
         updated: Boolean(result?.updated),
         patientEmail,
-        patientToken: patientEmail ? issuePatientToken(patientEmail) : null,
+        requiresAccountSetup: Boolean(patientEmail),
+      });
+      return;
+    }
+
+    if (req.method === 'POST' && routePath === 'patient/checkout/account/setup') {
+      const body = await parseJsonBody(req);
+      const sessionId = String(body?.sessionId || body?.session_id || '').trim();
+      const email = normalizeEmail(body?.email);
+      const confirmEmail = normalizeEmail(body?.confirmEmail || body?.confirm_email || '');
+      const password = String(body?.password || '');
+
+      if (!sessionId || !email || !confirmEmail || !password) {
+        sendJson(res, 400, { error: 'sessionId, email, confirmEmail, and password are required' });
+        return;
+      }
+
+      if (email !== confirmEmail) {
+        sendJson(res, 400, { error: 'Email confirmation does not match' });
+        return;
+      }
+
+      const session = await fetchStripeCheckoutSession(sessionId);
+      const paymentStatus = String(session?.payment_status || '').toLowerCase();
+      if (!['paid', 'no_payment_required'].includes(paymentStatus)) {
+        sendJson(res, 409, {
+          error: 'Payment is not completed yet',
+          paymentStatus: session?.payment_status || null,
+        });
+        return;
+      }
+
+      const result = await markPaidFromStripeSession(session, 'checkout_account_setup', req);
+      const expectedEmail = normalizeEmail(result?.patientEmail || session?.metadata?.patient_email || '');
+      if (!expectedEmail) {
+        sendJson(res, 400, { error: 'Unable to determine the patient email for this checkout' });
+        return;
+      }
+      if (email !== expectedEmail) {
+        sendJson(res, 400, { error: `Email must match the consult email (${expectedEmail})` });
+        return;
+      }
+
+      const certificates = await listCertificates();
+      const patientCertificates = getPatientCertificatesForEmail(certificates, expectedEmail);
+      const latest = patientCertificates[0] || null;
+      const fullName = String(latest?.certificateDraft?.fullName || '').trim();
+      const dob = String(latest?.certificateDraft?.dob || '').trim();
+      const phone = String(latest?.certificateDraft?.phone || '').trim();
+
+      let account = await getPatientAccountByEmail(expectedEmail);
+      if (account) {
+        try {
+          account = await setPatientAccountPassword({ email: expectedEmail, password });
+        } catch (errorObject) {
+          if (errorObject?.code === 'PASSWORD_INVALID') {
+            sendJson(res, 400, { error: errorObject.message });
+            return;
+          }
+          throw errorObject;
+        }
+        await updatePatientAccountProfile({
+          email: expectedEmail,
+          fullName,
+          dob,
+          phone,
+        });
+      } else {
+        try {
+          account = await createPatientAccount({
+            email: expectedEmail,
+            password,
+            fullName,
+            dob,
+            phone,
+          });
+        } catch (errorObject) {
+          if (errorObject?.code === 'PASSWORD_INVALID') {
+            sendJson(res, 400, { error: errorObject.message });
+            return;
+          }
+          if (errorObject?.code === 'ACCOUNT_EXISTS') {
+            account = await setPatientAccountPassword({ email: expectedEmail, password });
+            await updatePatientAccountProfile({
+              email: expectedEmail,
+              fullName,
+              dob,
+              phone,
+            });
+          } else {
+            throw errorObject;
+          }
+        }
+      }
+
+      const patientToken = issuePatientToken(expectedEmail);
+      await appendAudit({
+        type: 'PATIENT_ACCOUNT_SETUP_FROM_CHECKOUT',
+        email: expectedEmail,
+        stripeSessionId: sessionId,
+      });
+
+      sendJson(res, 200, {
+        ok: true,
+        token: patientToken,
+        patientEmail: expectedEmail,
+        patient: buildPatientIdentity({
+          email: expectedEmail,
+          latestCertificate: latest,
+          account: account || null,
+        }),
+      });
+      info('patient.checkout_account_setup.completed', {
+        email: expectedEmail,
+        stripeSessionId: sessionId,
       });
       return;
     }
@@ -1025,6 +1315,7 @@ export default async function handler(req, res) {
       const body = await parseJsonBody(req);
       const email = normalizeEmail(body.email);
       const dob = String(body.dob || '').trim();
+      const password = String(body.password || '');
 
       if (!email) {
         sendJson(res, 400, { error: 'Email is required' });
@@ -1033,12 +1324,42 @@ export default async function handler(req, res) {
 
       const certificates = await listCertificates();
       const patientCertificates = getPatientCertificatesForEmail(certificates, email);
+      const latest = patientCertificates[0] || null;
+
+      if (password) {
+        const account = await authenticatePatientAccount({ email, password });
+        if (!account) {
+          sendJson(res, 401, { error: 'Invalid email or password' });
+          return;
+        }
+
+        if (latest?.certificateDraft) {
+          await updatePatientAccountProfile({
+            email,
+            fullName: latest.certificateDraft.fullName || '',
+            dob: latest.certificateDraft.dob || '',
+            phone: latest.certificateDraft.phone || '',
+          });
+        }
+
+        const token = issuePatientToken(email);
+        sendJson(res, 200, {
+          token,
+          patient: buildPatientIdentity({
+            email,
+            latestCertificate: latest,
+            account,
+          }),
+        });
+        info('patient.login.success', { email, method: 'password' });
+        return;
+      }
+
       if (patientCertificates.length === 0) {
         sendJson(res, 404, { error: 'No patient account found for this email yet' });
         return;
       }
 
-      const latest = patientCertificates[0];
       if (latest?.certificateDraft?.dob && !dob) {
         sendJson(res, 400, { error: 'Date of birth is required for this account' });
         return;
@@ -1048,16 +1369,216 @@ export default async function handler(req, res) {
         return;
       }
 
+      await updatePatientAccountProfile({
+        email,
+        fullName: latest?.certificateDraft?.fullName || '',
+        dob: latest?.certificateDraft?.dob || '',
+        phone: latest?.certificateDraft?.phone || '',
+      });
+
       const token = issuePatientToken(email);
       sendJson(res, 200, {
         token,
-        patient: {
-          fullName: latest.certificateDraft.fullName || '',
-          email,
-          dob: latest.certificateDraft.dob || '',
-        },
+        patient: buildPatientIdentity({ email, latestCertificate: latest, account: null }),
       });
-      info('patient.login.success', { email });
+      info('patient.login.success', { email, method: 'dob' });
+      return;
+    }
+
+    if (req.method === 'POST' && routePath === 'patient/register') {
+      const body = await parseJsonBody(req);
+      const email = normalizeEmail(body.email);
+      const password = String(body.password || '');
+      const fullName = String(body.fullName || body.name || '').trim();
+      const dob = String(body.dob || '').trim();
+      const phone = String(body.phone || '').trim();
+
+      if (!isLikelyPatientEmail(email)) {
+        sendJson(res, 400, { error: 'A valid email is required' });
+        return;
+      }
+
+      let account;
+      try {
+        account = await createPatientAccount({
+          email,
+          password,
+          fullName,
+          dob,
+          phone,
+        });
+      } catch (errorObject) {
+        if (errorObject?.code === 'ACCOUNT_EXISTS') {
+          sendJson(res, 409, { error: 'An account already exists for this email' });
+          return;
+        }
+        if (errorObject?.code === 'PASSWORD_INVALID') {
+          sendJson(res, 400, { error: errorObject.message });
+          return;
+        }
+        throw errorObject;
+      }
+
+      await appendAudit({
+        type: 'PATIENT_ACCOUNT_CREATED',
+        email,
+      });
+
+      try {
+        const welcomeEmail = renderPatientWelcomeEmail({
+          baseUrl: getFrontendBaseUrl(req),
+          fullName: account.fullName || fullName,
+        });
+        await sendEmail({
+          to: email,
+          subject: 'Welcome to Onya Health',
+          html: welcomeEmail.html,
+          text: welcomeEmail.text,
+        });
+      } catch (errorObject) {
+        error('patient.register.welcome_email_failed', {
+          email,
+          message: errorObject?.message || String(errorObject),
+        });
+      }
+
+      const token = issuePatientToken(email);
+      sendJson(res, 201, {
+        token,
+        patient: buildPatientIdentity({
+          email,
+          latestCertificate: null,
+          account,
+        }),
+      });
+      info('patient.register.success', { email });
+      return;
+    }
+
+    if (req.method === 'POST' && routePath === 'patient/password/reset/request') {
+      const body = await parseJsonBody(req);
+      const email = normalizeEmail(body.email);
+
+      if (!isLikelyPatientEmail(email)) {
+        sendJson(res, 400, { error: 'A valid email is required' });
+        return;
+      }
+
+      let resetPayload = await issuePasswordResetToken(email, PATIENT_PASSWORD_RESET_TTL_MS);
+      if (!resetPayload) {
+        const certificates = await listCertificates();
+        const patientCertificates = getPatientCertificatesForEmail(certificates, email);
+        const latest = patientCertificates[0] || null;
+
+        if (latest?.certificateDraft?.email) {
+          try {
+            await createPatientAccount({
+              email,
+              password: createBootstrapPassword(),
+              fullName: latest.certificateDraft.fullName || '',
+              dob: latest.certificateDraft.dob || '',
+              phone: latest.certificateDraft.phone || '',
+            });
+          } catch (errorObject) {
+            if (errorObject?.code !== 'ACCOUNT_EXISTS') {
+              throw errorObject;
+            }
+          }
+
+          await updatePatientAccountProfile({
+            email,
+            fullName: latest.certificateDraft.fullName || '',
+            dob: latest.certificateDraft.dob || '',
+            phone: latest.certificateDraft.phone || '',
+          });
+
+          resetPayload = await issuePasswordResetToken(email, PATIENT_PASSWORD_RESET_TTL_MS);
+          if (resetPayload) {
+            await appendAudit({
+              type: 'PATIENT_ACCOUNT_BOOTSTRAPPED_FOR_RESET',
+              email,
+            });
+          }
+        }
+      }
+
+      if (resetPayload) {
+        const resetUrl = buildPatientPasswordResetUrl(req, resetPayload.token);
+        const resetEmail = renderPatientPasswordResetEmail({
+          baseUrl: getFrontendBaseUrl(req),
+          resetUrl,
+          expiresMinutes: String(Math.round(PATIENT_PASSWORD_RESET_TTL_MS / (1000 * 60))),
+        });
+        await sendEmail({
+          to: email,
+          subject: 'Reset your Onya Health password',
+          html: resetEmail.html,
+          text: resetEmail.text,
+        });
+        await appendAudit({
+          type: 'PATIENT_PASSWORD_RESET_REQUESTED',
+          email,
+        });
+        info('patient.password_reset.requested', {
+          email,
+          provider: currentEmailProvider(),
+        });
+      } else {
+        info('patient.password_reset.request_skipped', {
+          email,
+          reason: 'no_patient_account_or_certificate',
+        });
+      }
+
+      sendJson(res, 200, {
+        message: 'If an account exists for this email, a reset link has been sent.',
+      });
+      return;
+    }
+
+    if (req.method === 'POST' && routePath === 'patient/password/reset/confirm') {
+      const body = await parseJsonBody(req);
+      const token = String(body.token || '').trim();
+      const nextPassword = String(body.password || body.newPassword || '');
+
+      if (!token || !nextPassword) {
+        sendJson(res, 400, { error: 'token and password are required' });
+        return;
+      }
+
+      let account;
+      try {
+        account = await resetPasswordWithToken({
+          token,
+          newPassword: nextPassword,
+        });
+      } catch (errorObject) {
+        if (errorObject?.code === 'PASSWORD_INVALID') {
+          sendJson(res, 400, { error: errorObject.message });
+          return;
+        }
+        if (['TOKEN_INVALID', 'TOKEN_EXPIRED', 'ACCOUNT_NOT_FOUND'].includes(String(errorObject?.code || ''))) {
+          sendJson(res, 400, { error: 'Invalid or expired reset token' });
+          return;
+        }
+        throw errorObject;
+      }
+
+      await appendAudit({
+        type: 'PATIENT_PASSWORD_RESET_COMPLETED',
+        email: account.email,
+      });
+
+      const patientToken = issuePatientToken(account.email);
+      sendJson(res, 200, {
+        token: patientToken,
+        patient: buildPatientIdentity({
+          email: account.email,
+          latestCertificate: null,
+          account,
+        }),
+      });
+      info('patient.password_reset.completed', { email: account.email });
       return;
     }
 
@@ -1065,21 +1586,32 @@ export default async function handler(req, res) {
       const patient = await requirePatient(req, res);
       if (!patient) return;
 
+      const account = await getPatientAccountByEmail(patient.email);
       const certificates = await listCertificates();
       const patientCertificates = getPatientCertificatesForEmail(certificates, patient.email);
-      if (patientCertificates.length === 0) {
+      if (patientCertificates.length === 0 && !account) {
         sendJson(res, 404, { error: 'Patient not found' });
         return;
       }
 
-      const latest = patientCertificates[0];
-      sendJson(res, 200, {
-        patient: {
+      const latest = patientCertificates[0] || null;
+      if (latest?.certificateDraft) {
+        await updatePatientAccountProfile({
+          email: patient.email,
           fullName: latest.certificateDraft.fullName || '',
-          email: normalizeEmail(patient.email),
           dob: latest.certificateDraft.dob || '',
           phone: latest.certificateDraft.phone || '',
-        },
+        });
+      }
+
+      sendJson(res, 200, {
+        patient: buildPatientIdentity({
+          email: patient.email,
+          latestCertificate: latest,
+          account,
+        }),
+        queueCount: patientCertificates.filter((item) => isOpenForReview(item.status)).length,
+        latestRequest: latest ? patientSummaryFromCertificate(latest) : null,
       });
       return;
     }
@@ -1149,22 +1681,26 @@ export default async function handler(req, res) {
         message,
       });
 
+      const recipients = await resolveDoctorNotificationEmails();
+      const patientMessageEmail = renderDoctorPatientMessageEmail({
+        baseUrl: getFrontendBaseUrl(req),
+        certId,
+        patientEmail: normalizeEmail(patient.email),
+        message,
+      });
+
       await sendEmail({
-        to: DOCTOR_NOTIFICATION_EMAILS,
+        to: recipients,
         subject: `Patient message for request ${certId}`,
-        html: `
-          <p>Patient message received for certificate <strong>${certId}</strong>.</p>
-          <p><strong>From:</strong> ${normalizeEmail(patient.email)}</p>
-          <p><strong>Message:</strong></p>
-          <p>${message.replace(/\n/g, '<br/>')}</p>
-        `,
-        text: `Patient message for ${certId} from ${normalizeEmail(patient.email)}: ${message}`,
+        html: patientMessageEmail.html,
+        text: patientMessageEmail.text,
       });
 
       info('patient.message.sent', {
         certificateId: certId,
         patientEmail: normalizeEmail(patient.email),
         provider: currentEmailProvider(),
+        recipients,
       });
 
       sendJson(res, 200, { message: 'Message sent to doctor' });
@@ -1208,23 +1744,171 @@ export default async function handler(req, res) {
       const password = String(body.password || '');
       const fullName = String(body.fullName || body.name || '').trim();
 
-      if (!email || !password) {
-        sendJson(res, 400, { error: 'Email and password are required' });
-        return;
-      }
-      if (password.length < 8) {
-        sendJson(res, 400, { error: 'Password must be at least 8 characters' });
+      if (!isLikelyDoctorEmail(email)) {
+        sendJson(res, 400, { error: 'A valid email is required' });
         return;
       }
 
-      await registerDoctorAccount({ email, password, fullName });
+      const supabaseConfig = getSupabaseConfig();
+      if (supabaseConfig.enabled) {
+        await registerDoctorAccount({ email, password, fullName });
+      }
+
+      let account;
+      try {
+        account = await createDoctorAccount({
+          email,
+          password,
+          fullName,
+          source: supabaseConfig.enabled ? 'supabase-signup' : 'portal-signup',
+        });
+      } catch (errorObject) {
+        if (errorObject?.code === 'ACCOUNT_EXISTS') {
+          sendJson(res, 409, { error: 'Doctor account already exists' });
+          return;
+        }
+        if (errorObject?.code === 'PASSWORD_INVALID') {
+          sendJson(res, 400, { error: errorObject.message });
+          return;
+        }
+        throw errorObject;
+      }
+
+      try {
+        const welcomeEmail = renderDoctorWelcomeEmail({
+          baseUrl: getFrontendBaseUrl(req),
+          fullName: account.fullName || fullName,
+        });
+        await sendEmail({
+          to: email,
+          subject: 'Welcome to the Onya doctor portal',
+          html: welcomeEmail.html,
+          text: welcomeEmail.text,
+        });
+      } catch (errorObject) {
+        error('doctor.register.welcome_email_failed', {
+          email,
+          message: errorObject?.message || String(errorObject),
+        });
+      }
+
+      await appendAudit({
+        type: 'DOCTOR_ACCOUNT_CREATED',
+        email,
+      });
+
       const token = issueDoctorToken(email);
       info('doctor.register.success', { email });
       sendJson(res, 201, {
         token,
         doctor: {
           email,
-          name: fullName || email,
+          name: account.fullName || fullName || email,
+        },
+      });
+      return;
+    }
+
+    if (req.method === 'POST' && routePath === 'doctor/password/reset/request') {
+      const body = await parseJsonBody(req);
+      const email = normalizeEmail(body.email);
+
+      if (!isLikelyDoctorEmail(email)) {
+        sendJson(res, 400, { error: 'A valid email is required' });
+        return;
+      }
+
+      const supabaseDoctor = await findSupabaseDoctorByEmail(email);
+      if (supabaseDoctor?.email) {
+        await upsertDoctorAccount({
+          email: supabaseDoctor.email,
+          fullName: supabaseDoctor.fullName || '',
+          source: 'supabase',
+        });
+      }
+
+      const resetPayload = await issueDoctorPasswordResetToken(email, DOCTOR_PASSWORD_RESET_TTL_MS);
+      if (resetPayload) {
+        const resetUrl = buildDoctorPasswordResetUrl(req, resetPayload.token);
+        const resetEmail = renderDoctorPasswordResetEmail({
+          baseUrl: getFrontendBaseUrl(req),
+          resetUrl,
+          expiresMinutes: String(Math.round(DOCTOR_PASSWORD_RESET_TTL_MS / (1000 * 60))),
+        });
+        await sendEmail({
+          to: email,
+          subject: 'Reset your doctor portal password',
+          html: resetEmail.html,
+          text: resetEmail.text,
+        });
+        await appendAudit({
+          type: 'DOCTOR_PASSWORD_RESET_REQUESTED',
+          email,
+        });
+        info('doctor.password_reset.requested', {
+          email,
+          provider: currentEmailProvider(),
+        });
+      }
+
+      sendJson(res, 200, {
+        message: 'If an account exists for this email, a reset link has been sent.',
+      });
+      return;
+    }
+
+    if (req.method === 'POST' && routePath === 'doctor/password/reset/confirm') {
+      const body = await parseJsonBody(req);
+      const token = String(body.token || '').trim();
+      const nextPassword = String(body.password || body.newPassword || '');
+
+      if (!token || !nextPassword) {
+        sendJson(res, 400, { error: 'token and password are required' });
+        return;
+      }
+
+      let account;
+      try {
+        account = await resetDoctorPasswordWithToken({
+          token,
+          newPassword: nextPassword,
+        });
+      } catch (errorObject) {
+        if (errorObject?.code === 'PASSWORD_INVALID') {
+          sendJson(res, 400, { error: errorObject.message });
+          return;
+        }
+        if (['TOKEN_INVALID', 'TOKEN_EXPIRED', 'ACCOUNT_NOT_FOUND'].includes(String(errorObject?.code || ''))) {
+          sendJson(res, 400, { error: 'Invalid or expired reset token' });
+          return;
+        }
+        throw errorObject;
+      }
+
+      const supabaseConfig = getSupabaseConfig();
+      if (supabaseConfig.enabled) {
+        try {
+          await updateSupabaseDoctorPasswordByEmail(account.email, nextPassword);
+        } catch (errorObject) {
+          info('doctor.password_reset.supabase_sync_failed', {
+            email: account.email,
+            message: errorObject?.message || String(errorObject),
+          });
+        }
+      }
+
+      await appendAudit({
+        type: 'DOCTOR_PASSWORD_RESET_COMPLETED',
+        email: account.email,
+      });
+
+      const authToken = issueDoctorToken(account.email);
+      info('doctor.password_reset.completed', { email: account.email });
+      sendJson(res, 200, {
+        token: authToken,
+        doctor: {
+          email: account.email,
+          name: account.fullName || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
         },
       });
       return;
@@ -1235,28 +1919,50 @@ export default async function handler(req, res) {
       const email = normalizeEmail(body.email);
       const password = String(body.password || '');
 
-      let authenticatedEmail = null;
+      let authenticatedDoctor = null;
       if (validateDoctorCredentials(email, password)) {
-        authenticatedEmail = email;
+        authenticatedDoctor = {
+          email,
+          name: process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
+        };
       } else {
+        const localAuth = await authenticateDoctorAccount({ email, password });
+        if (localAuth?.email) {
+          authenticatedDoctor = {
+            email: localAuth.email,
+            name: localAuth.fullName || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
+          };
+        }
+
         const supabaseAuth = await authenticateDoctorViaSupabase(email, password);
+        if (!authenticatedDoctor && supabaseAuth?.email) {
+          authenticatedDoctor = {
+            email: supabaseAuth.email,
+            name: supabaseAuth.fullName || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
+          };
+        }
+
         if (supabaseAuth?.email) {
-          authenticatedEmail = supabaseAuth.email;
+          await upsertDoctorAccount({
+            email: supabaseAuth.email,
+            fullName: supabaseAuth.fullName || '',
+            source: 'supabase',
+          });
         }
       }
 
-      if (!authenticatedEmail) {
+      if (!authenticatedDoctor) {
         sendJson(res, 401, { error: 'Invalid credentials' });
         return;
       }
 
-      const token = issueDoctorToken(authenticatedEmail);
-      info('doctor.login.success', { email: authenticatedEmail });
+      const token = issueDoctorToken(authenticatedDoctor.email);
+      info('doctor.login.success', { email: authenticatedDoctor.email });
       sendJson(res, 200, {
         token,
         doctor: {
-          email: authenticatedEmail,
-          name: process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
+          email: authenticatedDoctor.email,
+          name: authenticatedDoctor.name,
         },
       });
       return;

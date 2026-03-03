@@ -1,0 +1,62 @@
+{
+  "accounts": [
+    {
+      "email": "doc.8897@example.com",
+      "fullName": "Dr Test",
+      "source": "portal-signup",
+      "passwordHash": "scrypt$96866ac5c15ddcb396337f0bbbbdaf38$28262132d17fdc4af42511d1a0afaf6af71de5ee869296c1c3f724059f1e2326dc3cdc47e4f6ae6c4a1fc9c367cdd02303a6b5a10f2d3809aea553f7574e7788",
+      "createdAt": "2026-03-02T16:10:29.701Z",
+      "updatedAt": "2026-03-02T16:10:35.363Z",
+      "lastLoginAt": "2026-03-02T16:10:35.363Z",
+      "lastPasswordResetAt": ""
+    },
+    {
+      "email": "doc.27688@example.com",
+      "fullName": "Dr Test",
+      "source": "portal-signup",
+      "passwordHash": "scrypt$2354bee843981481e7bad0377980762c$5e875da50e771b3c196faff385fa7262ff3ac6a68e3565bcd868ca6d9ba53d8ec0ed700ce4c82d52c0f52f6ffa539797f8fa76293bf96e24807669089f07c2f2",
+      "createdAt": "2026-03-02T16:10:54.545Z",
+      "updatedAt": "2026-03-02T16:10:58.865Z",
+      "lastLoginAt": "2026-03-02T16:10:58.865Z",
+      "lastPasswordResetAt": ""
+    },
+    {
+      "email": "doc.3041@example.com",
+      "fullName": "Dr Test",
+      "source": "portal-signup",
+      "passwordHash": "scrypt$ae9ac160fa505970b68d5307e8a86016$ae4f4076de509fde584207f01c6f886d8bcf170e9c363b454488f827e761674bb84124ff650e2b717a09c9328f70cfb3f4ca2ac79aa813c94ad4c21314469bf2",
+      "createdAt": "2026-03-02T16:12:39.565Z",
+      "updatedAt": "2026-03-02T16:12:41.498Z",
+      "lastLoginAt": "2026-03-02T16:12:41.498Z",
+      "lastPasswordResetAt": "2026-03-02T16:12:41.094Z"
+    },
+    {
+      "email": "doc.9289@example.com",
+      "fullName": "Dr Check",
+      "source": "portal-signup",
+      "passwordHash": "scrypt$2fe40e58c46c5c1edf2645ae7af84c45$f0e97f6f5f55a05a70c2d35f1c09891dcbffd72cc0a8df40917a6f1e33dbbba0bfb7a361c263f699133aaccc5ed7a20f34347d22b64461dee17105f2ea7e2798",
+      "createdAt": "2026-03-02T16:16:28.588Z",
+      "updatedAt": "2026-03-02T16:16:30.913Z",
+      "lastLoginAt": "",
+      "lastPasswordResetAt": "2026-03-02T16:16:30.913Z"
+    }
+  ],
+  "resetTokens": [
+    {
+      "id": "5b333fa1-3db8-40f3-b338-7089a83adcdc",
+      "email": "doc.8897@example.com",
+      "tokenHash": "0e2c0f21b4a10ab0058faa6073720f78c9e29356c6e58ee512389e0c16297725",
+      "createdAt": "2026-03-02T16:10:35.425Z",
+      "expiresAt": "2026-03-02T17:10:35.425Z",
+      "usedAt": null
+    },
+    {
+      "id": "6422ba67-8afc-4d03-9825-eee970b20907",
+      "email": "doc.9289@example.com",
+      "tokenHash": "736a5afecb8819e31c77953513554a439498ab34345a71ec0f746994dc069e54",
+      "createdAt": "2026-03-02T16:16:30.571Z",
+      "expiresAt": "2026-03-02T17:16:30.571Z",
+      "usedAt": "2026-03-02T16:16:30.913Z"
+    }
+  ]
+}

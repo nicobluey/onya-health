@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { type CSSProperties, useState } from 'react';
 import type { ComponentType, FormEvent } from 'react';
 import {
     ChevronRight,
@@ -107,7 +107,7 @@ const RECORD_TAB_META: Record<
 };
 
 const panelClassName =
-    'rounded-3xl border border-[#cbd5e1] bg-white shadow-[0_24px_42px_-34px_rgba(15,23,42,0.24)]';
+    'rounded-3xl border border-[#dbe2d9] bg-white shadow-[0_24px_42px_-34px_rgba(15,23,42,0.24)]';
 
 function isQueuedStatus(status: string) {
     const normalized = String(status || '').toLowerCase();
@@ -127,10 +127,10 @@ function statusLabel(status: string) {
 
 function statusTone(status: string) {
     const normalized = String(status || '').toLowerCase();
-    if (isQueuedStatus(status)) return 'bg-[#fff4dc] text-[#8d5c0a] border-[#f4d7a5]';
-    if (normalized === 'approved' || normalized === 'closed') return 'bg-[#eaf4ff] text-[#2e8cff] border-[#b7dcff]';
+    if (isQueuedStatus(status)) return 'bg-[#edf1ec] text-[#1f5f3f] border-[#b9c8ba]';
+    if (normalized === 'approved' || normalized === 'closed') return 'bg-[#edf1ec] text-[#1f5f3f] border-[#b9c8ba]';
     if (normalized === 'denied') return 'bg-[#ffe9e8] text-[#a93736] border-[#f3c5c4]';
-    return 'bg-[#f1f8ff] text-[#475569] border-[#cbd5e1]';
+    return 'bg-[#eff4ef] text-[#5f7063] border-[#dbe2d9]';
 }
 
 function consultTitle(serviceType: string) {
@@ -184,15 +184,15 @@ function EmptySectionState({
 }) {
     return (
         <div className="px-4 py-10 text-center sm:px-8">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] text-[#64748b]">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] text-[#6f7e71]">
                 <Icon size={22} />
             </div>
-            <h3 className="mt-4 text-lg font-semibold text-[#020617]">{title}</h3>
-            <p className="mt-2 text-sm leading-relaxed text-[#475569]">{description}</p>
+            <h3 className="mt-4 text-lg font-semibold text-[#18251e]">{title}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-[#5f7063]">{description}</p>
             <button
                 type="button"
                 onClick={onAdd}
-                className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[#cbd5e1] bg-white px-4 py-2 text-sm font-semibold text-[#2e8cff] transition hover:border-[#58a8ff]"
+                className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[#dbe2d9] bg-white px-4 py-2 text-sm font-semibold text-[#1f5f3f] transition hover:border-[#88a18d]"
             >
                 <Plus size={16} />
                 {buttonLabel}
@@ -211,58 +211,60 @@ function HomeHero({
     onGoToTab: (tab: Exclude<MainTab, 'home'>) => void;
 }) {
     return (
-        <section className="relative overflow-hidden rounded-[30px] border border-[#cbd5e1] bg-gradient-to-br from-[#165fad] via-[#2e8cff] to-[#58a8ff] p-5 text-white sm:p-7">
-            <img
-                src="/Blue%20Bubbles.png"
-                alt=""
-                aria-hidden="true"
-                className="pointer-events-none absolute -left-12 -top-14 h-44 w-44 object-cover opacity-35"
-            />
-            <img
-                src="/Blue%20Cells.png"
-                alt=""
-                aria-hidden="true"
-                className="pointer-events-none absolute -bottom-16 right-[-2rem] h-52 w-52 object-cover opacity-30"
-            />
-            <img
-                src="/HERO.png"
-                alt=""
-                aria-hidden="true"
-                className="pointer-events-none absolute -right-24 bottom-0 hidden h-[115%] w-auto object-contain opacity-20 lg:block"
-            />
-            <div className="relative z-10 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <section className="relative overflow-hidden rounded-[30px] border border-[#dbe2d9] bg-white p-5 sm:p-7">
+            <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-end">
                 <div>
-                    <p className="inline-flex items-center rounded-full border border-white/30 bg-white/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#f1f5f9]">
+                    <p className="inline-flex items-center rounded-full border border-[#dbe2d9] bg-[#f8faf7] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f7063]">
                         Patient Home
                     </p>
-                    <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">
+                    <h1 className="mt-4 text-3xl font-semibold tracking-tight text-[#18251e] sm:text-4xl">
                         Welcome back, {firstNameValue}
                     </h1>
-                    <p className="mt-2 max-w-[560px] text-sm text-[#f1f5f9] sm:text-base">
+                    <p className="mt-2 max-w-[560px] text-sm text-[#5f7063] sm:text-base">
                         Your records, consult activity, and profile details are in one clean, unified workspace.
                     </p>
+
+                    <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:max-w-[420px]">
+                        <button
+                            type="button"
+                            onClick={() => onGoToTab('consult')}
+                            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#2e8cff] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1f7be6]"
+                        >
+                            <ClipboardPlus size={16} />
+                            Start Consult
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => onGoToTab('account')}
+                            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#dbe2d9] bg-white px-4 py-3 text-sm font-semibold text-[#18251e] transition hover:border-[#b9c8ba]"
+                        >
+                            <UserRound size={16} />
+                            Manage Account
+                        </button>
+                        <div className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] px-4 py-3 sm:col-span-2">
+                            <p className="text-xs uppercase tracking-[0.12em] text-[#5f7063]">Consults on file</p>
+                            <p className="mt-1 text-2xl font-semibold text-[#18251e]">{requestCount}</p>
+                        </div>
+                    </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[340px]">
-                    <button
-                        type="button"
-                        onClick={() => onGoToTab('consult')}
-                        className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-[#020617] transition hover:bg-[#f8fbff]"
+                <div className="relative hidden min-h-[260px] lg:block">
+                    <div className="overflow-hidden rounded-[1.8rem] border border-[#dbe2d9]">
+                        <img src="/HERO.png" alt="" aria-hidden="true" className="h-[260px] w-full object-cover" />
+                    </div>
+                    <div
+                        className="science-float-card -left-8 -top-5 h-20 w-20"
+                        aria-hidden="true"
+                        style={{ '--science-tilt': '-7deg', '--drift-duration': '20s', '--drift-delay': '0.3s' } as CSSProperties}
                     >
-                        <ClipboardPlus size={16} />
-                        Start Consult
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => onGoToTab('account')}
-                        className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/45 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/20"
+                        <img src="/Green%20Cells.png" alt="" className="h-full w-full object-cover" />
+                    </div>
+                    <div
+                        className="science-float-card is-reverse -bottom-4 right-3 h-24 w-24"
+                        aria-hidden="true"
+                        style={{ '--science-tilt': '8deg', '--drift-duration': '18s', '--drift-delay': '0.8s' } as CSSProperties}
                     >
-                        <UserRound size={16} />
-                        Manage Account
-                    </button>
-                    <div className="rounded-2xl border border-white/30 bg-white/15 px-4 py-3 sm:col-span-2">
-                        <p className="text-xs uppercase tracking-[0.12em] text-[#f1f5f9]">Consults on file</p>
-                        <p className="mt-1 text-2xl font-semibold">{requestCount}</p>
+                        <img src="/Blue%20Cells.png" alt="" className="h-full w-full object-cover" />
                     </div>
                 </div>
             </div>
@@ -280,29 +282,41 @@ function QueueStatusCard({
     if (!request) {
         return (
             <section className={`${panelClassName} p-5`}>
-                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#475569]">Queue Status</p>
-                <h2 className="mt-2 text-lg font-semibold text-[#020617]">No active queue</h2>
-                <p className="mt-1 text-sm text-[#475569]">Start a consult and it will appear here when a doctor is reviewing it.</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#5f7063]">Queue Status</p>
+                <h2 className="mt-2 text-lg font-semibold text-[#18251e]">No active queue</h2>
+                <p className="mt-1 text-sm text-[#5f7063]">Start a consult and it will appear here when a doctor is reviewing it.</p>
             </section>
         );
     }
 
     return (
-        <section className="overflow-hidden rounded-3xl border border-[#d8c79f] bg-[#fff7e8] p-5 shadow-[0_18px_36px_-28px_rgba(86,67,28,0.45)]">
+        <section className="overflow-hidden rounded-3xl border border-[#b9c8ba] bg-white p-5 shadow-[0_18px_36px_-28px_rgba(35,71,47,0.28)]">
             <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#f6e5bf] text-[#8d5c0a]">
+                <div className="relative mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#edf1ec] text-[#1f5f3f]">
                     <Heart size={19} className="fill-current stroke-current" />
+                    <span className="portal-live-dot absolute -right-0.5 -top-0.5" aria-hidden="true" />
                 </div>
                 <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.11em] text-[#8d6720]">Queue Status</p>
-                    <h2 className="mt-1 text-lg font-semibold text-[#5d420f]">You are in the doctor queue</h2>
-                    <p className="mt-1 text-sm text-[#7f5b1a]">{statusLabel(request.status)}</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.11em] text-[#5f7063]">Queue Status</p>
+                    <h2 className="mt-1 text-lg font-semibold text-[#18251e]">You are in the doctor queue</h2>
+                    <p className="mt-1 text-sm text-[#5f7063]">{statusLabel(request.status)}</p>
+                </div>
+            </div>
+            <div className="mt-4 rounded-2xl border border-[#dce7db] bg-[#f8faf7] p-3">
+                <div className="portal-queue-track">
+                    {['Triage', 'Assigned', 'Review', 'Issued'].map((label, index) => (
+                        <div key={label} className="portal-queue-step">
+                            <span className="portal-queue-dot" style={{ animationDelay: `${index * 0.25}s` } as CSSProperties} />
+                            <span className="portal-queue-step-label">{label}</span>
+                            {index < 3 && <span className="portal-queue-connector" />}
+                        </div>
+                    ))}
                 </div>
             </div>
             <button
                 type="button"
                 onClick={onOpenQueue}
-                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#7e5920] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#684715]"
+                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#1f5f3f] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#174830]"
             >
                 View Queue
                 <ChevronRight size={16} />
@@ -318,51 +332,44 @@ function PreviousConsultQueue({
     requests: PortalRequest[];
     onDownloadCertificate: (request: PortalRequest) => void;
 }) {
-    const history = requests.slice(0, 10);
+    const [showOlder, setShowOlder] = useState(false);
+    const latest = requests.slice(0, 3);
+    const older = requests.slice(3, 12);
+    const visibleHistory = showOlder ? [...latest, ...older] : latest;
 
     return (
         <section className={`${panelClassName} p-5 sm:p-6`}>
             <div className="flex items-center justify-between gap-3">
                 <div>
-                    <h2 className="text-xl font-semibold text-[#020617]">Previous Consults</h2>
-                    <p className="mt-1 text-sm text-[#475569]">Stacked chronologically for quick review and downloads.</p>
+                    <h2 className="text-xl font-semibold text-[#18251e]">Latest Consults</h2>
+                    <p className="mt-1 text-sm text-[#5f7063]">Most recent activity first. Expand if you need older consults.</p>
                 </div>
-                <div className="hidden rounded-full border border-[#cbd5e1] bg-[#f8fbff] px-3 py-1 text-xs font-semibold text-[#475569] sm:block">
-                    {history.length} records
+                <div className="hidden rounded-full border border-[#dbe2d9] bg-[#f8faf7] px-3 py-1 text-xs font-semibold text-[#5f7063] sm:block">
+                    {requests.length} records
                 </div>
             </div>
 
-            {history.length === 0 ? (
-                <div className="mt-4 rounded-2xl border border-dashed border-[#cbd5e1] bg-[#f8fbff] p-6 text-sm text-[#475569]">
+            {visibleHistory.length === 0 ? (
+                <div className="mt-4 rounded-2xl border border-dashed border-[#dbe2d9] bg-[#f8faf7] p-6 text-sm text-[#5f7063]">
                     No consult history yet.
                 </div>
             ) : (
-                <ul className="mt-5 max-h-[440px] space-y-3 overflow-y-auto pr-1">
-                    {history.map((request, index) => {
+                <ul className="mt-5 space-y-3">
+                    {visibleHistory.map((request) => {
                         const queued = isQueuedStatus(request.status);
 
                         return (
-                            <li key={request.id} className="relative pl-7">
-                                {index < history.length - 1 && (
-                                    <span className="absolute left-[0.62rem] top-7 h-[calc(100%-0.15rem)] w-px bg-[#cbd5e1]" aria-hidden="true" />
-                                )}
-                                <span
-                                    className={`absolute left-0 top-2.5 h-3.5 w-3.5 rounded-full border-2 border-white ${
-                                        queued ? 'bg-[#d19a33]' : 'bg-[#2e8cff]'
-                                    }`}
-                                    aria-hidden="true"
-                                />
-
-                                <article className="rounded-2xl border border-[#cbd5e1] bg-[#ffffff] p-4 transition hover:border-[#b7dcff]">
+                            <li key={request.id}>
+                                <article className="rounded-2xl border border-[#dbe2d9] bg-[#ffffff] p-4 transition hover:border-[#b9c8ba]">
                                     <div className="flex flex-wrap items-center justify-between gap-2">
                                         <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone(request.status)}`}>
                                             {statusLabel(request.status)}
                                         </span>
-                                        <span className="text-xs font-medium text-[#475569]">{formatDate(request.createdAt)}</span>
+                                        <span className="text-xs font-medium text-[#5f7063]">{formatDate(request.createdAt)}</span>
                                     </div>
 
-                                    <h3 className="mt-3 text-base font-semibold text-[#020617]">{consultTitle(request.serviceType)}</h3>
-                                    <p className="mt-1 text-sm text-[#475569]">
+                                    <h3 className="mt-3 text-base font-semibold text-[#18251e]">{consultTitle(request.serviceType)}</h3>
+                                    <p className="mt-1 text-sm text-[#5f7063]">
                                         {request.decision?.by || (queued ? 'Awaiting doctor assignment' : 'Completed consult')}
                                     </p>
 
@@ -370,7 +377,7 @@ function PreviousConsultQueue({
                                         <button
                                             type="button"
                                             onClick={() => onDownloadCertificate(request)}
-                                            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[#cbd5e1] bg-white px-3 py-1.5 text-xs font-semibold text-[#2e8cff] transition hover:border-[#58a8ff]"
+                                            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[#dbe2d9] bg-white px-3 py-1.5 text-xs font-semibold text-[#1f5f3f] transition hover:border-[#88a18d]"
                                         >
                                             <FileText size={14} />
                                             Download certificate PDF
@@ -381,6 +388,17 @@ function PreviousConsultQueue({
                         );
                     })}
                 </ul>
+            )}
+
+            {older.length > 0 && (
+                <button
+                    type="button"
+                    onClick={() => setShowOlder((prev) => !prev)}
+                    className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[#dbe2d9] bg-[#f8faf7] px-4 py-2 text-sm font-semibold text-[#1f5f3f] transition hover:border-[#b9c8ba]"
+                >
+                    {showOlder ? 'Hide older consults' : `View older consults (${older.length})`}
+                    <ChevronRight size={15} className={`transition ${showOlder ? 'rotate-90' : ''}`} />
+                </button>
             )}
         </section>
     );
@@ -396,14 +414,14 @@ function AccountSnapshot({ patient }: { patient: PatientProfile }) {
 
     return (
         <section className={`${panelClassName} overflow-hidden`}>
-            <div className="border-b border-[#dbeeff] px-5 py-4">
-                <h2 className="text-lg font-semibold text-[#020617]">Account Snapshot</h2>
+            <div className="border-b border-[#dce7db] px-5 py-4">
+                <h2 className="text-lg font-semibold text-[#18251e]">Account Snapshot</h2>
             </div>
             <div className="space-y-1 p-4">
                 {rows.map((row) => (
-                    <div key={row.label} className="rounded-xl border border-[#eaf4ff] bg-[#f8fbff] px-3 py-2.5">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-[#64748b]">{row.label}</p>
-                        <p className="mt-1 text-sm font-medium text-[#020617]">{row.value}</p>
+                    <div key={row.label} className="rounded-xl border border-[#edf1ec] bg-[#f8faf7] px-3 py-2.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-[#6f7e71]">{row.label}</p>
+                        <p className="mt-1 text-sm font-medium text-[#18251e]">{row.value}</p>
                     </div>
                 ))}
             </div>
@@ -429,16 +447,16 @@ function ProfilePulse({ patient, data }: { patient: PatientProfile; data: Portal
 
     return (
         <section className={`${panelClassName} p-5`}>
-            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#475569]">Profile Progress</p>
-            <h2 className="mt-2 text-lg font-semibold text-[#020617]">{percent}% complete</h2>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#eaf4ff]">
-                <div className="h-full rounded-full bg-[#2e8cff]" style={{ width: `${percent}%` }} />
+            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#5f7063]">Profile Progress</p>
+            <h2 className="mt-2 text-lg font-semibold text-[#18251e]">{percent}% complete</h2>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#edf1ec]">
+                <div className="h-full rounded-full bg-[#1f5f3f]" style={{ width: `${percent}%` }} />
             </div>
             <div className="mt-4 space-y-2">
                 {metrics.map((metric) => (
-                    <div key={metric.label} className="flex items-center justify-between rounded-xl border border-[#eaf4ff] bg-[#ffffff] px-3 py-2">
-                        <span className="text-xs font-medium text-[#475569]">{metric.label}</span>
-                        <span className="text-sm font-semibold text-[#2e8cff]">{metric.value}</span>
+                    <div key={metric.label} className="flex items-center justify-between rounded-xl border border-[#edf1ec] bg-[#ffffff] px-3 py-2">
+                        <span className="text-xs font-medium text-[#5f7063]">{metric.label}</span>
+                        <span className="text-sm font-semibold text-[#1f5f3f]">{metric.value}</span>
                     </div>
                 ))}
             </div>
@@ -475,60 +493,62 @@ function MedicalRecordsSection({
 
     return (
         <section className={`${panelClassName} overflow-hidden`}>
-            <div className="flex items-center gap-2 overflow-x-auto border-b border-[#dbeeff] px-3 py-3">
-                {(Object.keys(RECORD_TAB_META) as RecordTab[]).map((tab) => {
-                    const active = tab === recordTab;
-                    return (
-                        <button
-                            key={tab}
-                            type="button"
-                            onClick={() => onRecordTabChange(tab)}
-                            className={`shrink-0 rounded-xl px-3 py-1.5 text-sm font-semibold transition ${
-                                active
-                                    ? 'border border-[#b7dcff] bg-[#0f172a] text-white'
-                                    : 'text-[#475569] hover:bg-[#f1f8ff]'
-                            }`}
-                        >
-                            {RECORD_TAB_META[tab].label}
-                        </button>
-                    );
-                })}
+            <div className="border-b border-[#dce7db] px-3 py-3">
+                <div className="grid grid-cols-3 gap-2">
+                    {(Object.keys(RECORD_TAB_META) as RecordTab[]).map((tab) => {
+                        const active = tab === recordTab;
+                        return (
+                            <button
+                                key={tab}
+                                type="button"
+                                onClick={() => onRecordTabChange(tab)}
+                                className={`rounded-xl px-2 py-2 text-center text-[12px] font-semibold leading-tight transition sm:text-sm ${
+                                    active
+                                        ? 'border border-[#b9c8ba] bg-[#0f172a] text-white'
+                                        : 'border border-[#e5ebe4] text-[#5f7063] hover:bg-[#eff4ef]'
+                                }`}
+                            >
+                                {RECORD_TAB_META[tab].label}
+                            </button>
+                        );
+                    })}
+                </div>
                 <button
                     type="button"
                     onClick={() => setIsAdding((value) => !value)}
-                    className="ml-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#cbd5e1] text-[#2e8cff]"
-                    aria-label="Add health item"
+                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#dbe2d9] bg-[#f8faf7] px-4 py-2 text-sm font-semibold text-[#1f5f3f] transition hover:border-[#b9c8ba]"
                 >
-                    <Plus size={16} />
+                    <Plus size={15} />
+                    {tabMeta.ctaLabel}
                 </button>
             </div>
 
             <div className="p-4">
                 {isAdding && (
-                    <form onSubmit={submit} className="mb-4 space-y-3 rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3">
+                    <form onSubmit={submit} className="mb-4 space-y-3 rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-3">
                         <input
                             value={title}
                             onChange={(event) => setTitle(event.target.value)}
-                            className="h-10 w-full rounded-xl border border-[#cbd5e1] bg-white px-3 text-sm outline-none focus:border-[#58a8ff]"
+                            className="h-10 w-full rounded-xl border border-[#dbe2d9] bg-white px-3 text-sm outline-none focus:border-[#88a18d]"
                             placeholder={tabMeta.placeholderTitle}
                         />
                         <textarea
                             value={details}
                             onChange={(event) => setDetails(event.target.value)}
-                            className="min-h-20 w-full rounded-xl border border-[#cbd5e1] bg-white px-3 py-2 text-sm outline-none focus:border-[#58a8ff]"
+                            className="min-h-20 w-full rounded-xl border border-[#dbe2d9] bg-white px-3 py-2 text-sm outline-none focus:border-[#88a18d]"
                             placeholder="Optional details for your care team"
                         />
                         <div className="flex items-center justify-end gap-2">
                             <button
                                 type="button"
                                 onClick={() => setIsAdding(false)}
-                                className="rounded-lg border border-[#cbd5e1] px-3 py-1.5 text-xs font-semibold text-[#475569]"
+                                className="rounded-lg border border-[#dbe2d9] px-3 py-1.5 text-xs font-semibold text-[#5f7063]"
                             >
                                 Cancel
                             </button>
                             <button
                                 type="submit"
-                                className="rounded-lg bg-[#2e8cff] px-3 py-1.5 text-xs font-semibold text-white"
+                                className="rounded-lg bg-[#1f5f3f] px-3 py-1.5 text-xs font-semibold text-white"
                             >
                                 Save
                             </button>
@@ -547,10 +567,10 @@ function MedicalRecordsSection({
                 ) : (
                     <ul className="space-y-2">
                         {activeEntries.map((entry) => (
-                            <li key={entry.id} className="rounded-2xl border border-[#dbeeff] bg-[#f8fbff] px-4 py-3">
-                                <p className="text-sm font-semibold text-[#020617]">{entry.title}</p>
-                                {entry.details && <p className="mt-1 text-sm text-[#475569]">{entry.details}</p>}
-                                <p className="mt-2 text-xs text-[#64748b]">Added {formatDate(entry.createdAt)}</p>
+                            <li key={entry.id} className="rounded-2xl border border-[#dce7db] bg-[#f8faf7] px-4 py-3">
+                                <p className="text-sm font-semibold text-[#18251e]">{entry.title}</p>
+                                {entry.details && <p className="mt-1 text-sm text-[#5f7063]">{entry.details}</p>}
+                                <p className="mt-2 text-xs text-[#6f7e71]">Added {formatDate(entry.createdAt)}</p>
                             </li>
                         ))}
                     </ul>
@@ -583,12 +603,12 @@ function LifestyleNotesSection({
 
     return (
         <section className={`${panelClassName} overflow-hidden`}>
-            <div className="flex items-center border-b border-[#dbeeff] px-5 py-4">
-                <h2 className="text-lg font-semibold text-[#020617]">Lifestyle Notes</h2>
+            <div className="flex items-center border-b border-[#dce7db] px-5 py-4">
+                <h2 className="text-lg font-semibold text-[#18251e]">Lifestyle Notes</h2>
                 <button
                     type="button"
                     onClick={() => setIsAdding((value) => !value)}
-                    className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#cbd5e1] text-[#2e8cff]"
+                    className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#dbe2d9] text-[#1f5f3f]"
                     aria-label="Add lifestyle note"
                 >
                     <Plus size={16} />
@@ -597,30 +617,30 @@ function LifestyleNotesSection({
 
             <div className="p-4">
                 {isAdding && (
-                    <form onSubmit={submit} className="mb-4 space-y-3 rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3">
+                    <form onSubmit={submit} className="mb-4 space-y-3 rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-3">
                         <input
                             value={title}
                             onChange={(event) => setTitle(event.target.value)}
-                            className="h-10 w-full rounded-xl border border-[#cbd5e1] bg-white px-3 text-sm outline-none focus:border-[#58a8ff]"
+                            className="h-10 w-full rounded-xl border border-[#dbe2d9] bg-white px-3 text-sm outline-none focus:border-[#88a18d]"
                             placeholder="e.g. Sleep routine"
                         />
                         <textarea
                             value={details}
                             onChange={(event) => setDetails(event.target.value)}
-                            className="min-h-20 w-full rounded-xl border border-[#cbd5e1] bg-white px-3 py-2 text-sm outline-none focus:border-[#58a8ff]"
+                            className="min-h-20 w-full rounded-xl border border-[#dbe2d9] bg-white px-3 py-2 text-sm outline-none focus:border-[#88a18d]"
                             placeholder="Share habits, sleep, activity, nutrition, or triggers"
                         />
                         <div className="flex items-center justify-end gap-2">
                             <button
                                 type="button"
                                 onClick={() => setIsAdding(false)}
-                                className="rounded-lg border border-[#cbd5e1] px-3 py-1.5 text-xs font-semibold text-[#475569]"
+                                className="rounded-lg border border-[#dbe2d9] px-3 py-1.5 text-xs font-semibold text-[#5f7063]"
                             >
                                 Cancel
                             </button>
                             <button
                                 type="submit"
-                                className="rounded-lg bg-[#2e8cff] px-3 py-1.5 text-xs font-semibold text-white"
+                                className="rounded-lg bg-[#1f5f3f] px-3 py-1.5 text-xs font-semibold text-white"
                             >
                                 Save
                             </button>
@@ -639,10 +659,10 @@ function LifestyleNotesSection({
                 ) : (
                     <ul className="space-y-2">
                         {entries.map((entry) => (
-                            <li key={entry.id} className="rounded-2xl border border-[#dbeeff] bg-[#f8fbff] px-4 py-3">
-                                <p className="text-sm font-semibold text-[#020617]">{entry.title}</p>
-                                {entry.details && <p className="mt-1 text-sm text-[#475569]">{entry.details}</p>}
-                                <p className="mt-2 text-xs text-[#64748b]">Added {formatDate(entry.createdAt)}</p>
+                            <li key={entry.id} className="rounded-2xl border border-[#dce7db] bg-[#f8faf7] px-4 py-3">
+                                <p className="text-sm font-semibold text-[#18251e]">{entry.title}</p>
+                                {entry.details && <p className="mt-1 text-sm text-[#5f7063]">{entry.details}</p>}
+                                <p className="mt-2 text-xs text-[#6f7e71]">Added {formatDate(entry.createdAt)}</p>
                             </li>
                         ))}
                     </ul>
@@ -685,12 +705,12 @@ function TestResultsSection({
 
     return (
         <section className={`${panelClassName} overflow-hidden`}>
-            <div className="flex items-center border-b border-[#dbeeff] px-5 py-4">
-                <h2 className="text-lg font-semibold text-[#020617]">Test Results</h2>
+            <div className="flex items-center border-b border-[#dce7db] px-5 py-4">
+                <h2 className="text-lg font-semibold text-[#18251e]">Test Results</h2>
                 <button
                     type="button"
                     onClick={() => setIsAdding((value) => !value)}
-                    className="ml-auto inline-flex items-center gap-2 rounded-lg border border-[#cbd5e1] px-3 py-1.5 text-xs font-semibold text-[#2e8cff]"
+                    className="ml-auto inline-flex items-center gap-2 rounded-lg border border-[#dbe2d9] px-3 py-1.5 text-xs font-semibold text-[#1f5f3f]"
                 >
                     <Upload size={14} />
                     Upload Test
@@ -699,45 +719,45 @@ function TestResultsSection({
 
             <div className="p-4">
                 {isAdding && (
-                    <form onSubmit={submit} className="mb-4 space-y-3 rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3">
+                    <form onSubmit={submit} className="mb-4 space-y-3 rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-3">
                         <input
                             value={name}
                             onChange={(event) => setName(event.target.value)}
-                            className="h-10 w-full rounded-xl border border-[#cbd5e1] bg-white px-3 text-sm outline-none focus:border-[#58a8ff]"
+                            className="h-10 w-full rounded-xl border border-[#dbe2d9] bg-white px-3 text-sm outline-none focus:border-[#88a18d]"
                             placeholder="e.g. Full Blood Count"
                         />
                         <input
                             type="date"
                             value={testDate}
                             onChange={(event) => setTestDate(event.target.value)}
-                            className="h-10 w-full rounded-xl border border-[#cbd5e1] bg-white px-3 text-sm outline-none focus:border-[#58a8ff]"
+                            className="h-10 w-full rounded-xl border border-[#dbe2d9] bg-white px-3 text-sm outline-none focus:border-[#88a18d]"
                         />
                         <textarea
                             value={summary}
                             onChange={(event) => setSummary(event.target.value)}
-                            className="min-h-20 w-full rounded-xl border border-[#cbd5e1] bg-white px-3 py-2 text-sm outline-none focus:border-[#58a8ff]"
+                            className="min-h-20 w-full rounded-xl border border-[#dbe2d9] bg-white px-3 py-2 text-sm outline-none focus:border-[#88a18d]"
                             placeholder="Add a short summary of this result"
                         />
                         <div className="space-y-2">
-                            <label className="block text-xs font-semibold uppercase tracking-[0.08em] text-[#475569]">Attachment</label>
+                            <label className="block text-xs font-semibold uppercase tracking-[0.08em] text-[#5f7063]">Attachment</label>
                             <input
                                 type="file"
                                 onChange={(event) => setFileName(event.target.files?.[0]?.name || '')}
-                                className="block w-full text-xs text-[#475569] file:mr-3 file:rounded-lg file:border-0 file:bg-[#eaf4ff] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[#2e8cff]"
+                                className="block w-full text-xs text-[#5f7063] file:mr-3 file:rounded-lg file:border-0 file:bg-[#edf1ec] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[#1f5f3f]"
                             />
-                            {fileName && <p className="text-xs text-[#64748b]">Selected: {fileName}</p>}
+                            {fileName && <p className="text-xs text-[#6f7e71]">Selected: {fileName}</p>}
                         </div>
                         <div className="flex items-center justify-end gap-2">
                             <button
                                 type="button"
                                 onClick={() => setIsAdding(false)}
-                                className="rounded-lg border border-[#cbd5e1] px-3 py-1.5 text-xs font-semibold text-[#475569]"
+                                className="rounded-lg border border-[#dbe2d9] px-3 py-1.5 text-xs font-semibold text-[#5f7063]"
                             >
                                 Cancel
                             </button>
                             <button
                                 type="submit"
-                                className="rounded-lg bg-[#2e8cff] px-3 py-1.5 text-xs font-semibold text-white"
+                                className="rounded-lg bg-[#1f5f3f] px-3 py-1.5 text-xs font-semibold text-white"
                             >
                                 Save result
                             </button>
@@ -756,15 +776,15 @@ function TestResultsSection({
                 ) : (
                     <ul className="space-y-2">
                         {entries.map((entry) => (
-                            <li key={entry.id} className="rounded-2xl border border-[#dbeeff] bg-[#f8fbff] px-4 py-3">
+                            <li key={entry.id} className="rounded-2xl border border-[#dce7db] bg-[#f8faf7] px-4 py-3">
                                 <div className="flex items-start gap-2">
                                     <div className="min-w-0">
-                                        <p className="text-sm font-semibold text-[#020617]">{entry.name}</p>
-                                        {entry.summary && <p className="mt-1 text-sm text-[#475569]">{entry.summary}</p>}
+                                        <p className="text-sm font-semibold text-[#18251e]">{entry.name}</p>
+                                        {entry.summary && <p className="mt-1 text-sm text-[#5f7063]">{entry.summary}</p>}
                                     </div>
-                                    <span className="ml-auto shrink-0 text-xs text-[#64748b]">{formatDate(entry.testDate)}</span>
+                                    <span className="ml-auto shrink-0 text-xs text-[#6f7e71]">{formatDate(entry.testDate)}</span>
                                 </div>
-                                {entry.fileName && <p className="mt-2 text-xs text-[#64748b]">Attachment: {entry.fileName}</p>}
+                                {entry.fileName && <p className="mt-2 text-xs text-[#6f7e71]">Attachment: {entry.fileName}</p>}
                             </li>
                         ))}
                     </ul>

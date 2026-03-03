@@ -1,5 +1,19 @@
 export function getApiBase() {
-  return (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+  const configuredBase = String(import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '');
+  if (configuredBase) {
+    return configuredBase;
+  }
+
+  if (typeof window !== 'undefined') {
+    const { protocol, hostname, port } = window.location;
+    const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1';
+    // Only apply localhost split-port fallback in Vite dev mode.
+    if (import.meta.env.DEV && isLocalHost && port === '5173') {
+      return `${protocol}//${hostname}:8787`;
+    }
+  }
+
+  return '';
 }
 
 async function parseJsonOrThrow(response: Response) {

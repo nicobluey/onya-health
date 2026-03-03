@@ -96,6 +96,15 @@
 - Scroll storytelling can use sticky sections and stacked cards.
 - Avoid excessive rotation or playful motion in clinical flows.
 
+## Image Treatment
+- Use raw source photos by default.
+- Do not apply photo overlays/filters by default:
+  no tint layers, no pastel color wash, no opacity fade, no haze blur, no duotone treatment.
+- Only add a photo overlay/filter when explicitly requested for a specific section.
+- Use rounded image corners by default (cards, decorative assets, section imagery).
+- Use sharp/square image edges only when explicitly requested.
+- Balance decorative imagery compositionally (for example, top-left and bottom-right), and avoid single-corner imbalance on mobile.
+
 ## Landing Composition (Service Pages)
 1. Hero
 2. Used by patients

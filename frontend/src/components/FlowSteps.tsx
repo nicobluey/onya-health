@@ -573,9 +573,6 @@ export const CheckoutStep = () => {
             if (details.email) {
                 window.localStorage.setItem('onya_patient_email', details.email);
             }
-            if (payload?.patientToken) {
-                window.localStorage.setItem('onya_patient_token', payload.patientToken);
-            }
             if (payload?.sessionId) {
                 window.localStorage.setItem('onya_last_checkout_session_id', payload.sessionId);
             }

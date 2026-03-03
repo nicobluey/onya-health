@@ -12,6 +12,55 @@ function defaultOutboxPath() {
 
 const OUTBOX_PATH = process.env.OUTBOX_PATH || defaultOutboxPath();
 const RESEND_API_URL = 'https://api.resend.com/emails';
+let cachedSmtpTransporter = null;
+
+function getSmtpConfig() {
+  const host = String(process.env.SMTP_HOST || '').trim();
+  const port = Number(process.env.SMTP_PORT || 587);
+  const user = String(process.env.SMTP_USER || '').trim();
+  const pass = String(process.env.SMTP_PASS || '').trim();
+  const secure = String(process.env.SMTP_SECURE || '').toLowerCase() === 'true' || port === 465;
+  const tlsRejectUnauthorized = String(process.env.SMTP_TLS_REJECT_UNAUTHORIZED || 'true').toLowerCase() !== 'false';
+
+  return {
+    host,
+    port,
+    user,
+    pass,
+    secure,
+    tlsRejectUnauthorized,
+    enabled: Boolean(host && port && user && pass),
+  };
+}
+
+export function currentEmailProvider() {
+  const smtp = getSmtpConfig();
+  if (smtp.enabled) return 'smtp';
+  if (process.env.RESEND_API_KEY) return 'resend';
+  return 'mock-outbox';
+}
+
+async function getSmtpTransporter() {
+  const config = getSmtpConfig();
+  if (!config.enabled) return null;
+  if (cachedSmtpTransporter) return cachedSmtpTransporter;
+
+  const nodemailer = await import('nodemailer');
+  cachedSmtpTransporter = nodemailer.createTransport({
+    host: config.host,
+    port: config.port,
+    secure: config.secure,
+    auth: {
+      user: config.user,
+      pass: config.pass,
+    },
+    tls: {
+      rejectUnauthorized: config.tlsRejectUnauthorized,
+    },
+  });
+
+  return cachedSmtpTransporter;
+}
 
 async function appendOutbox(entry) {
   try {
@@ -35,7 +84,7 @@ export async function sendEmail({ to, subject, html, text, attachments = [] }) {
   const apiKey = process.env.RESEND_API_KEY || '';
   const from = process.env.EMAIL_FROM || 'Onya Health <noreply@onyahealth.com>';
   const recipients = Array.isArray(to) ? to : [to];
-  const provider = apiKey ? 'resend' : 'mock-outbox';
+  const provider = currentEmailProvider();
 
   info('email.dispatch.started', {
     provider,
@@ -45,7 +94,50 @@ export async function sendEmail({ to, subject, html, text, attachments = [] }) {
     attachmentCount: attachments.length,
   });
 
-  if (!apiKey) {
+  if (provider === 'smtp') {
+    try {
+      const transporter = await getSmtpTransporter();
+      const payload = await transporter.sendMail({
+        from,
+        to: recipients.join(', '),
+        subject,
+        html,
+        text,
+        attachments: attachments.map((file) => ({
+          filename: file.filename,
+          content: Buffer.from(String(file.contentBase64 || ''), 'base64'),
+        })),
+      });
+
+      info('email.dispatch.succeeded', {
+        provider,
+        to: recipients,
+        subject,
+        status: 'accepted',
+        id: payload?.messageId || null,
+      });
+      return payload;
+    } catch (errorObject) {
+      await appendOutbox({
+        at: new Date().toISOString(),
+        mode: 'error',
+        provider,
+        to: recipients,
+        from,
+        subject,
+        error: errorObject?.message || String(errorObject),
+      });
+      error('email.dispatch.failed', {
+        provider,
+        to: recipients,
+        subject,
+        errorText: errorObject?.message || String(errorObject),
+      });
+      throw errorObject;
+    }
+  }
+
+  if (provider === 'mock-outbox' || !apiKey) {
     const saved = await appendOutbox({
       at: new Date().toISOString(),
       mode: 'mock',
