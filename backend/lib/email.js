@@ -34,9 +34,17 @@ function getSmtpConfig() {
 }
 
 export function currentEmailProvider() {
+  const explicitProvider = String(process.env.EMAIL_PROVIDER || '').trim().toLowerCase();
   const smtp = getSmtpConfig();
+  const resendEnabled = Boolean(String(process.env.RESEND_API_KEY || '').trim());
+
+  if (explicitProvider === 'smtp') return smtp.enabled ? 'smtp' : 'mock-outbox';
+  if (explicitProvider === 'resend') return resendEnabled ? 'resend' : 'mock-outbox';
+
+  // On serverless, prefer HTTP API providers first when available.
+  if (process.env.VERCEL && resendEnabled) return 'resend';
   if (smtp.enabled) return 'smtp';
-  if (process.env.RESEND_API_KEY) return 'resend';
+  if (resendEnabled) return 'resend';
   return 'mock-outbox';
 }
 
@@ -116,13 +124,42 @@ export async function sendEmail({ to, subject, html, text, attachments = [] }) {
         })),
       });
 
+      const accepted = Array.isArray(payload?.accepted)
+        ? payload.accepted.map((entry) => String(entry || '').trim().toLowerCase()).filter(Boolean)
+        : [];
+      const rejected = Array.isArray(payload?.rejected)
+        ? payload.rejected.map((entry) => String(entry || '').trim().toLowerCase()).filter(Boolean)
+        : [];
+      const expected = recipients.map((entry) => String(entry || '').trim().toLowerCase()).filter(Boolean);
+      const fullyAccepted = expected.length > 0 && expected.every((entry) => accepted.includes(entry));
+      const anyAccepted = accepted.length > 0;
+
       info('email.dispatch.succeeded', {
         provider,
         to: recipients,
         subject,
         status: 'accepted',
         id: payload?.messageId || null,
+        accepted,
+        rejected,
+        response: payload?.response || null,
       });
+
+      // Fail closed in production if SMTP did not accept the intended recipient(s).
+      if (process.env.VERCEL && (!anyAccepted || !fullyAccepted)) {
+        const deliveryError = new Error(
+          `SMTP accepted ${accepted.length}/${expected.length} recipients (rejected: ${rejected.join(', ') || 'none'})`
+        );
+        error('email.dispatch.partial_or_rejected', {
+          provider,
+          to: recipients,
+          subject,
+          accepted,
+          rejected,
+          response: payload?.response || null,
+        });
+        throw deliveryError;
+      }
       return payload;
     } catch (errorObject) {
       await appendOutbox({

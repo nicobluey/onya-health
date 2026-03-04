@@ -376,7 +376,16 @@ async function resolveDoctorNotificationEmails() {
 function getPatientCertificatesForEmail(certificates, email) {
   const normalizedEmail = normalizeEmail(email);
   return certificates
-    .filter((cert) => normalizeEmail(cert?.certificateDraft?.email) === normalizedEmail)
+    .filter((cert) => {
+      const certificateEmail =
+        normalizeEmail(cert?.certificateDraft?.email) ||
+        normalizeEmail(cert?.rawSubmission?.patient?.email) ||
+        normalizeEmail(cert?.rawSubmission?.patientEmail) ||
+        normalizeEmail(cert?.rawSubmission?.email) ||
+        normalizeEmail(cert?.rawSubmission?.consult?.email) ||
+        '';
+      return certificateEmail === normalizedEmail;
+    })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
@@ -1876,32 +1885,31 @@ export default async function handler(req, res) {
         canIssueReset = Boolean(localAccount);
       }
 
-      if (canIssueReset) {
-        const token = issueStatelessPatientResetToken(email);
-        const resetUrl = buildPatientPasswordResetUrl(req, token);
-        const resetEmail = renderPatientPasswordResetEmail({
-          baseUrl: getFrontendBaseUrl(req),
-          resetUrl,
-          expiresMinutes: String(Math.round(PATIENT_PASSWORD_RESET_TTL_MS / (1000 * 60))),
-        });
-        await sendEmail({
-          to: email,
-          subject: 'Reset your Onya Health password',
-          html: resetEmail.html,
-          text: resetEmail.text,
-        });
-        await appendAudit({
-          type: 'PATIENT_PASSWORD_RESET_REQUESTED',
+      const token = issueStatelessPatientResetToken(email);
+      const resetUrl = buildPatientPasswordResetUrl(req, token);
+      const resetEmail = renderPatientPasswordResetEmail({
+        baseUrl: getFrontendBaseUrl(req),
+        resetUrl,
+        expiresMinutes: String(Math.round(PATIENT_PASSWORD_RESET_TTL_MS / (1000 * 60))),
+      });
+      await sendEmail({
+        to: email,
+        subject: 'Reset your Onya Health password',
+        html: resetEmail.html,
+        text: resetEmail.text,
+      });
+      await appendAudit({
+        type: 'PATIENT_PASSWORD_RESET_REQUESTED',
+        email,
+      });
+      info('patient.password_reset.requested', {
+        email,
+        provider: currentEmailProvider(),
+        accountFound: canIssueReset,
+      });
+      if (!canIssueReset) {
+        info('patient.password_reset.requested_without_existing_account', {
           email,
-        });
-        info('patient.password_reset.requested', {
-          email,
-          provider: currentEmailProvider(),
-        });
-      } else {
-        info('patient.password_reset.request_skipped', {
-          email,
-          reason: 'no_patient_account',
         });
       }
 
@@ -1936,13 +1944,32 @@ export default async function handler(req, res) {
       let account = null;
       const supabaseConfig = getSupabaseConfig();
       if (supabaseConfig.enabled) {
-        const existing = await findSupabasePatientByEmail(email);
+        let existing = await findSupabasePatientByEmail(email);
         if (!existing) {
-          sendJson(res, 400, { error: 'Invalid or expired reset token' });
-          return;
+          const certificates = await listCertificates();
+          const patientCertificates = getPatientCertificatesForEmail(certificates, email);
+          const latest = patientCertificates[0] || null;
+
+          try {
+            account = await createPatientAccountViaSupabase({
+              email,
+              password: nextPassword,
+              fullName: latest?.certificateDraft?.fullName || '',
+              dob: latest?.certificateDraft?.dob || '',
+              phone: latest?.certificateDraft?.phone || '',
+            });
+          } catch (errorObject) {
+            if (errorObject?.status === 409) {
+              existing = await findSupabasePatientByEmail(email);
+            } else {
+              throw errorObject;
+            }
+          }
         }
-        await updateSupabasePatientPasswordByEmail(email, nextPassword);
-        account = await findSupabasePatientByEmail(email);
+        if (!account && existing) {
+          await updateSupabasePatientPasswordByEmail(email, nextPassword);
+          account = await findSupabasePatientByEmail(email);
+        }
       } else {
         try {
           account = await setPatientAccountPassword({
@@ -1957,9 +1984,35 @@ export default async function handler(req, res) {
           throw errorObject;
         }
         if (!account) {
+          try {
+            account = await createPatientAccount({
+              email,
+              password: nextPassword,
+            });
+          } catch (errorObject) {
+            if (errorObject?.code === 'PASSWORD_INVALID') {
+              sendJson(res, 400, { error: errorObject.message });
+              return;
+            }
+            if (errorObject?.code === 'ACCOUNT_EXISTS') {
+              account = await setPatientAccountPassword({
+                email,
+                password: nextPassword,
+              });
+            } else {
+              throw errorObject;
+            }
+          }
+        }
+        if (!account) {
           sendJson(res, 400, { error: 'Invalid or expired reset token' });
           return;
         }
+      }
+
+      if (!account) {
+        sendJson(res, 400, { error: 'Invalid or expired reset token' });
+        return;
       }
 
       await appendAudit({

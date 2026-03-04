@@ -74,7 +74,8 @@ function mapDbToCertificate(item) {
 }
 
 function mapSupabaseRowToCertificate(row) {
-  const med = row.medical_certificate_requests || {};
+  const rawMedicalRequest = row.medical_certificate_requests;
+  const med = Array.isArray(rawMedicalRequest) ? rawMedicalRequest[0] || {} : rawMedicalRequest || {};
 
   const createdAt = row.submitted_at || row.created_at || new Date().toISOString();
   const rawSubmission = med.raw_submission || null;
