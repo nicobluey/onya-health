@@ -1239,6 +1239,22 @@ export default async function handler(req, res) {
   }
 
   const { url, routePath, segments } = parseApiRoute(req);
+  if (routePath === 'patient/password/reset/request' && req.method !== 'POST') {
+    sendJson(res, 405, { error: 'Method not allowed. Use POST for this endpoint.' });
+    return;
+  }
+  if (routePath === 'patient/password/reset/confirm' && req.method !== 'POST') {
+    sendJson(res, 405, { error: 'Method not allowed. Use POST for this endpoint.' });
+    return;
+  }
+  if (routePath === 'doctor/password/reset/request' && req.method !== 'POST') {
+    sendJson(res, 405, { error: 'Method not allowed. Use POST for this endpoint.' });
+    return;
+  }
+  if (routePath === 'doctor/password/reset/confirm' && req.method !== 'POST') {
+    sendJson(res, 405, { error: 'Method not allowed. Use POST for this endpoint.' });
+    return;
+  }
 
   try {
     if (req.method === 'GET' && routePath === 'health') {
@@ -1247,6 +1263,13 @@ export default async function handler(req, res) {
         service: 'onya-health-backend',
         runtime: 'vercel-function',
         storage: isSupabaseStorageEnabled() ? 'supabase' : 'local-json',
+        emailProvider: currentEmailProvider(),
+        smtpConfigured: Boolean(
+          String(process.env.SMTP_HOST || '').trim() &&
+            String(process.env.SMTP_USER || '').trim() &&
+            String(process.env.SMTP_PASS || '').trim()
+        ),
+        resendConfigured: Boolean(String(process.env.RESEND_API_KEY || '').trim()),
       });
       return;
     }

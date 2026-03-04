@@ -40,6 +40,13 @@ export function currentEmailProvider() {
   return 'mock-outbox';
 }
 
+function allowMockEmailFallback() {
+  const explicitOverride = String(process.env.ALLOW_MOCK_EMAIL || '').trim().toLowerCase();
+  if (explicitOverride === 'true') return true;
+  if (explicitOverride === 'false') return false;
+  return !process.env.VERCEL;
+}
+
 async function getSmtpTransporter() {
   const config = getSmtpConfig();
   if (!config.enabled) return null;
@@ -138,6 +145,18 @@ export async function sendEmail({ to, subject, html, text, attachments = [] }) {
   }
 
   if (provider === 'mock-outbox' || !apiKey) {
+    if (!allowMockEmailFallback()) {
+      const configError = new Error(
+        'Email provider is not configured. Set SMTP_* or RESEND_API_KEY in production.'
+      );
+      error('email.dispatch.unconfigured', {
+        provider,
+        to: recipients,
+        subject,
+      });
+      throw configError;
+    }
+
     const saved = await appendOutbox({
       at: new Date().toISOString(),
       mode: 'mock',
