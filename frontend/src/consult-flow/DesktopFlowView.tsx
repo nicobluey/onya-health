@@ -1,29 +1,29 @@
 import { useBooking } from './state';
-import { Stepper } from './components/Stepper';
-import { StepRenderer } from './components/FlowSteps';
-import { UpsellModal } from './components/UpsellModal';
-import { FAQ } from './components/FAQ';
-import { HowItWorks } from './components/HowItWorks';
-import { Reviews } from './components/Reviews';
-import { LiveActivityToast } from './components/LiveActivityToast';
+import { Stepper } from '../components/Stepper';
+import { StepRenderer } from '../components/FlowSteps';
+import { UpsellModal } from '../components/UpsellModal';
+import { FAQ } from '../components/FAQ';
+import { HowItWorks } from '../components/HowItWorks';
+import { Reviews } from '../components/Reviews';
+import { LiveActivityToast } from '../components/LiveActivityToast';
 import {
     BlogsSection,
     LeadingClinicSection,
     ReadyToSkipWaitingRoomSection,
     UsedByPatientsSection,
-} from './components/LandingExtras';
+} from '../components/LandingExtras';
 import { COPY } from './copy';
 import { Check, ArrowRight } from 'lucide-react';
-import { Button } from './components/UI';
-import { Footer } from './components/Footer';
+import { Button } from '../components/UI';
+import { Footer } from '../components/Footer';
 import type { CSSProperties } from 'react';
 import type { ServiceConfig } from './services';
 
-interface DesktopViewProps {
+interface DesktopFlowViewProps {
     service: ServiceConfig;
 }
 
-export default function DesktopView({ service }: DesktopViewProps) {
+export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
     const { step, view, startBooking, goHome } = useBooking();
     const themedStyle = {
         backgroundColor: service.theme.pageBg,

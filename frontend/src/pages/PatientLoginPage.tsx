@@ -1,6 +1,6 @@
 import { type CSSProperties, useState } from 'react';
 import { ArrowRight, Lock, Mail } from 'lucide-react';
-import { fetchApiJson } from './lib/api';
+import { fetchApiJson } from '../lib/api';
 
 type FloatingScienceCard = {
     src: string;
@@ -89,7 +89,7 @@ const SCIENCE_FLOATING_CARDS: FloatingScienceCard[] = [
     },
 ];
 
-export default function PatientLogin() {
+export default function PatientLoginPage() {
     const [email, setEmail] = useState('');
     const [dob, setDob] = useState('');
     const [password, setPassword] = useState('');

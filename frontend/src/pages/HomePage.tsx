@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, Grid2x2, X } from 'lucide-react';
-import { SERVICE_LIST } from './services';
-import { LiveActivityToast } from './components/LiveActivityToast';
-import { FAQ } from './components/FAQ';
-import { BlogsSection, UsedByPatientsSection } from './components/LandingExtras';
-import { Footer } from './components/Footer';
-import { HomeReviews } from './components/HomeReviews';
-import { HowItWorks } from './components/HowItWorks';
+import { SERVICE_LIST } from '../consult-flow';
+import { LiveActivityToast } from '../components/LiveActivityToast';
+import { FAQ } from '../components/FAQ';
+import { BlogsSection, UsedByPatientsSection } from '../components/LandingExtras';
+import { Footer } from '../components/Footer';
+import { HomeReviews } from '../components/HomeReviews';
+import { HowItWorks } from '../components/HowItWorks';
 
 const ROTATING_PROVIDERS = ['doctor', 'nutritionist', 'psychologist'];
 const HOME_THEME = {
@@ -32,7 +32,7 @@ const HOME_CARD_IMAGE_BY_SLUG: Record<string, string> = {
     psychologist: '/psychologist.png',
 };
 
-export default function HomeHub() {
+export default function HomePage() {
     const [wordIndex, setWordIndex] = useState(0);
     const [displayWord, setDisplayWord] = useState('');
     const [isDeleting, setIsDeleting] = useState(false);

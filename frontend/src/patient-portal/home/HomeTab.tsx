@@ -12,66 +12,22 @@ import {
     Upload,
     UserRound,
 } from 'lucide-react';
-
-type MainTab = 'home' | 'consult' | 'account';
-type LayoutMode = 'desktop' | 'mobile';
-type RecordTab = 'medical-history' | 'allergies' | 'medications';
-
-interface PortalRequest {
-    id: string;
-    createdAt: string;
-    status: string;
-    serviceType: string;
-    purpose: string;
-    symptom: string;
-    description: string;
-    startDate: string | null;
-    durationDays: number;
-    decision?: {
-        by?: string;
-        at?: string;
-        notes?: string;
-    } | null;
-    certificatePdfUrl?: string | null;
-}
-
-interface PatientProfile {
-    fullName: string;
-    email: string;
-    dob?: string;
-    phone?: string;
-}
-
-interface TextEntry {
-    id: string;
-    title: string;
-    details: string;
-    createdAt: string;
-}
-
-interface TestResultEntry {
-    id: string;
-    name: string;
-    summary: string;
-    testDate: string;
-    fileName: string;
-    createdAt: string;
-}
-
-interface PortalProfileData {
-    medicalHistory: TextEntry[];
-    allergies: TextEntry[];
-    medications: TextEntry[];
-    lifestyleNotes: TextEntry[];
-    testResults: TestResultEntry[];
-}
-
-interface TestResultDraft {
-    name: string;
-    summary: string;
-    testDate: string;
-    fileName: string;
-}
+import {
+    type LayoutMode,
+    type MainTab,
+    type PatientProfile,
+    type PortalProfileData,
+    type PortalRequest,
+    type RecordTab,
+    type TestResultDraft,
+    type TestResultEntry,
+    type TextEntry,
+    consultTitle,
+    formatDate,
+    formatReadableDate,
+    isQueuedStatus,
+    statusLabel,
+} from '../model';
 
 const RECORD_TAB_META: Record<
     RecordTab,
@@ -109,58 +65,12 @@ const RECORD_TAB_META: Record<
 const panelClassName =
     'rounded-3xl border border-[#dbe2d9] bg-white shadow-[0_24px_42px_-34px_rgba(15,23,42,0.24)]';
 
-function isQueuedStatus(status: string) {
-    const normalized = String(status || '').toLowerCase();
-    return ['awaiting_payment', 'pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(normalized);
-}
-
-function statusLabel(status: string) {
-    const normalized = String(status || '').toLowerCase();
-    if (normalized === 'awaiting_payment') return 'Awaiting payment confirmation';
-    if (['pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(normalized)) return 'Pending doctor review';
-    if (normalized === 'approved') return 'Approved and issued';
-    if (normalized === 'closed') return 'Completed';
-    if (normalized === 'denied') return 'Not approved';
-    if (!normalized) return 'No active request';
-    return normalized.replace(/_/g, ' ');
-}
-
 function statusTone(status: string) {
     const normalized = String(status || '').toLowerCase();
     if (isQueuedStatus(status)) return 'bg-[#edf1ec] text-[#1f5f3f] border-[#b9c8ba]';
     if (normalized === 'approved' || normalized === 'closed') return 'bg-[#edf1ec] text-[#1f5f3f] border-[#b9c8ba]';
     if (normalized === 'denied') return 'bg-[#ffe9e8] text-[#a93736] border-[#f3c5c4]';
     return 'bg-[#eff4ef] text-[#5f7063] border-[#dbe2d9]';
-}
-
-function consultTitle(serviceType: string) {
-    if (serviceType === 'doctor' || !serviceType) return 'Medical Certificate';
-    return serviceType
-        .split('_')
-        .map((word) => word.slice(0, 1).toUpperCase() + word.slice(1))
-        .join(' ');
-}
-
-function formatDate(value?: string | null) {
-    if (!value) return '—';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleDateString('en-AU', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-    });
-}
-
-function formatReadableDate(value?: string | null) {
-    if (!value) return 'Not provided';
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleDateString('en-AU', {
-        day: '2-digit',
-        month: 'long',
-        year: 'numeric',
-    });
 }
 
 function getRecordEntries(data: PortalProfileData, tab: RecordTab): TextEntry[] {

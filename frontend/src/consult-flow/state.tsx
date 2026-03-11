@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
-import type { BookingState, BookingStep, CertificatePurpose, Symptom, UserDetails } from './types';
+import type { BookingState, BookingStep, CertificatePurpose, Symptom, UserDetails } from '../types';
 
 interface BookingContextType extends BookingState {
     setPurpose: (p: CertificatePurpose) => void;

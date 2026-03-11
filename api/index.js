@@ -12,6 +12,8 @@ import {
   createPatientAccount,
   getPatientAccountByEmail,
   isLikelyEmail as isLikelyPatientEmail,
+  issuePasswordResetToken,
+  resetPasswordWithToken,
   setPatientAccountPassword,
   updatePatientAccountProfile,
   validatePassword as validatePatientPassword,
@@ -36,7 +38,7 @@ import {
   listCertificates,
   updateCertificate,
 } from '../backend/lib/storage.js';
-import { sendEmail } from '../backend/lib/email.js';
+import { currentEmailProvider, sendEmail } from '../backend/lib/email.js';
 import {
   renderDoctorPatientMessageEmail,
   renderDoctorPasswordResetEmail,
@@ -49,6 +51,11 @@ import {
   renderPatientWelcomeEmail,
 } from '../backend/lib/email-templates.js';
 import { error, info } from '../backend/lib/logger.js';
+import {
+  getLatestPatientSnapshot,
+  getPatientCertificatesForEmail,
+  syncPatientProfileFromLatest,
+} from './lib/patient-snapshot.js';
 
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 const FRONTEND_BASE_URL = (process.env.FRONTEND_BASE_URL || '').replace(/\/$/, '');
@@ -80,6 +87,7 @@ const PATIENT_PASSWORD_RESET_SIGNING_SECRET =
   process.env.PATIENT_SESSION_SECRET ||
   process.env.DOCTOR_SESSION_SECRET ||
   'change-this-patient-reset-secret';
+const PATIENT_SUPABASE_RESET_METADATA_KEY = 'onya_patient_password_reset';
 const DOCTOR_PASSWORD_RESET_TTL_MS = Math.max(
   1000 * 60 * 5,
   Number(process.env.DOCTOR_PASSWORD_RESET_TTL_MS || 1000 * 60 * 60)
@@ -87,6 +95,12 @@ const DOCTOR_PASSWORD_RESET_TTL_MS = Math.max(
 const DOCTOR_PASSWORD_RESET_PATH = process.env.DOCTOR_PASSWORD_RESET_PATH || '/doctor/login';
 
 const OPEN_REVIEW_STATUSES = new Set(['pending', 'submitted', 'triaged', 'assigned', 'in_review']);
+const POST_ONLY_ROUTES = new Set([
+  'patient/password/reset/request',
+  'patient/password/reset/confirm',
+  'doctor/password/reset/request',
+  'doctor/password/reset/confirm',
+]);
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', CORS_ORIGIN);
@@ -156,6 +170,27 @@ function decodeBase64Url(value) {
   return Buffer.from(String(value || ''), 'base64url').toString('utf8');
 }
 
+function normalizeResetToken(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  let normalized = raw;
+  try {
+    normalized = decodeURIComponent(raw);
+  } catch {
+    normalized = raw;
+  }
+
+  return normalized
+    .replace(/\s+/g, '')
+    .replace(/^[<("'`]+/, '')
+    .replace(/[>)"'`.,]+$/, '');
+}
+
+function hashResetTokenValue(token) {
+  return crypto.createHash('sha256').update(String(token || '')).digest('hex');
+}
+
 function signResetTokenPayload(encodedPayload) {
   return crypto
     .createHmac('sha256', PATIENT_PASSWORD_RESET_SIGNING_SECRET)
@@ -174,11 +209,12 @@ function issueStatelessPatientResetToken(email) {
 }
 
 function verifyStatelessPatientResetToken(token) {
-  if (!token || typeof token !== 'string' || !token.includes('.')) {
+  const normalizedToken = normalizeResetToken(token);
+  if (!normalizedToken || typeof normalizedToken !== 'string' || !normalizedToken.includes('.')) {
     return null;
   }
 
-  const [encodedPayload, incomingSignature] = token.split('.');
+  const [encodedPayload, incomingSignature] = normalizedToken.split('.');
   const expectedSignature = signResetTokenPayload(encodedPayload);
   const incomingBuffer = Buffer.from(String(incomingSignature || ''), 'utf8');
   const expectedBuffer = Buffer.from(String(expectedSignature || ''), 'utf8');
@@ -200,6 +236,37 @@ function verifyStatelessPatientResetToken(token) {
   const email = normalizeEmail(payload.email);
   if (!isLikelyPatientEmail(email)) return null;
   return { email };
+}
+
+function issueScopedPatientResetToken(subject) {
+  return `${encodeBase64Url(String(subject || '').trim())}.${crypto.randomBytes(32).toString('base64url')}`;
+}
+
+function parseScopedPatientResetToken(token) {
+  const normalizedToken = normalizeResetToken(token);
+  const separatorIndex = normalizedToken.indexOf('.');
+  if (separatorIndex <= 0 || separatorIndex >= normalizedToken.length - 1) {
+    return null;
+  }
+
+  const encodedSubject = normalizedToken.slice(0, separatorIndex);
+  const rawToken = normalizedToken;
+
+  let subject = '';
+  try {
+    subject = String(decodeBase64Url(encodedSubject) || '').trim();
+  } catch {
+    subject = '';
+  }
+
+  if (!subject) {
+    return null;
+  }
+
+  return {
+    subject,
+    rawToken,
+  };
 }
 
 function safeTimingCompare(a, b) {
@@ -292,13 +359,6 @@ function isOpenForReview(status) {
   return OPEN_REVIEW_STATUSES.has(String(status || '').toLowerCase());
 }
 
-function currentEmailProvider() {
-  if (String(process.env.SMTP_HOST || '').trim() && String(process.env.SMTP_USER || '').trim() && String(process.env.SMTP_PASS || '').trim()) {
-    return 'smtp';
-  }
-  return process.env.RESEND_API_KEY ? 'resend' : 'mock-outbox';
-}
-
 function userHasDoctorRole(user) {
   const metadataRole = String(user?.user_metadata?.role || user?.app_metadata?.role || '').toLowerCase();
   return ['provider', 'doctor', 'admin'].includes(metadataRole);
@@ -373,21 +433,6 @@ async function resolveDoctorNotificationEmails() {
   return deduped;
 }
 
-function getPatientCertificatesForEmail(certificates, email) {
-  const normalizedEmail = normalizeEmail(email);
-  return certificates
-    .filter((cert) => {
-      const certificateEmail =
-        normalizeEmail(cert?.certificateDraft?.email) ||
-        normalizeEmail(cert?.rawSubmission?.patient?.email) ||
-        normalizeEmail(cert?.rawSubmission?.patientEmail) ||
-        normalizeEmail(cert?.rawSubmission?.email) ||
-        normalizeEmail(cert?.rawSubmission?.consult?.email) ||
-        '';
-      return certificateEmail === normalizedEmail;
-    })
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-}
 
 function isApprovedCertificate(certificate) {
   const status = String(certificate?.status || '').toLowerCase();
@@ -909,6 +954,15 @@ async function listSupabaseAuthUsers(config) {
   return parseSupabaseUsersPayload(payload);
 }
 
+async function getSupabaseAuthUserById(config, userId) {
+  if (!config.enabled || !userId) return null;
+
+  const payload = await supabaseAuthAdminRequest(config, `users/${userId}`, {
+    method: 'GET',
+  });
+  return payload?.user || payload?.data?.user || payload?.data || payload || null;
+}
+
 async function supabaseRestRequest(config, endpoint, options = {}) {
   const response = await fetch(`${config.url}/rest/v1/${endpoint}`, {
     method: options.method || 'GET',
@@ -1092,13 +1146,17 @@ async function updateSupabaseDoctorPasswordByEmail(email, password) {
   return doctor;
 }
 
-async function findSupabasePatientByEmail(email) {
+async function findSupabasePatientUserByEmail(email) {
   const config = getSupabaseConfig();
   if (!config.enabled) return null;
 
   const users = await listSupabaseAuthUsers(config);
   const normalized = normalizeEmail(email);
-  const match = users.find((entry) => normalizeEmail(entry?.email) === normalized && userHasPatientRole(entry));
+  return users.find((entry) => normalizeEmail(entry?.email) === normalized && userHasPatientRole(entry)) || null;
+}
+
+async function findSupabasePatientByEmail(email) {
+  const match = await findSupabasePatientUserByEmail(email);
   if (!match) return null;
 
   return {
@@ -1186,6 +1244,134 @@ async function updateSupabasePatientPasswordByEmail(email, password) {
   return account;
 }
 
+function getSupabasePatientResetState(user) {
+  const metadata = user?.user_metadata || {};
+  const resetState = metadata?.[PATIENT_SUPABASE_RESET_METADATA_KEY];
+  return resetState && typeof resetState === 'object' ? resetState : null;
+}
+
+async function issueSupabasePatientPasswordResetToken(email) {
+  const config = getSupabaseConfig();
+  if (!config.enabled) return null;
+
+  const user = await findSupabasePatientUserByEmail(email);
+  if (!user?.id) return null;
+
+  const token = issueScopedPatientResetToken(user.id);
+  const resetState = {
+    tokenHash: hashResetTokenValue(token),
+    issuedAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + PATIENT_PASSWORD_RESET_TTL_MS).toISOString(),
+    usedAt: null,
+  };
+
+  await supabaseAuthAdminRequest(config, `users/${user.id}`, {
+    method: 'PUT',
+    body: {
+      user_metadata: {
+        ...(user?.user_metadata || {}),
+        [PATIENT_SUPABASE_RESET_METADATA_KEY]: resetState,
+      },
+    },
+  });
+
+  return {
+    email: normalizeEmail(email),
+    token,
+    expiresAt: resetState.expiresAt,
+  };
+}
+
+async function verifySupabasePatientPasswordResetToken(token) {
+  const parsed = parseScopedPatientResetToken(token);
+  if (!parsed?.subject || !parsed.rawToken) {
+    info('patient.password_reset.verify.failed', {
+      reason: 'token_parse_failed',
+      tokenLength: String(token || '').length,
+    });
+    return null;
+  }
+
+  const config = getSupabaseConfig();
+  if (!config.enabled) {
+    info('patient.password_reset.verify.failed', {
+      reason: 'supabase_not_enabled',
+    });
+    return null;
+  }
+
+  const user = await getSupabaseAuthUserById(config, parsed.subject);
+  if (!user?.id) {
+    info('patient.password_reset.verify.failed', {
+      reason: 'user_not_found',
+      userId: parsed.subject,
+    });
+    return null;
+  }
+  if (!userHasPatientRole(user)) {
+    info('patient.password_reset.verify.failed', {
+      reason: 'user_not_patient',
+      userId: parsed.subject,
+      email: normalizeEmail(user.email),
+    });
+    return null;
+  }
+
+  const resetState = getSupabasePatientResetState(user);
+  if (!resetState || resetState.usedAt) {
+    info('patient.password_reset.verify.failed', {
+      reason: resetState?.usedAt ? 'token_already_used' : 'missing_reset_state',
+      userId: user.id,
+      email: normalizeEmail(user.email),
+    });
+    return null;
+  }
+
+  const expiresAt = new Date(resetState.expiresAt || '').getTime();
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) {
+    info('patient.password_reset.verify.failed', {
+      reason: 'token_expired',
+      userId: user.id,
+      email: normalizeEmail(user.email),
+      expiresAt: resetState.expiresAt || null,
+    });
+    return null;
+  }
+
+  if (!safeTimingCompare(resetState.tokenHash, hashResetTokenValue(parsed.rawToken))) {
+    info('patient.password_reset.verify.failed', {
+      reason: 'token_hash_mismatch',
+      userId: user.id,
+      email: normalizeEmail(user.email),
+    });
+    return null;
+  }
+
+  return {
+    email: normalizeEmail(user.email),
+    user,
+  };
+}
+
+async function clearSupabasePatientPasswordResetToken(user) {
+  if (!user?.id) return;
+
+  const config = getSupabaseConfig();
+  if (!config.enabled) return;
+
+  const nextMetadata = {
+    ...(user?.user_metadata || {}),
+  };
+  delete nextMetadata[PATIENT_SUPABASE_RESET_METADATA_KEY];
+
+  await supabaseAuthAdminRequest(config, `users/${user.id}`, {
+    method: 'PUT',
+    body: {
+      user_metadata: nextMetadata,
+    },
+  });
+}
+
 async function upsertSupabasePatientMetadata({ email, fullName, dob, phone }) {
   const existing = await findSupabasePatientByEmail(email);
   if (!existing?.id) return null;
@@ -1248,19 +1434,8 @@ export default async function handler(req, res) {
   }
 
   const { url, routePath, segments } = parseApiRoute(req);
-  if (routePath === 'patient/password/reset/request' && req.method !== 'POST') {
-    sendJson(res, 405, { error: 'Method not allowed. Use POST for this endpoint.' });
-    return;
-  }
-  if (routePath === 'patient/password/reset/confirm' && req.method !== 'POST') {
-    sendJson(res, 405, { error: 'Method not allowed. Use POST for this endpoint.' });
-    return;
-  }
-  if (routePath === 'doctor/password/reset/request' && req.method !== 'POST') {
-    sendJson(res, 405, { error: 'Method not allowed. Use POST for this endpoint.' });
-    return;
-  }
-  if (routePath === 'doctor/password/reset/confirm' && req.method !== 'POST') {
+  if (POST_ONLY_ROUTES.has(routePath) && req.method !== 'POST') {
+    res.setHeader('Allow', 'POST, OPTIONS');
     sendJson(res, 405, { error: 'Method not allowed. Use POST for this endpoint.' });
     return;
   }
@@ -1483,11 +1658,8 @@ export default async function handler(req, res) {
       }
 
       const certificates = await listCertificates();
-      const patientCertificates = getPatientCertificatesForEmail(certificates, expectedEmail);
-      const latest = patientCertificates[0] || null;
-      const fullName = String(latest?.certificateDraft?.fullName || '').trim();
-      const dob = String(latest?.certificateDraft?.dob || '').trim();
-      const phone = String(latest?.certificateDraft?.phone || '').trim();
+      const { latest, latestProfile } = getLatestPatientSnapshot(certificates, expectedEmail);
+      const { fullName, dob, phone } = latestProfile;
 
       let account = null;
       const supabaseConfig = getSupabaseConfig();
@@ -1611,8 +1783,7 @@ export default async function handler(req, res) {
       }
 
       const certificates = await listCertificates();
-      const patientCertificates = getPatientCertificatesForEmail(certificates, email);
-      const latest = patientCertificates[0] || null;
+      const { patientCertificates, latest, latestProfile } = getLatestPatientSnapshot(certificates, email);
       const supabaseConfig = getSupabaseConfig();
 
       if (password) {
@@ -1628,23 +1799,13 @@ export default async function handler(req, res) {
           return;
         }
 
-        if (latest?.certificateDraft) {
-          if (supabaseConfig.enabled) {
-            await upsertSupabasePatientMetadata({
-              email,
-              fullName: latest.certificateDraft.fullName || '',
-              dob: latest.certificateDraft.dob || '',
-              phone: latest.certificateDraft.phone || '',
-            });
-          } else {
-            await updatePatientAccountProfile({
-              email,
-              fullName: latest.certificateDraft.fullName || '',
-              dob: latest.certificateDraft.dob || '',
-              phone: latest.certificateDraft.phone || '',
-            });
-          }
-        }
+        await syncPatientProfileFromLatest({
+          email,
+          latestCertificate: latest,
+          supabaseEnabled: supabaseConfig.enabled,
+          upsertSupabasePatientMetadata,
+          updatePatientAccountProfile,
+        });
 
         const token = issuePatientToken(email);
         sendJson(res, 200, {
@@ -1664,30 +1825,22 @@ export default async function handler(req, res) {
         return;
       }
 
-      if (latest?.certificateDraft?.dob && !dob) {
+      if (latestProfile.dob && !dob) {
         sendJson(res, 400, { error: 'Date of birth is required for this account' });
         return;
       }
-      if (dob && latest?.certificateDraft?.dob && latest.certificateDraft.dob !== dob) {
+      if (dob && latestProfile.dob && latestProfile.dob !== dob) {
         sendJson(res, 401, { error: 'Date of birth did not match our records' });
         return;
       }
 
-      if (supabaseConfig.enabled) {
-        await upsertSupabasePatientMetadata({
-          email,
-          fullName: latest?.certificateDraft?.fullName || '',
-          dob: latest?.certificateDraft?.dob || '',
-          phone: latest?.certificateDraft?.phone || '',
-        });
-      } else {
-        await updatePatientAccountProfile({
-          email,
-          fullName: latest?.certificateDraft?.fullName || '',
-          dob: latest?.certificateDraft?.dob || '',
-          phone: latest?.certificateDraft?.phone || '',
-        });
-      }
+      await syncPatientProfileFromLatest({
+        email,
+        latestCertificate: latest,
+        supabaseEnabled: supabaseConfig.enabled,
+        upsertSupabasePatientMetadata,
+        updatePatientAccountProfile,
+      });
 
       const token = issuePatientToken(email);
       sendJson(res, 200, {
@@ -1802,116 +1955,115 @@ export default async function handler(req, res) {
       }
 
       const supabaseConfig = getSupabaseConfig();
+      const certificates = await listCertificates();
+      const { latest, latestProfile } = getLatestPatientSnapshot(certificates, email);
       let canIssueReset = false;
 
       if (supabaseConfig.enabled) {
         let supabasePatient = await findSupabasePatientByEmail(email);
-        if (!supabasePatient) {
-          const certificates = await listCertificates();
-          const patientCertificates = getPatientCertificatesForEmail(certificates, email);
-          const latest = patientCertificates[0] || null;
-
-          if (latest?.certificateDraft?.email) {
-            try {
-              await createPatientAccountViaSupabase({
+        if (!supabasePatient && latest) {
+          try {
+            await createPatientAccountViaSupabase({
+              email,
+              password: createBootstrapPassword(),
+              fullName: latestProfile.fullName,
+              dob: latestProfile.dob,
+              phone: latestProfile.phone,
+            });
+          } catch (errorObject) {
+            // Account may already exist in Supabase auth with different metadata.
+            if (errorObject?.status === 409) {
+              await upsertSupabasePatientMetadata({
                 email,
-                password: createBootstrapPassword(),
-                fullName: latest.certificateDraft.fullName || '',
-                dob: latest.certificateDraft.dob || '',
-                phone: latest.certificateDraft.phone || '',
+                fullName: latestProfile.fullName,
+                dob: latestProfile.dob,
+                phone: latestProfile.phone,
               });
-            } catch (errorObject) {
-              // Account may already exist in Supabase auth with different metadata.
-              if (errorObject?.status === 409) {
-                await upsertSupabasePatientMetadata({
-                  email,
-                  fullName: latest.certificateDraft.fullName || '',
-                  dob: latest.certificateDraft.dob || '',
-                  phone: latest.certificateDraft.phone || '',
-                });
-              } else {
-                throw errorObject;
-              }
+            } else {
+              throw errorObject;
             }
+          }
 
-            supabasePatient = await findSupabasePatientByEmail(email);
-            if (supabasePatient) {
-              await appendAudit({
-                type: 'PATIENT_ACCOUNT_BOOTSTRAPPED_FOR_RESET',
-                email,
-              });
-            }
+          supabasePatient = await findSupabasePatientByEmail(email);
+          if (supabasePatient) {
+            await appendAudit({
+              type: 'PATIENT_ACCOUNT_BOOTSTRAPPED_FOR_RESET',
+              email,
+            });
           }
         }
         canIssueReset = Boolean(supabasePatient);
       } else {
         let localAccount = await getPatientAccountByEmail(email);
-        if (!localAccount) {
-          const certificates = await listCertificates();
-          const patientCertificates = getPatientCertificatesForEmail(certificates, email);
-          const latest = patientCertificates[0] || null;
-
-          if (latest?.certificateDraft?.email) {
-            try {
-              await createPatientAccount({
-                email,
-                password: createBootstrapPassword(),
-                fullName: latest.certificateDraft.fullName || '',
-                dob: latest.certificateDraft.dob || '',
-                phone: latest.certificateDraft.phone || '',
-              });
-            } catch (errorObject) {
-              if (errorObject?.code !== 'ACCOUNT_EXISTS') {
-                throw errorObject;
-              }
-            }
-
-            await updatePatientAccountProfile({
+        if (!localAccount && latest) {
+          try {
+            await createPatientAccount({
               email,
-              fullName: latest.certificateDraft.fullName || '',
-              dob: latest.certificateDraft.dob || '',
-              phone: latest.certificateDraft.phone || '',
+              password: createBootstrapPassword(),
+              fullName: latestProfile.fullName,
+              dob: latestProfile.dob,
+              phone: latestProfile.phone,
             });
-
-            localAccount = await getPatientAccountByEmail(email);
-            if (localAccount) {
-              await appendAudit({
-                type: 'PATIENT_ACCOUNT_BOOTSTRAPPED_FOR_RESET',
-                email,
-              });
+          } catch (errorObject) {
+            if (errorObject?.code !== 'ACCOUNT_EXISTS') {
+              throw errorObject;
             }
+          }
+
+          await updatePatientAccountProfile({
+            email,
+            fullName: latestProfile.fullName,
+            dob: latestProfile.dob,
+            phone: latestProfile.phone,
+          });
+
+          localAccount = await getPatientAccountByEmail(email);
+          if (localAccount) {
+            await appendAudit({
+              type: 'PATIENT_ACCOUNT_BOOTSTRAPPED_FOR_RESET',
+              email,
+            });
           }
         }
         canIssueReset = Boolean(localAccount);
       }
 
-      const token = issueStatelessPatientResetToken(email);
-      const resetUrl = buildPatientPasswordResetUrl(req, token);
-      const resetEmail = renderPatientPasswordResetEmail({
-        baseUrl: getFrontendBaseUrl(req),
-        resetUrl,
-        expiresMinutes: String(Math.round(PATIENT_PASSWORD_RESET_TTL_MS / (1000 * 60))),
-      });
-      await sendEmail({
-        to: email,
-        subject: 'Reset your Onya Health password',
-        html: resetEmail.html,
-        text: resetEmail.text,
-      });
-      await appendAudit({
-        type: 'PATIENT_PASSWORD_RESET_REQUESTED',
-        email,
-      });
+      if (canIssueReset) {
+        const resetPayload = supabaseConfig.enabled
+          ? await issueSupabasePatientPasswordResetToken(email)
+          : await issuePasswordResetToken(email, PATIENT_PASSWORD_RESET_TTL_MS);
+
+        if (!resetPayload?.token) {
+          throw new Error('Unable to issue patient password reset token');
+        }
+
+        const resetUrl = buildPatientPasswordResetUrl(req, resetPayload.token);
+        const resetEmail = renderPatientPasswordResetEmail({
+          baseUrl: getFrontendBaseUrl(req),
+          resetUrl,
+          expiresMinutes: String(Math.round(PATIENT_PASSWORD_RESET_TTL_MS / (1000 * 60))),
+        });
+        await sendEmail({
+          to: email,
+          subject: 'Reset your Onya Health password',
+          html: resetEmail.html,
+          text: resetEmail.text,
+        });
+        await appendAudit({
+          type: 'PATIENT_PASSWORD_RESET_REQUESTED',
+          email,
+        });
+      } else {
+        info('patient.password_reset.requested_without_existing_account', {
+          email,
+        });
+      }
+
       info('patient.password_reset.requested', {
         email,
         provider: currentEmailProvider(),
         accountFound: canIssueReset,
       });
-      if (!canIssueReset) {
-        info('patient.password_reset.requested_without_existing_account', {
-          email,
-        });
-      }
 
       sendJson(res, 200, {
         message: 'If an account exists for this email, a reset link has been sent.',
@@ -1921,7 +2073,7 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST' && routePath === 'patient/password/reset/confirm') {
       const body = await parseJsonBody(req);
-      const token = String(body.token || '').trim();
+      const token = normalizeResetToken(body.token);
       const nextPassword = String(body.password || body.newPassword || '');
 
       if (!token || !nextPassword) {
@@ -1934,29 +2086,32 @@ export default async function handler(req, res) {
         return;
       }
 
-      const decoded = verifyStatelessPatientResetToken(token);
-      if (!decoded?.email) {
-        sendJson(res, 400, { error: 'Invalid or expired reset token' });
-        return;
-      }
-      const email = normalizeEmail(decoded.email);
-
       let account = null;
       const supabaseConfig = getSupabaseConfig();
       if (supabaseConfig.enabled) {
+        const decoded =
+          (await verifySupabasePatientPasswordResetToken(token)) || verifyStatelessPatientResetToken(token);
+        if (!decoded?.email) {
+          info('patient.password_reset.confirm.invalid_token', {
+            tokenLength: token.length,
+            supabaseEnabled: true,
+          });
+          sendJson(res, 400, { error: 'Invalid or expired reset token' });
+          return;
+        }
+
+        const email = normalizeEmail(decoded.email);
+        const certificates = await listCertificates();
+        const { latestProfile } = getLatestPatientSnapshot(certificates, email);
         let existing = await findSupabasePatientByEmail(email);
         if (!existing) {
-          const certificates = await listCertificates();
-          const patientCertificates = getPatientCertificatesForEmail(certificates, email);
-          const latest = patientCertificates[0] || null;
-
           try {
             account = await createPatientAccountViaSupabase({
               email,
               password: nextPassword,
-              fullName: latest?.certificateDraft?.fullName || '',
-              dob: latest?.certificateDraft?.dob || '',
-              phone: latest?.certificateDraft?.phone || '',
+              fullName: latestProfile.fullName,
+              dob: latestProfile.dob,
+              phone: latestProfile.phone,
             });
           } catch (errorObject) {
             if (errorObject?.status === 409) {
@@ -1970,43 +2125,63 @@ export default async function handler(req, res) {
           await updateSupabasePatientPasswordByEmail(email, nextPassword);
           account = await findSupabasePatientByEmail(email);
         }
+
+        if (decoded?.user) {
+          try {
+            await clearSupabasePatientPasswordResetToken(decoded.user);
+          } catch (errorObject) {
+            error('patient.password_reset.confirm.clear_token_failed', {
+              email,
+              message: errorObject?.message || String(errorObject),
+            });
+          }
+        }
+
+        if (!account) {
+          sendJson(res, 400, { error: 'Invalid or expired reset token' });
+          return;
+        }
+
+        await appendAudit({
+          type: 'PATIENT_PASSWORD_RESET_COMPLETED',
+          email,
+        });
+
+        const patientToken = issuePatientToken(email);
+        sendJson(res, 200, {
+          token: patientToken,
+          patient: buildPatientIdentity({
+            email,
+            latestCertificate: null,
+            account,
+          }),
+        });
+        info('patient.password_reset.completed', { email });
+        return;
       } else {
         try {
-          account = await setPatientAccountPassword({
-            email,
-            password: nextPassword,
+          account = await resetPasswordWithToken({
+            token,
+            newPassword: nextPassword,
           });
         } catch (errorObject) {
           if (errorObject?.code === 'PASSWORD_INVALID') {
             sendJson(res, 400, { error: errorObject.message });
             return;
           }
-          throw errorObject;
-        }
-        if (!account) {
-          try {
-            account = await createPatientAccount({
-              email,
-              password: nextPassword,
+          if (
+            errorObject?.code === 'TOKEN_INVALID' ||
+            errorObject?.code === 'TOKEN_EXPIRED' ||
+            String(errorObject?.message || '').toLowerCase().includes('invalid or expired')
+          ) {
+            info('patient.password_reset.confirm.invalid_token', {
+              tokenLength: token.length,
+              supabaseEnabled: false,
             });
-          } catch (errorObject) {
-            if (errorObject?.code === 'PASSWORD_INVALID') {
-              sendJson(res, 400, { error: errorObject.message });
-              return;
-            }
-            if (errorObject?.code === 'ACCOUNT_EXISTS') {
-              account = await setPatientAccountPassword({
-                email,
-                password: nextPassword,
-              });
-            } else {
-              throw errorObject;
-            }
+            sendJson(res, 400, { error: 'Invalid or expired reset token' });
+            return;
           }
-        }
-        if (!account) {
-          sendJson(res, 400, { error: 'Invalid or expired reset token' });
-          return;
+          throw errorObject;
         }
       }
 
@@ -2015,6 +2190,7 @@ export default async function handler(req, res) {
         return;
       }
 
+      const email = normalizeEmail(account.email);
       await appendAudit({
         type: 'PATIENT_PASSWORD_RESET_COMPLETED',
         email,
@@ -2046,29 +2222,21 @@ export default async function handler(req, res) {
         account = await getPatientAccountByEmail(patient.email);
       }
       const certificates = await listCertificates();
-      const patientCertificates = getPatientCertificatesForEmail(certificates, patient.email);
+      const { patientCertificates, latest } = getLatestPatientSnapshot(certificates, patient.email);
       if (patientCertificates.length === 0 && !account) {
         sendJson(res, 404, { error: 'Patient not found' });
         return;
       }
 
-      const latest = patientCertificates[0] || null;
-      if (latest?.certificateDraft) {
-        if (supabaseConfig.enabled) {
-          account = await upsertSupabasePatientMetadata({
-            email: patient.email,
-            fullName: latest.certificateDraft.fullName || '',
-            dob: latest.certificateDraft.dob || '',
-            phone: latest.certificateDraft.phone || '',
-          });
-        } else {
-          await updatePatientAccountProfile({
-            email: patient.email,
-            fullName: latest.certificateDraft.fullName || '',
-            dob: latest.certificateDraft.dob || '',
-            phone: latest.certificateDraft.phone || '',
-          });
-        }
+      const syncedProfile = await syncPatientProfileFromLatest({
+        email: patient.email,
+        latestCertificate: latest,
+        supabaseEnabled: supabaseConfig.enabled,
+        upsertSupabasePatientMetadata,
+        updatePatientAccountProfile,
+      });
+      if (syncedProfile) {
+        account = syncedProfile;
       }
 
       sendJson(res, 200, {

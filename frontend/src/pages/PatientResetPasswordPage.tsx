@@ -1,13 +1,20 @@
 import { useMemo, useState } from 'react';
 import { ArrowRight, Lock } from 'lucide-react';
-import { fetchApiJson } from './lib/api';
+import { fetchApiJson } from '../lib/api';
 
 function getTokenFromUrl() {
   const search = new URLSearchParams(window.location.search);
-  return String(search.get('token') || '').trim();
+  const rawToken = String(search.get('token') || '').trim();
+  if (!rawToken) return '';
+
+  try {
+    return decodeURIComponent(rawToken).replace(/\s+/g, '');
+  } catch {
+    return rawToken.replace(/\s+/g, '');
+  }
 }
 
-export default function PatientResetPassword() {
+export default function PatientResetPasswordPage() {
   const token = useMemo(getTokenFromUrl, []);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');

@@ -1,5 +1,5 @@
-import { useBooking } from '../state';
-import { COPY } from '../copy';
+import { useBooking } from '../consult-flow/state';
+import { COPY } from '../consult-flow/copy';
 import { Modal, Button } from './UI';
 import { Star, Check } from 'lucide-react';
 

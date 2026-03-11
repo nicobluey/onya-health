@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check } from 'lucide-react';
-import { useBooking } from '../state';
-import { COPY } from '../copy';
+import { useBooking } from '../consult-flow/state';
+import { COPY } from '../consult-flow/copy';
 import { Button, SelectableCard, Input } from './UI';
 import { AnimatePresence, motion } from 'framer-motion';
-import { getServiceForPath } from '../services';
+import { getServiceForPath } from '../consult-flow/services';
 import { fetchApiJson } from '../lib/api';
 
 // Transitions

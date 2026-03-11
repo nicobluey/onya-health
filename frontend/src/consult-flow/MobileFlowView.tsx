@@ -1,31 +1,31 @@
 import { useBooking } from './state';
-import { Stepper } from './components/Stepper';
-import { StepRenderer } from './components/FlowSteps';
-import { UpsellModal } from './components/UpsellModal';
-import { FAQ } from './components/FAQ';
-import { HowItWorks } from './components/HowItWorks';
-import { Reviews } from './components/Reviews';
-import { LiveActivityToast } from './components/LiveActivityToast';
+import { Stepper } from '../components/Stepper';
+import { StepRenderer } from '../components/FlowSteps';
+import { UpsellModal } from '../components/UpsellModal';
+import { FAQ } from '../components/FAQ';
+import { HowItWorks } from '../components/HowItWorks';
+import { Reviews } from '../components/Reviews';
+import { LiveActivityToast } from '../components/LiveActivityToast';
 import {
     BlogsSection,
     LeadingClinicSection,
     ReadyToSkipWaitingRoomSection,
     UsedByPatientsSection,
-} from './components/LandingExtras';
-import { Footer } from './components/Footer';
+} from '../components/LandingExtras';
+import { Footer } from '../components/Footer';
 
 import { COPY } from './copy';
 import { Check, ArrowRight, Grid2x2, X } from 'lucide-react';
-import { Button } from './components/UI';
+import { Button } from '../components/UI';
 import { useState, useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import type { ServiceConfig } from './services';
 
-interface MobileViewProps {
+interface MobileFlowViewProps {
     service: ServiceConfig;
 }
 
-export default function MobileView({ service }: MobileViewProps) {
+export default function MobileFlowView({ service }: MobileFlowViewProps) {
     const { step, view, startBooking } = useBooking();
     const [menuOpen, setMenuOpen] = useState(false);
     const themedStyle = {

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown } from 'lucide-react';
 import { cn } from './UI';
-import { COPY } from '../copy';
+import { COPY } from '../consult-flow/copy';
 
 export function FAQ() {
     const [openIndex, setOpenIndex] = useState<number | null>(0);

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowRight, ChevronLeft, ChevronRight, Star } from 'lucide-react';
 import { Button } from './UI';
-import { useBooking } from '../state';
+import { useBooking } from '../consult-flow/state';
 
 const REVIEWS = [
     {
