@@ -2039,42 +2039,58 @@ export default async function handler(req, res) {
       }
 
       const supabaseConfig = getSupabaseConfig();
-      const certificates = await listCertificates();
-      const { latest, latestProfile } = getLatestPatientSnapshot(certificates, email);
       let canIssueReset = false;
       let resetTokenMode = supabaseConfig.enabled ? 'supabase' : 'local';
+      let latest = null;
+      let latestProfile = {
+        fullName: '',
+        dob: '',
+        phone: '',
+      };
+      let latestSnapshotLoaded = false;
+      const ensureLatestSnapshot = async () => {
+        if (latestSnapshotLoaded) return;
+        const certificates = await listCertificates();
+        const snapshot = getLatestPatientSnapshot(certificates, email);
+        latest = snapshot.latest;
+        latestProfile = snapshot.latestProfile;
+        latestSnapshotLoaded = true;
+      };
 
       if (supabaseConfig.enabled) {
         let supabasePatient = await findSupabasePatientByEmail(email);
-        if (!supabasePatient && latest) {
-          try {
-            await createPatientAccountViaSupabase({
-              email,
-              password: createBootstrapPassword(),
-              fullName: latestProfile.fullName,
-              dob: latestProfile.dob,
-              phone: latestProfile.phone,
-            });
-          } catch (errorObject) {
-            // Account may already exist in Supabase auth with different metadata.
-            if (errorObject?.status === 409) {
-              await upsertSupabasePatientMetadata({
+        if (!supabasePatient) {
+          await ensureLatestSnapshot();
+          if (latest) {
+            try {
+              await createPatientAccountViaSupabase({
                 email,
+                password: createBootstrapPassword(),
                 fullName: latestProfile.fullName,
                 dob: latestProfile.dob,
                 phone: latestProfile.phone,
               });
-            } else {
-              throw errorObject;
+            } catch (errorObject) {
+              // Account may already exist in Supabase auth with different metadata.
+              if (errorObject?.status === 409) {
+                await upsertSupabasePatientMetadata({
+                  email,
+                  fullName: latestProfile.fullName,
+                  dob: latestProfile.dob,
+                  phone: latestProfile.phone,
+                });
+              } else {
+                throw errorObject;
+              }
             }
-          }
 
-          supabasePatient = await findSupabasePatientByEmail(email);
-          if (supabasePatient) {
-            await appendAudit({
-              type: 'PATIENT_ACCOUNT_BOOTSTRAPPED_FOR_RESET',
-              email,
-            });
+            supabasePatient = await findSupabasePatientByEmail(email);
+            if (supabasePatient) {
+              await appendAudit({
+                type: 'PATIENT_ACCOUNT_BOOTSTRAPPED_FOR_RESET',
+                email,
+              });
+            }
           }
         }
         canIssueReset = Boolean(supabasePatient);
@@ -2092,34 +2108,37 @@ export default async function handler(req, res) {
         }
       } else {
         let localAccount = await getPatientAccountByEmail(email);
-        if (!localAccount && latest) {
-          try {
-            await createPatientAccount({
+        if (!localAccount) {
+          await ensureLatestSnapshot();
+          if (latest) {
+            try {
+              await createPatientAccount({
+                email,
+                password: createBootstrapPassword(),
+                fullName: latestProfile.fullName,
+                dob: latestProfile.dob,
+                phone: latestProfile.phone,
+              });
+            } catch (errorObject) {
+              if (errorObject?.code !== 'ACCOUNT_EXISTS') {
+                throw errorObject;
+              }
+            }
+
+            await updatePatientAccountProfile({
               email,
-              password: createBootstrapPassword(),
               fullName: latestProfile.fullName,
               dob: latestProfile.dob,
               phone: latestProfile.phone,
             });
-          } catch (errorObject) {
-            if (errorObject?.code !== 'ACCOUNT_EXISTS') {
-              throw errorObject;
+
+            localAccount = await getPatientAccountByEmail(email);
+            if (localAccount) {
+              await appendAudit({
+                type: 'PATIENT_ACCOUNT_BOOTSTRAPPED_FOR_RESET',
+                email,
+              });
             }
-          }
-
-          await updatePatientAccountProfile({
-            email,
-            fullName: latestProfile.fullName,
-            dob: latestProfile.dob,
-            phone: latestProfile.phone,
-          });
-
-          localAccount = await getPatientAccountByEmail(email);
-          if (localAccount) {
-            await appendAudit({
-              type: 'PATIENT_ACCOUNT_BOOTSTRAPPED_FOR_RESET',
-              email,
-            });
           }
         }
         canIssueReset = Boolean(localAccount);
@@ -2151,16 +2170,28 @@ export default async function handler(req, res) {
           resetUrl,
           expiresMinutes: String(Math.round(PATIENT_PASSWORD_RESET_TTL_MS / (1000 * 60))),
         });
-        await sendEmail({
-          to: email,
-          subject: 'Reset your Onya Health password',
-          html: resetEmail.html,
-          text: resetEmail.text,
-        });
-        await appendAudit({
-          type: 'PATIENT_PASSWORD_RESET_REQUESTED',
-          email,
-        });
+
+        // Dispatch email asynchronously so API response isn't blocked on SMTP latency.
+        void (async () => {
+          try {
+            await sendEmail({
+              to: email,
+              subject: 'Reset your Onya Health password',
+              html: resetEmail.html,
+              text: resetEmail.text,
+            });
+            await appendAudit({
+              type: 'PATIENT_PASSWORD_RESET_REQUESTED',
+              email,
+            });
+          } catch (errorObject) {
+            error('patient.password_reset.dispatch_failed', {
+              email,
+              message: errorObject?.message || String(errorObject),
+              mode: resetTokenMode,
+            });
+          }
+        })();
       } else {
         info('patient.password_reset.requested_without_existing_account', {
           email,
@@ -2210,10 +2241,15 @@ export default async function handler(req, res) {
         }
 
         const email = normalizeEmail(decoded.email);
-        const certificates = await listCertificates();
-        const { latestProfile } = getLatestPatientSnapshot(certificates, email);
         let existing = await findSupabasePatientByEmail(email);
+        let latestProfile = {
+          fullName: '',
+          dob: '',
+          phone: '',
+        };
         if (!existing) {
+          const certificates = await listCertificates();
+          ({ latestProfile } = getLatestPatientSnapshot(certificates, email));
           try {
             account = await createPatientAccountViaSupabase({
               email,
@@ -2579,16 +2615,28 @@ export default async function handler(req, res) {
           resetUrl,
           expiresMinutes: String(Math.round(DOCTOR_PASSWORD_RESET_TTL_MS / (1000 * 60))),
         });
-        await sendEmail({
-          to: email,
-          subject: 'Reset your doctor portal password',
-          html: resetEmail.html,
-          text: resetEmail.text,
-        });
-        await appendAudit({
-          type: 'DOCTOR_PASSWORD_RESET_REQUESTED',
-          email,
-        });
+
+        // Dispatch email asynchronously so API response isn't blocked on SMTP latency.
+        void (async () => {
+          try {
+            await sendEmail({
+              to: email,
+              subject: 'Reset your doctor portal password',
+              html: resetEmail.html,
+              text: resetEmail.text,
+            });
+            await appendAudit({
+              type: 'DOCTOR_PASSWORD_RESET_REQUESTED',
+              email,
+            });
+          } catch (errorObject) {
+            error('doctor.password_reset.dispatch_failed', {
+              email,
+              message: errorObject?.message || String(errorObject),
+            });
+          }
+        })();
+
         info('doctor.password_reset.requested', {
           email,
           provider: currentEmailProvider(),
