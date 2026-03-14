@@ -15,6 +15,11 @@ const fade = {
     transition: { duration: 0.3 }
 };
 
+const CARER_CERT_UPSELL_DOLLARS = Math.max(
+    0,
+    Number(import.meta.env.VITE_CARER_CERT_UPSELL_DOLLARS || 10)
+);
+
 export const PurposeStep = () => {
     const { setPurpose, nextStep, purpose } = useBooking();
     return (
@@ -148,6 +153,15 @@ export const DescriptionStep = () => {
                     />
                 </div>
                 {error && <p className="text-xs text-red-500">{error}</p>}
+
+                <div className="rounded-lg border border-amber-300 bg-amber-50 p-4">
+                    <p className="text-sm font-semibold text-amber-900">Seek urgent in-person care now if you have:</p>
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-900/90">
+                        {COPY.steps.description.redFlags.map((item) => (
+                            <li key={item}>{item}</li>
+                        ))}
+                    </ul>
+                </div>
             </div>
             <Button fullWidth onClick={handleNext}>Continue</Button>
         </motion.div>
@@ -157,6 +171,7 @@ export const DescriptionStep = () => {
 export const DatesStep = () => {
     const { setDates, nextStep, startDate, durationDays } = useBooking();
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const [durationOpen, setDurationOpen] = useState(false);
     const durationMenuRef = useRef<HTMLDivElement | null>(null);
     const durationOptions = [
@@ -177,6 +192,13 @@ export const DatesStep = () => {
         const source = value || today;
         const normalized = new Date(source.getTime() - source.getTimezoneOffset() * 60000);
         return normalized.toISOString().split('T')[0];
+    };
+
+    const normalizeNotPast = (value: Date) => {
+        const next = new Date(value);
+        if (Number.isNaN(next.getTime())) return today;
+        next.setHours(0, 0, 0, 0);
+        return next < today ? today : next;
     };
 
     useEffect(() => {
@@ -204,6 +226,7 @@ export const DatesStep = () => {
     return (
         <motion.div {...fade} className="space-y-6">
             <h2 className="text-2xl font-bold text-text-primary">{COPY.steps.dates.question}</h2>
+            <p className="text-sm text-text-secondary">{COPY.steps.dates.helper}</p>
 
             <div className="space-y-4">
                 <div className="space-y-2">
@@ -212,7 +235,8 @@ export const DatesStep = () => {
                         type="date"
                         className="w-full p-3 rounded-lg border border-border bg-white"
                         value={dateToInputValue(startDate)}
-                        onChange={(e) => setDates(new Date(e.target.value), durationDays)}
+                        min={dateToInputValue(today)}
+                        onChange={(e) => setDates(normalizeNotPast(new Date(e.target.value)), durationDays)}
                     />
                 </div>
 
@@ -253,7 +277,7 @@ export const DatesStep = () => {
                                                 role="option"
                                                 aria-selected={active}
                                                 onClick={() => {
-                                                    setDates(startDate || today, option.value);
+                                                    setDates(normalizeNotPast(startDate || today), option.value);
                                                     setDurationOpen(false);
                                                 }}
                                                 className={`flex w-full items-center justify-between px-4 py-3 text-left text-sm transition-colors ${
@@ -452,6 +476,8 @@ export const DetailsStep = () => {
 export const CheckoutStep = () => {
     const {
         isUnlimited,
+        includeCarerCertificate,
+        setCarerCertificate,
         purpose,
         symptom,
         complianceChecked,
@@ -462,6 +488,10 @@ export const CheckoutStep = () => {
     } = useBooking();
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState('');
+    const showCarerUpsell = !isUnlimited;
+    const baseAmount = isUnlimited ? 19 : 25;
+    const carerAddonAmount = showCarerUpsell && includeCarerCertificate ? CARER_CERT_UPSELL_DOLLARS : 0;
+    const totalAmount = baseAmount + carerAddonAmount;
 
     const handleCheckout = async () => {
         setSubmitError('');
@@ -494,6 +524,7 @@ export const CheckoutStep = () => {
                         startDate: startDate?.toISOString() || null,
                         durationDays,
                         isUnlimited,
+                        includeCarerCertificate: showCarerUpsell ? includeCarerCertificate : false,
                     }
                 }),
             });
@@ -531,11 +562,49 @@ export const CheckoutStep = () => {
                         {isUnlimited ? "Unlimited Certificates" : "One-off Certificate"}
                     </span>
                     <span className="font-bold text-text-primary">
-                        {isUnlimited ? "$19.00" : "$25.00"}
+                        ${baseAmount.toFixed(2)}
                     </span>
                 </div>
                 {isUnlimited && <div className="text-xs text-forest-700 font-medium">Billed monthly</div>}
             </div>
+
+            {showCarerUpsell && (
+                <div className="rounded-xl border border-border bg-white p-4">
+                    <div className="flex items-start justify-between gap-4">
+                        <div>
+                            <p className="font-semibold text-text-primary">Add carer&apos;s certificate</p>
+                            <p className="mt-1 text-sm text-text-secondary">
+                                Optional add-on if you need carer leave documentation for this request.
+                            </p>
+                            <p className="mt-2 text-sm font-semibold text-text-primary">+${CARER_CERT_UPSELL_DOLLARS.toFixed(2)}</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setCarerCertificate(!includeCarerCertificate)}
+                            className={`inline-flex h-8 w-14 items-center rounded-full border transition ${
+                                includeCarerCertificate ? 'border-primary bg-primary' : 'border-border bg-sand-100'
+                            }`}
+                            aria-pressed={includeCarerCertificate}
+                            aria-label="Toggle carer's certificate add-on"
+                        >
+                            <span
+                                className={`inline-block h-6 w-6 rounded-full bg-white shadow transition-transform ${
+                                    includeCarerCertificate ? 'translate-x-7' : 'translate-x-1'
+                                }`}
+                            />
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {showCarerUpsell && (
+                <div className="rounded-xl border border-border bg-sand-50 p-4">
+                    <div className="flex items-center justify-between text-sm">
+                        <span className="text-text-secondary">Total due today</span>
+                        <span className="text-base font-bold text-text-primary">${totalAmount.toFixed(2)}</span>
+                    </div>
+                </div>
+            )}
 
             <Button fullWidth onClick={handleCheckout} disabled={submitting}>
                 {submitting ? 'Redirecting to secure checkout...' : COPY.steps.checkout.cta}

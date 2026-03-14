@@ -1,34 +1,3 @@
-const PEOPLE = [
-    'Ava',
-    'Noah',
-    'Olivia',
-    'Liam',
-    'Mia',
-    'Ethan',
-    'Sophie',
-    'Lucas',
-    'Amelia',
-    'Jack',
-    'Isla',
-    'Leo',
-    'Grace',
-    'Hudson',
-    'Ella',
-    'Archer',
-    'Ruby',
-    'Harvey',
-    'Chloe',
-    'Finn'
-];
-
-const DOCTORS = [
-    'Dr. Wilson',
-    'Dr. Patel',
-    'Dr. Nguyen',
-    'Dr. Chen',
-    'Dr. Evans'
-];
-
 const LOCATIONS = [
     'Melbourne',
     'Sydney',
@@ -44,17 +13,15 @@ const LOCATIONS = [
 
 const OUTCOMES = [
     'a medical certificate',
-    'a same-day consult summary',
-    'a doctor-approved treatment note',
-    'a verified follow-up plan',
-    'their certificate by email',
-    'a completed consult outcome'
+    'a consult outcome by email',
+    'a follow-up request from the clinical team',
+    'a review outcome after doctor assessment',
+    'an update in their patient portal'
 ];
 
-export const LIVE_ACTIVITY_MESSAGES = PEOPLE.flatMap((person, personIndex) =>
-    DOCTORS.map((doctor, doctorIndex) => {
-        const location = LOCATIONS[(personIndex + doctorIndex * 2) % LOCATIONS.length];
-        const outcome = OUTCOMES[(personIndex * 3 + doctorIndex) % OUTCOMES.length];
-        return `${person} from ${location} saw ${doctor} and received ${outcome}.`;
+export const LIVE_ACTIVITY_MESSAGES = LOCATIONS.flatMap((location, locationIndex) =>
+    OUTCOMES.map((outcome, outcomeIndex) => {
+        const channel = (locationIndex + outcomeIndex) % 2 === 0 ? 'consult portal' : 'secure email';
+        return `Consult update: a patient in ${location} received ${outcome} via ${channel}.`;
     })
 );

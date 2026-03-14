@@ -8,6 +8,7 @@ interface BookingContextType extends BookingState {
     setDescription: (d: string) => void;
     setDates: (start: Date, duration: number) => void;
     setUnlimited: (unlimited: boolean) => void;
+    setCarerCertificate: (enabled: boolean) => void;
     setDetails: (d: Partial<UserDetails>) => void;
     nextStep: () => void;
     prevStep: () => void;
@@ -29,6 +30,22 @@ const FLOW_ORDER: BookingStep[] = [
     'confirmation'
 ];
 
+function startOfToday() {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return today;
+}
+
+function normalizeStartDate(value: Date) {
+    const normalized = new Date(value);
+    if (Number.isNaN(normalized.getTime())) {
+        return startOfToday();
+    }
+    normalized.setHours(0, 0, 0, 0);
+    const today = startOfToday();
+    return normalized < today ? today : normalized;
+}
+
 export function BookingProvider({ children }: { children: ReactNode }) {
     const [state, setState] = useState<BookingState>({
         step: 'purpose',
@@ -36,9 +53,10 @@ export function BookingProvider({ children }: { children: ReactNode }) {
         symptom: [],
         complianceChecked: false,
         description: '',
-        startDate: new Date(),
+        startDate: startOfToday(),
         durationDays: 1,
         isUnlimited: false,
+        includeCarerCertificate: false,
         details: {
             fullName: '',
             dob: '',
@@ -85,8 +103,18 @@ export function BookingProvider({ children }: { children: ReactNode }) {
         setSymptom: (symptom: Symptom[]) => updateState({ symptom }),
         setComplianceChecked: (complianceChecked: boolean) => updateState({ complianceChecked }),
         setDescription: (description: string) => updateState({ description }),
-        setDates: (startDate: Date, durationDays: number) => updateState({ startDate, durationDays }),
-        setUnlimited: (isUnlimited: boolean) => updateState({ isUnlimited }),
+        setDates: (startDate: Date, durationDays: number) =>
+            updateState({
+                startDate: normalizeStartDate(startDate),
+                durationDays: Math.max(1, Number(durationDays || 1)),
+            }),
+        setUnlimited: (isUnlimited: boolean) =>
+            setState((prev) => ({
+                ...prev,
+                isUnlimited,
+                includeCarerCertificate: isUnlimited ? false : prev.includeCarerCertificate,
+            })),
+        setCarerCertificate: (includeCarerCertificate: boolean) => updateState({ includeCarerCertificate }),
         setDetails: (details: Partial<UserDetails>) => setState(prev => ({ ...prev, details: { ...prev.details, ...details } })),
         nextStep,
         prevStep,

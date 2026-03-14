@@ -1,6 +1,7 @@
 import { useRef, type CSSProperties } from 'react';
 import { motion, useScroll, useTransform, type MotionValue } from 'framer-motion';
 import { Button } from './UI';
+import type { ServiceSlug } from '../consult-flow/services';
 
 interface TimelineStep {
     title: string;
@@ -8,12 +9,12 @@ interface TimelineStep {
     key: 'consult' | 'audio' | 'doctor';
 }
 
-const TIMELINE_STEPS: TimelineStep[] = [
+const GENERIC_TIMELINE_STEPS: TimelineStep[] = [
     {
         key: 'consult',
         title: 'Book your consultation',
         description:
-            'Select from medical certificates, prescriptions, specialist referrals, and general consults. Our secure online form takes just minutes to complete and is available 24/7.',
+            'Start your consult online and share the details needed for safe clinical review.',
     },
     {
         key: 'audio',
@@ -26,6 +27,27 @@ const TIMELINE_STEPS: TimelineStep[] = [
         title: 'Human doctors that deliver',
         description:
             'A registered Australian doctor reviews your pre-consult and chats with you if needed. Once approved, your documentation is delivered instantly by email.',
+    },
+];
+
+const DOCTOR_TIMELINE_STEPS: TimelineStep[] = [
+    {
+        key: 'consult',
+        title: 'Start your certificate consult',
+        description:
+            'Choose your certificate purpose and share your current symptoms in a short online form.',
+    },
+    {
+        key: 'audio',
+        title: 'Add context for safe review',
+        description:
+            'Include when symptoms started, whether this is first-time or recurring, and what has changed.',
+    },
+    {
+        key: 'doctor',
+        title: 'Doctor-reviewed outcome',
+        description:
+            'An Australian-registered doctor reviews your submission and may request follow-up before deciding.',
     },
 ];
 
@@ -162,32 +184,39 @@ function StepStackCard({ step, idx, total, progress }: StepStackCardProps) {
 
 interface HowItWorksProps {
     onStartConsult?: () => void;
+    serviceSlug?: ServiceSlug;
 }
 
-export function HowItWorks({ onStartConsult }: HowItWorksProps) {
+export function HowItWorks({ onStartConsult, serviceSlug }: HowItWorksProps) {
     const stackRef = useRef<HTMLDivElement | null>(null);
     const { scrollYProgress } = useScroll({
         target: stackRef,
         offset: ['start start', 'end end'],
     });
+    const isDoctorFlow = serviceSlug === 'doctor';
+    const timelineSteps = isDoctorFlow ? DOCTOR_TIMELINE_STEPS : GENERIC_TIMELINE_STEPS;
+    const sectionTitle = isDoctorFlow ? 'Medical certificate consult process' : 'The Onya accessible healthcare model';
+    const sectionSubtitle = isDoctorFlow
+        ? 'A conservative, doctor-reviewed process for non-emergency certificate requests.'
+        : 'Scroll through each stage of the consult flow from booking to doctor-reviewed delivery.';
 
     return (
         <section className="bg-white py-12 md:py-16">
             <div className="mx-auto max-w-6xl px-6 md:px-8">
                 <div ref={stackRef} className="relative h-[250vh] md:h-[300vh]">
                     <div className="sticky top-16 bg-white pt-7 md:top-20 md:pt-9">
-                        <h2 className="text-center text-3xl font-bold text-text-primary md:text-4xl">The Onya accessible healthcare model</h2>
+                        <h2 className="text-center text-3xl font-bold text-text-primary md:text-4xl">{sectionTitle}</h2>
                         <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-text-secondary md:text-base">
-                            Scroll through each stage of the consult flow from booking to doctor-reviewed delivery.
+                            {sectionSubtitle}
                         </p>
 
                         <div className="relative mx-auto mt-6 h-[68vh] min-h-[500px] max-h-[660px] w-full max-w-5xl md:mt-8 md:h-[62vh] md:min-h-[500px] md:max-h-[640px]">
-                            {TIMELINE_STEPS.map((step, idx) => (
+                            {timelineSteps.map((step, idx) => (
                                 <StepStackCard
                                     key={step.title}
                                     step={step}
                                     idx={idx}
-                                    total={TIMELINE_STEPS.length}
+                                    total={timelineSteps.length}
                                     progress={scrollYProgress}
                                 />
                             ))}

@@ -90,10 +90,15 @@ const STRIPE_WEBHOOK_SECRET = String(process.env.STRIPE_WEBHOOK_SECRET || '');
 const STRIPE_PRICE_PRODUCT_SINGLE_DAY = process.env.STRIPE_PRICE_PRODUCT_SINGLE_DAY || 'prod_U3xUNjNVkYYxdi';
 const STRIPE_PRICE_PRODUCT_MULTI_DAY_ONE_OFF = process.env.STRIPE_PRICE_PRODUCT_MULTI_DAY_ONE_OFF || 'prod_U3xXc0tzo0FJQs';
 const STRIPE_PRICE_PRODUCT_MULTI_DAY_RECURRING = process.env.STRIPE_PRICE_PRODUCT_MULTI_DAY_RECURRING || 'prod_U3xTbAyYCjVi3J';
+const CERTIFICATE_TIME_ZONE = process.env.CERTIFICATE_TIME_ZONE || 'Australia/Brisbane';
 
 const STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS || 1121);
 const STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS || 2711);
 const STRIPE_AMOUNT_RECURRING_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_RECURRING_AUD_CENTS || 1917);
+const STRIPE_AMOUNT_CARER_CERT_AUD_CENTS = Math.max(
+  0,
+  Number(process.env.STRIPE_AMOUNT_CARER_CERT_AUD_CENTS || 1000)
+);
 const PATIENT_PASSWORD_RESET_TTL_MS = Math.max(
   1000 * 60 * 5,
   Number(process.env.PATIENT_PASSWORD_RESET_TTL_MS || 1000 * 60 * 60)
@@ -300,10 +305,15 @@ function sanitizeNameForStripe(value) {
 function stripePricingFromRequest(body) {
   const isUnlimited = Boolean(body?.consult?.isUnlimited);
   const durationDays = Math.max(1, Number(body?.consult?.durationDays || 1));
+  const includeCarerCertificate = !isUnlimited && Boolean(body?.consult?.includeCarerCertificate);
+  const carerCertificateAmount = includeCarerCertificate ? STRIPE_AMOUNT_CARER_CERT_AUD_CENTS : 0;
 
   if (isUnlimited) {
     return {
       mode: 'subscription',
+      baseUnitAmount: STRIPE_AMOUNT_RECURRING_AUD_CENTS,
+      carerCertificateAmount: 0,
+      includeCarerCertificate: false,
       unitAmount: STRIPE_AMOUNT_RECURRING_AUD_CENTS,
       productId: STRIPE_PRICE_PRODUCT_MULTI_DAY_RECURRING,
       displayName: 'Onyahealth Pro',
@@ -314,25 +324,33 @@ function stripePricingFromRequest(body) {
   }
 
   if (durationDays <= 1) {
+    const baseUnitAmount = STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS;
     return {
       mode: 'payment',
-      unitAmount: STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS,
+      baseUnitAmount,
+      carerCertificateAmount,
+      includeCarerCertificate,
+      unitAmount: baseUnitAmount + carerCertificateAmount,
       productId: STRIPE_PRICE_PRODUCT_SINGLE_DAY,
       displayName: 'Medical Consultation (Single day)',
       description: 'One-day medical certificate request',
     };
   }
 
+  const baseUnitAmount = STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS;
   return {
     mode: 'payment',
-    unitAmount: STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS,
+    baseUnitAmount,
+    carerCertificateAmount,
+    includeCarerCertificate,
+    unitAmount: baseUnitAmount + carerCertificateAmount,
     productId: STRIPE_PRICE_PRODUCT_MULTI_DAY_ONE_OFF,
     displayName: 'Medical Consultation (Multi-day)',
     description: 'Multi-day medical certificate request',
   };
 }
 
-async function createStripeCheckoutSession({ certificate, body, pricing, uiMode = 'hosted' }) {
+async function createStripeCheckoutSession({ certificate, pricing, uiMode = 'hosted' }) {
   const frontendBase = getFrontendBaseUrl();
   const params = new URLSearchParams();
   params.set('mode', pricing.mode);
@@ -360,6 +378,8 @@ async function createStripeCheckoutSession({ certificate, body, pricing, uiMode 
   params.set('metadata[patient_email]', certificate.certificateDraft.email || '');
   params.set('metadata[service_type]', certificate.serviceType || 'doctor');
   params.set('metadata[patient_name]', sanitizeNameForStripe(certificate.certificateDraft.fullName));
+  params.set('metadata[include_carer_certificate]', pricing.includeCarerCertificate ? 'true' : 'false');
+  params.set('metadata[carer_certificate_amount]', String(pricing.carerCertificateAmount || 0));
   params.set('allow_promotion_codes', 'true');
 
   if (pricing.mode === 'subscription') {
@@ -397,11 +417,32 @@ async function createStripeCheckoutSession({ certificate, body, pricing, uiMode 
   return payload;
 }
 
+function formatDateInCertificateTimezone(value) {
+  return new Intl.DateTimeFormat('sv-SE', { timeZone: CERTIFICATE_TIME_ZONE }).format(value);
+}
+
+function normalizeCertificateStartDate(value) {
+  const todayDate = formatDateInCertificateTimezone(new Date());
+  const rawDate = String(value || '').trim();
+  const parsedDatePattern = rawDate.match(/\d{4}-\d{2}-\d{2}/);
+  if (parsedDatePattern?.[0]) {
+    return parsedDatePattern[0] < todayDate ? todayDate : parsedDatePattern[0];
+  }
+
+  const parsed = rawDate ? new Date(rawDate) : new Date();
+  if (Number.isNaN(parsed.getTime())) return todayDate;
+
+  const candidateDate = formatDateInCertificateTimezone(parsed);
+  return candidateDate < todayDate ? todayDate : candidateDate;
+}
+
 function buildDraftCertificate(requestBody) {
   const patient = requestBody.patient || {};
   const consult = requestBody.consult || {};
-  const parsedStartDate = consult.startDate ? new Date(consult.startDate) : new Date();
-  const startDate = Number.isNaN(parsedStartDate.getTime()) ? new Date() : parsedStartDate;
+  const startDate = normalizeCertificateStartDate(consult.startDate);
+  const durationDays = Math.max(1, Number(consult.durationDays || 1));
+  const isUnlimited = Boolean(consult.isUnlimited);
+  const includeCarerCertificate = !isUnlimited && Boolean(consult.includeCarerCertificate);
 
   return {
     fullName: patient.fullName || '',
@@ -412,8 +453,9 @@ function buildDraftCertificate(requestBody) {
     purpose: consult.purpose || '',
     symptom: consult.symptom || '',
     description: consult.description || '',
-    startDate: startDate.toISOString().split('T')[0],
-    durationDays: Number(consult.durationDays || 1),
+    startDate,
+    durationDays,
+    includeCarerCertificate,
   };
 }
 
@@ -885,6 +927,13 @@ async function handleApi(req, res, url) {
     const body = await parseJsonBody(req);
     const requestedUiMode = body?.uiMode === 'embedded' ? 'embedded' : 'hosted';
     const patient = body.patient || {};
+    const certificateDraft = buildDraftCertificate(body);
+    body.consult = {
+      ...(body?.consult || {}),
+      startDate: certificateDraft.startDate,
+      durationDays: certificateDraft.durationDays,
+      includeCarerCertificate: certificateDraft.includeCarerCertificate,
+    };
 
     if (!isStripeEnabled()) {
       sendJson(res, 500, { error: 'Stripe is not configured on the server' });
@@ -903,7 +952,7 @@ async function handleApi(req, res, url) {
       status: 'awaiting_payment',
       serviceType: body.serviceType || 'doctor',
       risk,
-      certificateDraft: buildDraftCertificate(body),
+      certificateDraft,
       rawSubmission: {
         ...body,
         payment: {
@@ -916,7 +965,7 @@ async function handleApi(req, res, url) {
 
     await createCertificate(certificate);
     const pricing = stripePricingFromRequest(body);
-    const session = await createStripeCheckoutSession({ certificate, body, pricing, uiMode: requestedUiMode });
+    const session = await createStripeCheckoutSession({ certificate, pricing, uiMode: requestedUiMode });
 
     await updateCertificate(certificate.id, (current) => ({
       ...current,
@@ -927,6 +976,9 @@ async function handleApi(req, res, url) {
           stripeSessionId: session.id || null,
           checkoutUrl: session.url || null,
           amount: pricing.unitAmount,
+          baseAmount: pricing.baseUnitAmount,
+          carerCertificateAmount: pricing.carerCertificateAmount,
+          includeCarerCertificate: pricing.includeCarerCertificate,
           currency: 'aud',
           mode: pricing.mode,
         },
@@ -940,6 +992,7 @@ async function handleApi(req, res, url) {
       stripeSessionId: session.id || null,
       amount: pricing.unitAmount,
       mode: pricing.mode,
+      includeCarerCertificate: pricing.includeCarerCertificate,
     });
 
     sendJson(res, 200, {

@@ -6,11 +6,12 @@ export type CertificatePurpose =
     | 'Other';
 
 export type Symptom =
-    | 'Cold / Flu'
-    | 'Gastro'
-    | 'Migraine'
-    | 'Mental Health'
-    | 'Injury'
+    | 'Fever / infection symptoms'
+    | 'Gastro symptoms'
+    | 'Headache'
+    | 'Respiratory symptoms'
+    | 'Mental health symptoms'
+    | 'Injury or pain'
     | 'Other';
 
 export type BookingStep =
@@ -41,6 +42,7 @@ export interface BookingState {
     startDate: Date | null;
     durationDays: number;
     isUnlimited: boolean; // false = one-off, true = subscription
+    includeCarerCertificate: boolean;
     details: UserDetails;
     showUpsell: boolean; // Logic flag to trigger modal
     view?: 'landing' | 'booking';

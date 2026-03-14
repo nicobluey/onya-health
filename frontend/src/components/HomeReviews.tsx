@@ -5,38 +5,32 @@ const HOME_REVIEWS = [
     {
         title: 'Matched me to the right clinician fast',
         body: 'I explained what I needed and got routed to the right provider in minutes. It felt simple and genuinely personalised.',
-        name: 'Mia T.',
-        date: 'February 20, 2026'
+        meta: 'Verified patient · QLD'
     },
     {
         title: 'Affordable and easy to use',
         body: 'The whole process was clear, quick, and priced fairly. I got quality support without needing to visit a clinic.',
-        name: 'Jordan L.',
-        date: 'February 22, 2026'
+        meta: 'Verified patient · NSW'
     },
     {
         title: 'Great when time is limited',
         body: 'I booked during a workday break and was guided to the right clinician straight away. No waiting-room delays at all.',
-        name: 'Noah B.',
-        date: 'February 24, 2026'
+        meta: 'Verified patient · VIC'
     },
     {
         title: 'Felt personalised, not generic',
         body: 'The intake questions were smart and the provider fit was spot on. The recommendations were practical and easy to follow.',
-        name: 'Ava M.',
-        date: 'February 25, 2026'
+        meta: 'Verified patient · SA'
     },
     {
         title: 'Smooth from start to finish',
         body: 'Everything flowed well, from matching to consult completion. It was one of the easiest healthcare experiences I have had.',
-        name: 'Ethan R.',
-        date: 'February 26, 2026'
+        meta: 'Verified patient · WA'
     },
     {
         title: 'Perfect for busy schedules',
         body: 'Being matched quickly meant I did not spend time searching around. I got quality care without disrupting my day.',
-        name: 'Olivia S.',
-        date: 'February 27, 2026'
+        meta: 'Verified patient · TAS'
     },
 ];
 
@@ -167,7 +161,7 @@ export function HomeReviews() {
                     >
                         {trackReviews.map((review, idx) => (
                             <article
-                                key={`${review.name}-${review.date}-${idx}`}
+                                key={`${review.title}-${review.meta}-${idx}`}
                                 className="px-2"
                                 style={{ flex: `0 0 ${100 / cardsPerView}%` }}
                             >
@@ -180,8 +174,7 @@ export function HomeReviews() {
                                     </div>
                                     <p className="mb-5 min-h-[78px] text-[15px] leading-relaxed text-text-secondary">{review.body}</p>
                                     <div className="border-t border-sand-200 pt-4">
-                                        <p className="text-sm font-bold text-text-primary">{review.name}</p>
-                                        <p className="mt-1 text-xs text-text-secondary">{review.date}</p>
+                                        <p className="text-sm font-semibold text-text-primary">{review.meta}</p>
                                     </div>
                                 </div>
                             </article>

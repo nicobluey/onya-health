@@ -7,50 +7,42 @@ const REVIEWS = [
     {
         title: 'Fast and straightforward',
         body: 'Filled out the consult on my lunch break and had my certificate approved before my next meeting.',
-        name: 'Mia T.',
-        date: 'January 28, 2026'
+        meta: 'Verified patient · QLD'
     },
     {
         title: 'No waiting room stress',
         body: 'Everything was online, clear, and easy to follow. It felt professional from start to finish.',
-        name: 'Jordan L.',
-        date: 'January 31, 2026'
+        meta: 'Verified patient · NSW'
     },
     {
         title: 'Actually helpful support',
-        body: 'I had one question and got a fast reply. The doctor notes were clear and accepted immediately.',
-        name: 'Ethan R.',
-        date: 'February 2, 2026'
+        body: 'I had one question and got a fast reply. The doctor feedback was clear and easy to follow.',
+        meta: 'Verified patient · VIC'
     },
     {
         title: 'Best option when sick',
         body: 'Could not travel, so this saved me. Took minutes to submit and I received everything by email.',
-        name: 'Sophie K.',
-        date: 'February 5, 2026'
+        meta: 'Verified patient · SA'
     },
     {
         title: 'Quick approval after-hours',
         body: 'Submitted late in the evening and still got everything reviewed quickly. Super convenient process.',
-        name: 'Daniel P.',
-        date: 'February 6, 2026'
+        meta: 'Verified patient · WA'
     },
     {
         title: 'Clear and professional',
         body: 'The consult flow was easy and the doctor feedback was clear. This felt reliable and legitimate.',
-        name: 'Olivia S.',
-        date: 'February 7, 2026'
+        meta: 'Verified patient · TAS'
     },
     {
         title: 'Great for busy schedules',
         body: 'Saved me from missing more work. The whole experience was simple, quick, and very well designed.',
-        name: 'Noah B.',
-        date: 'February 8, 2026'
+        meta: 'Verified patient · NT'
     },
     {
         title: 'Smooth from start to finish',
         body: 'No confusion, no waiting room, and no delays. Everything was handled exactly as promised.',
-        name: 'Ava M.',
-        date: 'February 8, 2026'
+        meta: 'Verified patient · ACT'
     }
 ];
 
@@ -179,7 +171,7 @@ export function Reviews() {
                     >
                         {trackReviews.map((review, idx) => (
                             <article
-                                key={`${review.name}-${review.date}-${idx}`}
+                                key={`${review.title}-${review.meta}-${idx}`}
                                 className="px-2"
                                 style={{ flex: `0 0 ${100 / cardsPerView}%` }}
                             >
@@ -192,8 +184,7 @@ export function Reviews() {
                                     </div>
                                     <p className="text-text-secondary leading-relaxed mb-6 text-[15px] min-h-[96px]">{review.body}</p>
                                     <div className="border-t border-sand-200 pt-4">
-                                        <p className="font-bold text-text-primary text-sm">{review.name}</p>
-                                        <p className="text-xs text-text-secondary mt-1">{review.date}</p>
+                                        <p className="font-semibold text-text-primary text-sm">{review.meta}</p>
                                     </div>
                                 </div>
                             </article>

@@ -25,6 +25,7 @@ interface DesktopFlowViewProps {
 
 export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
     const { step, view, startBooking, goHome } = useBooking();
+    const isDoctorPage = service.slug === 'doctor';
     const themedStyle = {
         backgroundColor: service.theme.pageBg,
         '--color-primary': service.theme.primary,
@@ -61,64 +62,125 @@ export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
             {/* HERO SECTION - LANDING PAGE VIEW */}
             {view === 'landing' && (
                 <>
-                    <section className="relative min-h-[640px] overflow-hidden pb-32 pt-28" style={{ backgroundColor: service.theme.heroBg }}>
-                        <div className="absolute inset-0">
-                            <img
-                                src="/HERO.png"
-                                alt=""
-                                aria-hidden="true"
-                                className="h-full w-full object-cover"
-                                style={{ objectPosition: '58% 76%' }}
-                            />
-                        </div>
-                        <div className="max-w-7xl mx-auto px-8 relative z-10">
-                            <div className="space-y-8 max-w-2xl">
-                                <h1 className="text-6xl font-serif font-bold leading-[1.1] text-white tracking-tight">
-                                    Talk to a {service.providerName} covered by <span className="hero-brand-hover cursor-pointer">Onya Health</span>
-                                </h1>
+                    {isDoctorPage ? (
+                        <>
+                            <section className="border-b border-border bg-sunlight-50 py-16">
+                                <div className="mx-auto grid max-w-7xl grid-cols-12 items-center gap-10 px-8">
+                                    <div className="col-span-7">
+                                        <p className="inline-flex rounded-full border border-sunlight-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-bark-600">
+                                            Dedicated medical certificate service
+                                        </p>
+                                        <h1 className="mt-4 text-6xl leading-[1.04] text-text-primary">
+                                            Online medical certificate consults for work, uni, and carer leave.
+                                        </h1>
+                                        <p className="mt-5 max-w-2xl text-lg leading-relaxed text-text-secondary">
+                                            Complete your consult online. An Australian-registered doctor reviews your information and provides a certificate outcome when clinically appropriate.
+                                        </p>
 
-                                <p className="text-xl text-white font-semibold leading-relaxed">
-                                    {service.heroSubtitle}
-                                </p>
+                                        <div className="mt-7 grid gap-3 text-sm text-text-primary">
+                                            <p className="rounded-xl border border-border bg-white px-4 py-3">For non-emergency symptoms and short-term incapacity requests.</p>
+                                            <p className="rounded-xl border border-border bg-white px-4 py-3">Doctor review may include follow-up questions before an outcome is issued.</p>
+                                            <p className="rounded-xl border border-border bg-white px-4 py-3">Certificates can start from today onward only. Backdating is not available.</p>
+                                        </div>
 
-                                <div className="inline-flex items-center gap-2 text-sm font-semibold bg-white text-black px-4 py-2 rounded-full shadow-md">
-                                    <span className="relative flex h-2.5 w-2.5">
-                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
-                                    </span>
-                                    {service.slug === 'doctor' ? 'Doctors online now' : `${service.providerPlural} online now`}
+                                        <div className="mt-8 max-w-xs">
+                                            <Button className="h-11 px-5 text-sm rounded-xl shadow-sm" onClick={startBooking}>
+                                                Start certificate consult
+                                                <ArrowRight className="ml-2" />
+                                            </Button>
+                                        </div>
+                                    </div>
+
+                                    <div className="col-span-5 space-y-4">
+                                        <div className="overflow-hidden rounded-3xl border border-border bg-white shadow-sm">
+                                            <img
+                                                src="/doctor-consult.png"
+                                                alt="Doctor reviewing an online medical certificate consult"
+                                                className="h-[360px] w-full object-cover"
+                                            />
+                                        </div>
+                                        <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                                            Emergency symptoms such as chest pain, severe breathing difficulty, confusion, or collapse require urgent in-person care.
+                                        </div>
+                                    </div>
                                 </div>
+                            </section>
 
-                                <div className="max-w-xs">
-                                    <Button
-                                        className="h-11 px-5 text-sm rounded-xl shadow-lg"
-                                        onClick={startBooking}
-                                    >
-                                        {service.primaryCta}
-                                        <ArrowRight className="ml-2" />
-                                    </Button>
-                                </div>
+                            <div id="how-it-works">
+                                <HowItWorks onStartConsult={startBooking} serviceSlug={service.slug} />
                             </div>
-                        </div>
-                    </section>
 
-                    <UsedByPatientsSection />
+                            <UsedByPatientsSection />
 
-                    <div id="how-it-works">
-                        <HowItWorks onStartConsult={startBooking} />
-                    </div>
+                            <Reviews />
 
-                    <Reviews />
+                            <BlogsSection onStartConsult={startBooking} />
 
-                    <BlogsSection onStartConsult={startBooking} />
+                            <ReadyToSkipWaitingRoomSection onStartConsult={startBooking} />
 
-                    <LeadingClinicSection />
+                            <div id="faq" className="bg-white py-12 border-t border-border">
+                                <FAQ />
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <section className="relative min-h-[640px] overflow-hidden pb-32 pt-28" style={{ backgroundColor: service.theme.heroBg }}>
+                                <div className="absolute inset-0">
+                                    <img
+                                        src="/HERO.png"
+                                        alt=""
+                                        aria-hidden="true"
+                                        className="h-full w-full object-cover"
+                                        style={{ objectPosition: '58% 76%' }}
+                                    />
+                                </div>
+                                <div className="max-w-7xl mx-auto px-8 relative z-10">
+                                    <div className="space-y-8 max-w-2xl">
+                                        <h1 className="text-6xl font-serif font-bold leading-[1.1] text-white tracking-tight">
+                                            Talk to a {service.providerName} covered by <span className="hero-brand-hover cursor-pointer">Onya Health</span>
+                                        </h1>
 
-                    <ReadyToSkipWaitingRoomSection onStartConsult={startBooking} />
+                                        <p className="text-xl text-white font-semibold leading-relaxed">
+                                            {service.heroSubtitle}
+                                        </p>
 
-                    <div id="faq" className="bg-white py-12 border-t border-border">
-                        <FAQ />
-                    </div>
+                                        <div className="inline-flex items-center gap-2 text-sm font-semibold bg-white text-black px-4 py-2 rounded-full shadow-md">
+                                            <span className="relative flex h-2.5 w-2.5">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+                                            </span>
+                                            {`${service.providerPlural} online now`}
+                                        </div>
+
+                                        <div className="max-w-xs">
+                                            <Button className="h-11 px-5 text-sm rounded-xl shadow-lg" onClick={startBooking}>
+                                                {service.primaryCta}
+                                                <ArrowRight className="ml-2" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </section>
+
+                            <UsedByPatientsSection />
+
+                            <div id="how-it-works">
+                                <HowItWorks onStartConsult={startBooking} serviceSlug={service.slug} />
+                            </div>
+
+                            <Reviews />
+
+                            <BlogsSection onStartConsult={startBooking} />
+
+                            <LeadingClinicSection />
+
+                            <ReadyToSkipWaitingRoomSection onStartConsult={startBooking} />
+
+                            <div id="faq" className="bg-white py-12 border-t border-border">
+                                <FAQ />
+                            </div>
+                        </>
+                    )}
                 </>
             )}
 

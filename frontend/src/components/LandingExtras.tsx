@@ -31,9 +31,9 @@ const PATIENT_ORGS: PatientOrg[] = [
 ];
 
 const STATS: StatItem[] = [
-    { value: '24/7', label: 'Care Available' },
-    { value: '500+', label: 'Verified Doctors' },
-    { value: '30,000+', label: 'Patients Treated' },
+    { value: '24/7', label: 'Consult Requests' },
+    { value: 'Doctor-reviewed', label: 'Clinical Decisions' },
+    { value: 'Australia-wide', label: 'Service Coverage' },
 ];
 
 const LEADING_POINTS: Array<{ title: string; body: string }> = [
@@ -69,13 +69,13 @@ export function UsedByPatientsSection() {
                         ))}
                     </div>
                     <p className="max-w-2xl text-sm text-bark-600 md:justify-self-end">
-                        Quality healthcare on your terms. Connect with Australian-registered doctors from anywhere. No waiting rooms, no hassle.
+                        Request a medical-certificate consult online. Doctor review is completed digitally, with clear outcomes and follow-up guidance where needed.
                     </p>
                 </div>
             </div>
 
             <div className="px-6 py-6 text-center md:px-8 md:py-7 lg:px-12">
-                <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-text-secondary">Used by patients</p>
+                <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-text-secondary">Trusted by patients</p>
                 <p className="mt-1.5 text-lg font-medium text-bark-600">Used by companies across Australia</p>
 
                 <div className="relative mt-5 overflow-hidden">

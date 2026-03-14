@@ -28,6 +28,7 @@ interface MobileFlowViewProps {
 export default function MobileFlowView({ service }: MobileFlowViewProps) {
     const { step, view, startBooking } = useBooking();
     const [menuOpen, setMenuOpen] = useState(false);
+    const isDoctorPage = service.slug === 'doctor';
     const themedStyle = {
         backgroundColor: service.theme.pageBg,
         '--color-primary': service.theme.primary,
@@ -55,9 +56,9 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
                             <div className="inline-flex items-center gap-1.5 text-sm font-semibold bg-white text-black px-3 py-1.5 rounded-full shadow-sm whitespace-nowrap">
                                 <span className="relative flex h-2 w-2 shrink-0">
                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                                </span>
-                                <span>{service.slug === 'doctor' ? 'Doctors online now' : `${service.providerPlural} online`}</span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                            </span>
+                                <span>{service.slug === 'doctor' ? 'Certificate consults 24/7' : `${service.providerPlural} online`}</span>
                             </div>
                         )}
                         {view === 'landing' && (
@@ -121,57 +122,118 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
 
             {view === 'landing' ? (
                 <main className="flex-1">
-                    {/* Hero Mobile */}
-                    <section className="pb-16 pt-16 text-center relative overflow-hidden" style={{ backgroundColor: service.theme.heroBg }}>
-                        <div className="absolute inset-0">
-                            <img
-                                src="/HERO.png"
-                                alt=""
-                                aria-hidden="true"
-                                className="h-full w-full object-cover"
-                                style={{ objectPosition: '60% 84%' }}
-                            />
-                            <div className="absolute inset-0 bg-bark-900/26" />
-                        </div>
-                        <div className="relative z-10 px-5">
-                            <h1 className="text-4xl font-serif font-bold leading-tight text-white mb-4">
-                                Talk to a {service.providerName} covered by <span className="hero-brand-hover inline-block">Onya Health</span>.
-                            </h1>
-                            <p className="text-lg text-white font-semibold mb-8 leading-relaxed">
-                                {service.heroSubtitle}
-                            </p>
+                    {isDoctorPage ? (
+                        <>
+                            <section className="border-b border-border bg-sunlight-50 px-4 py-12">
+                                <div className="mx-auto max-w-xl">
+                                    <p className="inline-flex rounded-full border border-sunlight-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-bark-600">
+                                        Dedicated medical certificate service
+                                    </p>
+                                    <h1 className="mt-4 text-4xl font-serif font-bold leading-tight text-text-primary">
+                                        Online medical certificate consults for work, uni, and carer leave.
+                                    </h1>
+                                    <p className="mt-4 text-base leading-relaxed text-text-secondary">
+                                        Complete your consult online. An Australian-registered doctor reviews your information and provides a certificate outcome when clinically appropriate.
+                                    </p>
 
-                            <div className="mb-6">
-                                <Button
-                                    fullWidth
-                                    onClick={startBooking}
-                                    className="h-11 text-base rounded-xl shadow-lg"
-                                >
-                                    {service.mobileCta}
-                                    <ArrowRight size={18} className="ml-2" />
-                                </Button>
+                                    <div className="mt-5 space-y-2 text-sm text-text-primary">
+                                        <p className="rounded-xl border border-border bg-white px-4 py-3">For non-emergency symptoms and short-term incapacity requests.</p>
+                                        <p className="rounded-xl border border-border bg-white px-4 py-3">Doctor review may include follow-up questions before an outcome is issued.</p>
+                                        <p className="rounded-xl border border-border bg-white px-4 py-3">Certificates can start from today onward only. Backdating is not available.</p>
+                                    </div>
+
+                                    <div className="mt-6">
+                                        <Button fullWidth onClick={startBooking} className="h-11 text-base rounded-xl shadow-sm">
+                                            Start certificate consult
+                                            <ArrowRight size={18} className="ml-2" />
+                                        </Button>
+                                    </div>
+
+                                    <div className="mt-6 overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
+                                        <img
+                                            src="/doctor-consult.png"
+                                            alt="Doctor reviewing an online medical certificate consult"
+                                            className="h-56 w-full object-cover"
+                                        />
+                                    </div>
+                                    <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                                        Emergency symptoms such as chest pain, severe breathing difficulty, confusion, or collapse require urgent in-person care.
+                                    </div>
+                                </div>
+                            </section>
+
+                            <div id="how-it-works">
+                                <HowItWorks onStartConsult={startBooking} serviceSlug={service.slug} />
                             </div>
-                        </div>
-                    </section>
 
-                    <UsedByPatientsSection />
+                            <UsedByPatientsSection />
 
-                    <div id="how-it-works">
-                        <HowItWorks onStartConsult={startBooking} />
-                    </div>
+                            <Reviews />
 
-                    <Reviews />
+                            <BlogsSection onStartConsult={startBooking} />
 
-                    <BlogsSection onStartConsult={startBooking} />
+                            <ReadyToSkipWaitingRoomSection onStartConsult={startBooking} />
 
-                    <LeadingClinicSection />
+                            <div id="faq" className="bg-white py-12 px-4 border-t border-border">
+                                <FAQ />
+                            </div>
+                            <LiveActivityToast mobile />
+                        </>
+                    ) : (
+                        <>
+                            {/* Hero Mobile */}
+                            <section className="pb-16 pt-16 text-center relative overflow-hidden" style={{ backgroundColor: service.theme.heroBg }}>
+                                <div className="absolute inset-0">
+                                    <img
+                                        src="/HERO.png"
+                                        alt=""
+                                        aria-hidden="true"
+                                        className="h-full w-full object-cover"
+                                        style={{ objectPosition: '60% 84%' }}
+                                    />
+                                    <div className="absolute inset-0 bg-bark-900/26" />
+                                </div>
+                                <div className="relative z-10 px-5">
+                                    <h1 className="text-4xl font-serif font-bold leading-tight text-white mb-4">
+                                        Talk to a {service.providerName} covered by <span className="hero-brand-hover inline-block">Onya Health</span>.
+                                    </h1>
+                                    <p className="text-lg text-white font-semibold mb-8 leading-relaxed">
+                                        {service.heroSubtitle}
+                                    </p>
 
-                    <ReadyToSkipWaitingRoomSection onStartConsult={startBooking} />
+                                    <div className="mb-6">
+                                        <Button
+                                            fullWidth
+                                            onClick={startBooking}
+                                            className="h-11 text-base rounded-xl shadow-lg"
+                                        >
+                                            {service.mobileCta}
+                                            <ArrowRight size={18} className="ml-2" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            </section>
 
-                    <div id="faq" className="bg-white py-12 px-4 border-t border-border">
-                        <FAQ />
-                    </div>
-                    <LiveActivityToast mobile />
+                            <UsedByPatientsSection />
+
+                            <div id="how-it-works">
+                                <HowItWorks onStartConsult={startBooking} serviceSlug={service.slug} />
+                            </div>
+
+                            <Reviews />
+
+                            <BlogsSection onStartConsult={startBooking} />
+
+                            <LeadingClinicSection />
+
+                            <ReadyToSkipWaitingRoomSection onStartConsult={startBooking} />
+
+                            <div id="faq" className="bg-white py-12 px-4 border-t border-border">
+                                <FAQ />
+                            </div>
+                            <LiveActivityToast mobile />
+                        </>
+                    )}
                 </main>
             ) : (
                 <main className="flex-1 px-4 py-6 bg-white">
