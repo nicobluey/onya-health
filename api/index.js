@@ -2042,6 +2042,7 @@ export default async function handler(req, res) {
       const certificates = await listCertificates();
       const { latest, latestProfile } = getLatestPatientSnapshot(certificates, email);
       let canIssueReset = false;
+      let resetTokenMode = supabaseConfig.enabled ? 'supabase' : 'local';
 
       if (supabaseConfig.enabled) {
         let supabasePatient = await findSupabasePatientByEmail(email);
@@ -2077,6 +2078,18 @@ export default async function handler(req, res) {
           }
         }
         canIssueReset = Boolean(supabasePatient);
+
+        // In Supabase mode we still allow reset for legacy local-auth accounts.
+        if (!canIssueReset) {
+          const localAccount = await getPatientAccountByEmail(email);
+          if (localAccount) {
+            canIssueReset = true;
+            resetTokenMode = 'stateless';
+            info('patient.password_reset.requested_local_fallback', {
+              email,
+            });
+          }
+        }
       } else {
         let localAccount = await getPatientAccountByEmail(email);
         if (!localAccount && latest) {
@@ -2113,9 +2126,20 @@ export default async function handler(req, res) {
       }
 
       if (canIssueReset) {
-        const resetPayload = supabaseConfig.enabled
-          ? await issueSupabasePatientPasswordResetToken(email)
-          : await issuePasswordResetToken(email, PATIENT_PASSWORD_RESET_TTL_MS);
+        let resetPayload = null;
+        if (supabaseConfig.enabled) {
+          if (resetTokenMode === 'stateless') {
+            resetPayload = {
+              email,
+              token: issueStatelessPatientResetToken(email),
+              expiresAt: new Date(Date.now() + PATIENT_PASSWORD_RESET_TTL_MS).toISOString(),
+            };
+          } else {
+            resetPayload = await issueSupabasePatientPasswordResetToken(email);
+          }
+        } else {
+          resetPayload = await issuePasswordResetToken(email, PATIENT_PASSWORD_RESET_TTL_MS);
+        }
 
         if (!resetPayload?.token) {
           throw new Error('Unable to issue patient password reset token');
@@ -2147,6 +2171,7 @@ export default async function handler(req, res) {
         email,
         provider: currentEmailProvider(),
         accountFound: canIssueReset,
+        resetTokenMode: canIssueReset ? resetTokenMode : 'none',
       });
 
       sendJson(res, 200, {
