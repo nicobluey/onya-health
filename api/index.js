@@ -1644,6 +1644,7 @@ export default async function handler(req, res) {
       }
 
       const risk = calculateRisk(body);
+      const pricing = stripePricingFromRequest(body);
       const certificate = {
         id: crypto.randomUUID(),
         createdAt: new Date().toISOString(),
@@ -1656,28 +1657,6 @@ export default async function handler(req, res) {
           payment: {
             provider: 'stripe',
             status: 'initiated',
-          },
-        },
-        decision: null,
-      };
-
-      await createCertificate(certificate);
-      const pricing = stripePricingFromRequest(body);
-      const session = await createStripeCheckoutSession({
-        req,
-        certificate,
-        pricing,
-        uiMode: requestedUiMode,
-      });
-
-      await updateCertificate(certificate.id, (current) => ({
-        ...current,
-        rawSubmission: {
-          ...(current.rawSubmission || {}),
-          payment: {
-            ...(current.rawSubmission?.payment || {}),
-            stripeSessionId: session.id || null,
-            checkoutUrl: session.url || null,
             amount: pricing.unitAmount,
             baseAmount: pricing.baseUnitAmount,
             carerCertificateAmount: pricing.carerCertificateAmount,
@@ -1686,9 +1665,19 @@ export default async function handler(req, res) {
             mode: pricing.mode,
           },
         },
-      }));
+        decision: null,
+      };
 
-      await appendAudit({
+      const sessionPromise = createStripeCheckoutSession({
+        req,
+        certificate,
+        pricing,
+        uiMode: requestedUiMode,
+      });
+      const persistPromise = createCertificate(certificate);
+      const [session] = await Promise.all([sessionPromise, persistPromise]);
+
+      appendAudit({
         type: 'CHECKOUT_SESSION_CREATED',
         certificateId: certificate.id,
         provider: 'stripe',
@@ -1696,6 +1685,11 @@ export default async function handler(req, res) {
         amount: pricing.unitAmount,
         mode: pricing.mode,
         includeCarerCertificate: pricing.includeCarerCertificate,
+      }).catch((auditError) => {
+        error('checkout.session.audit_failed', {
+          certificateId: certificate.id,
+          message: auditError?.message || String(auditError),
+        });
       });
 
       info('checkout.session.created', {
