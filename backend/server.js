@@ -74,9 +74,13 @@ loadEnvFile(path.resolve(process.cwd(), '.env'));
 loadEnvFile(path.resolve(process.cwd(), 'backend', '.env'));
 
 const PORT = Number(process.env.PORT || 8787);
-const APP_BASE_URL = process.env.APP_BASE_URL || `http://localhost:${PORT}`;
-const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
-const FRONTEND_BASE_URL = process.env.FRONTEND_BASE_URL || CORS_ORIGIN || APP_BASE_URL;
+const APP_BASE_URL = String(process.env.APP_BASE_URL || `http://localhost:${PORT}`)
+  .trim()
+  .replace(/\/$/, '');
+const CORS_ORIGIN = String(process.env.CORS_ORIGIN || '*').trim();
+const FRONTEND_BASE_URL = String(process.env.FRONTEND_BASE_URL || '')
+  .trim()
+  .replace(/\/$/, '');
 const DOCTOR_NOTIFICATION_EMAILS_CONFIGURED = (process.env.DOCTOR_NOTIFICATION_EMAILS || 'doctor@onyahealth.com')
   .split(',')
   .map((item) => item.trim())
@@ -104,9 +108,93 @@ const OPEN_REVIEW_STATUSES = new Set(['pending', 'submitted', 'triaged', 'assign
 
 const PORTAL_DIR = path.resolve(process.cwd(), 'backend', 'doctor-portal');
 
-function setCors(res) {
-  res.setHeader('Access-Control-Allow-Origin', CORS_ORIGIN);
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+function normalizeOrigin(value) {
+  const raw = String(value || '').trim();
+  if (!raw || raw.toLowerCase() === 'null') return '';
+  if (raw === '*') return '*';
+
+  const candidate = raw.includes('://') ? raw : `https://${raw}`;
+  try {
+    return new URL(candidate).origin;
+  } catch {
+    return '';
+  }
+}
+
+function parseCorsOrigins(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return [];
+  const tokens = raw
+    .split(/[,\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (tokens.includes('*')) return ['*'];
+
+  const origins = [];
+  for (const token of tokens) {
+    const origin = normalizeOrigin(token);
+    if (origin && !origins.includes(origin)) {
+      origins.push(origin);
+    }
+  }
+  return origins;
+}
+
+function buildAllowedCorsOrigins() {
+  const configuredOrigins = parseCorsOrigins(CORS_ORIGIN);
+  if (configuredOrigins.includes('*')) return ['*'];
+
+  const derivedOrigins = [
+    ...configuredOrigins,
+    normalizeOrigin(FRONTEND_BASE_URL),
+    normalizeOrigin(APP_BASE_URL),
+    normalizeOrigin(process.env.VERCEL_URL),
+    normalizeOrigin(process.env.VERCEL_PROJECT_PRODUCTION_URL),
+  ].filter(Boolean);
+
+  return Array.from(new Set(derivedOrigins));
+}
+
+const ALLOWED_CORS_ORIGINS = buildAllowedCorsOrigins();
+const DEFAULT_CORS_ORIGIN = ALLOWED_CORS_ORIGINS[0] || '';
+
+function appendVaryHeader(res, headerName) {
+  const existingValue = String(res.getHeader('Vary') || '');
+  const parts = existingValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (!parts.includes(headerName)) {
+    parts.push(headerName);
+    res.setHeader('Vary', parts.join(', '));
+  }
+}
+
+function resolveCorsOrigin(req, res) {
+  if (ALLOWED_CORS_ORIGINS.includes('*')) return '*';
+
+  const request = req || res?.req;
+  const requestOrigin = normalizeOrigin(request?.headers?.origin || '');
+  if (requestOrigin && ALLOWED_CORS_ORIGINS.includes(requestOrigin)) {
+    return requestOrigin;
+  }
+
+  if (requestOrigin) return '';
+  return DEFAULT_CORS_ORIGIN;
+}
+
+function setCors(res, req) {
+  const existingOrigin = normalizeOrigin(res.getHeader('Access-Control-Allow-Origin') || '');
+  const allowedOrigin = req ? resolveCorsOrigin(req, res) : existingOrigin || resolveCorsOrigin(req, res);
+  if (allowedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+  } else {
+    res.removeHeader('Access-Control-Allow-Origin');
+  }
+  if (allowedOrigin && allowedOrigin !== '*') {
+    appendVaryHeader(res, 'Origin');
+  }
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Stripe-Signature');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
 }
 
@@ -245,21 +333,22 @@ function stripePricingFromRequest(body) {
 }
 
 async function createStripeCheckoutSession({ certificate, body, pricing, uiMode = 'hosted' }) {
+  const frontendBase = getFrontendBaseUrl();
   const params = new URLSearchParams();
   params.set('mode', pricing.mode);
   if (uiMode === 'embedded') {
     params.set('ui_mode', 'embedded');
     params.set(
       'return_url',
-      `${FRONTEND_BASE_URL.replace(/\/$/, '')}/patient?checkout=success&session_id={CHECKOUT_SESSION_ID}`
+      `${frontendBase}/patient?checkout=success&session_id={CHECKOUT_SESSION_ID}`
     );
     params.set('redirect_on_completion', 'if_required');
   } else {
     params.set(
       'success_url',
-      `${FRONTEND_BASE_URL.replace(/\/$/, '')}/patient?checkout=success&session_id={CHECKOUT_SESSION_ID}`
+      `${frontendBase}/patient?checkout=success&session_id={CHECKOUT_SESSION_ID}`
     );
-    params.set('cancel_url', `${FRONTEND_BASE_URL.replace(/\/$/, '')}/doctor?checkout=cancelled`);
+    params.set('cancel_url', `${frontendBase}/doctor?checkout=cancelled`);
   }
   params.set('client_reference_id', certificate.id);
   params.set('payment_method_types[0]', 'card');
@@ -402,11 +491,16 @@ function normalizeEmail(value) {
 }
 
 function getFrontendBaseUrl() {
-  const configured = String(FRONTEND_BASE_URL || '').trim();
-  if (!configured || configured === '*') {
-    return String(APP_BASE_URL || '').replace(/\/$/, '');
+  const configuredOrigin = normalizeOrigin(FRONTEND_BASE_URL);
+  if (configuredOrigin && configuredOrigin !== '*') {
+    return configuredOrigin;
   }
-  return configured.replace(/\/$/, '');
+
+  if (DEFAULT_CORS_ORIGIN && DEFAULT_CORS_ORIGIN !== '*') {
+    return DEFAULT_CORS_ORIGIN;
+  }
+
+  return APP_BASE_URL;
 }
 
 function buildPatientPasswordResetUrl(token) {
@@ -701,8 +795,9 @@ async function fetchStripeCheckoutSession(sessionId) {
 }
 
 async function handleApi(req, res, url) {
+  setCors(res, req);
+
   if (req.method === 'OPTIONS') {
-    setCors(res);
     res.statusCode = 204;
     res.end();
     return;

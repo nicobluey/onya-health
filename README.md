@@ -50,7 +50,7 @@ Set these before `npm run backend` in production:
 
 - `PORT` - backend port (default `8787`)
 - `APP_BASE_URL` - public URL for doctor links in emails
-- `CORS_ORIGIN` - allowed frontend origin (default `*`)
+- `CORS_ORIGIN` - allowed frontend origin(s); use comma-separated values for multiple domains (default `*`)
 - `DOCTOR_LOGIN_EMAIL` - doctor portal login email
 - `DOCTOR_LOGIN_PASSWORD` - doctor portal login password
 - `DOCTOR_DISPLAY_NAME` - doctor display name in login payload

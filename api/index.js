@@ -57,7 +57,7 @@ import {
   syncPatientProfileFromLatest,
 } from './lib/patient-snapshot.js';
 
-const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
+const CORS_ORIGIN = String(process.env.CORS_ORIGIN || '*').trim();
 const FRONTEND_BASE_URL = (process.env.FRONTEND_BASE_URL || '').replace(/\/$/, '');
 const APP_BASE_URL = (process.env.APP_BASE_URL || '').replace(/\/$/, '');
 
@@ -102,8 +102,92 @@ const POST_ONLY_ROUTES = new Set([
   'doctor/password/reset/confirm',
 ]);
 
-function setCors(res) {
-  res.setHeader('Access-Control-Allow-Origin', CORS_ORIGIN);
+function normalizeOrigin(value) {
+  const raw = String(value || '').trim();
+  if (!raw || raw.toLowerCase() === 'null') return '';
+  if (raw === '*') return '*';
+
+  const candidate = raw.includes('://') ? raw : `https://${raw}`;
+  try {
+    return new URL(candidate).origin;
+  } catch {
+    return '';
+  }
+}
+
+function parseCorsOrigins(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return [];
+  const tokens = raw
+    .split(/[,\s]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (tokens.includes('*')) return ['*'];
+
+  const origins = [];
+  for (const token of tokens) {
+    const origin = normalizeOrigin(token);
+    if (origin && !origins.includes(origin)) {
+      origins.push(origin);
+    }
+  }
+  return origins;
+}
+
+function buildAllowedCorsOrigins() {
+  const configuredOrigins = parseCorsOrigins(CORS_ORIGIN);
+  if (configuredOrigins.includes('*')) return ['*'];
+
+  const derivedOrigins = [
+    ...configuredOrigins,
+    normalizeOrigin(FRONTEND_BASE_URL),
+    normalizeOrigin(APP_BASE_URL),
+    normalizeOrigin(process.env.VERCEL_URL),
+    normalizeOrigin(process.env.VERCEL_PROJECT_PRODUCTION_URL),
+  ].filter(Boolean);
+
+  return Array.from(new Set(derivedOrigins));
+}
+
+const ALLOWED_CORS_ORIGINS = buildAllowedCorsOrigins();
+const DEFAULT_CORS_ORIGIN = ALLOWED_CORS_ORIGINS[0] || '';
+
+function appendVaryHeader(res, headerName) {
+  const existingValue = String(res.getHeader('Vary') || '');
+  const parts = existingValue
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (!parts.includes(headerName)) {
+    parts.push(headerName);
+    res.setHeader('Vary', parts.join(', '));
+  }
+}
+
+function resolveCorsOrigin(req, res) {
+  if (ALLOWED_CORS_ORIGINS.includes('*')) return '*';
+
+  const request = req || res?.req;
+  const requestOrigin = normalizeOrigin(request?.headers?.origin || '');
+  if (requestOrigin && ALLOWED_CORS_ORIGINS.includes(requestOrigin)) {
+    return requestOrigin;
+  }
+
+  if (requestOrigin) return '';
+  return DEFAULT_CORS_ORIGIN;
+}
+
+function setCors(res, req) {
+  const existingOrigin = normalizeOrigin(res.getHeader('Access-Control-Allow-Origin') || '');
+  const allowedOrigin = req ? resolveCorsOrigin(req, res) : existingOrigin || resolveCorsOrigin(req, res);
+  if (allowedOrigin) {
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
+  } else {
+    res.removeHeader('Access-Control-Allow-Origin');
+  }
+  if (allowedOrigin && allowedOrigin !== '*') {
+    appendVaryHeader(res, 'Origin');
+  }
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Stripe-Signature');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
 }
@@ -1427,7 +1511,7 @@ function isPdfPath(segments) {
 }
 
 export default async function handler(req, res) {
-  setCors(res);
+  setCors(res, req);
   if (req.method === 'OPTIONS') {
     res.status(204).end();
     return;
