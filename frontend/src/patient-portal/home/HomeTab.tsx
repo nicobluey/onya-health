@@ -1,6 +1,7 @@
 import { type CSSProperties, useState } from 'react';
 import type { ComponentType, FormEvent } from 'react';
 import {
+    Check,
     ChevronRight,
     ClipboardPlus,
     FileText,
@@ -26,6 +27,8 @@ import {
     formatDate,
     formatReadableDate,
     isQueuedStatus,
+    queueEstimatedMinutes,
+    queueStageIndex,
     statusLabel,
 } from '../model';
 
@@ -189,6 +192,8 @@ function QueueStatusCard({
     request: PortalRequest | null;
     onOpenQueue: () => void;
 }) {
+    const queueSteps = ['Submitted', 'Payment', 'Review', 'Issued'];
+
     if (!request) {
         return (
             <section className={`${panelClassName} p-5`}>
@@ -198,6 +203,10 @@ function QueueStatusCard({
             </section>
         );
     }
+
+    const stageIndex = queueStageIndex(request.status);
+    const etaMinutes = queueEstimatedMinutes(request);
+    const waitingCopy = stageIndex >= 3 ? 'Certificate issued' : `Estimated wait: ${etaMinutes} min`;
 
     return (
         <section className="overflow-hidden rounded-3xl border border-[#b9c8ba] bg-white p-5 shadow-[0_18px_36px_-28px_rgba(35,71,47,0.28)]">
@@ -210,19 +219,48 @@ function QueueStatusCard({
                     <p className="text-xs font-semibold uppercase tracking-[0.11em] text-[#5f7063]">Queue Status</p>
                     <h2 className="mt-1 text-lg font-semibold text-[#18251e]">You are in the doctor queue</h2>
                     <p className="mt-1 text-sm text-[#5f7063]">{statusLabel(request.status)}</p>
+                    <p className="mt-1 text-sm font-semibold text-[#1f5f3f]">{waitingCopy}</p>
                 </div>
             </div>
             <div className="mt-4 rounded-2xl border border-[#dce7db] bg-[#f8faf7] p-3">
-                <div className="portal-queue-track">
-                    {['Triage', 'Assigned', 'Review', 'Issued'].map((label, index) => (
-                        <div key={label} className="portal-queue-step">
-                            <span className="portal-queue-dot" style={{ animationDelay: `${index * 0.25}s` } as CSSProperties} />
-                            <span className="portal-queue-step-label">{label}</span>
-                            {index < 3 && <span className="portal-queue-connector" />}
-                        </div>
-                    ))}
+                <div className="grid grid-cols-4 gap-2">
+                    {queueSteps.map((label, index) => {
+                        const completed = index < stageIndex || stageIndex >= 3;
+                        const active = index === stageIndex && stageIndex < 3;
+                        const pulse = active && index === 2;
+
+                        return (
+                            <div key={label} className="relative text-center">
+                                <span
+                                    className={`mx-auto flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-semibold ${
+                                        completed
+                                            ? 'border-[#1f5f3f] bg-[#1f5f3f] text-white'
+                                            : active
+                                              ? 'border-[#1f5f3f] bg-[#edf1ec] text-[#1f5f3f]'
+                                              : 'border-[#c9d6c8] bg-white text-[#8b9a8d]'
+                                    } ${pulse ? 'animate-pulse' : ''}`}
+                                >
+                                    {completed ? <Check size={12} /> : index + 1}
+                                </span>
+                                <span className="mt-1 block text-[11px] font-semibold text-[#5f7063]">{label}</span>
+                                {index < queueSteps.length - 1 && (
+                                    <span
+                                        className={`absolute left-[58%] top-3 h-[2px] w-[84%] ${
+                                            completed ? 'bg-[#9ab79d]' : 'bg-[#d4ddd2]'
+                                        }`}
+                                        aria-hidden="true"
+                                    />
+                                )}
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
+            {stageIndex < 3 && (
+                <p className="mt-3 text-xs text-[#5f7063]">
+                    Review is in progress and updates automatically every few seconds.
+                </p>
+            )}
             <button
                 type="button"
                 onClick={onOpenQueue}

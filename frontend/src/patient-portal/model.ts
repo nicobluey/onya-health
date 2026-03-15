@@ -302,6 +302,38 @@ export function isQueuedStatus(status: string) {
   return ['awaiting_payment', 'pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(normalized);
 }
 
+export function queueStageIndex(status: string) {
+  const normalized = String(status || '').toLowerCase();
+  if (normalized === 'awaiting_payment') return 1;
+  if (['pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(normalized)) return 2;
+  if (normalized === 'approved' || normalized === 'closed') return 3;
+  return 0;
+}
+
+export function queueEstimatedMinutes(request: PortalRequest | null) {
+  if (!request) return 23;
+  const normalized = String(request.status || '').toLowerCase();
+  if (normalized === 'approved' || normalized === 'closed') return 0;
+
+  const ranges: Record<string, [number, number]> = {
+    awaiting_payment: [2, 6],
+    pending: [21, 29],
+    submitted: [21, 29],
+    triaged: [17, 24],
+    assigned: [12, 19],
+    in_review: [7, 14],
+  };
+  const [min, max] = ranges[normalized] || [17, 23];
+  const seed = `${request.id}:${request.createdAt}:${normalized}`;
+  let hash = 0;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash << 5) - hash + seed.charCodeAt(index);
+    hash |= 0;
+  }
+  const offset = Math.abs(hash) % (max - min + 1);
+  return min + offset;
+}
+
 export function statusLabel(status: string) {
   const normalized = String(status || '').toLowerCase();
   if (normalized === 'awaiting_payment') return 'Awaiting payment confirmation';

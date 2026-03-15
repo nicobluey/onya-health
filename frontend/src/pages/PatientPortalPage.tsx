@@ -2,6 +2,7 @@ import { type CSSProperties, type FormEvent, useEffect, useMemo, useState } from
 import {
     ArrowLeft,
     CalendarDays,
+    Check,
     CheckCircle2,
     ChevronRight,
     Clock3,
@@ -46,6 +47,8 @@ import {
     formatDate,
     formatReadableDate,
     isQueuedStatus,
+    queueEstimatedMinutes,
+    queueStageIndex,
     readPortalProfile,
     sectionCardClassName,
     statusLabel,
@@ -203,7 +206,19 @@ function MobileBottomNav({
     );
 }
 
-function QueueBanner({ onTap }: { onTap: () => void }) {
+function QueueBanner({
+    request,
+    onTap,
+}: {
+    request: PortalRequest;
+    onTap: () => void;
+}) {
+    const stageIndex = queueStageIndex(request.status);
+    const etaMinutes = queueEstimatedMinutes(request);
+    const queueTitle = stageIndex >= 2 ? 'Doctor review in progress' : 'Payment confirmation in progress';
+    const queueSubtitle =
+        stageIndex >= 2 ? `Estimated time remaining: ${etaMinutes} min` : 'This usually updates within 1-2 minutes';
+
     return (
         <button
             type="button"
@@ -217,8 +232,8 @@ function QueueBanner({ onTap }: { onTap: () => void }) {
                     <span className="portal-live-dot absolute -right-0.5 -top-0.5" aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
-                    <p className="text-sm font-semibold text-[#020617]">You&apos;re in the queue</p>
-                    <p className="text-xs text-[#475569]">Tap to view live status</p>
+                    <p className="text-sm font-semibold text-[#020617]">{queueTitle}</p>
+                    <p className="text-xs text-[#475569]">{queueSubtitle}</p>
                 </div>
                 <ChevronRight size={18} className="ml-auto text-[#64748b]" />
             </div>
@@ -603,7 +618,12 @@ function QueuedWaitingScreen({
     onBack: () => void;
     onSendMessage: () => void;
 }) {
-    const queueSteps = ['Triage', 'Doctor Assigned', 'Review', 'Issue'];
+    const queueSteps = ['Submitted', 'Payment', 'Review', 'Issued'];
+    const stageIndex = queueStageIndex(request?.status || '');
+    const etaMinutes = queueEstimatedMinutes(request);
+    const reviewActive = stageIndex === 2;
+    const queueHeading = reviewActive ? 'Under doctor review' : 'Queued';
+    const queueSubheading = reviewActive ? `Estimated time remaining: ${etaMinutes} min` : statusLabel(request?.status || '');
     const rows = [
         { label: 'Type', value: 'Medical Certificate', icon: Tag },
         { label: 'Leave type', value: request?.purpose || '—', icon: FileText },
@@ -630,24 +650,57 @@ function QueuedWaitingScreen({
                         <Heart size={20} className="fill-current stroke-current" />
                     </div>
                     <div className="min-w-0">
-                        <h1 className="text-lg font-semibold text-[#020617]">Queued</h1>
-                        <p className="text-sm text-[#475569]">A doctor will be assigned shortly</p>
+                        <h1 className="text-lg font-semibold text-[#020617]">{queueHeading}</h1>
+                        <p className="text-sm text-[#475569]">{queueSubheading}</p>
                     </div>
                 </div>
                 <div className="mt-4 rounded-2xl border border-[#dbeeff] bg-[#f8fbff] p-3">
-                    <div className="portal-queue-track">
-                        {queueSteps.map((step, index) => (
-                            <div key={step} className="portal-queue-step">
-                                <span
-                                    className="portal-queue-dot"
-                                    style={{ animationDelay: `${index * 0.28}s` } as CSSProperties}
-                                    aria-hidden="true"
-                                />
-                                <span className="portal-queue-step-label">{step}</span>
-                                {index < queueSteps.length - 1 && <span className="portal-queue-connector" aria-hidden="true" />}
-                            </div>
-                        ))}
+                    <div className="grid grid-cols-4 gap-2">
+                        {queueSteps.map((step, index) => {
+                            const completed = index < stageIndex;
+                            const active = index === stageIndex && stageIndex < 3;
+                            const pulse = active && index === 2;
+                            return (
+                                <div key={step} className="relative text-center">
+                                    <span
+                                        className={`mx-auto flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-semibold ${
+                                            completed
+                                                ? 'border-[#2e8cff] bg-[#2e8cff] text-white'
+                                                : active
+                                                  ? 'border-[#2e8cff] bg-[#dbeeff] text-[#2e8cff]'
+                                                  : 'border-[#cbd5e1] bg-white text-[#94a3b8]'
+                                        } ${pulse ? 'animate-pulse' : ''}`}
+                                    >
+                                        {completed ? <Check size={12} /> : index + 1}
+                                    </span>
+                                    <span className="mt-1 block text-[11px] font-semibold text-[#64748b]">{step}</span>
+                                    {index < queueSteps.length - 1 && (
+                                        <span
+                                            className={`absolute left-[58%] top-3 h-[2px] w-[84%] ${
+                                                completed ? 'bg-[#9ecbff]' : 'bg-[#dbeafe]'
+                                            }`}
+                                            aria-hidden="true"
+                                        />
+                                    )}
+                                </div>
+                            );
+                        })}
                     </div>
+                    {reviewActive && (
+                        <p className="mt-3 text-xs text-[#475569]">
+                            Review is active now. The pulsing step updates to issued once your certificate is completed.
+                        </p>
+                    )}
+                    {!reviewActive && stageIndex < 2 && (
+                        <p className="mt-3 text-xs text-[#475569]">
+                            Payment is being confirmed. Completed steps will tick automatically as your request moves forward.
+                        </p>
+                    )}
+                    {stageIndex >= 3 && (
+                        <p className="mt-3 text-xs text-[#475569]">
+                            Your certificate has been issued. Go back to Home or Account to download it.
+                        </p>
+                    )}
                 </div>
             </article>
 
@@ -1104,6 +1157,92 @@ export default function PatientPortalPage() {
         setSelectedConsultOptionId(null);
     };
 
+    const startUnlimitedCertificateRequest = async () => {
+        if (!token) {
+            window.location.href = '/patient-login';
+            return;
+        }
+
+        const patientEmail = (patient.email || window.localStorage.getItem('onya_patient_email') || '').trim().toLowerCase();
+        if (!patientEmail) {
+            window.alert('Your account email is missing. Refresh and try again.');
+            return;
+        }
+
+        const startDateIso = new Date().toISOString();
+        const fallbackPurpose = latestRequest?.purpose || 'Personal leave';
+        const fallbackSymptom = latestRequest?.symptom || 'General medical condition';
+        const fallbackDescription = 'Requested from patient portal using active unlimited plan.';
+
+        try {
+            const { response, payload } = await fetchApiJson('/api/checkout/session', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    uiMode: 'hosted',
+                    serviceType: 'doctor',
+                    patient: {
+                        fullName: patient.fullName || 'Patient',
+                        email: patientEmail,
+                        dob: patient.dob || '',
+                        phone: patient.phone || '',
+                    },
+                    consult: {
+                        purpose: fallbackPurpose,
+                        symptom: fallbackSymptom,
+                        symptomVisibility: 'private',
+                        description: fallbackDescription,
+                        startDate: startDateIso,
+                        durationDays: 1,
+                        complianceChecked: true,
+                        isUnlimited: true,
+                        includeCarerCertificate: false,
+                    },
+                }),
+            });
+
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Unable to start your certificate request right now.');
+            }
+
+            if (payload?.checkoutBypassed) {
+                const syntheticRequest: PortalRequest = {
+                    id: String(payload?.certificateId || `local-${createId()}`),
+                    createdAt: new Date().toISOString(),
+                    status: String(payload?.status || 'pending'),
+                    serviceType: 'doctor',
+                    purpose: fallbackPurpose,
+                    symptom: fallbackSymptom,
+                    symptomVisibility: 'private',
+                    description: fallbackDescription,
+                    startDate: startDateIso,
+                    durationDays: 1,
+                };
+                setRequests((current) => [syntheticRequest, ...current.filter((item) => item.id !== syntheticRequest.id)]);
+                setActiveQueuedRequest(syntheticRequest);
+                setPortalScreen('queued');
+                return;
+            }
+
+            if (payload?.checkoutUrl) {
+                window.location.assign(String(payload.checkoutUrl));
+                return;
+            }
+
+            if (payload?.redirectUrl) {
+                window.location.assign(String(payload.redirectUrl));
+                return;
+            }
+
+            throw new Error('Unable to start your certificate request right now.');
+        } catch (errorObject) {
+            window.alert(errorObject instanceof Error ? errorObject.message : 'Unable to start your certificate request right now.');
+        }
+    };
+
     const openConsultOption = (optionId: ConsultOptionId) => {
         const option = CONSULT_OPTIONS.find((item) => item.id === optionId);
         if (!option) return;
@@ -1111,6 +1250,10 @@ export default function PatientPortalPage() {
         setLastMainTab('consult');
         if (option.status === 'available') {
             if (option.id === 'medical-certificate') {
+                if (billing?.hasActiveUnlimited) {
+                    void startUnlimitedCertificateRequest();
+                    return;
+                }
                 window.location.href = '/doctor';
                 return;
             }
@@ -1431,7 +1574,7 @@ export default function PatientPortalPage() {
                 <PortalBackdropArt />
                 <MobileTopBar activeTab={mainTab} />
                 <main className="relative z-10 px-4 py-5">{renderPortalContent('mobile')}</main>
-                {portalScreen === 'main' && queuedRequest && <QueueBanner onTap={openQueuedScreen} />}
+                {portalScreen === 'main' && queuedRequest && <QueueBanner request={queuedRequest} onTap={openQueuedScreen} />}
                 {portalScreen === 'main' && <MobileBottomNav activeTab={mainTab} onTabChange={setTab} />}
             </div>
         </>
