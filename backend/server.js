@@ -965,6 +965,19 @@ function unixSecondsToIso(value) {
   return new Date(seconds * 1000).toISOString();
 }
 
+function isPaidLikePaymentStatus(value) {
+  const status = String(value || '').trim().toLowerCase();
+  return status === 'paid' || status === 'no_payment_required';
+}
+
+function isSubscriptionLikePayment(certificate, payment) {
+  const mode = String(payment?.mode || '').trim().toLowerCase();
+  const hasStripeSubscriptionId = Boolean(String(payment?.stripeSubscriptionId || '').trim());
+  const consultIsUnlimited =
+    Boolean(certificate?.rawSubmission?.consult?.isUnlimited) || Boolean(certificate?.rawSubmission?.isUnlimited);
+  return mode === 'subscription' || hasStripeSubscriptionId || consultIsUnlimited;
+}
+
 async function fetchStripeSubscription(subscriptionId) {
   const normalizedId = String(subscriptionId || '').trim();
   if (!normalizedId) return null;
@@ -1113,16 +1126,29 @@ async function cancelStripeSubscriptionAtPeriodEnd(subscriptionId) {
 
 function mostRecentPatientSubscriptionPayment(certificates, patientEmail) {
   const patientCertificates = getPatientCertificatesForEmail(certificates, patientEmail);
+  let fallback = null;
+
   for (const certificate of patientCertificates) {
     const payment = certificate?.rawSubmission?.payment || null;
     if (!payment) continue;
-    if (String(payment.mode || '').toLowerCase() !== 'subscription') continue;
-    return {
-      certificate,
-      payment,
-    };
+    if (!isSubscriptionLikePayment(certificate, payment)) continue;
+
+    if (!fallback) {
+      fallback = {
+        certificate,
+        payment,
+      };
+    }
+
+    const hasStripeSubscriptionId = Boolean(String(payment.stripeSubscriptionId || '').trim());
+    if (hasStripeSubscriptionId || isPaidLikePaymentStatus(payment.status)) {
+      return {
+        certificate,
+        payment,
+      };
+    }
   }
-  return null;
+  return fallback;
 }
 
 async function resolvePatientBillingProfile(patientEmail, certificatesInput = null) {
