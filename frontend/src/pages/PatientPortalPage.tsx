@@ -5,6 +5,7 @@ import {
     CheckCircle2,
     ChevronRight,
     Clock3,
+    CreditCard,
     FileText,
     Heart,
     Home,
@@ -24,6 +25,7 @@ import {
     type ConsultOptionId,
     type LayoutMode,
     type MainTab,
+    type PatientBillingInfo,
     type PatientProfile,
     type PortalProfileData,
     type PortalRequest,
@@ -70,6 +72,22 @@ function PortalBackdropArt() {
             ))}
         </>
     );
+}
+
+function normalizeBillingInfo(input: unknown): PatientBillingInfo | null {
+    if (!input || typeof input !== 'object') return null;
+    const value = input as Record<string, unknown>;
+
+    return {
+        hasActiveUnlimited: Boolean(value.hasActiveUnlimited),
+        plan: String(value.plan || 'pay_as_you_go'),
+        subscriptionStatus: String(value.subscriptionStatus || 'none'),
+        stripeCustomerId: String(value.stripeCustomerId || ''),
+        stripeSubscriptionId: String(value.stripeSubscriptionId || ''),
+        cancelAtPeriodEnd: Boolean(value.cancelAtPeriodEnd),
+        currentPeriodEnd: value.currentPeriodEnd ? String(value.currentPeriodEnd) : null,
+        canManageSubscription: Boolean(value.canManageSubscription),
+    };
 }
 
 function DesktopSidebar({
@@ -208,13 +226,39 @@ function QueueBanner({ onTap }: { onTap: () => void }) {
     );
 }
 
-function ConsultTab({ onSelectOption }: { onSelectOption: (optionId: ConsultOptionId) => void }) {
+function ConsultTab({
+    onSelectOption,
+    billing,
+}: {
+    onSelectOption: (optionId: ConsultOptionId) => void;
+    billing: PatientBillingInfo | null;
+}) {
     return (
         <section className="space-y-5">
             <header>
                 <h1 className="text-3xl font-semibold tracking-tight text-[#020617]">Book a consultation</h1>
                 <p className="mt-1 text-base text-[#475569]">Choose a service to continue. Live services open instantly, others are previewable.</p>
             </header>
+
+            <article className="rounded-2xl border border-[#cbd5e1] bg-white px-4 py-3">
+                <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#eef5ff] text-[#2e8cff]">
+                        <CreditCard size={18} />
+                    </div>
+                    <div>
+                        <p className="text-sm font-semibold text-[#020617]">
+                            {billing?.hasActiveUnlimited
+                                ? 'Unlimited plan active'
+                                : 'Pay-as-you-go or unlimited available'}
+                        </p>
+                        <p className="mt-1 text-sm text-[#475569]">
+                            {billing?.hasActiveUnlimited
+                                ? 'Your next medical certificate request will go straight to doctor review with no checkout screen.'
+                                : 'Start a medical certificate request and you can choose one-off payment or unlimited at checkout.'}
+                        </p>
+                    </div>
+                </div>
+            </article>
 
             <div className="grid gap-3 md:grid-cols-2">
                 {CONSULT_OPTIONS.map((option) => {
@@ -337,13 +381,23 @@ function ProfileCard({ patient }: { patient: PatientProfile }) {
 function AccountTab({
     patient,
     latestRequest,
+    billing,
     data,
     onDownloadCertificate,
+    onManageBilling,
+    onCancelSubscription,
+    billingActionState,
+    billingError,
 }: {
     patient: PatientProfile;
     latestRequest: PortalRequest | null;
+    billing: PatientBillingInfo | null;
     data: PortalProfileData;
     onDownloadCertificate: (request: PortalRequest) => void;
+    onManageBilling: () => void;
+    onCancelSubscription: () => void;
+    billingActionState: 'idle' | 'opening_portal' | 'cancelling';
+    billingError: string;
 }) {
     const stats = [
         { label: 'Medical history', value: data.medicalHistory.length },
@@ -359,6 +413,66 @@ function AccountTab({
             </header>
 
             <ProfileCard patient={patient} />
+
+            <section className={sectionCardClassName()}>
+                <div className="border-b border-[#dbeeff] px-5 py-4">
+                    <h2 className="text-lg font-semibold text-[#020617]">Billing & Subscription</h2>
+                </div>
+                <div className="space-y-3 px-5 py-4">
+                    <div className="rounded-2xl border border-[#dbeeff] bg-[#f8fbff] p-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#64748b]">Current plan</p>
+                        <p className="mt-1 text-base font-semibold text-[#020617]">
+                            {billing?.hasActiveUnlimited ? 'Unlimited certificates' : 'Pay as you go'}
+                        </p>
+                        <p className="mt-1 text-sm text-[#475569]">
+                            {billing?.hasActiveUnlimited
+                                ? `Subscription status: ${billing.subscriptionStatus || 'active'}`
+                                : 'No active unlimited subscription found.'}
+                        </p>
+                        {billing?.hasActiveUnlimited && billing.currentPeriodEnd && (
+                            <p className="mt-1 text-xs text-[#64748b]">Current period ends {formatDate(billing.currentPeriodEnd)}</p>
+                        )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                        {billing?.canManageSubscription ? (
+                            <button
+                                type="button"
+                                onClick={onManageBilling}
+                                disabled={billingActionState !== 'idle'}
+                                className="inline-flex h-10 items-center justify-center rounded-xl bg-[#2e8cff] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
+                            >
+                                {billingActionState === 'opening_portal' ? 'Opening billing...' : 'Manage subscription'}
+                            </button>
+                        ) : (
+                            <a
+                                href="/doctor"
+                                className="inline-flex h-10 items-center justify-center rounded-xl bg-[#2e8cff] px-4 text-sm font-semibold text-white"
+                            >
+                                Start unlimited plan
+                            </a>
+                        )}
+
+                        {billing?.hasActiveUnlimited && !billing.cancelAtPeriodEnd && (
+                            <button
+                                type="button"
+                                onClick={onCancelSubscription}
+                                disabled={billingActionState !== 'idle'}
+                                className="inline-flex h-10 items-center justify-center rounded-xl border border-[#cbd5e1] bg-white px-4 text-sm font-semibold text-[#0f172a] disabled:cursor-not-allowed disabled:opacity-70"
+                            >
+                                {billingActionState === 'cancelling' ? 'Updating...' : 'Cancel at period end'}
+                            </button>
+                        )}
+                    </div>
+
+                    {billing?.cancelAtPeriodEnd && (
+                        <p className="text-sm text-[#475569]">
+                            Cancellation scheduled. Your unlimited access remains active until period end.
+                        </p>
+                    )}
+                    {billingError && <p className="text-sm font-semibold text-red-600">{billingError}</p>}
+                </div>
+            </section>
 
             <section className={sectionCardClassName()}>
                 <div className="border-b border-[#dbeeff] px-5 py-4">
@@ -575,16 +689,19 @@ function CheckoutAccountSetupScreen({
     const [confirmPassword, setConfirmPassword] = useState('');
     const [submitting, setSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
+    const [existingAccountEmail, setExistingAccountEmail] = useState('');
 
     const handleUseSameEmail = () => {
         setEmail(setup.consultEmail);
         setConfirmEmail(setup.consultEmail);
         setErrorMessage('');
+        setExistingAccountEmail('');
     };
 
     const handleSubmit = async (event: FormEvent) => {
         event.preventDefault();
         setErrorMessage('');
+        setExistingAccountEmail('');
 
         const normalizedEmail = email.trim().toLowerCase();
         const normalizedConfirm = confirmEmail.trim().toLowerCase();
@@ -631,6 +748,11 @@ function CheckoutAccountSetupScreen({
             });
 
             if (!response.ok) {
+                if (response.status === 409 && String(payload?.code || '').toUpperCase() === 'ACCOUNT_EXISTS') {
+                    const accountEmail = String(payload?.patientEmail || normalizedEmail).trim().toLowerCase();
+                    setExistingAccountEmail(accountEmail);
+                    throw new Error('An account already exists for this email. Sign in to continue.');
+                }
                 throw new Error(payload?.error || 'Unable to complete account setup right now.');
             }
 
@@ -740,6 +862,14 @@ function CheckoutAccountSetupScreen({
                         </label>
 
                         {errorMessage && <p className="text-sm font-semibold text-red-600">{errorMessage}</p>}
+                        {existingAccountEmail && (
+                            <a
+                                href={`/patient-login?email=${encodeURIComponent(existingAccountEmail)}`}
+                                className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-[#cbd5e1] bg-white text-sm font-semibold text-[#0f172a]"
+                            >
+                                Sign in to existing account
+                            </a>
+                        )}
 
                         <button
                             type="submit"
@@ -767,6 +897,9 @@ export default function PatientPortalPage() {
         email: window.localStorage.getItem('onya_patient_email') || 'john@gmail.com',
     });
     const [requests, setRequests] = useState<PortalRequest[]>([]);
+    const [billing, setBilling] = useState<PatientBillingInfo | null>(null);
+    const [billingActionState, setBillingActionState] = useState<'idle' | 'opening_portal' | 'cancelling'>('idle');
+    const [billingError, setBillingError] = useState('');
     const [activeQueuedRequest, setActiveQueuedRequest] = useState<PortalRequest | null>(null);
     const [recordTab, setRecordTab] = useState<RecordTab>('medical-history');
     const [portalData, setPortalData] = useState<PortalProfileData>(createEmptyPortalData);
@@ -814,6 +947,16 @@ export default function PatientPortalPage() {
                     const consultEmail = String(payload?.patientEmail || '').trim().toLowerCase();
                     if (consultEmail) {
                         window.localStorage.setItem('onya_patient_email', consultEmail);
+                    }
+                    const requiresAccountSetup = Boolean(payload?.requiresAccountSetup);
+                    if (!requiresAccountSetup) {
+                        const loginUrl = new URL('/patient-login', window.location.origin);
+                        if (consultEmail) {
+                            loginUrl.searchParams.set('email', consultEmail);
+                        }
+                        loginUrl.searchParams.set('checkout', 'success');
+                        window.location.href = `${loginUrl.pathname}${loginUrl.search}${loginUrl.hash}`;
+                        return null;
                     }
                     return {
                         sessionId,
@@ -902,6 +1045,9 @@ export default function PatientPortalPage() {
                 };
                 setPatient(patientProfile);
                 window.localStorage.setItem('onya_patient_email', patientProfile.email);
+                setBilling(normalizeBillingInfo(mePayload?.billing));
+                setBillingError('');
+                setBillingActionState('idle');
 
                 const items: PortalRequest[] = Array.isArray(requestsPayload?.requests) ? requestsPayload.requests : [];
                 setRequests(items);
@@ -964,8 +1110,11 @@ export default function PatientPortalPage() {
 
         setLastMainTab('consult');
         if (option.status === 'available') {
+            if (option.id === 'medical-certificate') {
+                window.location.href = '/doctor';
+                return;
+            }
             setPortalScreen('call-prep');
-            setSelectedConsultOptionId(null);
             return;
         }
 
@@ -1110,6 +1259,57 @@ export default function PatientPortalPage() {
         setToken(nextToken);
     };
 
+    const openBillingPortal = async () => {
+        if (!token) return;
+        try {
+            setBillingError('');
+            setBillingActionState('opening_portal');
+            const { response, payload } = await fetchApiJson('/api/patient/billing/portal', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                    returnUrl: `${window.location.origin}/patient`,
+                }),
+            });
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Unable to open billing portal right now.');
+            }
+            const portalUrl = String(payload?.url || '').trim();
+            if (!portalUrl) {
+                throw new Error('Billing portal did not return a URL.');
+            }
+            window.location.assign(portalUrl);
+        } catch (errorObject) {
+            setBillingError(errorObject instanceof Error ? errorObject.message : 'Unable to open billing portal right now.');
+            setBillingActionState('idle');
+        }
+    };
+
+    const cancelSubscriptionAtPeriodEnd = async () => {
+        if (!token) return;
+        try {
+            setBillingError('');
+            setBillingActionState('cancelling');
+            const { response, payload } = await fetchApiJson('/api/patient/subscription/cancel', {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                },
+            });
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Unable to update subscription right now.');
+            }
+            setBilling(normalizeBillingInfo(payload?.billing));
+            setBillingActionState('idle');
+        } catch (errorObject) {
+            setBillingError(errorObject instanceof Error ? errorObject.message : 'Unable to update subscription right now.');
+            setBillingActionState('idle');
+        }
+    };
+
     const renderPortalContent = (mode: LayoutMode) => {
         if (portalScreen === 'call-prep') {
             return <CallPrepScreen onBack={closeOverlayScreen} onStartCall={startCallAndQueue} />;
@@ -1149,15 +1349,20 @@ export default function PatientPortalPage() {
         }
 
         if (mainTab === 'consult') {
-            return <ConsultTab onSelectOption={openConsultOption} />;
+            return <ConsultTab onSelectOption={openConsultOption} billing={billing} />;
         }
 
         return (
             <AccountTab
                 patient={patient}
                 latestRequest={latestRequest}
+                billing={billing}
                 data={portalData}
                 onDownloadCertificate={downloadCertificatePdf}
+                onManageBilling={openBillingPortal}
+                onCancelSubscription={cancelSubscriptionAtPeriodEnd}
+                billingActionState={billingActionState}
+                billingError={billingError}
             />
         );
     };

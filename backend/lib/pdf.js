@@ -221,6 +221,35 @@ function drawHolographicSeal(doc, centerX, centerY, size, verificationCode) {
   });
 }
 
+function drawHolographicPanel(doc, x, y, width, height, borderColor) {
+  const gradient = doc.linearGradient(x, y, x + width, y + height);
+  gradient.stop(0, '#F9FCFF', 0.98).stop(0.32, '#ECF5FF', 0.96).stop(0.66, '#E7F1FF', 0.95).stop(1, '#F6FAFF', 0.98);
+
+  doc.roundedRect(x, y, width, height, 14).fillAndStroke(gradient, borderColor);
+
+  doc.save();
+  doc.roundedRect(x, y, width, height, 14).clip();
+  for (let i = -height; i < width + height; i += 22) {
+    doc
+      .lineWidth(1)
+      .strokeColor('#FFFFFF')
+      .opacity(0.24)
+      .moveTo(x + i, y + 2)
+      .lineTo(x + i + height, y + height - 2)
+      .stroke();
+  }
+  for (let i = -height; i < width + height; i += 36) {
+    doc
+      .lineWidth(0.8)
+      .strokeColor('#BFDBFE')
+      .opacity(0.32)
+      .moveTo(x + i, y + height - 2)
+      .lineTo(x + i + height, y + 2)
+      .stroke();
+  }
+  doc.restore();
+}
+
 export async function buildCertificatePdf(certificate, options = {}) {
   const data = certificate?.certificateDraft || {};
   const verificationCode =
@@ -343,28 +372,63 @@ export async function buildCertificatePdf(certificate, options = {}) {
     doc.lineWidth(2.5).strokeColor(colors.accent).moveTo(left, y).lineTo(right, y).stroke();
     y += 16;
 
-    const headerCardHeight = 72;
-    doc.roundedRect(left, y, contentWidth, headerCardHeight, 9).fillAndStroke(colors.panel, colors.border);
+    const headerCardHeight = 118;
+    const headerTopY = y;
+    drawHolographicPanel(doc, left, headerTopY, contentWidth, headerCardHeight, '#B9D3F7');
 
-    doc.font('Helvetica').fontSize(10).fillColor(colors.muted).text('DATE OF ISSUE', left + 14, y + 14);
+    const qrTileSize = 74;
+    const qrTileX = right - qrTileSize - 18;
+    const qrTileY = headerTopY + (headerCardHeight - qrTileSize) / 2;
+
+    doc
+      .roundedRect(qrTileX - 6, qrTileY - 6, qrTileSize + 12, qrTileSize + 12, 12)
+      .lineWidth(1)
+      .fillAndStroke('#FFFFFF', '#CFE0F8');
+
+    if (qrBuffer) {
+      doc.image(qrBuffer, qrTileX, qrTileY, { fit: [qrTileSize, qrTileSize], align: 'center', valign: 'center' });
+    } else {
+      doc
+        .rect(qrTileX, qrTileY, qrTileSize, qrTileSize)
+        .lineWidth(1.1)
+        .strokeColor(colors.accent)
+        .stroke();
+      doc
+        .font('Helvetica')
+        .fontSize(8.5)
+        .fillColor(colors.muted)
+        .text('QR unavailable', qrTileX + 6, qrTileY + 30, { width: qrTileSize - 12, align: 'center' });
+    }
+
+    doc
+      .font('Helvetica')
+      .fontSize(8.5)
+      .fillColor(colors.muted)
+      .text('Scan to verify', qrTileX - 8, qrTileY + qrTileSize + 8, { width: qrTileSize + 16, align: 'center' });
+
+    const metaWidth = contentWidth - qrTileSize - 42;
+    const codeX = left + 16;
+    const codeY = headerTopY + 18;
+
+    doc.font('Helvetica').fontSize(10).fillColor(colors.muted).text('DATE OF ISSUE', codeX, codeY);
     doc
       .font('Helvetica-Bold')
-      .fontSize(15)
+      .fontSize(15.5)
       .fillColor(colors.text)
-      .text(issueDate, left + 14, y + 34, { width: contentWidth * 0.58 });
+      .text(issueDate, codeX, codeY + 18, { width: metaWidth, lineBreak: false });
 
     doc
       .font('Helvetica')
       .fontSize(10)
       .fillColor(colors.muted)
-      .text('CERTIFICATE CODE', right - 205, y + 14, { width: 190, align: 'right' });
+      .text('CERTIFICATE CODE', codeX, codeY + 50);
     doc
       .font('Helvetica-Bold')
-      .fontSize(16)
+      .fontSize(17)
       .fillColor(colors.text)
-      .text(verificationCode, right - 205, y + 34, { width: 190, align: 'right' });
+      .text(verificationCode, codeX, codeY + 68, { width: metaWidth, lineBreak: false });
 
-    y += headerCardHeight + 18;
+    y += headerCardHeight + 20;
 
     doc.font('Helvetica-Bold').fontSize(14).fillColor(colors.text).text('Patient details', left, y);
     y += 22;
@@ -430,7 +494,7 @@ export async function buildCertificatePdf(certificate, options = {}) {
       y += 16;
     }
 
-    const verificationHeight = 130;
+    const verificationHeight = 122;
     const verificationBottomPadding = 12;
     const maxVerificationY = doc.page.height - 38 - verificationHeight - verificationBottomPadding;
     const verificationTargetY = y + 20;
@@ -444,7 +508,7 @@ export async function buildCertificatePdf(certificate, options = {}) {
     const minVerificationY = 540;
     if (isFirstPage && verificationY < minVerificationY) verificationY = minVerificationY;
 
-    doc.roundedRect(left, verificationY, contentWidth, verificationHeight, 20).fillAndStroke(colors.panel, colors.border);
+    drawHolographicPanel(doc, left, verificationY, contentWidth, verificationHeight, colors.border);
 
     doc
       .font('Helvetica-Bold')
@@ -453,41 +517,20 @@ export async function buildCertificatePdf(certificate, options = {}) {
       .text('AUTHENTICITY VERIFICATION', left + 16, verificationY + 14, { lineBreak: false });
 
     doc
-      .font('Helvetica-Oblique')
+      .font('Helvetica')
       .fontSize(10)
       .fillColor(colors.muted)
-      .text('Verify this certificate with the code below or by scanning the QR code.', left + 16, verificationY + 30, {
-        width: contentWidth - 250,
+      .text('Use the code below at onyahealth.com.au/verify to confirm this certificate.', left + 16, verificationY + 32, {
+        width: contentWidth - 150,
         lineBreak: false,
       });
 
-    const verifyText = verifyUrl ? 'Visit onyahealth.com.au/verify' : 'Visit onyahealth.com.au/verify';
-    doc.font('Helvetica').fontSize(10).fillColor(colors.muted).text(verifyText, left + 16, verificationY + 52, {
-      width: contentWidth - 250,
+    doc.font('Helvetica-Bold').fontSize(20).fillColor(colors.text).text(verificationCode, left + 16, verificationY + 64, {
+      width: contentWidth - 170,
       lineBreak: false,
     });
 
-    doc.font('Helvetica-Bold').fontSize(17).fillColor(colors.text).text(verificationCode, left + 16, verificationY + 82, {
-      width: contentWidth - 310,
-      lineBreak: false,
-    });
-
-    drawHolographicSeal(doc, left + 284, verificationY + 84, 62, verificationCode);
-
-    if (qrBuffer) {
-      doc.image(qrBuffer, right - 144, verificationY + 18, { fit: [96, 96], align: 'center', valign: 'center' });
-    } else {
-      doc
-        .rect(right - 144, verificationY + 18, 96, 96)
-        .lineWidth(1.1)
-        .strokeColor(colors.accent)
-        .stroke();
-      doc
-        .font('Helvetica')
-        .fontSize(9)
-        .fillColor(colors.muted)
-        .text('QR unavailable', right - 138, verificationY + 60, { width: 84, align: 'center' });
-    }
+    drawHolographicSeal(doc, right - 66, verificationY + 62, 82, verificationCode);
 
     const footerY = verificationY + verificationHeight + 12;
     doc.font('Helvetica-Bold').fontSize(11).fillColor(colors.text).text('Verification support:', left, footerY);

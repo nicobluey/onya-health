@@ -6,6 +6,7 @@ import { Button, SelectableCard, Input } from './UI';
 import { AnimatePresence, motion } from 'framer-motion';
 import { getServiceForPath } from '../consult-flow/services';
 import { fetchApiJson } from '../lib/api';
+import type { CertificatePurpose, Symptom } from '../types';
 
 // Transitions
 const fade = {
@@ -30,7 +31,10 @@ export const PurposeStep = () => {
                     <SelectableCard
                         key={opt}
                         selected={purpose === opt}
-                        onClick={() => { setPurpose(opt as any); nextStep(); }}
+                        onClick={() => {
+                            setPurpose(opt as CertificatePurpose);
+                            nextStep();
+                        }}
                     >
                         {opt}
                     </SelectableCard>
@@ -120,7 +124,7 @@ export const DescriptionStep = () => {
             <div className="space-y-4">
                 <div className="flex flex-wrap gap-2" role="group" aria-label="Symptoms">
                     {COPY.steps.symptom.options.map((opt) => {
-                        const selected = symptom.includes(opt as any);
+                        const selected = symptom.includes(opt as Symptom);
                         return (
                             <button
                                 key={opt}
@@ -128,8 +132,8 @@ export const DescriptionStep = () => {
                                 aria-pressed={selected}
                                 onClick={() => {
                                     const next = selected
-                                        ? symptom.filter((value) => value !== (opt as any))
-                                        : [...symptom, opt as any];
+                                        ? symptom.filter((value) => value !== (opt as Symptom))
+                                        : [...symptom, opt as Symptom];
                                     setSymptom(next);
                                     setError('');
                                 }}
@@ -546,11 +550,16 @@ export const CheckoutStep = () => {
                 .join('\n\n');
 
             const serviceType = getServiceForPath(window.location.pathname) || 'doctor';
+            const patientToken = String(window.localStorage.getItem('onya_patient_token') || '').trim();
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+            if (patientToken) {
+                headers.Authorization = `Bearer ${patientToken}`;
+            }
             const { response, payload } = await fetchApiJson('/api/checkout/session', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers,
                 body: JSON.stringify({
                     uiMode: 'hosted',
                     serviceType,
@@ -575,6 +584,12 @@ export const CheckoutStep = () => {
             if (details.email) {
                 window.localStorage.setItem('onya_patient_email', details.email);
             }
+
+            if (payload?.checkoutBypassed) {
+                window.location.assign('/patient');
+                return;
+            }
+
             if (payload?.sessionId) {
                 window.localStorage.setItem('onya_last_checkout_session_id', payload.sessionId);
             }

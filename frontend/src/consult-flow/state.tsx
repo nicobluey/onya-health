@@ -54,6 +54,11 @@ function normalizeStartDate(value: Date) {
     return normalized < today ? today : normalized;
 }
 
+function readStoredPatientEmail() {
+    if (typeof window === 'undefined') return '';
+    return String(window.localStorage.getItem('onya_patient_email') || '').trim().toLowerCase();
+}
+
 export function BookingProvider({ children }: { children: ReactNode }) {
     const [state, setState] = useState<BookingState>({
         step: 'purpose',
@@ -70,7 +75,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
             fullName: '',
             dob: '',
             gender: '',
-            email: '',
+            email: readStoredPatientEmail(),
             phone: '',
             address: ''
         },

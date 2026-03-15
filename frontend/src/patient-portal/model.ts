@@ -56,6 +56,17 @@ export interface PatientProfile {
   phone?: string;
 }
 
+export interface PatientBillingInfo {
+  hasActiveUnlimited: boolean;
+  plan: string;
+  subscriptionStatus: string;
+  stripeCustomerId: string;
+  stripeSubscriptionId: string;
+  cancelAtPeriodEnd: boolean;
+  currentPeriodEnd: string | null;
+  canManageSubscription: boolean;
+}
+
 export interface TextEntry {
   id: string;
   title: string;

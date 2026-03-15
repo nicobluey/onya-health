@@ -1,4 +1,4 @@
-import { type CSSProperties, useState } from 'react';
+import { type CSSProperties, useEffect, useState } from 'react';
 import { ArrowRight, Lock, Mail } from 'lucide-react';
 import { fetchApiJson } from '../lib/api';
 
@@ -97,6 +97,17 @@ export default function PatientLoginPage() {
     const [resetSending, setResetSending] = useState(false);
     const [error, setError] = useState('');
     const [resetStatus, setResetStatus] = useState('');
+
+    useEffect(() => {
+        const url = new URL(window.location.href);
+        const initialEmail = String(url.searchParams.get('email') || '').trim().toLowerCase();
+        if (initialEmail) {
+            setEmail(initialEmail);
+        }
+        if (url.searchParams.get('checkout') === 'success') {
+            setResetStatus('Payment confirmed. Sign in to access your patient portal.');
+        }
+    }, []);
 
     const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();

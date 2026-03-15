@@ -14,7 +14,6 @@ import {
   isLikelyEmail as isLikelyPatientEmail,
   issuePasswordResetToken,
   resetPasswordWithToken,
-  setPatientAccountPassword,
   updatePatientAccountProfile,
   validatePassword as validatePatientPassword,
 } from '../backend/lib/patient-auth.js';
@@ -83,6 +82,13 @@ const STRIPE_AMOUNT_CARER_CERT_AUD_CENTS = Math.max(
   0,
   Number(process.env.STRIPE_AMOUNT_CARER_CERT_AUD_CENTS || 1000)
 );
+const STRIPE_SUBSCRIPTION_CACHE_TTL_MS = Math.max(
+  15_000,
+  Number(process.env.STRIPE_SUBSCRIPTION_CACHE_TTL_MS || 60_000)
+);
+const STRIPE_BILLING_PORTAL_RETURN_PATH = String(
+  process.env.STRIPE_BILLING_PORTAL_RETURN_PATH || '/patient'
+).trim();
 const PATIENT_PASSWORD_RESET_TTL_MS = Math.max(
   1000 * 60 * 5,
   Number(process.env.PATIENT_PASSWORD_RESET_TTL_MS || 1000 * 60 * 60)
@@ -101,12 +107,15 @@ const DOCTOR_PASSWORD_RESET_TTL_MS = Math.max(
 const DOCTOR_PASSWORD_RESET_PATH = process.env.DOCTOR_PASSWORD_RESET_PATH || '/doctor/login';
 
 const OPEN_REVIEW_STATUSES = new Set(['pending', 'submitted', 'triaged', 'assigned', 'in_review']);
+const ACTIVE_STRIPE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past_due']);
 const POST_ONLY_ROUTES = new Set([
   'patient/password/reset/request',
   'patient/password/reset/confirm',
   'doctor/password/reset/request',
   'doctor/password/reset/confirm',
 ]);
+
+const stripeSubscriptionCache = new Map();
 
 function normalizeOrigin(value) {
   const raw = String(value || '').trim();
@@ -915,6 +924,261 @@ async function fetchStripeEvent(eventId) {
   return payload;
 }
 
+function normalizeStripeSubscriptionStatus(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase();
+}
+
+function isStripeSubscriptionActiveStatus(status) {
+  return ACTIVE_STRIPE_SUBSCRIPTION_STATUSES.has(normalizeStripeSubscriptionStatus(status));
+}
+
+function unixSecondsToIso(value) {
+  const seconds = Number(value || 0);
+  if (!Number.isFinite(seconds) || seconds <= 0) return null;
+  return new Date(seconds * 1000).toISOString();
+}
+
+async function fetchStripeSubscription(subscriptionId) {
+  const normalizedId = String(subscriptionId || '').trim();
+  if (!normalizedId) return null;
+  if (!STRIPE_SECRET_KEY) return null;
+
+  const response = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(normalizedId)}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+    },
+  });
+
+  const text = await response.text();
+  let payload = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    payload = { raw: text };
+  }
+
+  if (!response.ok) {
+    const message = payload?.error?.message || `Unable to load Stripe subscription (${response.status})`;
+    const err = new Error(message);
+    err.status = response.status;
+    err.data = payload;
+    throw err;
+  }
+
+  return payload;
+}
+
+async function fetchStripeSubscriptionCached(subscriptionId) {
+  const normalizedId = String(subscriptionId || '').trim();
+  if (!normalizedId) return null;
+
+  const now = Date.now();
+  const cached = stripeSubscriptionCache.get(normalizedId);
+  if (cached && cached.expiresAt > now) {
+    return cached.value;
+  }
+
+  const value = await fetchStripeSubscription(normalizedId);
+  stripeSubscriptionCache.set(normalizedId, {
+    value,
+    expiresAt: now + STRIPE_SUBSCRIPTION_CACHE_TTL_MS,
+  });
+  return value;
+}
+
+function buildStripeBillingReturnUrl(req, fallbackPath = STRIPE_BILLING_PORTAL_RETURN_PATH) {
+  const baseUrl = getFrontendBaseUrl(req);
+  const fallback = String(fallbackPath || '/patient').trim();
+  const path = fallback.startsWith('/') ? fallback : `/${fallback}`;
+  return `${baseUrl}${path}`;
+}
+
+async function createStripeBillingPortalSession(customerId, returnUrl) {
+  const normalizedCustomerId = String(customerId || '').trim();
+  if (!normalizedCustomerId) {
+    const err = new Error('Stripe customer id is required');
+    err.status = 400;
+    throw err;
+  }
+  if (!STRIPE_SECRET_KEY) {
+    const err = new Error('Stripe is not configured on the server');
+    err.status = 500;
+    throw err;
+  }
+
+  const params = new URLSearchParams();
+  params.set('customer', normalizedCustomerId);
+  params.set('return_url', String(returnUrl || '').trim());
+
+  const response = await fetch('https://api.stripe.com/v1/billing_portal/sessions', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: params.toString(),
+  });
+
+  const text = await response.text();
+  let payload = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    payload = { raw: text };
+  }
+
+  if (!response.ok) {
+    const message = payload?.error?.message || `Unable to create Stripe billing portal session (${response.status})`;
+    const err = new Error(message);
+    err.status = response.status;
+    err.data = payload;
+    throw err;
+  }
+
+  return payload;
+}
+
+async function cancelStripeSubscriptionAtPeriodEnd(subscriptionId) {
+  const normalizedId = String(subscriptionId || '').trim();
+  if (!normalizedId) {
+    const err = new Error('Stripe subscription id is required');
+    err.status = 400;
+    throw err;
+  }
+  if (!STRIPE_SECRET_KEY) {
+    const err = new Error('Stripe is not configured on the server');
+    err.status = 500;
+    throw err;
+  }
+
+  const params = new URLSearchParams();
+  params.set('cancel_at_period_end', 'true');
+
+  const response = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(normalizedId)}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: params.toString(),
+  });
+
+  const text = await response.text();
+  let payload = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    payload = { raw: text };
+  }
+
+  if (!response.ok) {
+    const message = payload?.error?.message || `Unable to update Stripe subscription (${response.status})`;
+    const err = new Error(message);
+    err.status = response.status;
+    err.data = payload;
+    throw err;
+  }
+
+  stripeSubscriptionCache.delete(normalizedId);
+  return payload;
+}
+
+function mostRecentPatientSubscriptionPayment(certificates, patientEmail) {
+  const patientCertificates = getPatientCertificatesForEmail(certificates, patientEmail);
+  for (const certificate of patientCertificates) {
+    const payment = certificate?.rawSubmission?.payment || null;
+    if (!payment) continue;
+    if (String(payment.mode || '').toLowerCase() !== 'subscription') continue;
+    return {
+      certificate,
+      payment,
+    };
+  }
+  return null;
+}
+
+async function resolvePatientBillingProfile(patientEmail, certificatesInput = null) {
+  const email = normalizeEmail(patientEmail);
+  const empty = {
+    hasActiveUnlimited: false,
+    plan: 'pay_as_you_go',
+    subscriptionStatus: 'none',
+    stripeCustomerId: '',
+    stripeSubscriptionId: '',
+    cancelAtPeriodEnd: false,
+    currentPeriodEnd: null,
+    canManageSubscription: false,
+    latestSubscriptionRequestId: null,
+  };
+  if (!email) return empty;
+
+  const certificates = Array.isArray(certificatesInput) ? certificatesInput : await listCertificates();
+  const latest = mostRecentPatientSubscriptionPayment(certificates, email);
+  if (!latest) return empty;
+
+  const payment = latest.payment || {};
+  const subscriptionId = String(payment.stripeSubscriptionId || '').trim();
+  const customerId = String(payment.stripeCustomerId || '').trim();
+  const profile = {
+    ...empty,
+    plan: 'unlimited',
+    stripeCustomerId: customerId,
+    stripeSubscriptionId: subscriptionId,
+    latestSubscriptionRequestId: latest.certificate?.id || null,
+    canManageSubscription: Boolean(isStripeEnabled() && customerId),
+  };
+
+  if (!subscriptionId || !isStripeEnabled()) {
+    const localPaid = String(payment.status || '').toLowerCase() === 'paid';
+    return {
+      ...profile,
+      hasActiveUnlimited: localPaid,
+      subscriptionStatus: localPaid ? 'active' : 'inactive',
+    };
+  }
+
+  try {
+    const subscription = await fetchStripeSubscriptionCached(subscriptionId);
+    const status = normalizeStripeSubscriptionStatus(subscription?.status || '');
+    return {
+      ...profile,
+      hasActiveUnlimited: isStripeSubscriptionActiveStatus(status),
+      subscriptionStatus: status || 'unknown',
+      cancelAtPeriodEnd: Boolean(subscription?.cancel_at_period_end),
+      currentPeriodEnd: unixSecondsToIso(subscription?.current_period_end),
+      stripeCustomerId: String(subscription?.customer || customerId),
+    };
+  } catch (errorObject) {
+    error('stripe.subscription.lookup_failed', {
+      patientEmail: email,
+      stripeSubscriptionId: subscriptionId,
+      message: errorObject?.message || String(errorObject),
+    });
+    return {
+      ...profile,
+      hasActiveUnlimited: String(payment.status || '').toLowerCase() === 'paid',
+      subscriptionStatus: 'unknown',
+    };
+  }
+}
+
+async function patientAccountExists(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return false;
+
+  const supabaseConfig = getSupabaseConfig();
+  if (supabaseConfig.enabled) {
+    const supabasePatient = await findSupabasePatientByEmail(normalized);
+    if (supabasePatient) return true;
+  }
+
+  const localAccount = await getPatientAccountByEmail(normalized);
+  return Boolean(localAccount);
+}
+
 async function sendDoctorReviewEmail(certificate, req) {
   const reviewUrl = `${getAppBaseUrl(req)}/doctor/login`;
   const recipients = await resolveDoctorNotificationEmails();
@@ -1097,7 +1361,13 @@ async function markPaidFromStripeSession(session, trigger, req) {
     rawSubmission: {
       ...(certificate.rawSubmission || {}),
       payment: {
+        ...(certificate.rawSubmission?.payment || {}),
         provider: 'stripe',
+        mode:
+          String(certificate.rawSubmission?.payment?.mode || '').toLowerCase() === 'subscription' ||
+          String(session?.mode || '').toLowerCase() === 'subscription'
+            ? 'subscription'
+            : 'payment',
         status: 'paid',
         stripeSessionId: session.id || null,
         stripeCustomerId: session.customer || null,
@@ -1853,6 +2123,84 @@ export default async function handler(req, res) {
 
       const risk = calculateRisk(body);
       const pricing = stripePricingFromRequest(body);
+      const normalizedPatientEmail = normalizeEmail(patient.email);
+      const patientAuth = getPatientAuth(req);
+      const canUseSubscriptionBypass =
+        Boolean(patientAuth?.email) && normalizedPatientEmail === normalizeEmail(patientAuth.email);
+
+      if (canUseSubscriptionBypass) {
+        const certificates = await listCertificates();
+        const billing = await resolvePatientBillingProfile(normalizedPatientEmail, certificates);
+        if (billing.hasActiveUnlimited) {
+          const certificateId = crypto.randomUUID();
+          const verificationCode = buildCertificateVerificationCode(certificateId);
+          const paidAt = new Date().toISOString();
+          const certificate = {
+            id: certificateId,
+            createdAt: paidAt,
+            status: 'pending',
+            serviceType: body.serviceType || 'doctor',
+            risk,
+            certificateDraft,
+            rawSubmission: {
+              ...body,
+              verificationCode,
+              payment: {
+                provider: 'stripe',
+                mode: 'subscription',
+                status: 'paid',
+                paidAt,
+                amount: 0,
+                baseAmount: 0,
+                amountTotal: 0,
+                currency: 'aud',
+                stripeCustomerId: billing.stripeCustomerId || null,
+                stripeSubscriptionId: billing.stripeSubscriptionId || null,
+                includeCarerCertificate: Boolean(certificateDraft.includeCarerCertificate),
+                coveredByUnlimitedPlan: true,
+              },
+            },
+            decision: null,
+          };
+
+          await createCertificate(certificate);
+          await appendAudit({
+            type: 'CHECKOUT_BYPASSED_ACTIVE_SUBSCRIPTION',
+            certificateId: certificate.id,
+            email: normalizedPatientEmail,
+            stripeCustomerId: billing.stripeCustomerId || null,
+            stripeSubscriptionId: billing.stripeSubscriptionId || null,
+          });
+          await appendAudit({
+            type: 'PAYMENT_CONFIRMED',
+            certificateId: certificate.id,
+            provider: 'stripe',
+            trigger: 'active_subscription_coverage',
+            stripeSubscriptionId: billing.stripeSubscriptionId || null,
+          });
+          await sendDoctorReviewEmail(certificate, req);
+
+          info('checkout.session.bypassed_active_subscription', {
+            certificateId: certificate.id,
+            patientEmail: normalizedPatientEmail,
+            stripeCustomerId: billing.stripeCustomerId || null,
+            stripeSubscriptionId: billing.stripeSubscriptionId || null,
+          });
+
+          sendJson(res, 200, {
+            certificateId: certificate.id,
+            verificationCode: getCertificateVerificationCode(certificate),
+            checkoutBypassed: true,
+            status: certificate.status,
+            patientEmail: normalizedPatientEmail,
+            hasActiveUnlimited: true,
+            requiresAccountSetup: false,
+            redirectUrl: '/patient',
+          });
+          return;
+        }
+      }
+
       const certificateId = crypto.randomUUID();
       const verificationCode = buildCertificateVerificationCode(certificateId);
       const certificate = {
@@ -1945,6 +2293,7 @@ export default async function handler(req, res) {
 
       const result = await markPaidFromStripeSession(session, 'checkout_success_confirm', req);
       const patientEmail = normalizeEmail(result?.patientEmail || session?.metadata?.patient_email || '');
+      const accountExists = patientEmail ? await patientAccountExists(patientEmail) : false;
       sendJson(res, 200, {
         ok: true,
         sessionId,
@@ -1953,7 +2302,8 @@ export default async function handler(req, res) {
         status: result?.status || null,
         updated: Boolean(result?.updated),
         patientEmail,
-        requiresAccountSetup: Boolean(patientEmail),
+        accountExists,
+        requiresAccountSetup: Boolean(patientEmail) && !accountExists,
       });
       return;
     }
@@ -2007,87 +2357,65 @@ export default async function handler(req, res) {
 
       let account = null;
       const supabaseConfig = getSupabaseConfig();
+      if (await patientAccountExists(expectedEmail)) {
+        sendJson(res, 409, {
+          error: 'An account already exists for this email. Please sign in to continue.',
+          code: 'ACCOUNT_EXISTS',
+          loginPath: '/patient-login',
+          patientEmail: expectedEmail,
+        });
+        return;
+      }
+
       if (supabaseConfig.enabled) {
-        const existingSupabasePatient = await findSupabasePatientByEmail(expectedEmail);
-        if (existingSupabasePatient) {
-          await updateSupabasePatientPasswordByEmail(expectedEmail, password);
-          account = await upsertSupabasePatientMetadata({
+        try {
+          account = await createPatientAccountViaSupabase({
             email: expectedEmail,
+            password,
             fullName,
             dob,
             phone,
           });
-        } else {
-          try {
-            account = await createPatientAccountViaSupabase({
-              email: expectedEmail,
-              password,
-              fullName,
-              dob,
-              phone,
+        } catch (errorObject) {
+          if (errorObject?.status === 409) {
+            sendJson(res, 409, {
+              error: 'An account already exists for this email. Please sign in to continue.',
+              code: 'ACCOUNT_EXISTS',
+              loginPath: '/patient-login',
+              patientEmail: expectedEmail,
             });
-          } catch (errorObject) {
-            if (errorObject?.status === 409) {
-              await updateSupabasePatientPasswordByEmail(expectedEmail, password);
-              account = await upsertSupabasePatientMetadata({
-                email: expectedEmail,
-                fullName,
-                dob,
-                phone,
-              });
-            } else {
-              throw errorObject;
-            }
+            return;
           }
+          throw errorObject;
         }
 
         if (!account) {
           account = await findSupabasePatientByEmail(expectedEmail);
         }
       } else {
-        account = await getPatientAccountByEmail(expectedEmail);
-        if (account) {
-          try {
-            account = await setPatientAccountPassword({ email: expectedEmail, password });
-          } catch (errorObject) {
-            if (errorObject?.code === 'PASSWORD_INVALID') {
-              sendJson(res, 400, { error: errorObject.message });
-              return;
-            }
-            throw errorObject;
-          }
-          await updatePatientAccountProfile({
+        try {
+          account = await createPatientAccount({
             email: expectedEmail,
+            password,
             fullName,
             dob,
             phone,
           });
-        } else {
-          try {
-            account = await createPatientAccount({
-              email: expectedEmail,
-              password,
-              fullName,
-              dob,
-              phone,
-            });
-          } catch (errorObject) {
-            if (errorObject?.code === 'PASSWORD_INVALID') {
-              sendJson(res, 400, { error: errorObject.message });
-              return;
-            }
-            if (errorObject?.code === 'ACCOUNT_EXISTS') {
-              account = await setPatientAccountPassword({ email: expectedEmail, password });
-              await updatePatientAccountProfile({
-                email: expectedEmail,
-                fullName,
-                dob,
-                phone,
-              });
-            } else {
-              throw errorObject;
-            }
+        } catch (errorObject) {
+          if (errorObject?.code === 'PASSWORD_INVALID') {
+            sendJson(res, 400, { error: errorObject.message });
+            return;
           }
+          if (errorObject?.code === 'ACCOUNT_EXISTS') {
+            sendJson(res, 409, {
+              error: 'An account already exists for this email. Please sign in to continue.',
+              code: 'ACCOUNT_EXISTS',
+              loginPath: '/patient-login',
+              patientEmail: expectedEmail,
+            });
+            return;
+          }
+          throw errorObject;
         }
       }
 
@@ -2624,6 +2952,7 @@ export default async function handler(req, res) {
         account = await getPatientAccountByEmail(patient.email);
       }
       const certificates = await listCertificates();
+      const billing = await resolvePatientBillingProfile(patient.email, certificates);
       const { patientCertificates, latest } = getLatestPatientSnapshot(certificates, patient.email);
       if (patientCertificates.length === 0 && !account) {
         sendJson(res, 404, { error: 'Patient not found' });
@@ -2647,8 +2976,79 @@ export default async function handler(req, res) {
           latestCertificate: latest,
           account,
         }),
+        billing,
         queueCount: patientCertificates.filter((item) => isOpenForReview(item.status)).length,
         latestRequest: latest ? patientSummaryFromCertificate(latest) : null,
+      });
+      return;
+    }
+
+    if (req.method === 'POST' && routePath === 'patient/billing/portal') {
+      const patient = await requirePatient(req, res);
+      if (!patient) return;
+      if (!isStripeEnabled()) {
+        sendJson(res, 500, { error: 'Stripe billing is not configured on the server' });
+        return;
+      }
+
+      const body = await parseJsonBody(req);
+      const requestedReturnUrl = String(body?.returnUrl || body?.return_url || '').trim();
+      const fallbackReturnUrl = buildStripeBillingReturnUrl(req);
+      const safeReturnUrl =
+        requestedReturnUrl.startsWith('https://') || requestedReturnUrl.startsWith('http://')
+          ? requestedReturnUrl
+          : fallbackReturnUrl;
+
+      const certificates = await listCertificates();
+      const billing = await resolvePatientBillingProfile(patient.email, certificates);
+      if (!billing.stripeCustomerId) {
+        sendJson(res, 409, {
+          error: 'No Stripe billing profile found for this patient account.',
+          code: 'BILLING_NOT_FOUND',
+        });
+        return;
+      }
+
+      const portal = await createStripeBillingPortalSession(billing.stripeCustomerId, safeReturnUrl);
+      sendJson(res, 200, {
+        url: portal?.url || null,
+      });
+      return;
+    }
+
+    if (req.method === 'POST' && routePath === 'patient/subscription/cancel') {
+      const patient = await requirePatient(req, res);
+      if (!patient) return;
+      if (!isStripeEnabled()) {
+        sendJson(res, 500, { error: 'Stripe billing is not configured on the server' });
+        return;
+      }
+
+      const certificates = await listCertificates();
+      const billing = await resolvePatientBillingProfile(patient.email, certificates);
+      if (!billing.stripeSubscriptionId) {
+        sendJson(res, 409, {
+          error: 'No active unlimited subscription was found.',
+          code: 'SUBSCRIPTION_NOT_FOUND',
+        });
+        return;
+      }
+
+      const updatedSubscription = await cancelStripeSubscriptionAtPeriodEnd(billing.stripeSubscriptionId);
+      const refreshedBilling = await resolvePatientBillingProfile(patient.email, certificates);
+
+      await appendAudit({
+        type: 'PATIENT_SUBSCRIPTION_CANCEL_AT_PERIOD_END',
+        email: normalizeEmail(patient.email),
+        stripeSubscriptionId: billing.stripeSubscriptionId,
+      });
+
+      sendJson(res, 200, {
+        ok: true,
+        subscriptionStatus: normalizeStripeSubscriptionStatus(updatedSubscription?.status || ''),
+        cancelAtPeriodEnd: Boolean(updatedSubscription?.cancel_at_period_end),
+        currentPeriodEnd: unixSecondsToIso(updatedSubscription?.current_period_end),
+        billing: refreshedBilling,
       });
       return;
     }
