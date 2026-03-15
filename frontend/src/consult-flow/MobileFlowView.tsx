@@ -86,6 +86,13 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
                                     Patient login
                                 </a>
                                 <a
+                                    href="/verify"
+                                    onClick={() => setMenuOpen(false)}
+                                    className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary"
+                                >
+                                    Verify
+                                </a>
+                                <a
                                     href="#how-it-works"
                                     onClick={() => setMenuOpen(false)}
                                     className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary"

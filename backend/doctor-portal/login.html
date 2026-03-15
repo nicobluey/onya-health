@@ -11,8 +11,8 @@
         --line: #d9e3f2;
         --text: #0f172a;
         --muted: #475569;
-        --primary: #3b82f6;
-        --primary-hover: #2563eb;
+        --primary: #2e8cff;
+        --primary-hover: #1f7be6;
       }
 
       * { box-sizing: border-box; }
@@ -25,12 +25,12 @@
         padding: 20px;
         background: var(--bg);
         color: var(--text);
-        font-family: "Basic Commercial Pro", Arial, sans-serif;
+        font-family: Inter, system-ui, sans-serif;
       }
 
       .container {
         width: 100%;
-        max-width: 470px;
+        max-width: 520px;
         border: 1px solid var(--line);
         border-radius: 24px;
         background: var(--card);
@@ -42,6 +42,12 @@
         padding: 20px 22px 10px;
       }
 
+      .top-links {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
       .logo {
         width: 170px;
         max-width: 100%;
@@ -49,10 +55,32 @@
         display: block;
       }
 
+      .top-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .top-link {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #fff;
+        color: var(--text);
+        text-decoration: none;
+        padding: 7px 12px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .top-link:hover {
+        border-color: #bfd6ff;
+      }
+
       h1 {
         margin: 14px 0 8px;
         font-size: 30px;
         line-height: 1.08;
+        font-family: "Basic Commercial Pro", Arial, sans-serif;
       }
 
       p {
@@ -63,6 +91,7 @@
 
       .tabs {
         display: flex;
+        flex-wrap: wrap;
         gap: 8px;
         padding: 14px 22px 0;
       }
@@ -164,7 +193,13 @@
   <body>
     <main class="container">
       <section class="hero">
-        <img src="/logo.png" alt="Onya Health" class="logo" />
+        <div class="top-links">
+          <img src="/logo.png" alt="Onya Health" class="logo" />
+          <div class="top-actions">
+            <a class="top-link" href="/verify">Verify</a>
+            <a class="top-link" href="/">Home</a>
+          </div>
+        </div>
         <h1>Doctor portal</h1>
         <p>Sign in to review certificates. New doctors can create an account below.</p>
       </section>
@@ -193,10 +228,19 @@
         <form id="signup-form">
           <label for="signup-name">Full name</label>
           <input id="signup-name" name="fullName" type="text" autocomplete="name" required />
+
+          <label for="signup-provider-type">Provider type</label>
+          <input id="signup-provider-type" name="providerType" type="text" placeholder="General Practitioner" required />
+
+          <label for="signup-registration">Registration number</label>
+          <input id="signup-registration" name="registrationNumber" type="text" placeholder="MED1234567" required />
+
           <label for="signup-email">Doctor email</label>
           <input id="signup-email" name="email" type="email" autocomplete="username" required />
+
           <label for="signup-password">Password</label>
           <input id="signup-password" name="password" type="password" autocomplete="new-password" required />
+
           <button id="signup-button" type="submit">Create doctor account</button>
           <div class="status" id="signup-status"></div>
         </form>

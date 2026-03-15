@@ -30,6 +30,14 @@ function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
 }
 
+function normalizeProviderType(value) {
+  return String(value || '').trim();
+}
+
+function normalizeRegistrationNumber(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -109,6 +117,8 @@ function toPublicAccount(account) {
   return {
     email: normalizeEmail(account.email),
     fullName: String(account.fullName || ''),
+    providerType: normalizeProviderType(account.providerType),
+    registrationNumber: normalizeRegistrationNumber(account.registrationNumber),
     source: String(account.source || ''),
     createdAt: String(account.createdAt || ''),
     updatedAt: String(account.updatedAt || ''),
@@ -149,7 +159,14 @@ export async function getDoctorAccountByEmail(email) {
   return toPublicAccount(account);
 }
 
-export async function createDoctorAccount({ email, password, fullName = '', source = 'local' }) {
+export async function createDoctorAccount({
+  email,
+  password,
+  fullName = '',
+  providerType = '',
+  registrationNumber = '',
+  source = 'local',
+}) {
   const normalizedEmail = normalizeEmail(email);
   if (!normalizedEmail) {
     const err = new Error('Email is required');
@@ -174,6 +191,8 @@ export async function createDoctorAccount({ email, password, fullName = '', sour
     const account = {
       email: normalizedEmail,
       fullName: String(fullName || '').trim(),
+      providerType: normalizeProviderType(providerType),
+      registrationNumber: normalizeRegistrationNumber(registrationNumber),
       source: String(source || 'local'),
       passwordHash: hashPassword(password),
       createdAt: timestamp,
@@ -195,7 +214,14 @@ export async function createDoctorAccount({ email, password, fullName = '', sour
   return result.account;
 }
 
-export async function upsertDoctorAccount({ email, fullName = '', source = 'local', password }) {
+export async function upsertDoctorAccount({
+  email,
+  fullName = '',
+  providerType = '',
+  registrationNumber = '',
+  source = 'local',
+  password,
+}) {
   const normalizedEmail = normalizeEmail(email);
   if (!normalizedEmail) return null;
 
@@ -216,6 +242,8 @@ export async function upsertDoctorAccount({ email, fullName = '', source = 'loca
       account = {
         email: normalizedEmail,
         fullName: String(fullName || '').trim(),
+        providerType: normalizeProviderType(providerType),
+        registrationNumber: normalizeRegistrationNumber(registrationNumber),
         source: String(source || 'local'),
         passwordHash: typeof password === 'string' && password ? hashPassword(password) : '',
         createdAt: timestamp,
@@ -231,6 +259,16 @@ export async function upsertDoctorAccount({ email, fullName = '', source = 'loca
     const trimmedName = String(fullName || '').trim();
     if (trimmedName && account.fullName !== trimmedName) {
       account.fullName = trimmedName;
+      changed = true;
+    }
+    const normalizedProviderType = normalizeProviderType(providerType);
+    if (normalizedProviderType && account.providerType !== normalizedProviderType) {
+      account.providerType = normalizedProviderType;
+      changed = true;
+    }
+    const normalizedRegistrationNumber = normalizeRegistrationNumber(registrationNumber);
+    if (normalizedRegistrationNumber && account.registrationNumber !== normalizedRegistrationNumber) {
+      account.registrationNumber = normalizedRegistrationNumber;
       changed = true;
     }
     const nextSource = String(source || '').trim();

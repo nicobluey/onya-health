@@ -189,13 +189,21 @@ export default function PatientLoginPage() {
                     <a href="/" className="inline-flex items-center" aria-label="Go to home page">
                         <img src="/logo.png" alt="Onya Health" className="h-11 w-auto object-contain" />
                     </a>
-                    <a
-                        href="/doctor"
-                        className="inline-flex items-center gap-2 rounded-full border border-sand-200 bg-white/90 px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-bark-700 transition hover:border-forest-300"
-                    >
-                        Start Consult
-                        <ArrowRight size={14} />
-                    </a>
+                    <div className="flex items-center gap-2">
+                        <a
+                            href="/verify"
+                            className="inline-flex items-center gap-2 rounded-full border border-sand-200 bg-white/90 px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-bark-700 transition hover:border-forest-300"
+                        >
+                            Verify
+                        </a>
+                        <a
+                            href="/doctor"
+                            className="inline-flex items-center gap-2 rounded-full border border-sand-200 bg-white/90 px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-bark-700 transition hover:border-forest-300"
+                        >
+                            Start Consult
+                            <ArrowRight size={14} />
+                        </a>
+                    </div>
                 </div>
             </header>
 

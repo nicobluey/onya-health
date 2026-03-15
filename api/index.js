@@ -21,6 +21,7 @@ import {
 import {
   authenticateDoctorAccount,
   createDoctorAccount,
+  getDoctorAccountByEmail,
   isLikelyEmail as isLikelyDoctorEmail,
   issueDoctorPasswordResetToken,
   listDoctorEmails,
@@ -530,6 +531,37 @@ function isApprovedCertificate(certificate) {
   return false;
 }
 
+function normalizeVerificationCode(value) {
+  return String(value || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
+}
+
+function buildCertificateVerificationCode(certificateId) {
+  const normalizedId = normalizeVerificationCode(certificateId);
+  const suffix = (normalizedId.slice(-8) || crypto.randomBytes(4).toString('hex').toUpperCase())
+    .padStart(8, '0')
+    .slice(-8);
+  return `ONYA${suffix}`;
+}
+
+function getCertificateVerificationCode(certificate) {
+  const existing = normalizeVerificationCode(certificate?.rawSubmission?.verificationCode);
+  if (existing.startsWith('ONYA')) return existing;
+  return buildCertificateVerificationCode(certificate?.id || '');
+}
+
+function maskPatientName(value) {
+  const parts = String(value || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length === 0) return 'Unavailable';
+  return parts
+    .map((part) => `${part.slice(0, 1).toUpperCase()}${'*'.repeat(Math.max(1, part.length - 1))}`)
+    .join(' ');
+}
+
 function patientSummaryFromCertificate(certificate) {
   const draft = certificate?.certificateDraft || {};
   const approved = isApprovedCertificate(certificate);
@@ -544,6 +576,7 @@ function patientSummaryFromCertificate(certificate) {
     description: draft.description || '',
     startDate: draft.startDate || null,
     durationDays: Number(draft.durationDays || 1),
+    verificationCode: getCertificateVerificationCode(certificate),
     risk: certificate.risk || null,
     decision: certificate.decision || null,
     certificatePdfUrl: approved
@@ -564,6 +597,35 @@ function buildPatientIdentity({ email, latestCertificate, account }) {
 
 function createBootstrapPassword() {
   return `Temp${crypto.randomBytes(12).toString('hex')}9A`;
+}
+
+async function resolveDoctorProfile(email) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return null;
+
+  let account = await getDoctorAccountByEmail(normalizedEmail);
+  if (account?.email) return account;
+
+  const supabaseDoctor = await findSupabaseDoctorByEmail(normalizedEmail);
+  if (!supabaseDoctor?.email) return null;
+
+  account = await upsertDoctorAccount({
+    email: supabaseDoctor.email,
+    fullName: supabaseDoctor.fullName || '',
+    providerType: supabaseDoctor.providerType || '',
+    registrationNumber: supabaseDoctor.registrationNumber || '',
+    source: 'supabase',
+  });
+  return account;
+}
+
+function resolveDoctorDisplayName(account, fallbackEmail = '') {
+  return (
+    String(account?.fullName || '').trim() ||
+    normalizeEmail(fallbackEmail) ||
+    process.env.DOCTOR_DISPLAY_NAME ||
+    'Onya Health Doctor'
+  );
 }
 
 function doctorPayloadFromRequest(cert) {
@@ -595,6 +657,7 @@ function doctorPayloadFromRequest(cert) {
     symptom: cert.certificateDraft.symptom,
     startDate: cert.certificateDraft.startDate,
     durationDays: cert.certificateDraft.durationDays,
+    verificationCode: getCertificateVerificationCode(cert),
     description: cert.certificateDraft.description,
     risk: cert.risk,
     decision: cert.decision || null,
@@ -718,6 +781,7 @@ async function createStripeCheckoutSession({ req, certificate, pricing, uiMode =
   params.set('line_items[0][price_data][unit_amount]', String(pricing.unitAmount));
   params.set('line_items[0][price_data][product]', pricing.productId);
   params.set('metadata[certificate_id]', certificate.id);
+  params.set('metadata[verification_code]', getCertificateVerificationCode(certificate));
   params.set('metadata[patient_email]', certificate.certificateDraft.email || '');
   params.set('metadata[service_type]', certificate.serviceType || 'doctor');
   params.set('metadata[patient_name]', sanitizeNameForStripe(certificate.certificateDraft.fullName));
@@ -875,9 +939,17 @@ async function sendPatientDecisionEmail(certificate) {
   if (!patientEmail) return;
 
   if (isApprovedCertificate(certificate)) {
+    const verificationCode = getCertificateVerificationCode(certificate);
+    const verifyBaseUrl = FRONTEND_BASE_URL || APP_BASE_URL || '';
     const pdfBuffer = buildCertificatePdf(certificate, {
       doctorName: certificate?.decision?.by || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
       doctorNotes: certificate?.decision?.notes || '',
+      providerType: certificate?.decision?.providerType || '',
+      registrationNumber: certificate?.decision?.registrationNumber || '',
+      verificationCode,
+      verifyUrl: verifyBaseUrl
+        ? `${verifyBaseUrl}/verify?code=${encodeURIComponent(verificationCode)}`
+        : '',
     });
 
     const emailContent = renderPatientCertificateReadyEmail({
@@ -1120,7 +1192,7 @@ async function supabaseRestRequest(config, endpoint, options = {}) {
   return data;
 }
 
-async function registerDoctorAccount({ email, password, fullName }) {
+async function registerDoctorAccount({ email, password, fullName, providerType, registrationNumber }) {
   const config = getSupabaseConfig();
   if (!config.enabled) {
     const err = new Error('Doctor registration requires Supabase service role configuration');
@@ -1136,7 +1208,12 @@ async function registerDoctorAccount({ email, password, fullName }) {
         email,
         password,
         email_confirm: true,
-        user_metadata: { role: 'provider', full_name: fullName || '' },
+        user_metadata: {
+          role: 'provider',
+          full_name: fullName || '',
+          provider_type: String(providerType || '').trim(),
+          registration_number: String(registrationNumber || '').trim().toUpperCase(),
+        },
       },
     });
   } catch (authError) {
@@ -1236,6 +1313,8 @@ async function authenticateDoctorViaSupabase(email, password) {
   return {
     email: normalizeEmail(loginData?.user?.email || email),
     fullName: String(loginData?.user?.user_metadata?.full_name || '').trim(),
+    providerType: String(loginData?.user?.user_metadata?.provider_type || '').trim(),
+    registrationNumber: String(loginData?.user?.user_metadata?.registration_number || '').trim().toUpperCase(),
     source: 'supabase',
   };
 }
@@ -1254,6 +1333,8 @@ async function findSupabaseDoctorByEmail(email) {
     id: match.id || null,
     email: normalizeEmail(match.email),
     fullName: String(match?.user_metadata?.full_name || '').trim(),
+    providerType: String(match?.user_metadata?.provider_type || '').trim(),
+    registrationNumber: String(match?.user_metadata?.registration_number || '').trim().toUpperCase(),
   };
 }
 
@@ -1270,6 +1351,44 @@ async function updateSupabaseDoctorPasswordByEmail(email, password) {
   });
 
   return doctor;
+}
+
+async function upsertSupabaseDoctorMetadata({ email, fullName = '', providerType = '', registrationNumber = '' }) {
+  const existing = await findSupabaseDoctorByEmail(email);
+  if (!existing?.id) return null;
+
+  const config = getSupabaseConfig();
+  const users = await listSupabaseAuthUsers(config);
+  const user = users.find((entry) => String(entry?.id || '') === String(existing.id)) || null;
+  if (!user) return existing;
+
+  const currentMetadata = user?.user_metadata || {};
+  const nextMetadata = {
+    ...currentMetadata,
+    role: String(currentMetadata?.role || 'provider'),
+    full_name: String(fullName || currentMetadata?.full_name || '').trim(),
+    provider_type: String(providerType || currentMetadata?.provider_type || '').trim(),
+    registration_number: String(
+      registrationNumber || currentMetadata?.registration_number || ''
+    )
+      .trim()
+      .toUpperCase(),
+  };
+
+  const changed = JSON.stringify(currentMetadata) !== JSON.stringify(nextMetadata);
+  if (changed) {
+    await supabaseAuthAdminRequest(config, `users/${existing.id}`, {
+      method: 'PUT',
+      body: { user_metadata: nextMetadata },
+    });
+  }
+
+  return {
+    ...existing,
+    fullName: String(nextMetadata.full_name || '').trim(),
+    providerType: String(nextMetadata.provider_type || '').trim(),
+    registrationNumber: String(nextMetadata.registration_number || '').trim().toUpperCase(),
+  };
 }
 
 async function findSupabasePatientUserByEmail(email) {
@@ -1584,6 +1703,57 @@ export default async function handler(req, res) {
       return;
     }
 
+    if (req.method === 'GET' && routePath === 'certificates/verify') {
+      const verificationCode = normalizeVerificationCode(url.searchParams.get('code') || '');
+      if (!verificationCode) {
+        sendJson(res, 400, { valid: false, error: 'Verification code is required' });
+        return;
+      }
+
+      const certificates = await listCertificates();
+      const certificate = certificates.find(
+        (item) => getCertificateVerificationCode(item) === verificationCode
+      );
+
+      if (!certificate) {
+        sendJson(res, 404, { valid: false, error: 'Certificate not found' });
+        return;
+      }
+
+      if (!isApprovedCertificate(certificate)) {
+        sendJson(res, 409, {
+          valid: false,
+          error: 'Certificate is not approved',
+          status: certificate.status || null,
+        });
+        return;
+      }
+
+      const issuedAt = certificate?.decision?.at || certificate.createdAt || new Date().toISOString();
+      sendJson(res, 200, {
+        valid: true,
+        certificate: {
+          code: verificationCode,
+          certificateId: certificate.id,
+          issuedAt,
+          status: certificate.status,
+          startDate: certificate?.certificateDraft?.startDate || null,
+          durationDays: Number(certificate?.certificateDraft?.durationDays || 1),
+          purpose: certificate?.certificateDraft?.purpose || '',
+          patient: maskPatientName(certificate?.certificateDraft?.fullName || ''),
+          doctorName:
+            String(certificate?.decision?.by || '').trim() ||
+            process.env.DOCTOR_DISPLAY_NAME ||
+            'Onya Health Doctor',
+          providerType: String(certificate?.decision?.providerType || '').trim(),
+          registrationNumber: String(certificate?.decision?.registrationNumber || '')
+            .trim()
+            .toUpperCase(),
+        },
+      });
+      return;
+    }
+
     if (req.method === 'POST' && routePath === 'stripe/webhook') {
       try {
         const signature = req.headers['stripe-signature'];
@@ -1645,8 +1815,10 @@ export default async function handler(req, res) {
 
       const risk = calculateRisk(body);
       const pricing = stripePricingFromRequest(body);
+      const certificateId = crypto.randomUUID();
+      const verificationCode = buildCertificateVerificationCode(certificateId);
       const certificate = {
-        id: crypto.randomUUID(),
+        id: certificateId,
         createdAt: new Date().toISOString(),
         status: 'awaiting_payment',
         serviceType: body.serviceType || 'doctor',
@@ -1654,6 +1826,7 @@ export default async function handler(req, res) {
         certificateDraft,
         rawSubmission: {
           ...body,
+          verificationCode,
           payment: {
             provider: 'stripe',
             status: 'initiated',
@@ -1702,6 +1875,7 @@ export default async function handler(req, res) {
 
       sendJson(res, 200, {
         certificateId: certificate.id,
+        verificationCode: getCertificateVerificationCode(certificate),
         checkoutUrl: session.url,
         sessionId: session.id,
         clientSecret: session.client_secret || null,
@@ -2557,6 +2731,10 @@ export default async function handler(req, res) {
       const pdfBuffer = buildCertificatePdf(certificate, {
         doctorName: certificate?.decision?.by || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
         doctorNotes: certificate?.decision?.notes || '',
+        providerType: certificate?.decision?.providerType || '',
+        registrationNumber: certificate?.decision?.registrationNumber || '',
+        verificationCode: getCertificateVerificationCode(certificate),
+        verifyUrl: `${getFrontendBaseUrl(req)}/verify?code=${encodeURIComponent(getCertificateVerificationCode(certificate))}`,
       });
 
       res.status(200);
@@ -2571,15 +2749,35 @@ export default async function handler(req, res) {
       const email = normalizeEmail(body.email);
       const password = String(body.password || '');
       const fullName = String(body.fullName || body.name || '').trim();
+      const providerType = String(body.providerType || body.provider || '').trim();
+      const registrationNumber = String(
+        body.registrationNumber || body.providerRegistration || body.registration || ''
+      )
+        .trim()
+        .toUpperCase();
 
       if (!isLikelyDoctorEmail(email)) {
         sendJson(res, 400, { error: 'A valid email is required' });
         return;
       }
+      if (!providerType) {
+        sendJson(res, 400, { error: 'Provider type is required' });
+        return;
+      }
+      if (!registrationNumber) {
+        sendJson(res, 400, { error: 'Registration number is required' });
+        return;
+      }
 
       const supabaseConfig = getSupabaseConfig();
       if (supabaseConfig.enabled) {
-        await registerDoctorAccount({ email, password, fullName });
+        await registerDoctorAccount({
+          email,
+          password,
+          fullName,
+          providerType,
+          registrationNumber,
+        });
       }
 
       let account;
@@ -2588,6 +2786,8 @@ export default async function handler(req, res) {
           email,
           password,
           fullName,
+          providerType,
+          registrationNumber,
           source: supabaseConfig.enabled ? 'supabase-signup' : 'portal-signup',
         });
       } catch (errorObject) {
@@ -2632,6 +2832,8 @@ export default async function handler(req, res) {
         doctor: {
           email,
           name: account.fullName || fullName || email,
+          providerType: account.providerType || providerType,
+          registrationNumber: account.registrationNumber || registrationNumber,
         },
       });
       return;
@@ -2651,6 +2853,8 @@ export default async function handler(req, res) {
         await upsertDoctorAccount({
           email: supabaseDoctor.email,
           fullName: supabaseDoctor.fullName || '',
+          providerType: supabaseDoctor.providerType || '',
+          registrationNumber: supabaseDoctor.registrationNumber || '',
           source: 'supabase',
         });
       }
@@ -2749,6 +2953,8 @@ export default async function handler(req, res) {
         doctor: {
           email: account.email,
           name: account.fullName || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
+          providerType: account.providerType || '',
+          registrationNumber: account.registrationNumber || '',
         },
       });
       return;
@@ -2764,6 +2970,8 @@ export default async function handler(req, res) {
         authenticatedDoctor = {
           email,
           name: process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
+          providerType: '',
+          registrationNumber: '',
         };
       } else {
         const localAuth = await authenticateDoctorAccount({ email, password });
@@ -2771,6 +2979,8 @@ export default async function handler(req, res) {
           authenticatedDoctor = {
             email: localAuth.email,
             name: localAuth.fullName || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
+            providerType: localAuth.providerType || '',
+            registrationNumber: localAuth.registrationNumber || '',
           };
         }
 
@@ -2779,6 +2989,8 @@ export default async function handler(req, res) {
           authenticatedDoctor = {
             email: supabaseAuth.email,
             name: supabaseAuth.fullName || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
+            providerType: supabaseAuth.providerType || '',
+            registrationNumber: supabaseAuth.registrationNumber || '',
           };
         }
 
@@ -2786,6 +2998,8 @@ export default async function handler(req, res) {
           await upsertDoctorAccount({
             email: supabaseAuth.email,
             fullName: supabaseAuth.fullName || '',
+            providerType: supabaseAuth.providerType || '',
+            registrationNumber: supabaseAuth.registrationNumber || '',
             source: 'supabase',
           });
         }
@@ -2803,6 +3017,85 @@ export default async function handler(req, res) {
         doctor: {
           email: authenticatedDoctor.email,
           name: authenticatedDoctor.name,
+          providerType: authenticatedDoctor.providerType || '',
+          registrationNumber: authenticatedDoctor.registrationNumber || '',
+        },
+      });
+      return;
+    }
+
+    if (req.method === 'GET' && routePath === 'doctor/profile') {
+      const doctor = await requireDoctor(req, res);
+      if (!doctor) return;
+
+      const profile = await resolveDoctorProfile(doctor.email);
+      sendJson(res, 200, {
+        doctor: {
+          email: normalizeEmail(doctor.email),
+          fullName: String(profile?.fullName || '').trim(),
+          providerType: String(profile?.providerType || '').trim(),
+          registrationNumber: String(profile?.registrationNumber || '').trim().toUpperCase(),
+        },
+      });
+      return;
+    }
+
+    if (req.method === 'POST' && routePath === 'doctor/profile') {
+      const doctor = await requireDoctor(req, res);
+      if (!doctor) return;
+
+      const body = await parseJsonBody(req);
+      const fullName = String(body.fullName || body.name || '').trim();
+      const providerType = String(body.providerType || body.provider || '').trim();
+      const registrationNumber = String(
+        body.registrationNumber || body.providerRegistration || body.registration || ''
+      )
+        .trim()
+        .toUpperCase();
+
+      if (!providerType) {
+        sendJson(res, 400, { error: 'Provider type is required' });
+        return;
+      }
+      if (!registrationNumber) {
+        sendJson(res, 400, { error: 'Registration number is required' });
+        return;
+      }
+
+      const updated = await upsertDoctorAccount({
+        email: normalizeEmail(doctor.email),
+        fullName,
+        providerType,
+        registrationNumber,
+        source: 'portal-profile',
+      });
+
+      if (getSupabaseConfig().enabled) {
+        try {
+          await upsertSupabaseDoctorMetadata({
+            email: normalizeEmail(doctor.email),
+            fullName,
+            providerType,
+            registrationNumber,
+          });
+        } catch (errorObject) {
+          info('doctor.profile.supabase_sync_failed', {
+            email: normalizeEmail(doctor.email),
+            message: errorObject?.message || String(errorObject),
+          });
+        }
+      }
+
+      sendJson(res, 200, {
+        doctor: {
+          email: normalizeEmail(doctor.email),
+          fullName: String(updated?.fullName || fullName || '').trim(),
+          providerType: String(updated?.providerType || providerType || '').trim(),
+          registrationNumber: String(
+            updated?.registrationNumber || registrationNumber || ''
+          )
+            .trim()
+            .toUpperCase(),
         },
       });
       return;
@@ -2830,6 +3123,7 @@ export default async function handler(req, res) {
           status: item.status,
           serviceType: item.serviceType,
           patientName: item.certificateDraft.fullName,
+          verificationCode: getCertificateVerificationCode(item),
           risk: item.risk,
           assignedTo: item?.rawSubmission?.workflow?.assignedTo || null,
         }));
@@ -2990,6 +3284,8 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && segments.length === 4 && segments[0] === 'doctor' && segments[1] === 'certificates' && segments[3] === 'request-more-info') {
       const doctor = await requireDoctor(req, res);
       if (!doctor) return;
+      const doctorProfile = await resolveDoctorProfile(doctor.email);
+      const reviewerName = resolveDoctorDisplayName(doctorProfile, doctor.email);
 
       const certId = decodeURIComponent(segments[2]);
       const body = await parseJsonBody(req);
@@ -3018,7 +3314,12 @@ export default async function handler(req, res) {
         status: 'in_review',
         decision: {
           ...(item.decision || {}),
-          by: doctor.email,
+          by: reviewerName,
+          byEmail: normalizeEmail(doctor.email),
+          providerType: String(doctorProfile?.providerType || '').trim(),
+          registrationNumber: String(doctorProfile?.registrationNumber || '')
+            .trim()
+            .toUpperCase(),
           at: new Date().toISOString(),
           notes,
         },
@@ -3042,6 +3343,14 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && segments.length === 4 && segments[0] === 'doctor' && segments[1] === 'certificates' && segments[3] === 'pdf-preview') {
       const doctor = await requireDoctor(req, res);
       if (!doctor) return;
+      const doctorProfile = await resolveDoctorProfile(doctor.email);
+      if (!doctorProfile?.providerType || !doctorProfile?.registrationNumber) {
+        sendJson(res, 400, {
+          error: 'Please complete provider type and registration number in your doctor profile first.',
+        });
+        return;
+      }
+      const reviewerName = resolveDoctorDisplayName(doctorProfile, doctor.email);
 
       const certId = decodeURIComponent(segments[2]);
       const certificate = await getCertificateById(certId);
@@ -3057,15 +3366,26 @@ export default async function handler(req, res) {
         ...certificate,
         decision: {
           ...(certificate.decision || {}),
-          by: doctor.email,
+          by: reviewerName,
+          byEmail: normalizeEmail(doctor.email),
+          providerType: String(doctorProfile?.providerType || '').trim(),
+          registrationNumber: String(doctorProfile?.registrationNumber || '')
+            .trim()
+            .toUpperCase(),
           at: new Date().toISOString(),
           notes,
         },
       };
 
       const pdfBuffer = buildCertificatePdf(previewCertificate, {
-        doctorName: doctor.email,
+        doctorName: reviewerName,
         doctorNotes: notes,
+        providerType: String(previewCertificate?.decision?.providerType || '').trim(),
+        registrationNumber: String(previewCertificate?.decision?.registrationNumber || '')
+          .trim()
+          .toUpperCase(),
+        verificationCode: getCertificateVerificationCode(previewCertificate),
+        verifyUrl: `${getFrontendBaseUrl(req)}/verify?code=${encodeURIComponent(getCertificateVerificationCode(previewCertificate))}`,
         isPreview: true,
       });
 
@@ -3079,6 +3399,14 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && segments.length === 4 && segments[0] === 'doctor' && segments[1] === 'certificates' && segments[3] === 'decision') {
       const doctor = await requireDoctor(req, res);
       if (!doctor) return;
+      const doctorProfile = await resolveDoctorProfile(doctor.email);
+      if (!doctorProfile?.providerType || !doctorProfile?.registrationNumber) {
+        sendJson(res, 400, {
+          error: 'Please complete provider type and registration number in your doctor profile first.',
+        });
+        return;
+      }
+      const reviewerName = resolveDoctorDisplayName(doctorProfile, doctor.email);
 
       const certId = decodeURIComponent(segments[2]);
       const body = await parseJsonBody(req);
@@ -3110,7 +3438,12 @@ export default async function handler(req, res) {
           ...item,
           status: decision,
           decision: {
-            by: doctor.email,
+            by: reviewerName,
+            byEmail: normalizeEmail(doctor.email),
+            providerType: String(doctorProfile?.providerType || '').trim(),
+            registrationNumber: String(doctorProfile?.registrationNumber || '')
+              .trim()
+              .toUpperCase(),
             at: new Date().toISOString(),
             notes,
             result: decision,

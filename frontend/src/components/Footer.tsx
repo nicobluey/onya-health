@@ -26,6 +26,7 @@ const FOOTER_GROUPS: FooterLinkGroup[] = [
         links: [
             { label: 'About Onya Health', href: '/' },
             { label: 'Patient login', href: '/patient-login' },
+            { label: 'Verify certificate', href: '/verify' },
             { label: 'Onya blogs', href: '/blog' },
             { label: 'Contact', href: '/contact' },
         ],

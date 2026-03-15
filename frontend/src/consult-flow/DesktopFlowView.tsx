@@ -51,6 +51,7 @@ export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
                     ) : (
                         <div className="flex items-center gap-6">
                             <a href="/patient-login" className="text-text-primary hover:text-forest-700 transition-colors font-medium">Patient login</a>
+                            <a href="/verify" className="text-text-primary hover:text-forest-700 transition-colors font-medium">Verify</a>
                             <a href="#how-it-works" className="text-text-primary hover:text-forest-700 transition-colors font-medium">How it works</a>
                             <a href="#faq" className="text-text-primary hover:text-forest-700 transition-colors font-medium">FAQ</a>
                             <Button onClick={startBooking} className="px-5 h-10 text-sm">Book now</Button>

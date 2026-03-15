@@ -8,6 +8,7 @@ import {
 import { BlogIndexPage } from '../components/blog/BlogIndexPage';
 import { BlogArticlePage } from '../components/blog/BlogArticlePage';
 import {
+  CertificateVerifyPage,
   HomePage,
   PatientPortalPage,
   PatientLoginPage,
@@ -32,6 +33,10 @@ export function AppRouter() {
 
   if (pathname === '/patient/reset-password') {
     return <PatientResetPasswordPage />;
+  }
+
+  if (pathname === '/verify' || pathname === '/verify/') {
+    return <CertificateVerifyPage />;
   }
 
   if (pathname === '/patient' || pathname.startsWith('/patient/')) {

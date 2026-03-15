@@ -32,7 +32,10 @@
   <body>
     <header>
       <h1 style="margin:0;font-size:24px">Certificate Review</h1>
-      <button class="secondary" onclick="window.location.href='/doctor/queue'">Back to Queue</button>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <a href="/verify" class="secondary" style="text-decoration:none;">Verify</a>
+        <button class="secondary" onclick="window.location.href='/doctor/queue'">Back to Queue</button>
+      </div>
     </header>
     <main>
       <div id="content" class="panel">Loading certificate...</div>
@@ -164,6 +167,7 @@
             <div><div class="label">Symptom</div><div class="value">${cert.symptom || '-'}</div></div>
             <div><div class="label">Start Date</div><div class="value">${cert.startDate || '-'}</div></div>
             <div><div class="label">Duration</div><div class="value">${cert.durationDays || 1} day(s)</div></div>
+            <div><div class="label">Verification</div><div class="value">${cert.verificationCode || '-'}</div></div>
             <div><div class="label">Risk</div><div class="value">${String(cert.risk?.level || '').toUpperCase()} (${cert.risk?.score ?? 0})</div></div>
             <div><div class="label">Risk Notes</div><div class="value">${formatReasons(cert.risk?.reasons)}</div></div>
           </div>

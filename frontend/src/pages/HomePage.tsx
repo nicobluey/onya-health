@@ -98,6 +98,7 @@ export default function HomePage() {
                     <nav className="border-t border-white/40 bg-white/70 backdrop-blur-xl px-4 md:px-8 pb-4">
                         <div className="pt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                             <a href="/patient-login" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">Patient Login</a>
+                            <a href="/verify" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">Verify</a>
                             <a href="/doctor" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">Doctor</a>
                             <a href="/nutritionist" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">Nutritionist</a>
                             <a href="/psychologist" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">Psychologist</a>

@@ -84,32 +84,71 @@ function buildPdfFromLines(lines) {
   return Buffer.from(output, 'utf8');
 }
 
+function normalizeVerificationCode(value) {
+  return String(value || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
+}
+
+function fallbackVerificationCode(certificateId) {
+  const normalizedId = normalizeVerificationCode(certificateId);
+  const suffix = (normalizedId.slice(-8) || '00000000').padStart(8, '0').slice(-8);
+  return `ONYA${suffix}`;
+}
+
 export function buildCertificatePdf(certificate, options = {}) {
-  const data = certificate.certificateDraft;
+  const data = certificate.certificateDraft || {};
   const doctorName = options.doctorName || certificate?.decision?.by || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor';
   const doctorNotes = options.doctorNotes ?? certificate?.decision?.notes ?? '';
+  const providerType = String(
+    options.providerType || certificate?.decision?.providerType || ''
+  ).trim();
+  const registrationNumber = String(
+    options.registrationNumber || certificate?.decision?.registrationNumber || ''
+  )
+    .trim()
+    .toUpperCase();
+  const verificationCode = normalizeVerificationCode(
+    options.verificationCode || certificate?.rawSubmission?.verificationCode
+  ) || fallbackVerificationCode(certificate?.id || '');
+  const issuedAt = certificate?.decision?.at || certificate?.createdAt || new Date().toISOString();
+  const baseUrl = String(process.env.FRONTEND_BASE_URL || process.env.APP_BASE_URL || '').replace(/\/$/, '');
+  const verifyUrl =
+    String(options.verifyUrl || '').trim() ||
+    (baseUrl ? `${baseUrl}/verify?code=${encodeURIComponent(verificationCode)}` : '');
   const isPreview = Boolean(options.isPreview);
 
   const lines = [
-    isPreview ? 'Onya Health - Medical Certificate (Doctor Preview)' : 'Onya Health - Medical Certificate',
-    `Certificate ID: ${certificate.id}`,
-    `Issued: ${new Date().toLocaleString()}`,
+    isPreview ? 'Onya Health Medical Certificate (Doctor Preview)' : 'Onya Health Medical Certificate',
+    '------------------------------------------------------------',
+    `Certificate ID: ${certificate.id || '-'}`,
+    `Verification Code: ${verificationCode}`,
+    verifyUrl ? `Verify Online: ${verifyUrl}` : `Verify Online: /verify (code: ${verificationCode})`,
+    `Issued At: ${new Date(issuedAt).toLocaleString()}`,
     '',
-    `Patient Name: ${data.fullName}`,
+    'Patient Details',
+    '------------------------------------------------------------',
+    `Patient Name: ${data.fullName || 'Not provided'}`,
     `Date of Birth: ${data.dob || 'Not provided'}`,
     `Purpose: ${data.purpose || 'Not provided'}`,
     `Primary Symptom: ${data.symptom || 'Not provided'}`,
-    `Certificate Start Date: ${data.startDate}`,
-    `Duration: ${data.durationDays} day(s)`,
+    `Certificate Start Date: ${data.startDate || 'Not provided'}`,
+    `Duration: ${Number(data.durationDays || 1)} day(s)`,
     '',
-    'Consult Summary:',
+    'Clinical Summary',
+    '------------------------------------------------------------',
     '',
-    `Risk Level: ${certificate.risk.level} (${certificate.risk.score})`,
+    'Doctor Verification',
+    '------------------------------------------------------------',
     `Reviewed By: ${doctorName}`,
+    `Provider Type: ${providerType || 'Not provided'}`,
+    `Registration Number: ${registrationNumber || 'Not provided'}`,
+    `Risk Level: ${String(certificate?.risk?.level || '').toUpperCase()} (${certificate?.risk?.score ?? 0})`,
     '',
-    'Doctor Notes:',
+    'Doctor Notes',
+    '------------------------------------------------------------',
     '',
-    'This certificate was reviewed and approved by an Onya Health doctor.',
+    'This certificate was reviewed by an Onya Health doctor.',
   ];
 
   pushWrapped(lines, '', data.description || 'No summary provided.');

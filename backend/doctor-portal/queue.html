@@ -6,9 +6,28 @@
     <title>Doctor Queue - Onya Health</title>
     <style>
       body { font-family: Inter, Arial, sans-serif; margin: 0; background: #eef5ff; color: #12243f; }
-      header { padding: 18px 24px; border-bottom: 1px solid #cfe0ff; background: #fff; display: flex; justify-content: space-between; align-items: center; }
-      h1 { margin: 0; font-size: 24px; }
-      button { border: 1px solid #c4d8ff; background: #fff; color: #12356a; border-radius: 10px; padding: 8px 12px; font-weight: 600; cursor: pointer; }
+      header {
+        padding: 18px 24px;
+        border-bottom: 1px solid #cfe0ff;
+        background: #fff;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 14px;
+      }
+      h1 { margin: 0; font-size: 24px; font-family: "Basic Commercial Pro", Arial, sans-serif; }
+      .header-actions { display: flex; align-items: center; gap: 8px; }
+      button, .action-link {
+        border: 1px solid #c4d8ff;
+        background: #fff;
+        color: #12356a;
+        border-radius: 10px;
+        padding: 8px 12px;
+        font-weight: 600;
+        cursor: pointer;
+        text-decoration: none;
+        font-size: 13px;
+      }
       .wrap { max-width: 980px; margin: 24px auto; padding: 0 16px; }
       .meta { color: #5c77a7; margin-bottom: 14px; }
       .list { display: grid; gap: 12px; }
@@ -20,29 +39,89 @@
       .risk-high { background: #fee2e2; color: #991b1b; }
       a.review-link { background: #0f66e8; color: white; text-decoration: none; border-radius: 10px; padding: 9px 12px; font-size: 13px; font-weight: 700; }
       .empty { text-align: center; padding: 32px; border: 1px dashed #c4d8ff; border-radius: 12px; color: #6783ae; background: #fff; }
+      .profile-card { background: #fff; border: 1px solid #d6e4ff; border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+      .profile-card.hidden { display: none; }
+      .profile-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+      label { display: block; font-size: 12px; font-weight: 700; color: #4c6794; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.08em; }
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        border: 1px solid #c4d8ff;
+        border-radius: 10px;
+        padding: 10px;
+        font: inherit;
+      }
+      .profile-actions { margin-top: 12px; display: flex; align-items: center; gap: 10px; }
+      .primary-btn { border-color: #0f66e8; background: #0f66e8; color: #fff; }
+      .status { min-height: 18px; font-size: 13px; }
+      .status.error { color: #b3122f; }
+      .status.success { color: #0f7a42; }
     </style>
   </head>
   <body>
     <header>
       <h1>Open Certificate Queue</h1>
-      <button id="logout">Logout</button>
+      <div class="header-actions">
+        <a class="action-link" href="/verify">Verify</a>
+        <button id="toggle-profile">Profile</button>
+        <button id="logout">Logout</button>
+      </div>
     </header>
     <main class="wrap">
+      <section id="profile-card" class="profile-card hidden">
+        <h2 style="margin:0 0 4px;font-size:20px;font-family:'Basic Commercial Pro', Arial, sans-serif;">Doctor profile</h2>
+        <p style="margin:0 0 12px;color:#5c77a7;font-size:13px;">These details appear on certificates and verification responses.</p>
+        <form id="profile-form">
+          <div class="profile-grid">
+            <div>
+              <label for="profile-name">Full name</label>
+              <input id="profile-name" name="fullName" type="text" placeholder="Dr Jane Smith" required />
+            </div>
+            <div>
+              <label for="profile-provider-type">Provider type</label>
+              <input id="profile-provider-type" name="providerType" type="text" placeholder="General Practitioner" required />
+            </div>
+            <div>
+              <label for="profile-registration">Registration number</label>
+              <input id="profile-registration" name="registrationNumber" type="text" placeholder="MED1234567" required />
+            </div>
+          </div>
+          <div class="profile-actions">
+            <button id="profile-save" class="primary-btn" type="submit">Save profile</button>
+            <div id="profile-status" class="status"></div>
+          </div>
+        </form>
+      </section>
+
       <p class="meta">Pending requests are sorted by newest first. Risk factor helps prioritize reviews.</p>
       <div id="list" class="list"></div>
     </main>
     <script>
       const token = localStorage.getItem('onyaDoctorToken');
       const listNode = document.getElementById('list');
+      const profileCard = document.getElementById('profile-card');
+      const profileForm = document.getElementById('profile-form');
+      const profileStatus = document.getElementById('profile-status');
+      const profileSaveButton = document.getElementById('profile-save');
 
       if (!token) {
         window.location.href = '/doctor/login';
       }
 
+      document.getElementById('toggle-profile').addEventListener('click', () => {
+        profileCard.classList.toggle('hidden');
+      });
+
       document.getElementById('logout').addEventListener('click', () => {
         localStorage.removeItem('onyaDoctorToken');
         window.location.href = '/doctor/login';
       });
+
+      function setProfileStatus(message, isError = false) {
+        profileStatus.textContent = message || '';
+        profileStatus.classList.toggle('error', Boolean(message && isError));
+        profileStatus.classList.toggle('success', Boolean(message && !isError));
+      }
 
       function riskClass(level) {
         const normalized = String(level || '').toUpperCase();
@@ -51,11 +130,71 @@
         return 'risk-low';
       }
 
+      async function parseJsonResponse(response) {
+        const text = await response.text();
+        if (!text) return {};
+        try {
+          return JSON.parse(text);
+        } catch {
+          return { error: text.slice(0, 180) || 'Non-JSON response' };
+        }
+      }
+
+      async function loadProfile() {
+        const response = await fetch('/api/doctor/profile', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const payload = await parseJsonResponse(response);
+        if (!response.ok) {
+          if (response.status === 401) {
+            localStorage.removeItem('onyaDoctorToken');
+            window.location.href = '/doctor/login';
+            return;
+          }
+          throw new Error(payload.error || 'Failed to load doctor profile');
+        }
+
+        const doctor = payload.doctor || {};
+        document.getElementById('profile-name').value = doctor.fullName || '';
+        document.getElementById('profile-provider-type').value = doctor.providerType || '';
+        document.getElementById('profile-registration').value = doctor.registrationNumber || '';
+      }
+
+      profileForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        setProfileStatus('');
+        profileSaveButton.disabled = true;
+
+        const payload = Object.fromEntries(new FormData(profileForm).entries());
+        try {
+          const response = await fetch('/api/doctor/profile', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(payload),
+          });
+          const data = await parseJsonResponse(response);
+          if (!response.ok) {
+            throw new Error(data.error || 'Failed to update profile');
+          }
+          setProfileStatus('Profile updated.');
+          document.getElementById('profile-name').value = data?.doctor?.fullName || payload.fullName || '';
+          document.getElementById('profile-provider-type').value = data?.doctor?.providerType || payload.providerType || '';
+          document.getElementById('profile-registration').value = data?.doctor?.registrationNumber || payload.registrationNumber || '';
+        } catch (error) {
+          setProfileStatus(error.message || 'Failed to update profile.', true);
+        } finally {
+          profileSaveButton.disabled = false;
+        }
+      });
+
       async function loadQueue() {
         const response = await fetch('/api/doctor/certificates?status=pending', {
           headers: { Authorization: `Bearer ${token}` },
         });
-        const payload = await response.json();
+        const payload = await parseJsonResponse(response);
         if (!response.ok) {
           localStorage.removeItem('onyaDoctorToken');
           window.location.href = '/doctor/login';
@@ -72,6 +211,7 @@
             <div>
               <strong>${item.patientName || 'Unnamed patient'}</strong>
               <div class="id">Request ${item.id} · ${new Date(item.createdAt).toLocaleString()}</div>
+              <div class="id">Verification ${item.verificationCode || '-'}</div>
               <div style="margin-top:8px">
                 <span class="risk ${riskClass(item.risk.level)}">${String(item.risk.level || 'low').toUpperCase()} RISK (${item.risk.score})</span>
               </div>
@@ -83,8 +223,12 @@
         `).join('');
       }
 
-      loadQueue().catch(() => {
-        listNode.innerHTML = '<div class="empty">Failed to load queue.</div>';
+      loadProfile().catch((error) => {
+        setProfileStatus(error?.message || 'Failed to load doctor profile.', true);
+      });
+
+      loadQueue().catch((error) => {
+        listNode.innerHTML = `<div class="empty">${error?.message || 'Failed to load queue.'}</div>`;
       });
     </script>
   </body>
