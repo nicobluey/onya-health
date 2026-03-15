@@ -1027,6 +1027,143 @@ async function fetchStripeSubscriptionCached(subscriptionId) {
   return value;
 }
 
+async function fetchStripeCustomerByEmail(email) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return null;
+  if (!STRIPE_SECRET_KEY) return null;
+
+  const response = await fetch(
+    `https://api.stripe.com/v1/customers?email=${encodeURIComponent(normalizedEmail)}&limit=10`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+      },
+    }
+  );
+
+  const text = await response.text();
+  let payload = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    payload = { raw: text };
+  }
+
+  if (!response.ok) {
+    const message = payload?.error?.message || `Unable to load Stripe customers (${response.status})`;
+    const errorObject = new Error(message);
+    errorObject.status = response.status;
+    errorObject.data = payload;
+    throw errorObject;
+  }
+
+  const customers = Array.isArray(payload?.data) ? payload.data : [];
+  const exact = customers.find((entry) => normalizeEmail(entry?.email) === normalizedEmail);
+  return exact || customers[0] || null;
+}
+
+async function listStripeSubscriptionsForCustomer(customerId) {
+  const normalizedCustomerId = String(customerId || '').trim();
+  if (!normalizedCustomerId) return [];
+  if (!STRIPE_SECRET_KEY) return [];
+
+  const response = await fetch(
+    `https://api.stripe.com/v1/subscriptions?customer=${encodeURIComponent(normalizedCustomerId)}&status=all&limit=100`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+      },
+    }
+  );
+
+  const text = await response.text();
+  let payload = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    payload = { raw: text };
+  }
+
+  if (!response.ok) {
+    const message = payload?.error?.message || `Unable to load Stripe subscriptions (${response.status})`;
+    const errorObject = new Error(message);
+    errorObject.status = response.status;
+    errorObject.data = payload;
+    throw errorObject;
+  }
+
+  return Array.isArray(payload?.data) ? payload.data : [];
+}
+
+function stripeSubscriptionMatchesUnlimitedProduct(subscription) {
+  const targetProduct = String(STRIPE_PRICE_PRODUCT_MULTI_DAY_RECURRING || '').trim();
+  if (!targetProduct) return true;
+
+  const items = Array.isArray(subscription?.items?.data) ? subscription.items.data : [];
+  if (items.length === 0) return false;
+  return items.some((item) => String(item?.price?.product || '').trim() === targetProduct);
+}
+
+function pickBestStripeSubscription(subscriptions) {
+  const list = Array.isArray(subscriptions) ? subscriptions.filter(Boolean) : [];
+  if (list.length === 0) return null;
+
+  return [...list].sort((a, b) => {
+    const activeDelta =
+      Number(isStripeSubscriptionActiveStatus(b?.status)) - Number(isStripeSubscriptionActiveStatus(a?.status));
+    if (activeDelta !== 0) return activeDelta;
+
+    const cancelDelta = Number(Boolean(a?.cancel_at_period_end)) - Number(Boolean(b?.cancel_at_period_end));
+    if (cancelDelta !== 0) return cancelDelta;
+
+    const endA = Number(a?.current_period_end || 0);
+    const endB = Number(b?.current_period_end || 0);
+    if (endA !== endB) return endB - endA;
+
+    return Number(b?.created || 0) - Number(a?.created || 0);
+  })[0];
+}
+
+async function resolveStripeBillingByEmail(patientEmail) {
+  const email = normalizeEmail(patientEmail);
+  if (!email || !isStripeEnabled()) return null;
+
+  const customer = await fetchStripeCustomerByEmail(email);
+  if (!customer?.id) return null;
+
+  const allSubscriptions = await listStripeSubscriptionsForCustomer(customer.id);
+  const productMatched = allSubscriptions.filter(stripeSubscriptionMatchesUnlimitedProduct);
+  const candidates = productMatched.length > 0 ? productMatched : allSubscriptions;
+  const selected = pickBestStripeSubscription(candidates);
+
+  if (!selected) {
+    return {
+      hasActiveUnlimited: false,
+      plan: 'pay_as_you_go',
+      subscriptionStatus: 'none',
+      stripeCustomerId: String(customer.id || '').trim(),
+      stripeSubscriptionId: '',
+      cancelAtPeriodEnd: false,
+      currentPeriodEnd: null,
+      canManageSubscription: true,
+    };
+  }
+
+  const status = normalizeStripeSubscriptionStatus(selected?.status || '');
+  return {
+    hasActiveUnlimited: isStripeSubscriptionActiveStatus(status),
+    plan: 'unlimited',
+    subscriptionStatus: status || 'unknown',
+    stripeCustomerId: String(customer.id || '').trim(),
+    stripeSubscriptionId: String(selected?.id || '').trim(),
+    cancelAtPeriodEnd: Boolean(selected?.cancel_at_period_end),
+    currentPeriodEnd: unixSecondsToIso(selected?.current_period_end),
+    canManageSubscription: true,
+  };
+}
+
 function buildStripeBillingReturnUrl() {
   const baseUrl = getFrontendBaseUrl();
   const fallback = String(STRIPE_BILLING_PORTAL_RETURN_PATH || '/patient').trim();
@@ -1168,7 +1305,19 @@ async function resolvePatientBillingProfile(patientEmail, certificatesInput = nu
 
   const certificates = Array.isArray(certificatesInput) ? certificatesInput : await listCertificates();
   const latest = mostRecentPatientSubscriptionPayment(certificates, email);
-  if (!latest) return empty;
+  if (!latest) {
+    if (!isStripeEnabled()) return empty;
+    try {
+      const stripeProfile = await resolveStripeBillingByEmail(email);
+      return stripeProfile ? { ...empty, ...stripeProfile } : empty;
+    } catch (errorObject) {
+      error('stripe.subscription.lookup_by_email_failed', {
+        patientEmail: email,
+        message: errorObject?.message || String(errorObject),
+      });
+      return empty;
+    }
+  }
 
   const payment = latest.payment || {};
   const subscriptionId = String(payment.stripeSubscriptionId || '').trim();
@@ -1184,6 +1333,22 @@ async function resolvePatientBillingProfile(patientEmail, certificatesInput = nu
 
   if (!subscriptionId || !isStripeEnabled()) {
     const localPaid = String(payment.status || '').toLowerCase() === 'paid';
+    if (!localPaid && isStripeEnabled()) {
+      try {
+        const stripeProfile = await resolveStripeBillingByEmail(email);
+        if (stripeProfile?.stripeSubscriptionId || stripeProfile?.hasActiveUnlimited) {
+          return {
+            ...profile,
+            ...stripeProfile,
+          };
+        }
+      } catch (errorObject) {
+        error('stripe.subscription.lookup_by_email_failed', {
+          patientEmail: email,
+          message: errorObject?.message || String(errorObject),
+        });
+      }
+    }
     return {
       ...profile,
       hasActiveUnlimited: localPaid,
@@ -1194,7 +1359,7 @@ async function resolvePatientBillingProfile(patientEmail, certificatesInput = nu
   try {
     const subscription = await fetchStripeSubscriptionCached(subscriptionId);
     const status = normalizeStripeSubscriptionStatus(subscription?.status || '');
-    return {
+    const byIdProfile = {
       ...profile,
       hasActiveUnlimited: isStripeSubscriptionActiveStatus(status),
       subscriptionStatus: status || 'unknown',
@@ -1202,12 +1367,47 @@ async function resolvePatientBillingProfile(patientEmail, certificatesInput = nu
       currentPeriodEnd: unixSecondsToIso(subscription?.current_period_end),
       stripeCustomerId: String(subscription?.customer || customerId),
     };
+    if (byIdProfile.hasActiveUnlimited) {
+      return byIdProfile;
+    }
+
+    try {
+      const stripeProfile = await resolveStripeBillingByEmail(email);
+      if (stripeProfile?.hasActiveUnlimited) {
+        return {
+          ...profile,
+          ...stripeProfile,
+        };
+      }
+    } catch (errorObject) {
+      error('stripe.subscription.lookup_by_email_failed', {
+        patientEmail: email,
+        message: errorObject?.message || String(errorObject),
+      });
+    }
+    return byIdProfile;
   } catch (errorObject) {
     error('stripe.subscription.lookup_failed', {
       patientEmail: email,
       stripeSubscriptionId: subscriptionId,
       message: errorObject?.message || String(errorObject),
     });
+    if (isStripeEnabled()) {
+      try {
+        const stripeProfile = await resolveStripeBillingByEmail(email);
+        if (stripeProfile?.stripeSubscriptionId || stripeProfile?.hasActiveUnlimited) {
+          return {
+            ...profile,
+            ...stripeProfile,
+          };
+        }
+      } catch (lookupError) {
+        error('stripe.subscription.lookup_by_email_failed', {
+          patientEmail: email,
+          message: lookupError?.message || String(lookupError),
+        });
+      }
+    }
     return {
       ...profile,
       hasActiveUnlimited: String(payment.status || '').toLowerCase() === 'paid',
