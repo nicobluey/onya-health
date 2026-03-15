@@ -1,9 +1,17 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
-import type { BookingState, BookingStep, CertificatePurpose, Symptom, UserDetails } from '../types';
+import type {
+    BookingState,
+    BookingStep,
+    CertificatePurpose,
+    Symptom,
+    SymptomVisibility,
+    UserDetails
+} from '../types';
 
 interface BookingContextType extends BookingState {
     setPurpose: (p: CertificatePurpose) => void;
     setSymptom: (s: Symptom[]) => void;
+    setSymptomVisibility: (visibility: SymptomVisibility) => void;
     setComplianceChecked: (checked: boolean) => void;
     setDescription: (d: string) => void;
     setDates: (start: Date, duration: number) => void;
@@ -51,6 +59,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
         step: 'purpose',
         purpose: null,
         symptom: [],
+        symptomVisibility: 'private',
         complianceChecked: false,
         description: '',
         startDate: startOfToday(),
@@ -101,6 +110,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
         ...state,
         setPurpose: (purpose: CertificatePurpose) => updateState({ purpose }),
         setSymptom: (symptom: Symptom[]) => updateState({ symptom }),
+        setSymptomVisibility: (symptomVisibility: SymptomVisibility) => updateState({ symptomVisibility }),
         setComplianceChecked: (complianceChecked: boolean) => updateState({ complianceChecked }),
         setDescription: (description: string) => updateState({ description }),
         setDates: (startDate: Date, durationDays: number) =>

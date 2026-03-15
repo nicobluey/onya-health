@@ -37,6 +37,7 @@ export interface PortalRequest {
   serviceType: string;
   purpose: string;
   symptom: string;
+  symptomVisibility?: 'private' | 'public';
   description: string;
   startDate: string | null;
   durationDays: number;

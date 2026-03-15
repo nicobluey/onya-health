@@ -14,6 +14,8 @@ export type Symptom =
     | 'Injury or pain'
     | 'Other';
 
+export type SymptomVisibility = 'private' | 'public';
+
 export type BookingStep =
     | 'purpose'
     | 'compliance'
@@ -37,6 +39,7 @@ export interface BookingState {
     step: BookingStep;
     purpose: CertificatePurpose | null;
     symptom: Symptom[];
+    symptomVisibility: SymptomVisibility;
     complianceChecked: boolean;
     description: string;
     startDate: Date | null;

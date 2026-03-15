@@ -445,6 +445,9 @@ function buildDraftCertificate(requestBody) {
   const durationDays = Math.max(1, Number(consult.durationDays || 1));
   const isUnlimited = Boolean(consult.isUnlimited);
   const includeCarerCertificate = !isUnlimited && Boolean(consult.includeCarerCertificate);
+  const symptomVisibility = String(consult.symptomVisibility || '').trim().toLowerCase() === 'public'
+    ? 'public'
+    : 'private';
 
   return {
     fullName: patient.fullName || '',
@@ -454,6 +457,7 @@ function buildDraftCertificate(requestBody) {
     address: patient.address || '',
     purpose: consult.purpose || '',
     symptom: consult.symptom || '',
+    symptomVisibility,
     description: consult.description || '',
     startDate,
     durationDays,
@@ -471,6 +475,7 @@ function doctorPayloadFromRequest(cert) {
     patientEmail: cert.certificateDraft.email,
     purpose: cert.certificateDraft.purpose,
     symptom: cert.certificateDraft.symptom,
+    symptomVisibility: cert.certificateDraft.symptomVisibility || 'private',
     startDate: cert.certificateDraft.startDate,
     durationDays: cert.certificateDraft.durationDays,
     verificationCode: getCertificateVerificationCode(cert),
@@ -646,6 +651,7 @@ function patientSummaryFromCertificate(certificate) {
     serviceType: certificate.serviceType || 'doctor',
     purpose: draft.purpose || '',
     symptom: draft.symptom || '',
+    symptomVisibility: draft.symptomVisibility || 'private',
     description: draft.description || '',
     startDate: draft.startDate || null,
     durationDays: Number(draft.durationDays || 1),

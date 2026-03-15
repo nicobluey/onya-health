@@ -96,6 +96,8 @@ export const DescriptionStep = () => {
     const {
         symptom,
         setSymptom,
+        symptomVisibility,
+        setSymptomVisibility,
         description,
         setDescription,
         nextStep
@@ -151,6 +153,42 @@ export const DescriptionStep = () => {
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                     />
+                </div>
+
+                <div className="space-y-2">
+                    <label className="block text-sm font-medium text-text-secondary">Symptom privacy on certificate</label>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <button
+                            type="button"
+                            aria-pressed={symptomVisibility === 'private'}
+                            onClick={() => setSymptomVisibility('private')}
+                            className={`rounded-xl border px-4 py-3 text-left text-sm transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
+                                symptomVisibility === 'private'
+                                    ? 'border-primary bg-primary text-sand-50 shadow-sm'
+                                    : 'border-border bg-white text-text-primary hover:border-sand-300 hover:bg-sand-50'
+                            }`}
+                        >
+                            <p className="font-semibold">Keep private</p>
+                            <p className={`mt-1 text-xs ${symptomVisibility === 'private' ? 'text-sand-100' : 'text-text-secondary'}`}>
+                                Certificate uses: "medical condition"
+                            </p>
+                        </button>
+                        <button
+                            type="button"
+                            aria-pressed={symptomVisibility === 'public'}
+                            onClick={() => setSymptomVisibility('public')}
+                            className={`rounded-xl border px-4 py-3 text-left text-sm transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
+                                symptomVisibility === 'public'
+                                    ? 'border-primary bg-primary text-sand-50 shadow-sm'
+                                    : 'border-border bg-white text-text-primary hover:border-sand-300 hover:bg-sand-50'
+                            }`}
+                        >
+                            <p className="font-semibold">Show symptoms</p>
+                            <p className={`mt-1 text-xs ${symptomVisibility === 'public' ? 'text-sand-100' : 'text-text-secondary'}`}>
+                                Certificate can include your symptom category
+                            </p>
+                        </button>
+                    </div>
                 </div>
                 {error && <p className="text-xs text-red-500">{error}</p>}
 
@@ -480,6 +518,7 @@ export const CheckoutStep = () => {
         setCarerCertificate,
         purpose,
         symptom,
+        symptomVisibility,
         complianceChecked,
         description,
         startDate,
@@ -519,6 +558,7 @@ export const CheckoutStep = () => {
                     consult: {
                         purpose,
                         symptom: symptomSummary,
+                        symptomVisibility,
                         complianceChecked,
                         description: consultDescription,
                         startDate: startDate?.toISOString() || null,
