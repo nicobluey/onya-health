@@ -947,43 +947,75 @@ async function sendPatientDecisionEmail(certificate) {
   if (isApprovedCertificate(certificate)) {
     const verificationCode = getCertificateVerificationCode(certificate);
     const verifyBaseUrl = FRONTEND_BASE_URL || APP_BASE_URL || '';
-    const pdfBuffer = await buildCertificatePdf(certificate, {
-      doctorName: certificate?.decision?.by || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
-      doctorNotes: certificate?.decision?.notes || '',
-      providerType: certificate?.decision?.providerType || '',
-      registrationNumber: certificate?.decision?.registrationNumber || '',
-      verificationCode,
-      verifyUrl: verifyBaseUrl
-        ? `${verifyBaseUrl}/verify?code=${encodeURIComponent(verificationCode)}`
-        : '',
-    });
+    try {
+      const pdfBuffer = await buildCertificatePdf(certificate, {
+        doctorName: certificate?.decision?.by || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
+        doctorNotes: certificate?.decision?.notes || '',
+        providerType: certificate?.decision?.providerType || '',
+        registrationNumber: certificate?.decision?.registrationNumber || '',
+        verificationCode,
+        verifyUrl: verifyBaseUrl
+          ? `${verifyBaseUrl}/verify?code=${encodeURIComponent(verificationCode)}`
+          : '',
+      });
 
-    const emailContent = renderPatientCertificateReadyEmail({
-      baseUrl: FRONTEND_BASE_URL || APP_BASE_URL || '',
-      requestId: certificate.id,
-    });
+      const emailContent = renderPatientCertificateReadyEmail({
+        baseUrl: FRONTEND_BASE_URL || APP_BASE_URL || '',
+        requestId: certificate.id,
+        attachmentIncluded: true,
+      });
 
-    await sendEmail({
-      to: patientEmail,
-      subject: 'Your medical certificate is ready',
-      html: emailContent.html,
-      text: emailContent.text,
-      attachments: [
-        {
-          filename: `medical-certificate-${certificate.id}.pdf`,
-          contentBase64: pdfBuffer.toString('base64'),
-        },
-      ],
-    });
+      await sendEmail({
+        to: patientEmail,
+        subject: 'Your medical certificate is ready',
+        html: emailContent.html,
+        text: emailContent.text,
+        attachments: [
+          {
+            filename: `medical-certificate-${certificate.id}.pdf`,
+            contentBase64: pdfBuffer.toString('base64'),
+          },
+        ],
+      });
 
-    info('certificate.patient_email.sent', {
-      certificateId: certificate.id,
-      outcome: 'approved',
-      provider: currentEmailProvider(),
-      patientEmail,
-      hasPdfAttachment: true,
-    });
-    return;
+      info('certificate.patient_email.sent', {
+        certificateId: certificate.id,
+        outcome: 'approved',
+        provider: currentEmailProvider(),
+        patientEmail,
+        hasPdfAttachment: true,
+      });
+      return;
+    } catch (errorObject) {
+      error('certificate.patient_email.attachment_failed', {
+        certificateId: certificate.id,
+        patientEmail,
+        message: errorObject?.message || String(errorObject),
+      });
+
+      const fallbackContent = renderPatientCertificateReadyEmail({
+        baseUrl: FRONTEND_BASE_URL || APP_BASE_URL || '',
+        requestId: certificate.id,
+        attachmentIncluded: false,
+      });
+
+      await sendEmail({
+        to: patientEmail,
+        subject: 'Your medical certificate is ready',
+        html: fallbackContent.html,
+        text: fallbackContent.text,
+      });
+
+      info('certificate.patient_email.sent', {
+        certificateId: certificate.id,
+        outcome: 'approved',
+        provider: currentEmailProvider(),
+        patientEmail,
+        hasPdfAttachment: false,
+        fallbackNoAttachment: true,
+      });
+      return;
+    }
   }
 
   const emailContent = renderPatientCertificateDeniedEmail({
@@ -3465,7 +3497,18 @@ export default async function handler(req, res) {
         decision,
         by: doctor.email,
       });
-      await sendPatientDecisionEmail(updated);
+      let patientNotificationFailed = false;
+      try {
+        await sendPatientDecisionEmail(updated);
+      } catch (errorObject) {
+        patientNotificationFailed = true;
+        error('doctor.decision.patient_email_failed', {
+          doctor: doctor.email,
+          certificateId: updated.id,
+          decision,
+          message: errorObject?.message || String(errorObject),
+        });
+      }
 
       info('doctor.decision.submitted', {
         doctor: doctor.email,
@@ -3474,8 +3517,11 @@ export default async function handler(req, res) {
       });
 
       sendJson(res, 200, {
-        message: `Certificate ${decision}`,
+        message: patientNotificationFailed
+          ? `Certificate ${decision}. Patient email delivery failed; please check email provider logs.`
+          : `Certificate ${decision}`,
         certificate: doctorPayloadFromRequest(updated),
+        patientNotificationFailed,
       });
       return;
     }

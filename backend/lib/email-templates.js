@@ -120,18 +120,26 @@ export function renderDoctorReviewEmail({ baseUrl, requestId, patientName, riskL
   };
 }
 
-export function renderPatientCertificateReadyEmail({ baseUrl, requestId }) {
+export function renderPatientCertificateReadyEmail({ baseUrl, requestId, attachmentIncluded = true }) {
+  const normalizedBaseUrl = String(baseUrl || '').replace(/\/$/, '');
+  const patientPortalUrl = normalizedBaseUrl ? `${normalizedBaseUrl}/patient-login` : '/patient-login';
+  const bodyHtml = attachmentIncluded
+    ? `<p style="margin:0;"><strong>Request ID:</strong> ${escapeHtml(requestId)}</p><p style="margin:10px 0 0;">A copy of your certificate is attached to this email.</p>`
+    : `<p style="margin:0;"><strong>Request ID:</strong> ${escapeHtml(requestId)}</p><p style="margin:10px 0 0;">Your certificate is ready. If you do not see an attachment, open your patient portal to download it securely.</p><p style="margin:12px 0 0;"><a href="${escapeHtml(patientPortalUrl)}" style="color:${BRAND.primary};font-weight:700;">Open patient portal</a></p>`;
+
   const html = renderShell({
     baseUrl,
     badge: 'Certificate Ready',
     title: 'Your medical certificate is ready',
     subtitle: 'Your request has been reviewed and approved by an Onya doctor.',
-    bodyHtml: `<p style="margin:0;"><strong>Request ID:</strong> ${escapeHtml(requestId)}</p><p style="margin:10px 0 0;">A copy of your certificate is attached to this email.</p>`,
+    bodyHtml,
   });
 
   return {
     html,
-    text: `Your medical certificate is ready.\nRequest ID: ${requestId}\nA PDF copy is attached to this email.`,
+    text: attachmentIncluded
+      ? `Your medical certificate is ready.\nRequest ID: ${requestId}\nA PDF copy is attached to this email.`
+      : `Your medical certificate is ready.\nRequest ID: ${requestId}\nIf no attachment is visible, download your certificate from: ${patientPortalUrl}`,
   };
 }
 

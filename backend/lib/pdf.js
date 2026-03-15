@@ -181,6 +181,46 @@ function drawSignatureMark(doc, x, y) {
     .restore();
 }
 
+function drawHolographicSeal(doc, centerX, centerY, size, verificationCode) {
+  const radius = size / 2;
+  const outerGradient = doc.radialGradient(centerX - 4, centerY - 4, 2, centerX, centerY, radius);
+  outerGradient.stop(0, '#FEFCFF', 0.96).stop(0.32, '#CFFAFE', 0.92).stop(0.62, '#DDD6FE', 0.9).stop(1, '#93C5FD', 0.92);
+  doc.circle(centerX, centerY, radius).fill(outerGradient);
+
+  doc.save();
+  doc.circle(centerX, centerY, radius).clip();
+  doc
+    .lineWidth(2)
+    .strokeColor('#FFFFFF')
+    .opacity(0.32)
+    .moveTo(centerX - radius, centerY - radius + 8)
+    .lineTo(centerX + radius, centerY + radius - 8)
+    .stroke();
+  doc
+    .lineWidth(2)
+    .strokeColor('#7DD3FC')
+    .opacity(0.28)
+    .moveTo(centerX - radius + 6, centerY + radius - 12)
+    .lineTo(centerX + radius - 6, centerY - radius + 12)
+    .stroke();
+  doc.restore();
+
+  doc.circle(centerX, centerY, radius).lineWidth(1.5).strokeColor('#60A5FA').stroke();
+  doc.circle(centerX, centerY, radius - 6).lineWidth(1).strokeColor('#DBEAFE').stroke();
+
+  const sealCode = String(verificationCode || '').slice(-6) || 'ONYA';
+  doc.font('Helvetica-Bold').fontSize(7).fillColor('#1E3A8A').text('ONYA VERIFIED', centerX - radius, centerY - 6, {
+    width: size,
+    align: 'center',
+    lineBreak: false,
+  });
+  doc.font('Helvetica').fontSize(7).fillColor('#1E40AF').text(sealCode, centerX - radius, centerY + 5, {
+    width: size,
+    align: 'center',
+    lineBreak: false,
+  });
+}
+
 export async function buildCertificatePdf(certificate, options = {}) {
   const data = certificate?.certificateDraft || {};
   const verificationCode =
@@ -288,9 +328,6 @@ export async function buildCertificatePdf(certificate, options = {}) {
     });
 
     y = 92;
-    doc.font('Helvetica-Bold').fontSize(11).fillColor(colors.accent).text('ONYA HEALTH CERTIFICATES', left, y - 12, {
-      width: contentWidth,
-    });
     doc.font('Helvetica-Bold').fontSize(38).fillColor(colors.text).text('Medical Certificate', left, y, {
       width: contentWidth,
     });
@@ -329,7 +366,7 @@ export async function buildCertificatePdf(certificate, options = {}) {
 
     y += headerCardHeight + 18;
 
-    doc.font('Helvetica-Bold').fontSize(14).fillColor(colors.accent).text('Patient details', left, y);
+    doc.font('Helvetica-Bold').fontSize(14).fillColor(colors.text).text('Patient details', left, y);
     y += 22;
 
     doc.font('Helvetica-Bold').fontSize(13).text('Name:', left, y);
@@ -338,26 +375,11 @@ export async function buildCertificatePdf(certificate, options = {}) {
     });
     y += 22;
 
-    doc.font('Helvetica-Bold').fontSize(12).text('Date of Birth:', left, y);
-    doc.font('Helvetica').fontSize(12).text(safeText(data.dob), left + 130, y, {
-      width: contentWidth - 130,
-    });
-    y += 20;
-
     doc.font('Helvetica-Bold').fontSize(12).text('Certificate Period:', left, y);
     const readablePeriod = buildReadablePeriod(data.startDate, durationDays);
     doc.font('Helvetica').fontSize(12).text(readablePeriod, left + 130, y, {
       width: contentWidth - 130,
     });
-    y += 20;
-
-    doc.font('Helvetica-Bold').fontSize(12).text('Symptom display:', left, y);
-    doc
-      .font('Helvetica')
-      .fontSize(12)
-      .text(symptomVisibility === 'public' ? 'Public' : 'Private', left + 130, y, {
-        width: contentWidth - 130,
-      });
     y += 28;
 
     doc.font('Helvetica-Bold').fontSize(22).fillColor(colors.text).text('Medical Certificate Statement', left, y, {
@@ -365,7 +387,7 @@ export async function buildCertificatePdf(certificate, options = {}) {
     });
     y += 30;
 
-    doc.font('Helvetica-Bold').fontSize(12).fillColor(colors.accent).text('Clinical statement', left, y);
+    doc.font('Helvetica-Bold').fontSize(12).fillColor(colors.text).text('Clinical statement', left, y);
     y += 20;
 
     doc.font('Helvetica').fontSize(12.5).fillColor(colors.text).text(statement, left, y, {
@@ -374,7 +396,7 @@ export async function buildCertificatePdf(certificate, options = {}) {
     });
     y = doc.y + 10;
 
-    doc.font('Helvetica-Bold').fontSize(12).fillColor(colors.accent).text('Doctor verification', left, y);
+    doc.font('Helvetica-Bold').fontSize(12).fillColor(colors.text).text('Doctor verification', left, y);
     y += 18;
 
     doc.font('Helvetica-Bold').fontSize(13).fillColor(colors.text).text(`Doctor: ${doctorName}`, left, y, { width: contentWidth });
@@ -427,7 +449,7 @@ export async function buildCertificatePdf(certificate, options = {}) {
     doc
       .font('Helvetica-Bold')
       .fontSize(12)
-      .fillColor(colors.accent)
+      .fillColor(colors.text)
       .text('AUTHENTICITY VERIFICATION', left + 16, verificationY + 14, { lineBreak: false });
 
     doc
@@ -435,20 +457,22 @@ export async function buildCertificatePdf(certificate, options = {}) {
       .fontSize(10)
       .fillColor(colors.muted)
       .text('Verify this certificate with the code below or by scanning the QR code.', left + 16, verificationY + 30, {
-        width: contentWidth - 190,
+        width: contentWidth - 250,
         lineBreak: false,
       });
 
     const verifyText = verifyUrl ? 'Visit onyahealth.com.au/verify' : 'Visit onyahealth.com.au/verify';
     doc.font('Helvetica').fontSize(10).fillColor(colors.muted).text(verifyText, left + 16, verificationY + 52, {
-      width: contentWidth - 190,
+      width: contentWidth - 250,
       lineBreak: false,
     });
 
     doc.font('Helvetica-Bold').fontSize(17).fillColor(colors.text).text(verificationCode, left + 16, verificationY + 82, {
-      width: contentWidth - 220,
+      width: contentWidth - 310,
       lineBreak: false,
     });
+
+    drawHolographicSeal(doc, left + 284, verificationY + 84, 62, verificationCode);
 
     if (qrBuffer) {
       doc.image(qrBuffer, right - 144, verificationY + 18, { fit: [96, 96], align: 'center', valign: 'center' });
