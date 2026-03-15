@@ -4,6 +4,10 @@ import path from 'node:path';
 const DATA_DIR = path.resolve(process.cwd(), 'backend', 'data');
 const DB_PATH = path.join(DATA_DIR, 'db.json');
 
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
 function getSupabaseConfig() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
   const key =
@@ -21,6 +25,7 @@ function getSupabaseConfig() {
 const EMPTY_DB = {
   certificates: [],
   auditLog: [],
+  patientBilling: [],
 };
 
 let writeQueue = Promise.resolve();
@@ -38,7 +43,12 @@ async function ensureDbFile() {
 async function readDbRaw() {
   await ensureDbFile();
   const contents = await fs.readFile(DB_PATH, 'utf8');
-  return JSON.parse(contents);
+  const parsed = JSON.parse(contents || '{}');
+  return {
+    certificates: Array.isArray(parsed?.certificates) ? parsed.certificates : [],
+    auditLog: Array.isArray(parsed?.auditLog) ? parsed.auditLog : [],
+    patientBilling: Array.isArray(parsed?.patientBilling) ? parsed.patientBilling : [],
+  };
 }
 
 async function writeDbRaw(db) {
@@ -145,6 +155,52 @@ function mapSupabaseRowToCertificate(row) {
           notes: decisionNotes,
         }
       : null,
+  };
+}
+
+function mapSupabaseRowToPatientBilling(row) {
+  if (!row) return null;
+
+  const patientEmail = normalizeEmail(row.patient_email);
+  if (!patientEmail) return null;
+
+  return {
+    patientEmail,
+    hasActiveUnlimited: Boolean(row.has_active_unlimited),
+    plan: String(row.plan || 'pay_as_you_go'),
+    subscriptionStatus: String(row.subscription_status || 'none'),
+    stripeCustomerId: String(row.stripe_customer_id || ''),
+    stripeSubscriptionId: String(row.stripe_subscription_id || ''),
+    cancelAtPeriodEnd: Boolean(row.cancel_at_period_end),
+    currentPeriodEnd: row.current_period_end ? String(row.current_period_end) : null,
+    source: String(row.source || ''),
+    updatedAt: row.updated_at ? String(row.updated_at) : null,
+  };
+}
+
+function buildPatientBillingUpsertBody(patientEmail, patch = {}) {
+  const normalizedEmail = normalizeEmail(patientEmail);
+  const hasActiveUnlimited = Boolean(patch.hasActiveUnlimited);
+  const plan = String(patch.plan || (hasActiveUnlimited ? 'unlimited' : 'pay_as_you_go')).trim();
+  const subscriptionStatus = String(
+    patch.subscriptionStatus || (hasActiveUnlimited ? 'active' : 'none')
+  ).trim();
+  const stripeCustomerId = String(patch.stripeCustomerId || '').trim();
+  const stripeSubscriptionId = String(patch.stripeSubscriptionId || '').trim();
+  const cancelAtPeriodEnd = Boolean(patch.cancelAtPeriodEnd);
+  const currentPeriodEnd = patch.currentPeriodEnd ? String(patch.currentPeriodEnd) : null;
+
+  return {
+    patient_email: normalizedEmail,
+    has_active_unlimited: hasActiveUnlimited,
+    plan,
+    subscription_status: subscriptionStatus,
+    stripe_customer_id: stripeCustomerId || null,
+    stripe_subscription_id: stripeSubscriptionId || null,
+    cancel_at_period_end: cancelAtPeriodEnd,
+    current_period_end: currentPeriodEnd,
+    source: String(patch.source || '').trim() || null,
+    updated_at: new Date().toISOString(),
   };
 }
 
@@ -286,6 +342,58 @@ async function appendAuditLocal(entry) {
       ...entry,
       at: new Date().toISOString(),
     });
+  });
+}
+
+async function getPatientBillingLocal(email) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return null;
+
+  const db = await readDbRaw();
+  const row = db.patientBilling.find((entry) => normalizeEmail(entry?.patientEmail || entry?.patient_email) === normalizedEmail);
+  if (!row) return null;
+
+  return {
+    patientEmail: normalizedEmail,
+    hasActiveUnlimited: Boolean(row.hasActiveUnlimited ?? row.has_active_unlimited),
+    plan: String(row.plan || 'pay_as_you_go'),
+    subscriptionStatus: String(row.subscriptionStatus || row.subscription_status || 'none'),
+    stripeCustomerId: String(row.stripeCustomerId || row.stripe_customer_id || ''),
+    stripeSubscriptionId: String(row.stripeSubscriptionId || row.stripe_subscription_id || ''),
+    cancelAtPeriodEnd: Boolean(row.cancelAtPeriodEnd ?? row.cancel_at_period_end),
+    currentPeriodEnd: row.currentPeriodEnd || row.current_period_end || null,
+    source: String(row.source || ''),
+    updatedAt: row.updatedAt || row.updated_at || null,
+  };
+}
+
+async function upsertPatientBillingLocal(patientEmail, patch = {}) {
+  const normalizedEmail = normalizeEmail(patientEmail);
+  if (!normalizedEmail) return null;
+
+  return mutateDb((db) => {
+    const next = {
+      patientEmail: normalizedEmail,
+      hasActiveUnlimited: Boolean(patch.hasActiveUnlimited),
+      plan: String(patch.plan || (patch.hasActiveUnlimited ? 'unlimited' : 'pay_as_you_go')),
+      subscriptionStatus: String(patch.subscriptionStatus || (patch.hasActiveUnlimited ? 'active' : 'none')),
+      stripeCustomerId: String(patch.stripeCustomerId || ''),
+      stripeSubscriptionId: String(patch.stripeSubscriptionId || ''),
+      cancelAtPeriodEnd: Boolean(patch.cancelAtPeriodEnd),
+      currentPeriodEnd: patch.currentPeriodEnd ? String(patch.currentPeriodEnd) : null,
+      source: String(patch.source || ''),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const index = db.patientBilling.findIndex(
+      (entry) => normalizeEmail(entry?.patientEmail || entry?.patient_email) === normalizedEmail
+    );
+    if (index >= 0) {
+      db.patientBilling[index] = next;
+    } else {
+      db.patientBilling.push(next);
+    }
+    return next;
   });
 }
 
@@ -529,6 +637,35 @@ async function appendAuditSupabase(entry) {
   });
 }
 
+async function getPatientBillingSupabase(email) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return null;
+
+  const rows = await supabaseRequest(
+    `patient_billing?patient_email=eq.${encodeURIComponent(normalizedEmail)}&select=*&limit=1`,
+    {
+      method: 'GET',
+      prefer: 'return=representation',
+    }
+  );
+  const row = Array.isArray(rows) ? rows[0] : null;
+  return mapSupabaseRowToPatientBilling(row);
+}
+
+async function upsertPatientBillingSupabase(patientEmail, patch = {}) {
+  const body = buildPatientBillingUpsertBody(patientEmail, patch);
+  if (!body.patient_email) return null;
+
+  const rows = await supabaseRequest('patient_billing', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates,return=representation',
+    body,
+  });
+
+  const row = Array.isArray(rows) ? rows[0] : null;
+  return mapSupabaseRowToPatientBilling(row || body);
+}
+
 export async function listCertificates() {
   if (getSupabaseConfig().enabled) {
     return listCertificatesSupabase();
@@ -562,6 +699,20 @@ export async function appendAudit(entry) {
     return appendAuditSupabase(entry);
   }
   return appendAuditLocal(entry);
+}
+
+export async function getPatientBillingByEmail(email) {
+  if (getSupabaseConfig().enabled) {
+    return getPatientBillingSupabase(email);
+  }
+  return getPatientBillingLocal(email);
+}
+
+export async function upsertPatientBillingByEmail(email, patch = {}) {
+  if (getSupabaseConfig().enabled) {
+    return upsertPatientBillingSupabase(email, patch);
+  }
+  return upsertPatientBillingLocal(email, patch);
 }
 
 export function isSupabaseStorageEnabled() {
