@@ -941,7 +941,7 @@ async function sendPatientDecisionEmail(certificate) {
   if (isApprovedCertificate(certificate)) {
     const verificationCode = getCertificateVerificationCode(certificate);
     const verifyBaseUrl = FRONTEND_BASE_URL || APP_BASE_URL || '';
-    const pdfBuffer = buildCertificatePdf(certificate, {
+    const pdfBuffer = await buildCertificatePdf(certificate, {
       doctorName: certificate?.decision?.by || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
       doctorNotes: certificate?.decision?.notes || '',
       providerType: certificate?.decision?.providerType || '',
@@ -2393,27 +2393,24 @@ export default async function handler(req, res) {
           expiresMinutes: String(Math.round(PATIENT_PASSWORD_RESET_TTL_MS / (1000 * 60))),
         });
 
-        // Dispatch email asynchronously so API response isn't blocked on SMTP latency.
-        void (async () => {
-          try {
-            await sendEmail({
-              to: email,
-              subject: 'Reset your Onya Health password',
-              html: resetEmail.html,
-              text: resetEmail.text,
-            });
-            await appendAudit({
-              type: 'PATIENT_PASSWORD_RESET_REQUESTED',
-              email,
-            });
-          } catch (errorObject) {
-            error('patient.password_reset.dispatch_failed', {
-              email,
-              message: errorObject?.message || String(errorObject),
-              mode: resetTokenMode,
-            });
-          }
-        })();
+        try {
+          await sendEmail({
+            to: email,
+            subject: 'Reset your Onya Health password',
+            html: resetEmail.html,
+            text: resetEmail.text,
+          });
+          await appendAudit({
+            type: 'PATIENT_PASSWORD_RESET_REQUESTED',
+            email,
+          });
+        } catch (errorObject) {
+          error('patient.password_reset.dispatch_failed', {
+            email,
+            message: errorObject?.message || String(errorObject),
+            mode: resetTokenMode,
+          });
+        }
       } else {
         info('patient.password_reset.requested_without_existing_account', {
           email,
@@ -2728,7 +2725,7 @@ export default async function handler(req, res) {
         return;
       }
 
-      const pdfBuffer = buildCertificatePdf(certificate, {
+      const pdfBuffer = await buildCertificatePdf(certificate, {
         doctorName: certificate?.decision?.by || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
         doctorNotes: certificate?.decision?.notes || '',
         providerType: certificate?.decision?.providerType || '',
@@ -2868,26 +2865,23 @@ export default async function handler(req, res) {
           expiresMinutes: String(Math.round(DOCTOR_PASSWORD_RESET_TTL_MS / (1000 * 60))),
         });
 
-        // Dispatch email asynchronously so API response isn't blocked on SMTP latency.
-        void (async () => {
-          try {
-            await sendEmail({
-              to: email,
-              subject: 'Reset your doctor portal password',
-              html: resetEmail.html,
-              text: resetEmail.text,
-            });
-            await appendAudit({
-              type: 'DOCTOR_PASSWORD_RESET_REQUESTED',
-              email,
-            });
-          } catch (errorObject) {
-            error('doctor.password_reset.dispatch_failed', {
-              email,
-              message: errorObject?.message || String(errorObject),
-            });
-          }
-        })();
+        try {
+          await sendEmail({
+            to: email,
+            subject: 'Reset your doctor portal password',
+            html: resetEmail.html,
+            text: resetEmail.text,
+          });
+          await appendAudit({
+            type: 'DOCTOR_PASSWORD_RESET_REQUESTED',
+            email,
+          });
+        } catch (errorObject) {
+          error('doctor.password_reset.dispatch_failed', {
+            email,
+            message: errorObject?.message || String(errorObject),
+          });
+        }
 
         info('doctor.password_reset.requested', {
           email,
@@ -3377,7 +3371,7 @@ export default async function handler(req, res) {
         },
       };
 
-      const pdfBuffer = buildCertificatePdf(previewCertificate, {
+      const pdfBuffer = await buildCertificatePdf(previewCertificate, {
         doctorName: reviewerName,
         doctorNotes: notes,
         providerType: String(previewCertificate?.decision?.providerType || '').trim(),

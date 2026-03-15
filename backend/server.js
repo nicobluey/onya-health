@@ -716,7 +716,7 @@ async function sendPatientDecisionEmail(certificate) {
 
   if (certificate.status === 'approved') {
     const verificationCode = getCertificateVerificationCode(certificate);
-    const pdfBuffer = buildCertificatePdf(certificate, {
+    const pdfBuffer = await buildCertificatePdf(certificate, {
       doctorName: certificate?.decision?.by || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
       doctorNotes: certificate?.decision?.notes || '',
       providerType: certificate?.decision?.providerType || '',
@@ -2080,7 +2080,7 @@ async function handleApi(req, res, url) {
       },
     };
 
-    const pdfBuffer = buildCertificatePdf(previewCertificate, {
+    const pdfBuffer = await buildCertificatePdf(previewCertificate, {
       doctorName: reviewerName,
       doctorNotes: notes,
       providerType: String(previewCertificate?.decision?.providerType || '').trim(),
