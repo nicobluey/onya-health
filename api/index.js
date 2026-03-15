@@ -1095,12 +1095,15 @@ async function syncPatientBillingFromStripeSubscription(subscription, options = 
   const source = String(options?.source || 'stripe.subscription').trim();
   const fallbackPatientEmail = normalizeEmail(options?.fallbackPatientEmail || '');
   const patch = buildBillingPatchFromStripeSubscription(subscription, fallbackPatientEmail, source);
-  let patientEmail = patch.patientEmail;
+  let patientEmail = '';
 
-  if (!patientEmail && patch.stripeCustomerId) {
+  if (patch.stripeCustomerId) {
     patientEmail = await resolvePatientEmailFromStripeCustomer(patch.stripeCustomerId);
-    patch.patientEmail = patientEmail;
   }
+  if (!patientEmail) {
+    patientEmail = patch.patientEmail;
+  }
+  patch.patientEmail = patientEmail;
 
   if (!patientEmail) {
     return null;

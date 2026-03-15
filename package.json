@@ -11,7 +11,8 @@
     "backend": "node backend/server.js",
     "dcup": "docker compose up --build",
     "dcdown": "docker compose down",
-    "supabase:test-record": "node scripts/supabase-test-record.mjs"
+    "supabase:test-record": "node scripts/supabase-test-record.mjs",
+    "billing:backfill": "node scripts/backfill-patient-billing.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
