@@ -5,13 +5,18 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:start": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$proc = Start-Process -FilePath cmd.exe -ArgumentList '/c npm run dev -- --host localhost --port 5173 --strictPort' -WorkingDirectory '.' -WindowStyle Hidden -RedirectStandardOutput '.vite-run.log' -RedirectStandardError '.vite-run.err.log' -PassThru; Write-Output ('Started dev server on port 5173 (PID ' + $proc.Id + ').')\"",
+    "dev:stop": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"$conn = Get-NetTCPConnection -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue; if ($conn) { Stop-Process -Id $conn.OwningProcess -Force; Write-Output 'Stopped dev server on port 5173.' } else { Write-Output 'No dev server found on port 5173.' }\"",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "backend": "node backend/server.js",
     "dcup": "docker compose up --build",
     "dcdown": "docker compose down",
-    "supabase:test-record": "node scripts/supabase-test-record.mjs"
+    "supabase:test-record": "node scripts/supabase-test-record.mjs",
+    "images:landing": "node scripts/generate-landing-images.mjs",
+    "images:landing:dry": "node scripts/generate-landing-images.mjs --dry-run",
+    "images:chatgpt": "node scripts/generate-landing-images.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",

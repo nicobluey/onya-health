@@ -17,6 +17,7 @@ import {
     UserRound,
 } from 'lucide-react';
 import { fetchApiJson, getApiBase } from '../lib/api';
+import { HeaderBrand } from '../components/HeaderBrand';
 import HomeTab from '../patient-portal/home/HomeTab';
 import {
     type CheckoutSetupContext,
@@ -82,12 +83,10 @@ function DesktopSidebar({
     patient: PatientProfile;
 }) {
     return (
-        <aside className="hidden md:flex w-[260px] shrink-0 flex-col border-r border-[#cbd5e1] bg-[#f8fbff]/95 backdrop-blur">
+        <aside className="hidden md:flex w-[260px] shrink-0 flex-col border-r border-border bg-bg/95 backdrop-blur">
             <div className="px-5 pt-5">
-                <a href="/" className="inline-flex items-center" aria-label="Go to home page">
-                    <img src="/logo.png" alt="Onya Health" className="h-10 w-auto object-contain" />
-                </a>
-                <p className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-[#475569]">Platform</p>
+                <HeaderBrand />
+                <p className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-text-secondary">Platform</p>
                 <nav className="mt-3 space-y-1">
                     {[
                         { id: 'home' as const, label: 'Home', icon: Home },
@@ -103,8 +102,8 @@ function DesktopSidebar({
                                 onClick={() => onTabChange(item.id)}
                                 className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${
                                     active
-                                        ? 'bg-[#0f172a] text-white'
-                                        : 'text-[#334155] hover:bg-[#f1f8ff] hover:text-[#020617]'
+                                        ? 'bg-bark-900 text-white'
+                                        : 'text-text-secondary hover:bg-bg hover:text-text-primary'
                                 }`}
                             >
                                 <Icon size={16} />
@@ -115,15 +114,15 @@ function DesktopSidebar({
                 </nav>
             </div>
 
-            <div className="mt-auto border-t border-[#cbd5e1] p-4">
-                <div className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3">
+            <div className="mt-auto border-t border-border p-4">
+                <div className="rounded-2xl border border-border bg-bg p-3">
                     <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#dbeeff] text-sm font-semibold text-[#2e8cff]">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-sand-100 text-sm font-semibold text-primary">
                             {avatarInitials(patient.fullName)}
                         </div>
                         <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-[#020617]">{patient.fullName || 'Patient'}</p>
-                            <p className="truncate text-xs text-[#475569]">{patient.email || 'No email'}</p>
+                            <p className="truncate text-sm font-semibold text-text-primary">{patient.fullName || 'Patient'}</p>
+                            <p className="truncate text-xs text-text-secondary">{patient.email || 'No email'}</p>
                         </div>
                     </div>
                 </div>
@@ -136,12 +135,10 @@ function MobileTopBar({ activeTab }: { activeTab: MainTab }) {
     const label = activeTab.slice(0, 1).toUpperCase() + activeTab.slice(1);
 
     return (
-        <header className="sticky top-0 z-40 border-b border-[#cbd5e1] bg-[#f8fbff]/95 backdrop-blur">
+        <header className="sticky top-0 z-40 border-b border-border bg-bg/95 backdrop-blur">
             <div className="flex h-14 items-center justify-between px-4">
-                <a href="/" className="inline-flex items-center" aria-label="Go to home page">
-                    <img src="/logo.png" alt="Onya Health" className="h-10 w-auto object-contain" />
-                </a>
-                <span className="rounded-full border border-[#cbd5e1] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#334155]">
+                <HeaderBrand compact />
+                <span className="rounded-full border border-border bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-text-secondary">
                     {label}
                 </span>
             </div>
@@ -157,7 +154,7 @@ function MobileBottomNav({
     onTabChange: (next: MainTab) => void;
 }) {
     return (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#cbd5e1] bg-[#f8fbff]">
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-bg">
             <div className="mx-auto flex h-16 w-full max-w-[740px] items-center px-1">
                 {[
                     { id: 'home' as const, label: 'Home', icon: Home },
@@ -172,7 +169,7 @@ function MobileBottomNav({
                             type="button"
                             onClick={() => onTabChange(item.id)}
                             className={`flex flex-1 flex-col items-center justify-center gap-1.5 py-2 ${
-                                active ? 'text-[#2e8cff]' : 'text-[#475569]'
+                                active ? 'text-primary' : 'text-text-secondary'
                             }`}
                         >
                             <Icon size={20} />
@@ -190,19 +187,19 @@ function QueueBanner({ onTap }: { onTap: () => void }) {
         <button
             type="button"
             onClick={onTap}
-            className="fixed bottom-16 left-3 right-3 z-40 overflow-hidden rounded-2xl border border-[#b7dcff] bg-white px-4 py-3 text-left shadow-[0_24px_40px_-30px_rgba(15,23,42,0.55)]"
+            className="fixed bottom-16 left-3 right-3 z-40 overflow-hidden rounded-2xl border border-border bg-white px-4 py-3 text-left shadow-[0_24px_40px_-30px_rgba(15,23,42,0.55)]"
         >
-            <span className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-[#2e8cff]" aria-hidden="true" />
+            <span className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-primary" aria-hidden="true" />
             <div className="flex items-center gap-3">
-                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#dbeeff] text-[#2e8cff]">
+                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-sand-100 text-primary">
                     <Heart size={18} className="fill-current stroke-current" />
                     <span className="portal-live-dot absolute -right-0.5 -top-0.5" aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
-                    <p className="text-sm font-semibold text-[#020617]">You&apos;re in the queue</p>
-                    <p className="text-xs text-[#475569]">Tap to view live status</p>
+                    <p className="text-sm font-semibold text-text-primary">You&apos;re in the queue</p>
+                    <p className="text-xs text-text-secondary">Tap to view live status</p>
                 </div>
-                <ChevronRight size={18} className="ml-auto text-[#64748b]" />
+                <ChevronRight size={18} className="ml-auto text-text-secondary" />
             </div>
         </button>
     );
@@ -212,8 +209,8 @@ function ConsultTab({ onSelectOption }: { onSelectOption: (optionId: ConsultOpti
     return (
         <section className="space-y-5">
             <header>
-                <h1 className="text-3xl font-semibold tracking-tight text-[#020617]">Book a consultation</h1>
-                <p className="mt-1 text-base text-[#475569]">Choose a service to continue. Live services open instantly, others are previewable.</p>
+                <h1 className="text-3xl font-semibold tracking-tight text-text-primary">Book a consultation</h1>
+                <p className="mt-1 text-base text-text-secondary">Choose a service to continue. Live services open instantly, others are previewable.</p>
             </header>
 
             <div className="grid gap-3 md:grid-cols-2">
@@ -227,33 +224,33 @@ function ConsultTab({ onSelectOption }: { onSelectOption: (optionId: ConsultOpti
                             onClick={() => onSelectOption(option.id)}
                             className={`${sectionCardClassName(
                                 'group p-4 text-left transition hover:-translate-y-0.5 hover:shadow-[0_26px_50px_-36px_rgba(15,23,42,0.46)]'
-                            )} ${live ? 'border-[#b7dcff] bg-[#f8fbff]' : ''}`}
+                            )} ${live ? 'border-border bg-bg' : ''}`}
                         >
                             <div className="flex items-start gap-3">
                                 <div
                                     className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-                                        live ? 'bg-[#dbeeff] text-[#2e8cff]' : 'bg-[#f1f5f9] text-[#64748b]'
+                                        live ? 'bg-sand-100 text-primary' : 'bg-sand-75 text-text-secondary'
                                     }`}
                                 >
                                     <Icon size={18} />
                                 </div>
                                 <div className="min-w-0">
-                                    <h2 className="text-base font-semibold text-[#020617]">{option.title}</h2>
-                                    <p className="mt-1 text-sm text-[#475569]">{option.subtitle}</p>
+                                    <h2 className="text-base font-semibold text-text-primary">{option.title}</h2>
+                                    <p className="mt-1 text-sm text-text-secondary">{option.subtitle}</p>
                                 </div>
                                 <span
                                     className={`ml-auto shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${
-                                        live ? 'bg-[#dbeeff] text-[#165fad]' : 'bg-[#e2e8f0] text-[#475569]'
+                                        live ? 'bg-sand-100 text-primary-hover' : 'bg-sand-100 text-text-secondary'
                                     }`}
                                 >
                                     {option.badge}
                                 </span>
                             </div>
                             <div className="mt-3 flex items-center justify-between">
-                                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
+                                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text-secondary">
                                     {live ? 'Available now' : 'Preview available'}
                                 </p>
-                                <span className="inline-flex items-center gap-1 text-sm font-semibold text-[#2e8cff] transition group-hover:gap-1.5">
+                                <span className="inline-flex items-center gap-1 text-sm font-semibold text-primary transition group-hover:gap-1.5">
                                     {live ? 'Continue' : 'View details'}
                                     <ChevronRight size={15} />
                                 </span>
@@ -275,30 +272,30 @@ function ConsultComingSoonScreen({
 }) {
     return (
         <section className="space-y-5">
-            <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-[#475569]">
+            <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-text-secondary">
                 <ArrowLeft size={16} />
                 Back to consult options
             </button>
 
-            <article className="overflow-hidden rounded-3xl border border-[#cbd5e1] bg-white">
-                <div className="border-b border-[#dbeeff] bg-[#f8fbff] px-5 py-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#64748b]">Coming soon</p>
-                    <h1 className="mt-1 text-2xl font-semibold text-[#020617]">{option?.title ?? 'Service'}</h1>
+            <article className="overflow-hidden rounded-3xl border border-border bg-white">
+                <div className="border-b border-border bg-bg px-5 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.1em] text-text-secondary">Coming soon</p>
+                    <h1 className="mt-1 text-2xl font-semibold text-text-primary">{option?.title ?? 'Service'}</h1>
                 </div>
                 <div className="p-5">
-                    <p className="text-sm leading-relaxed text-[#475569]">
+                    <p className="text-sm leading-relaxed text-text-secondary">
                         {option?.subtitle ?? 'This service is being prepared.'} We&apos;re currently finalizing workflows and clinician availability.
                     </p>
-                    <div className="mt-4 rounded-2xl border border-[#dbeeff] bg-[#f8fbff] p-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#64748b]">What happens next</p>
-                        <p className="mt-1 text-sm text-[#475569]">
+                    <div className="mt-4 rounded-2xl border border-border bg-bg p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.1em] text-text-secondary">What happens next</p>
+                        <p className="mt-1 text-sm text-text-secondary">
                             Keep using live services today. This option will automatically appear as available once launched.
                         </p>
                     </div>
                     <button
                         type="button"
                         onClick={onBack}
-                        className="mt-4 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#2e8cff] px-5 text-sm font-semibold text-white"
+                        className="mt-4 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-white"
                     >
                         Got it
                         <ChevronRight size={16} />
@@ -319,14 +316,14 @@ function ProfileCard({ patient }: { patient: PatientProfile }) {
 
     return (
         <section className={sectionCardClassName()}>
-            <div className="border-b border-[#dbeeff] px-5 py-4">
-                <h2 className="text-lg font-semibold text-[#020617]">Account Info</h2>
+            <div className="border-b border-border px-5 py-4">
+                <h2 className="text-lg font-semibold text-text-primary">Account Info</h2>
             </div>
             <div className="space-y-1 p-4">
                 {rows.map((row) => (
-                    <div key={row.label} className="rounded-xl border border-[#f1f8ff] bg-[#f8fbff] px-3 py-2.5">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-[#64748b]">{row.label}</p>
-                        <p className="mt-1 text-sm font-medium text-[#020617]">{row.value}</p>
+                    <div key={row.label} className="rounded-xl border border-sand-75 bg-bg px-3 py-2.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-text-secondary">{row.label}</p>
+                        <p className="mt-1 text-sm font-medium text-text-primary">{row.value}</p>
                     </div>
                 ))}
             </div>
@@ -354,21 +351,21 @@ function AccountTab({
     return (
         <section className="space-y-5">
             <header>
-                <h1 className="text-3xl font-semibold tracking-tight text-[#020617]">Account</h1>
-                <p className="mt-1 text-base text-[#475569]">View your personal details and profile activity</p>
+                <h1 className="text-3xl font-semibold tracking-tight text-text-primary">Account</h1>
+                <p className="mt-1 text-base text-text-secondary">View your personal details and profile activity</p>
             </header>
 
             <ProfileCard patient={patient} />
 
             <section className={sectionCardClassName()}>
-                <div className="border-b border-[#dbeeff] px-5 py-4">
-                    <h2 className="text-lg font-semibold text-[#020617]">Profile Summary</h2>
+                <div className="border-b border-border px-5 py-4">
+                    <h2 className="text-lg font-semibold text-text-primary">Profile Summary</h2>
                 </div>
                 <div className="grid gap-3 px-5 py-4 sm:grid-cols-3">
                     {stats.map((item) => (
-                        <article key={item.label} className="rounded-2xl border border-[#dbeeff] bg-[#f8fbff] p-3">
-                            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">{item.label}</p>
-                            <p className="mt-2 text-2xl font-semibold text-[#020617]">{item.value}</p>
+                        <article key={item.label} className="rounded-2xl border border-border bg-bg p-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text-secondary">{item.label}</p>
+                            <p className="mt-2 text-2xl font-semibold text-text-primary">{item.value}</p>
                         </article>
                     ))}
                 </div>
@@ -376,17 +373,17 @@ function AccountTab({
 
             <section className={sectionCardClassName()}>
                 <div className="p-5">
-                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">Latest consult</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-text-secondary">Latest consult</p>
                     {latestRequest ? (
                         <>
-                            <h2 className="mt-2 text-lg font-semibold text-[#020617]">{consultTitle(latestRequest.serviceType)}</h2>
-                            <p className="mt-1 text-sm text-[#475569]">{statusLabel(latestRequest.status)}</p>
-                            <p className="mt-1 text-xs text-[#64748b]">Updated {formatDate(latestRequest.createdAt)}</p>
+                            <h2 className="mt-2 text-lg font-semibold text-text-primary">{consultTitle(latestRequest.serviceType)}</h2>
+                            <p className="mt-1 text-sm text-text-secondary">{statusLabel(latestRequest.status)}</p>
+                            <p className="mt-1 text-xs text-text-secondary">Updated {formatDate(latestRequest.createdAt)}</p>
                             {latestRequest.certificatePdfUrl && (
                                 <button
                                     type="button"
                                     onClick={() => onDownloadCertificate(latestRequest)}
-                                    className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[#2e8cff] px-3 py-2 text-sm font-semibold text-white"
+                                    className="mt-3 inline-flex items-center gap-2 rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-white"
                                 >
                                     <FileText size={15} />
                                     Download Medical Certificate
@@ -394,7 +391,7 @@ function AccountTab({
                             )}
                         </>
                     ) : (
-                        <p className="mt-2 text-sm text-[#475569]">No consult history yet.</p>
+                        <p className="mt-2 text-sm text-text-secondary">No consult history yet.</p>
                     )}
                 </div>
             </section>
@@ -414,19 +411,19 @@ function CallPrepScreen({
     return (
         <section className="space-y-5">
             <div className="grid grid-cols-3 gap-2">
-                <div className="h-1.5 rounded-full bg-[#2e8cff]" />
-                <div className="h-1.5 rounded-full bg-[#2e8cff]" />
-                <div className="h-1.5 rounded-full bg-[#dbeeff]" />
+                <div className="h-1.5 rounded-full bg-primary" />
+                <div className="h-1.5 rounded-full bg-primary" />
+                <div className="h-1.5 rounded-full bg-sand-100" />
             </div>
 
-            <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-[#475569]">
+            <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-text-secondary">
                 <ArrowLeft size={16} />
                 Back
             </button>
 
             <header>
-                <h1 className="text-3xl font-semibold tracking-tight text-[#020617]">Ready to start?</h1>
-                <p className="mt-2 text-base text-[#475569]">A quick chat with AI to help your doctor prepare</p>
+                <h1 className="text-3xl font-semibold tracking-tight text-text-primary">Ready to start?</h1>
+                <p className="mt-2 text-base text-text-secondary">A quick chat with AI to help your doctor prepare</p>
             </header>
 
             <article className={sectionCardClassName('overflow-hidden')}>
@@ -438,20 +435,20 @@ function CallPrepScreen({
                 ].map((item, index) => {
                     const Icon = item.icon;
                     return (
-                        <div key={item.text} className={`flex items-center gap-3 px-4 py-3 ${index > 0 ? 'border-t border-[#dbeeff]' : ''}`}>
-                            <Icon size={18} className="text-[#2e8cff]" />
-                            <p className="text-sm text-[#475569]">{item.text}</p>
+                        <div key={item.text} className={`flex items-center gap-3 px-4 py-3 ${index > 0 ? 'border-t border-border' : ''}`}>
+                            <Icon size={18} className="text-primary" />
+                            <p className="text-sm text-text-secondary">{item.text}</p>
                         </div>
                     );
                 })}
             </article>
 
-            <article className="overflow-hidden rounded-3xl border border-[#dbeeff] bg-white p-4">
+            <article className="overflow-hidden rounded-3xl border border-border bg-white p-4">
                 <div className="flex items-center gap-2">
-                    <Phone size={16} className="text-[#2e8cff]" />
-                    <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#64748b]">Live call preview</p>
+                    <Phone size={16} className="text-primary" />
+                    <p className="text-xs font-semibold uppercase tracking-[0.1em] text-text-secondary">Live call preview</p>
                 </div>
-                <div className="audio-wave mt-2 min-h-[86px] rounded-2xl border border-[#dbeeff] bg-[#f8fbff] px-2">
+                <div className="audio-wave mt-2 min-h-[86px] rounded-2xl border border-border bg-bg px-2">
                     {wavePattern.map((height, index) => (
                         <span
                             // intentional index key for fixed static visual bars
@@ -471,7 +468,7 @@ function CallPrepScreen({
             <button
                 type="button"
                 onClick={onStartCall}
-                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#2e8cff] text-sm font-semibold text-white"
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary text-sm font-semibold text-white"
             >
                 <Phone size={16} />
                 Start call
@@ -492,35 +489,35 @@ function QueuedWaitingScreen({
     const queueSteps = ['Triage', 'Doctor Assigned', 'Review', 'Issue'];
     const rows = [
         { label: 'Type', value: 'Medical Certificate', icon: Tag },
-        { label: 'Leave type', value: request?.purpose || '—', icon: FileText },
-        { label: 'Main symptom', value: request?.symptom || '—', icon: FileText },
-        { label: 'Certificate period', value: request?.startDate ? formatDate(request.startDate) : '—', icon: CalendarDays },
+        { label: 'Leave type', value: request?.purpose || 'â€”', icon: FileText },
+        { label: 'Main symptom', value: request?.symptom || 'â€”', icon: FileText },
+        { label: 'Certificate period', value: request?.startDate ? formatDate(request.startDate) : 'â€”', icon: CalendarDays },
     ];
 
     return (
         <section className="space-y-5">
             <div className="grid grid-cols-3 gap-2">
-                <div className="h-1.5 rounded-full bg-[#2e8cff]" />
-                <div className="h-1.5 rounded-full bg-[#2e8cff]" />
-                <div className="h-1.5 rounded-full bg-[#2e8cff]" />
+                <div className="h-1.5 rounded-full bg-primary" />
+                <div className="h-1.5 rounded-full bg-primary" />
+                <div className="h-1.5 rounded-full bg-primary" />
             </div>
 
-            <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-[#475569]">
+            <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-text-secondary">
                 <ArrowLeft size={16} />
                 Back
             </button>
 
-            <article className="overflow-hidden rounded-3xl border border-[#b7dcff] bg-white px-5 py-4">
+            <article className="overflow-hidden rounded-3xl border border-border bg-white px-5 py-4">
                 <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#dbeeff] text-[#2e8cff]">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-sand-100 text-primary">
                         <Heart size={20} className="fill-current stroke-current" />
                     </div>
                     <div className="min-w-0">
-                        <h1 className="text-lg font-semibold text-[#020617]">Queued</h1>
-                        <p className="text-sm text-[#475569]">A doctor will be assigned shortly</p>
+                        <h1 className="text-lg font-semibold text-text-primary">Queued</h1>
+                        <p className="text-sm text-text-secondary">A doctor will be assigned shortly</p>
                     </div>
                 </div>
-                <div className="mt-4 rounded-2xl border border-[#dbeeff] bg-[#f8fbff] p-3">
+                <div className="mt-4 rounded-2xl border border-border bg-bg p-3">
                     <div className="portal-queue-track">
                         {queueSteps.map((step, index) => (
                             <div key={step} className="portal-queue-step">
@@ -541,10 +538,10 @@ function QueuedWaitingScreen({
                 {rows.map((row, index) => {
                     const Icon = row.icon;
                     return (
-                        <div key={row.label} className={`flex items-center gap-3 px-4 py-3 ${index > 0 ? 'border-t border-[#dbeeff]' : ''}`}>
-                            <Icon size={16} className="text-[#94a3b8]" />
-                            <span className="text-sm text-[#475569]">{row.label}</span>
-                            <span className="ml-auto text-sm font-semibold text-[#020617]">{row.value}</span>
+                        <div key={row.label} className={`flex items-center gap-3 px-4 py-3 ${index > 0 ? 'border-t border-border' : ''}`}>
+                            <Icon size={16} className="text-sand-400" />
+                            <span className="text-sm text-text-secondary">{row.label}</span>
+                            <span className="ml-auto text-sm font-semibold text-text-primary">{row.value}</span>
                         </div>
                     );
                 })}
@@ -553,7 +550,7 @@ function QueuedWaitingScreen({
             <button
                 type="button"
                 onClick={onSendMessage}
-                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#2e8cff] text-sm font-semibold text-white"
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary text-sm font-semibold text-white"
             >
                 <MessageCircle size={16} />
                 Message Doctor
@@ -649,38 +646,38 @@ function CheckoutAccountSetupScreen({
     };
 
     return (
-        <div className="relative min-h-screen overflow-hidden bg-[#f8fbff] px-4 py-8 font-sans text-[#020617]">
+        <div className="relative min-h-screen overflow-hidden bg-bg px-4 py-8 font-sans text-text-primary">
             <PortalBackdropArt />
             <div className="relative z-10 mx-auto w-full max-w-[760px]">
-                <section className="overflow-hidden rounded-3xl border border-[#cbd5e1] bg-white shadow-[0_30px_55px_-36px_rgba(15,23,42,0.46)]">
-                    <div className="border-b border-[#dbeeff] bg-[#f8fbff] px-5 py-4 md:px-6">
-                        <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#64748b]">Payment confirmed</p>
-                        <h1 className="mt-1 text-2xl font-semibold text-[#020617] md:text-[2rem]">Create your portal password</h1>
-                        <p className="mt-2 text-sm text-[#475569]">
+                <section className="overflow-hidden rounded-3xl border border-border bg-white shadow-[0_30px_55px_-36px_rgba(15,23,42,0.46)]">
+                    <div className="border-b border-border bg-bg px-5 py-4 md:px-6">
+                        <p className="text-xs font-semibold uppercase tracking-[0.1em] text-text-secondary">Payment confirmed</p>
+                        <h1 className="mt-1 text-2xl font-semibold text-text-primary md:text-[2rem]">Create your portal password</h1>
+                        <p className="mt-2 text-sm text-text-secondary">
                             Confirm your consult email and set a password to access your patient portal.
                         </p>
                     </div>
 
                     <form className="space-y-4 px-5 py-5 md:px-6" onSubmit={handleSubmit}>
-                        <div className="rounded-2xl border border-[#dbeeff] bg-[#f8fbff] p-3">
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#64748b]">Consult email on file</p>
-                            <p className="mt-1 text-sm font-semibold text-[#020617]">{setup.consultEmail}</p>
+                        <div className="rounded-2xl border border-border bg-bg p-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-text-secondary">Consult email on file</p>
+                            <p className="mt-1 text-sm font-semibold text-text-primary">{setup.consultEmail}</p>
                         </div>
 
                         {setup.consultEmail && (
                             <button
                                 type="button"
                                 onClick={handleUseSameEmail}
-                                className="inline-flex h-10 items-center justify-center rounded-xl border border-[#b7dcff] bg-[#eff6ff] px-4 text-sm font-semibold text-[#165fad]"
+                                className="inline-flex h-10 items-center justify-center rounded-xl border border-border bg-bg px-4 text-sm font-semibold text-primary-hover"
                             >
                                 Use the same email as {setup.consultEmail}
                             </button>
                         )}
 
                         <label className="block">
-                            <span className="mb-1 block text-sm font-medium text-[#334155]">Email</span>
-                            <div className="flex items-center gap-2 rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3">
-                                <Mail size={16} className="text-[#64748b]" />
+                            <span className="mb-1 block text-sm font-medium text-text-secondary">Email</span>
+                            <div className="flex items-center gap-2 rounded-xl border border-border bg-bg px-3">
+                                <Mail size={16} className="text-text-secondary" />
                                 <input
                                     type="email"
                                     value={email}
@@ -693,9 +690,9 @@ function CheckoutAccountSetupScreen({
                         </label>
 
                         <label className="block">
-                            <span className="mb-1 block text-sm font-medium text-[#334155]">Confirm email</span>
-                            <div className="flex items-center gap-2 rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3">
-                                <Mail size={16} className="text-[#64748b]" />
+                            <span className="mb-1 block text-sm font-medium text-text-secondary">Confirm email</span>
+                            <div className="flex items-center gap-2 rounded-xl border border-border bg-bg px-3">
+                                <Mail size={16} className="text-text-secondary" />
                                 <input
                                     type="email"
                                     value={confirmEmail}
@@ -708,9 +705,9 @@ function CheckoutAccountSetupScreen({
                         </label>
 
                         <label className="block">
-                            <span className="mb-1 block text-sm font-medium text-[#334155]">Create password</span>
-                            <div className="flex items-center gap-2 rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3">
-                                <Lock size={16} className="text-[#64748b]" />
+                            <span className="mb-1 block text-sm font-medium text-text-secondary">Create password</span>
+                            <div className="flex items-center gap-2 rounded-xl border border-border bg-bg px-3">
+                                <Lock size={16} className="text-text-secondary" />
                                 <input
                                     type="password"
                                     value={password}
@@ -724,9 +721,9 @@ function CheckoutAccountSetupScreen({
                         </label>
 
                         <label className="block">
-                            <span className="mb-1 block text-sm font-medium text-[#334155]">Confirm password</span>
-                            <div className="flex items-center gap-2 rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3">
-                                <Lock size={16} className="text-[#64748b]" />
+                            <span className="mb-1 block text-sm font-medium text-text-secondary">Confirm password</span>
+                            <div className="flex items-center gap-2 rounded-xl border border-border bg-bg px-3">
+                                <Lock size={16} className="text-text-secondary" />
                                 <input
                                     type="password"
                                     value={confirmPassword}
@@ -744,7 +741,7 @@ function CheckoutAccountSetupScreen({
                         <button
                             type="submit"
                             disabled={submitting}
-                            className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-[#2e8cff] text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
+                            className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-primary text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
                         >
                             {submitting ? 'Creating account...' : 'Continue to patient portal'}
                         </button>
@@ -1168,10 +1165,10 @@ export default function PatientPortalPage() {
 
     if (loading) {
         return (
-            <div className="relative min-h-screen overflow-hidden bg-[#f8fbff] px-4 py-8 font-sans text-[#020617]">
+            <div className="relative min-h-screen overflow-hidden bg-bg px-4 py-8 font-sans text-text-primary">
                 <PortalBackdropArt />
-                <div className="relative z-10 mx-auto max-w-[900px] rounded-3xl border border-[#cbd5e1] bg-white p-6">
-                    <p className="text-sm text-[#475569]">Loading your patient account...</p>
+                <div className="relative z-10 mx-auto max-w-[900px] rounded-3xl border border-border bg-white p-6">
+                    <p className="text-sm text-text-secondary">Loading your patient account...</p>
                 </div>
             </div>
         );
@@ -1179,22 +1176,22 @@ export default function PatientPortalPage() {
 
     if (loadError) {
         return (
-            <div className="relative min-h-screen overflow-hidden bg-[#f8fbff] px-4 py-8 font-sans text-[#020617]">
+            <div className="relative min-h-screen overflow-hidden bg-bg px-4 py-8 font-sans text-text-primary">
                 <PortalBackdropArt />
-                <div className="relative z-10 mx-auto max-w-[900px] rounded-3xl border border-[#cbd5e1] bg-white p-6">
-                    <h1 className="text-2xl font-semibold text-[#020617]">Unable to load account</h1>
-                    <p className="mt-2 text-[#475569]">{loadError}</p>
+                <div className="relative z-10 mx-auto max-w-[900px] rounded-3xl border border-border bg-white p-6">
+                    <h1 className="text-2xl font-semibold text-text-primary">Unable to load account</h1>
+                    <p className="mt-2 text-text-secondary">{loadError}</p>
                     <div className="mt-4 flex gap-3">
                         <button
                             type="button"
                             onClick={() => window.location.reload()}
-                            className="rounded-xl bg-[#2e8cff] px-4 py-2 text-sm font-semibold text-white"
+                            className="rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-white"
                         >
                             Retry
                         </button>
                         <a
                             href="/patient-login"
-                            className="rounded-xl border border-[#cbd5e1] bg-white px-4 py-2 text-sm font-semibold text-[#020617]"
+                            className="rounded-xl border border-border bg-white px-4 py-2 text-sm font-semibold text-text-primary"
                         >
                             Back to login
                         </a>
@@ -1206,13 +1203,13 @@ export default function PatientPortalPage() {
 
     return (
         <>
-            <div className="relative hidden min-h-screen overflow-hidden bg-[#f8fbff] text-[#020617] md:flex">
+            <div className="relative hidden min-h-screen overflow-hidden bg-bg text-text-primary md:flex">
                 <PortalBackdropArt />
                 <DesktopSidebar activeTab={mainTab} onTabChange={setTab} patient={patient} />
                 <main className="relative z-10 flex-1">
                     <div className="mx-auto w-full max-w-[1160px] px-8 py-7">
                         {portalScreen === 'main' && (
-                            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#cbd5e1] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#475569]">
+                            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-border bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-text-secondary">
                                 <Home size={14} />
                                 {MAIN_TABS.find((tab) => tab === mainTab)?.toUpperCase()}
                             </div>
@@ -1222,7 +1219,7 @@ export default function PatientPortalPage() {
                 </main>
             </div>
 
-            <div className={`relative min-h-screen overflow-hidden bg-[#f8fbff] text-[#020617] md:hidden ${portalScreen === 'main' ? 'pb-28' : 'pb-6'}`}>
+            <div className={`relative min-h-screen overflow-hidden bg-bg text-text-primary md:hidden ${portalScreen === 'main' ? 'pb-28' : 'pb-6'}`}>
                 <PortalBackdropArt />
                 <MobileTopBar activeTab={mainTab} />
                 <main className="relative z-10 px-4 py-5">{renderPortalContent('mobile')}</main>

@@ -100,9 +100,9 @@ export function Reviews() {
         if (prevCardsPerView.current === cardsPerView) return;
 
         prevCardsPerView.current = cardsPerView;
-        setTransitionEnabled(false);
-        setSlideIndex(cardsPerView + activeIndex);
         requestAnimationFrame(() => {
+            setTransitionEnabled(false);
+            setSlideIndex(cardsPerView + activeIndex);
             requestAnimationFrame(() => setTransitionEnabled(true));
         });
     }, [cardsPerView, activeIndex]);
@@ -177,7 +177,7 @@ export function Reviews() {
                             >
                                 <div className="h-full bg-white rounded-2xl border border-sand-200 p-6 shadow-sm hover:shadow-md transition-shadow">
                                     <h3 className="text-2xl font-bold text-text-primary leading-tight mb-3">{review.title}</h3>
-                                    <div className="flex items-center gap-1 text-black mb-4">
+                                    <div className="mb-4 flex items-center gap-1 text-secondary">
                                         {[1, 2, 3, 4, 5].map((star) => (
                                             <Star key={star} size={16} className="fill-current stroke-none" />
                                         ))}
@@ -200,7 +200,7 @@ export function Reviews() {
                                 type="button"
                                 aria-label={`Go to review ${idx + 1}`}
                                 onClick={() => jumpTo(idx)}
-                                className={`h-2.5 rounded-full transition-all ${idx === activeIndex ? 'bg-black w-7' : 'bg-sand-300 w-2.5 hover:bg-sand-400'}`}
+                                className={`h-2.5 rounded-full transition-all ${idx === activeIndex ? 'bg-primary w-7' : 'bg-sand-300 w-2.5 hover:bg-sand-400'}`}
                             />
                         ))}
                     </div>

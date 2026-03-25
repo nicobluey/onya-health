@@ -1,0 +1,21 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgCarer" x1="130" y1="90" x2="1060" y2="730" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F3F9FF"/>
+      <stop offset="1" stop-color="#DFEDFF"/>
+    </linearGradient>
+    <linearGradient id="panelCarer" x1="280" y1="180" x2="920" y2="640" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F6FAFF"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" rx="48" fill="url(#bgCarer)"/>
+  <circle cx="210" cy="190" r="120" fill="#CCE5FF"/>
+  <circle cx="1020" cy="620" r="150" fill="#CCE5FF"/>
+  <rect x="260" y="150" width="680" height="500" rx="36" fill="url(#panelCarer)" stroke="#B7DCFF" stroke-width="6"/>
+  <path d="M600 360C600 360 520 308 480 268C450 238 454 188 490 164C521 144 561 154 585 186L600 206L615 186C639 154 679 144 710 164C746 188 750 238 720 268C680 308 600 360 600 360Z" fill="#2E8CFF"/>
+  <path d="M430 470C430 430 462 398 502 398H698C738 398 770 430 770 470V482C770 522 738 554 698 554H502C462 554 430 522 430 482V470Z" fill="#0F2742" opacity="0.1"/>
+  <path d="M430 472C430 442 454 418 484 418H716C746 418 770 442 770 472V478C770 508 746 532 716 532H484C454 532 430 508 430 478V472Z" fill="#2E8CFF" opacity="0.22"/>
+  <path d="M380 500C422 444 474 432 530 440C562 444 592 462 600 498C608 534 640 552 680 548C724 544 770 514 822 460" stroke="#0F2742" stroke-width="18" stroke-linecap="round"/>
+  <text x="350" y="595" fill="#34577F" font-family="Arial, sans-serif" font-size="32" font-weight="700">Carer's Leave Certificate Consult</text>
+</svg>

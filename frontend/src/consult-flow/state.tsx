@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import type { BookingState, BookingStep, CertificatePurpose, Symptom, UserDetails } from '../types';
 
@@ -22,6 +23,7 @@ const BookingContext = createContext<BookingContextType | undefined>(undefined);
 const FLOW_ORDER: BookingStep[] = [
     'purpose',
     'compliance',
+    'safety',
     'description',
     'dates',
     'upsell',
@@ -46,10 +48,31 @@ function normalizeStartDate(value: Date) {
     return normalized < today ? today : normalized;
 }
 
+function getPurposeFromSearch(): CertificatePurpose | null {
+    const params = new URLSearchParams(window.location.search);
+    const rawPurpose = (params.get('purpose') || '').trim().toLowerCase();
+
+    if (rawPurpose === 'work') return 'Work';
+    if (rawPurpose === 'university' || rawPurpose === 'uni' || rawPurpose === 'school') return 'University / School';
+    if (rawPurpose === 'carer' || rawPurpose === 'carers' || rawPurpose === 'carers-leave') return 'Carer’s leave';
+
+    return null;
+}
+
+function getInitialViewFromSearch(): 'landing' | 'booking' {
+    const params = new URLSearchParams(window.location.search);
+    const view = (params.get('view') || '').trim().toLowerCase();
+    return view === 'booking' ? 'booking' : 'landing';
+}
+
 export function BookingProvider({ children }: { children: ReactNode }) {
+    const preselectedPurpose = getPurposeFromSearch();
+    const initialStep: BookingStep = preselectedPurpose ? 'compliance' : 'purpose';
+    const initialView = getInitialViewFromSearch();
+
     const [state, setState] = useState<BookingState>({
-        step: 'purpose',
-        purpose: null,
+        step: initialStep,
+        purpose: preselectedPurpose,
         symptom: [],
         complianceChecked: false,
         description: '',
@@ -66,7 +89,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
             address: ''
         },
         showUpsell: false,
-        view: 'landing',
+        view: initialView,
     });
 
     const updateState = (updates: Partial<BookingState>) => {
@@ -120,7 +143,12 @@ export function BookingProvider({ children }: { children: ReactNode }) {
         prevStep,
         goToStep,
         startBooking: () => updateState({ view: 'booking' }),
-        goHome: () => updateState({ view: 'landing', step: 'purpose', showUpsell: false })
+        goHome: () => updateState({
+            view: 'landing',
+            step: preselectedPurpose ? 'compliance' : 'purpose',
+            purpose: preselectedPurpose,
+            showUpsell: false
+        })
     };
 
     const { Provider } = BookingContext;

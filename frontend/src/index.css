@@ -51,6 +51,15 @@
 
   --color-primary: var(--color-forest-700);
   --color-primary-hover: var(--color-forest-800);
+  --color-secondary: var(--color-forest-700);
+  --color-secondary-hover: var(--color-forest-800);
+  --color-accent: var(--color-sunlight-400);
+  --color-bg: var(--color-sand-25);
+  --color-surface: #ffffff;
+  --color-text: var(--color-bark-900);
+  --color-text-muted: var(--color-bark-600);
+  --color-warning: #f59e0b;
+  --color-error: #e05252;
 
   --color-offwhite: var(--color-sand-25);
   --color-cream: var(--color-sunlight-100);
@@ -383,3 +392,4 @@
     }
   }
 }
+

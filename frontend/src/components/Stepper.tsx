@@ -3,6 +3,7 @@ import type { BookingStep } from '../types';
 const PROGRESS_STEPS: BookingStep[] = [
     'purpose',
     'compliance',
+    'safety',
     'description',
     'dates',
     'details',

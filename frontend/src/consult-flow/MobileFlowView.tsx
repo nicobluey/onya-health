@@ -9,15 +9,17 @@ import { LiveActivityToast } from '../components/LiveActivityToast';
 import {
     BlogsSection,
     LeadingClinicSection,
+    PatientPlatformFocusSection,
     ReadyToSkipWaitingRoomSection,
     UsedByPatientsSection,
 } from '../components/LandingExtras';
 import { Footer } from '../components/Footer';
+import { HeaderDropdown } from '../components/HeaderDropdown';
+import { HeaderBrand } from '../components/HeaderBrand';
 
 import { COPY } from './copy';
-import { Check, ArrowRight, Grid2x2, X } from 'lucide-react';
+import { Check, ArrowRight, Clock3, ShieldCheck } from 'lucide-react';
 import { Button } from '../components/UI';
-import { useState, useEffect } from 'react';
 import type { CSSProperties } from 'react';
 import type { ServiceConfig } from './services';
 
@@ -25,9 +27,16 @@ interface MobileFlowViewProps {
     service: ServiceConfig;
 }
 
+const DOCTOR_HERO_INFO_CARDS = [
+    {
+        title: 'Doctor reviewed',
+        detail: 'AHPRA-registered doctor assessment.',
+        icon: ShieldCheck,
+    },
+];
+
 export default function MobileFlowView({ service }: MobileFlowViewProps) {
     const { step, view, startBooking } = useBooking();
-    const [menuOpen, setMenuOpen] = useState(false);
     const isDoctorPage = service.slug === 'doctor';
     const themedStyle = {
         backgroundColor: service.theme.pageBg,
@@ -35,84 +44,28 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
         '--color-primary-hover': service.theme.primaryHover,
     } as CSSProperties;
 
-    useEffect(() => {
-        setMenuOpen(false);
-    }, [view]);
-
     return (
         <div className="min-h-screen flex flex-col font-sans" style={themedStyle}>
             {/* Header */}
-            <header className="sticky top-0 z-30 border-b border-white/30 bg-white/30 shadow-sm backdrop-blur-xl">
+            <header className="sticky top-0 z-30 border-b border-border bg-white shadow-sm">
                 <div className="flex items-center justify-between px-4 h-14">
-                    <a
-                        href="/"
-                        className="font-serif font-bold text-xl tracking-tight text-text-primary flex items-center gap-2 cursor-pointer"
-                        aria-label="Go to home page"
-                    >
-                        <img src="/logo.png" alt="Onya Health" className="h-12 w-auto object-contain scale-110 origin-left" />
-                    </a>
+                    <HeaderBrand compact />
                     <div className="flex items-center gap-1.5">
                         {view === 'landing' && (
-                            <div className="inline-flex items-center gap-1.5 text-sm font-semibold bg-white text-black px-3 py-1.5 rounded-full shadow-sm whitespace-nowrap">
+                            <div className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-text-primary shadow-sm">
                                 <span className="relative flex h-2 w-2 shrink-0">
                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                            </span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                </span>
                                 <span>{service.slug === 'doctor' ? 'Certificate consults 24/7' : `${service.providerPlural} online`}</span>
                             </div>
                         )}
-                        {view === 'landing' && (
-                            <button
-                                type="button"
-                                onClick={() => setMenuOpen((prev) => !prev)}
-                                className="ml-1 h-9 w-9 rounded-lg text-text-primary/90 flex items-center justify-center hover:bg-white/30 transition-colors"
-                                aria-label="Toggle navigation"
-                                aria-expanded={menuOpen}
-                            >
-                                {menuOpen ? <X size={18} /> : <Grid2x2 size={18} />}
-                            </button>
-                        )}
+                        <HeaderDropdown
+                            buttonClassName="ml-1 h-9 w-9 rounded-lg text-text-primary/90 flex items-center justify-center hover:bg-sand-75 transition-colors"
+                            topOffsetClassName="top-14"
+                        />
                     </div>
                 </div>
-                {view === 'landing' && (
-                    menuOpen && (
-                        <nav className="border-t border-white/40 bg-white/70 backdrop-blur-xl px-4 pb-4">
-                            <div className="pt-3 space-y-2">
-                                <a
-                                    href="/patient-login"
-                                    onClick={() => setMenuOpen(false)}
-                                    className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary"
-                                >
-                                    Patient login
-                                </a>
-                                <a
-                                    href="#how-it-works"
-                                    onClick={() => setMenuOpen(false)}
-                                    className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary"
-                                >
-                                    How it works
-                                </a>
-                                <a
-                                    href="#faq"
-                                    onClick={() => setMenuOpen(false)}
-                                    className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary"
-                                >
-                                    FAQ
-                                </a>
-                                <Button
-                                    fullWidth
-                                    className="h-10 text-sm"
-                                    onClick={() => {
-                                        setMenuOpen(false);
-                                        startBooking();
-                                    }}
-                                >
-                                    Book now
-                                </Button>
-                            </div>
-                        </nav>
-                    )
-                )}
                 {view === 'booking' && (
                     <div className="px-4 pb-3 pt-1">
                         <Stepper currentStep={step} />
@@ -124,40 +77,64 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
                 <main className="flex-1">
                     {isDoctorPage ? (
                         <>
-                            <section className="border-b border-border bg-sunlight-50 px-4 py-12">
+                            <section className="border-b border-border bg-[linear-gradient(135deg,#fff8ef_0%,#fffaf5_45%,#ffffff_100%)] px-4 py-11">
                                 <div className="mx-auto max-w-xl">
-                                    <p className="inline-flex rounded-full border border-sunlight-200 bg-white px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-bark-600">
-                                        Dedicated medical certificate service
+                                    <p className="inline-flex rounded-full border border-sunlight-200 bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-bark-600">
+                                        Australian doctor-reviewed service
                                     </p>
                                     <h1 className="mt-4 text-4xl font-serif font-bold leading-tight text-text-primary">
-                                        Online medical certificate consults for work, uni, and carer leave.
+                                        Online medical certificate consults.
                                     </h1>
                                     <p className="mt-4 text-base leading-relaxed text-text-secondary">
-                                        Complete your consult online. An Australian-registered doctor reviews your information and provides a certificate outcome when clinically appropriate.
+                                        Complete a short online form, receive doctor review, and get digital delivery if approved.
                                     </p>
 
-                                    <div className="mt-5 space-y-2 text-sm text-text-primary">
-                                        <p className="rounded-xl border border-border bg-white px-4 py-3">For non-emergency symptoms and short-term incapacity requests.</p>
-                                        <p className="rounded-xl border border-border bg-white px-4 py-3">Doctor review may include follow-up questions before an outcome is issued.</p>
-                                        <p className="rounded-xl border border-border bg-white px-4 py-3">Certificates can start from today onward only. Backdating is not available.</p>
-                                    </div>
-
                                     <div className="mt-6">
-                                        <Button fullWidth onClick={startBooking} className="h-11 text-base rounded-xl shadow-sm">
-                                            Start certificate consult
-                                            <ArrowRight size={18} className="ml-2" />
+                                        <Button fullWidth onClick={startBooking} className="h-14 text-lg font-semibold rounded-2xl shadow-lg">
+                                            Start online consult
+                                            <ArrowRight size={20} className="ml-2" />
                                         </Button>
                                     </div>
 
-                                    <div className="mt-6 overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
+                                    <div className="mt-3 inline-flex max-w-full items-start gap-1.5 rounded-md border border-slate-200/70 bg-white/75 px-2.5 py-1.5 text-[13px] text-text-primary">
+                                        <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/80" />
+                                        <p className="leading-relaxed">
+                                            <span className="font-medium">Short form:</span> complete your consult details online in under 2 minutes.
+                                        </p>
+                                    </div>
+
+                                    <p className="mt-3 text-sm text-text-secondary">
+                                        Non-emergency symptoms only. Certificates start from today onward.
+                                    </p>
+
+                                    <div className="relative mt-6 overflow-hidden rounded-[26px] border border-slate-200/80 bg-white shadow-[0_20px_46px_rgba(15,23,42,0.16)]">
                                         <img
-                                            src="/doctor-consult.png"
-                                            alt="Doctor reviewing an online medical certificate consult"
-                                            className="h-56 w-full object-cover"
+                                            src="/Medical Certificate Landing.png"
+                                            alt="Person completing an online medical certificate consult"
+                                            className="h-[290px] w-full object-cover object-[68%_50%]"
                                         />
                                     </div>
-                                    <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                                        Emergency symptoms such as chest pain, severe breathing difficulty, confusion, or collapse require urgent in-person care.
+
+                                    <div className="mt-4 grid gap-2.5">
+                                        {DOCTOR_HERO_INFO_CARDS.map((card) => {
+                                            const Icon = card.icon;
+                                            return (
+                                                <article
+                                                    key={card.title}
+                                                    className="rounded-xl border border-slate-200/80 bg-white/95 px-4 py-3 shadow-sm"
+                                                >
+                                                    <div className="flex items-start gap-2.5">
+                                                        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                                                            <Icon className="h-3.5 w-3.5" />
+                                                        </span>
+                                                        <div>
+                                                            <p className="text-sm font-semibold text-text-primary">{card.title}</p>
+                                                            <p className="mt-0.5 text-xs leading-relaxed text-text-secondary">{card.detail}</p>
+                                                        </div>
+                                                    </div>
+                                                </article>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             </section>
@@ -168,14 +145,12 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
 
                             <UsedByPatientsSection />
 
-                            <Reviews />
-
-                            <BlogsSection onStartConsult={startBooking} />
+                            <PatientPlatformFocusSection onStartConsult={startBooking} />
 
                             <ReadyToSkipWaitingRoomSection onStartConsult={startBooking} />
 
                             <div id="faq" className="bg-white py-12 px-4 border-t border-border">
-                                <FAQ />
+                                <FAQ maxItems={6} />
                             </div>
                             <LiveActivityToast mobile />
                         </>

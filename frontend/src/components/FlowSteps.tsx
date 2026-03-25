@@ -6,6 +6,7 @@ import { Button, SelectableCard, Input } from './UI';
 import { AnimatePresence, motion } from 'framer-motion';
 import { getServiceForPath } from '../consult-flow/services';
 import { fetchApiJson } from '../lib/api';
+import type { CertificatePurpose, Symptom } from '../types';
 
 // Transitions
 const fade = {
@@ -30,7 +31,7 @@ export const PurposeStep = () => {
                     <SelectableCard
                         key={opt}
                         selected={purpose === opt}
-                        onClick={() => { setPurpose(opt as any); nextStep(); }}
+                        onClick={() => { setPurpose(opt as CertificatePurpose); nextStep(); }}
                     >
                         {opt}
                     </SelectableCard>
@@ -92,6 +93,66 @@ export const ComplianceStep = () => {
     );
 };
 
+export const SafetyStep = () => {
+    const { nextStep } = useBooking();
+    const [checks, setChecks] = useState<boolean[]>(new Array(COPY.steps.safety.checks.length).fill(false));
+    const allConfirmed = checks.every(Boolean);
+
+    const toggle = (idx: number) => {
+        const next = [...checks];
+        next[idx] = !next[idx];
+        setChecks(next);
+    };
+
+    const handleContinue = () => {
+        if (allConfirmed) {
+            nextStep();
+            return;
+        }
+
+        window.alert(`${COPY.steps.safety.alertTitle}\n\n${COPY.steps.safety.alertBody}`);
+    };
+
+    return (
+        <motion.div {...fade} className="space-y-6">
+            <h2 className="text-2xl font-bold text-text-primary">{COPY.steps.safety.title}</h2>
+            <p className="text-sm text-text-secondary">{COPY.steps.safety.helper}</p>
+
+            <div className="space-y-3" role="group" aria-label="Urgent symptom safety checklist">
+                {COPY.steps.safety.checks.map((text, idx) => (
+                    <button
+                        key={idx}
+                        type="button"
+                        aria-pressed={checks[idx]}
+                        onClick={() => toggle(idx)}
+                        className={`flex w-full min-h-14 items-start justify-between gap-3 rounded-xl border px-4 py-3 text-left text-sm font-medium leading-snug transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
+                            checks[idx]
+                                ? 'border-primary bg-white text-text-primary shadow-sm'
+                                : 'border-border bg-white text-text-secondary hover:border-sand-300 hover:bg-sand-50'
+                        }`}
+                    >
+                        <span>{text}</span>
+                        <span
+                            className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-all ${
+                                checks[idx]
+                                    ? 'border-primary bg-primary text-sand-50'
+                                    : 'border-sand-300 bg-white text-transparent'
+                            }`}
+                            aria-hidden="true"
+                        >
+                            <Check size={13} />
+                        </span>
+                    </button>
+                ))}
+            </div>
+
+            <Button fullWidth onClick={handleContinue}>
+                {COPY.steps.safety.continueLabel}
+            </Button>
+        </motion.div>
+    );
+};
+
 export const DescriptionStep = () => {
     const {
         symptom,
@@ -118,7 +179,8 @@ export const DescriptionStep = () => {
             <div className="space-y-4">
                 <div className="flex flex-wrap gap-2" role="group" aria-label="Symptoms">
                     {COPY.steps.symptom.options.map((opt) => {
-                        const selected = symptom.includes(opt as any);
+                        const symptomOption = opt as Symptom;
+                        const selected = symptom.includes(symptomOption);
                         return (
                             <button
                                 key={opt}
@@ -126,8 +188,8 @@ export const DescriptionStep = () => {
                                 aria-pressed={selected}
                                 onClick={() => {
                                     const next = selected
-                                        ? symptom.filter((value) => value !== (opt as any))
-                                        : [...symptom, opt as any];
+                                        ? symptom.filter((value) => value !== symptomOption)
+                                        : [...symptom, symptomOption];
                                     setSymptom(next);
                                     setError('');
                                 }}
@@ -668,6 +730,7 @@ export const StepRenderer = () => {
     switch (step) {
         case 'purpose': return <PurposeStep />;
         case 'compliance': return <ComplianceStep />;
+        case 'safety': return <SafetyStep />;
         case 'description': return <DescriptionStep />;
         case 'dates': return <DatesStep />;
         case 'details': return <DetailsStep />;

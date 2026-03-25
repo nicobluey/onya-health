@@ -1,0 +1,26 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgUni" x1="150" y1="60" x2="1040" y2="740" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F2F8FF"/>
+      <stop offset="1" stop-color="#E1EEFF"/>
+    </linearGradient>
+    <linearGradient id="paperUni" x1="350" y1="170" x2="860" y2="620" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F8FBFF"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" rx="48" fill="url(#bgUni)"/>
+  <circle cx="1030" cy="150" r="120" fill="#CFE5FF"/>
+  <circle cx="180" cy="650" r="130" fill="#D8EAFF"/>
+  <rect x="300" y="150" width="620" height="520" rx="34" fill="url(#paperUni)" stroke="#B7DCFF" stroke-width="6"/>
+  <rect x="360" y="230" width="420" height="24" rx="12" fill="#8CB5E1"/>
+  <rect x="360" y="272" width="330" height="18" rx="9" fill="#B1CCE8"/>
+  <rect x="360" y="308" width="360" height="18" rx="9" fill="#C5D9ED"/>
+  <rect x="360" y="344" width="290" height="18" rx="9" fill="#D8E4F0"/>
+  <path d="M730 160L940 230L730 300L520 230L730 160Z" fill="#2E8CFF"/>
+  <path d="M590 254V334C590 371 652 402 730 402C808 402 870 371 870 334V254" fill="#2E8CFF" opacity="0.2"/>
+  <circle cx="930" cy="230" r="12" fill="#0F2742"/>
+  <path d="M930 242V318" stroke="#0F2742" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="930" cy="340" r="18" fill="#2E8CFF"/>
+  <text x="355" y="560" fill="#365880" font-family="Arial, sans-serif" font-size="32" font-weight="700">University Certificate Consult</text>
+</svg>

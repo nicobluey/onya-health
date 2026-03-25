@@ -1,6 +1,7 @@
 import { ArrowLeft } from 'lucide-react';
 import { getBlogPostBySlug } from '../../blogs/posts';
-import { BlogShell, formatPublishedDate, MarkdownBlocks } from './MarkdownBlocks';
+import { BlogShell, MarkdownBlocks } from './MarkdownBlocks';
+import { formatPublishedDate } from './formatPublishedDate';
 
 interface BlogArticlePageProps {
     slug: string;

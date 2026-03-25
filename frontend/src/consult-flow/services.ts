@@ -1,4 +1,4 @@
-export type ServiceSlug = 'doctor' | 'nutritionist' | 'psychologist';
+﻿export type ServiceSlug = 'doctor' | 'nutritionist' | 'psychologist';
 
 export interface ServiceTheme {
     pageBg: string;
@@ -33,8 +33,8 @@ export const SERVICE_CONFIGS: Record<ServiceSlug, ServiceConfig> = {
         slug: 'doctor',
         providerName: 'doctor',
         providerPlural: 'Doctors',
-        heroSubtitle: 'Request a medical-certificate consult online. An Australian-registered doctor reviews your clinical information and provides an outcome.',
-        primaryCta: 'Start certificate consult',
+        heroSubtitle: 'Request a medical-certificate consult online with clear, doctor-reviewed outcomes.',
+        primaryCta: 'Start online consult',
         mobileCta: 'Start consult',
         badgeText: 'Your certificate request has been submitted for doctor review.',
         homeTitle: 'Medical certificate consults online',

@@ -35,19 +35,19 @@ const DOCTOR_TIMELINE_STEPS: TimelineStep[] = [
         key: 'consult',
         title: 'Start your certificate consult',
         description:
-            'Choose your certificate purpose and share your current symptoms in a short online form.',
+            'Choose your purpose and share your symptoms in a short online form.',
     },
     {
         key: 'audio',
         title: 'Add context for safe review',
         description:
-            'Include when symptoms started, whether this is first-time or recurring, and what has changed.',
+            'Include when symptoms started and what changed.',
     },
     {
         key: 'doctor',
         title: 'Doctor-reviewed outcome',
         description:
-            'An Australian-registered doctor reviews your submission and may request follow-up before deciding.',
+            'A doctor reviews your request and may ask follow-up questions before deciding.',
     },
 ];
 
@@ -152,15 +152,16 @@ function StepStackCard({ step, idx, total, progress }: StepStackCardProps) {
     const finalY = (total - 1 - idx) * 14;
     const finalScale = 1 - (total - 1 - idx) * 0.02;
 
-    const opacity = idx === 0
-        ? useTransform(progress, [0, 1], [1, 1])
-        : useTransform(progress, [0, appearStart, appearEnd, 1], [0, 0, 1, 1]);
-    const y = idx === 0
-        ? useTransform(progress, [0, 1], [0, finalY])
-        : useTransform(progress, [0, appearStart, appearEnd, 1], [120, 120, finalY, finalY]);
-    const scale = idx === 0
-        ? useTransform(progress, [0, 1], [1, finalScale])
-        : useTransform(progress, [0, appearStart, appearEnd, 1], [1.03, 1.03, finalScale, finalScale]);
+    const opacityFirst = useTransform(progress, [0, 1], [1, 1]);
+    const opacityOther = useTransform(progress, [0, appearStart, appearEnd, 1], [0, 0, 1, 1]);
+    const yFirst = useTransform(progress, [0, 1], [0, finalY]);
+    const yOther = useTransform(progress, [0, appearStart, appearEnd, 1], [120, 120, finalY, finalY]);
+    const scaleFirst = useTransform(progress, [0, 1], [1, finalScale]);
+    const scaleOther = useTransform(progress, [0, appearStart, appearEnd, 1], [1.03, 1.03, finalScale, finalScale]);
+
+    const opacity = idx === 0 ? opacityFirst : opacityOther;
+    const y = idx === 0 ? yFirst : yOther;
+    const scale = idx === 0 ? scaleFirst : scaleOther;
 
     return (
         <motion.article
@@ -199,6 +200,42 @@ export function HowItWorks({ onStartConsult, serviceSlug }: HowItWorksProps) {
     const sectionSubtitle = isDoctorFlow
         ? 'A conservative, doctor-reviewed process for non-emergency certificate requests.'
         : 'Scroll through each stage of the consult flow from booking to doctor-reviewed delivery.';
+
+    if (isDoctorFlow) {
+        return (
+            <section className="bg-white py-12 md:py-16">
+                <div className="mx-auto max-w-6xl px-6 md:px-8">
+                    <h2 className="text-center text-3xl font-bold text-text-primary md:text-4xl">How your consult works</h2>
+                    <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-text-secondary md:text-base">
+                        Three clear steps from submission to outcome.
+                    </p>
+
+                    <div className="mt-8 grid gap-4 md:grid-cols-3">
+                        {DOCTOR_TIMELINE_STEPS.map((step, idx) => (
+                            <article
+                                key={step.title}
+                                className="rounded-2xl border border-border bg-white p-6 shadow-[0_22px_44px_-36px_rgba(15,23,42,0.45)]"
+                            >
+                                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
+                                    {idx + 1}
+                                </span>
+                                <h3 className="mt-4 text-lg font-semibold text-text-primary">{step.title}</h3>
+                                <p className="mt-2 text-sm leading-relaxed text-text-secondary">{step.description}</p>
+                            </article>
+                        ))}
+                    </div>
+
+                    {onStartConsult && (
+                        <div className="mt-10 flex justify-center">
+                            <Button onClick={onStartConsult} className="h-14 px-8 text-base font-semibold rounded-2xl shadow-lg">
+                                Start consult
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            </section>
+        );
+    }
 
     return (
         <section className="bg-white py-12 md:py-16">

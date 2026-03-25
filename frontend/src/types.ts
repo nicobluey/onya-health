@@ -17,6 +17,7 @@ export type Symptom =
 export type BookingStep =
     | 'purpose'
     | 'compliance'
+    | 'safety'
     | 'description'
     | 'dates'
     | 'upsell'

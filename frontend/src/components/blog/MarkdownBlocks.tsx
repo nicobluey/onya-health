@@ -107,21 +107,13 @@ export function MarkdownBlocks({ markdown }: MarkdownBlocksProps) {
     );
 }
 
-export function formatPublishedDate(isoDate: string): string {
-    return new Date(isoDate).toLocaleDateString('en-AU', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-    });
-}
-
 export function BlogShell({ children }: { children: ReactNode }) {
     return (
         <div className="min-h-screen bg-white font-sans">
             <header className="sticky top-0 z-40 border-b border-white/40 bg-white/30 backdrop-blur-xl">
                 <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 md:px-8">
                     <a href="/" aria-label="Back to home" className="inline-flex items-center">
-                        <img src="/logo.png" alt="Onya Health" className="h-11 w-auto object-contain" />
+                        <img src="/onya-health-logo.png" alt="Onya Health" className="h-11 w-auto object-contain" />
                     </a>
                     <a href="/blog" className="text-sm font-semibold text-text-primary hover:text-primary">Onya Blogs</a>
                 </div>

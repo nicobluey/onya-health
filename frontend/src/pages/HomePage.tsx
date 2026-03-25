@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, Grid2x2, X } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { SERVICE_LIST } from '../consult-flow';
 import { LiveActivityToast } from '../components/LiveActivityToast';
 import { FAQ } from '../components/FAQ';
@@ -7,6 +7,8 @@ import { BlogsSection, UsedByPatientsSection } from '../components/LandingExtras
 import { Footer } from '../components/Footer';
 import { HomeReviews } from '../components/HomeReviews';
 import { HowItWorks } from '../components/HowItWorks';
+import { HeaderDropdown } from '../components/HeaderDropdown';
+import { HeaderBrand } from '../components/HeaderBrand';
 
 const ROTATING_PROVIDERS = ['doctor', 'nutritionist', 'psychologist'];
 const HOME_THEME = {
@@ -14,10 +16,10 @@ const HOME_THEME = {
     heroBg: '#58a8ff',
 };
 
-const HOME_STATS = [
-    { value: '24/7', label: 'Care Available' },
-    { value: '500+', label: 'Verified Doctors' },
-    { value: '30,000+', label: 'Patients Treated' },
+const HOME_HIGHLIGHTS = [
+    { title: 'Fast', detail: 'Online assessment' },
+    { title: 'Trusted', detail: 'Practitioner reviewed' },
+    { title: 'Personalised', detail: 'Care matched to your needs' },
 ];
 
 const HOME_CARD_CTA_BY_SLUG: Record<string, string> = {
@@ -36,7 +38,6 @@ export default function HomePage() {
     const [wordIndex, setWordIndex] = useState(0);
     const [displayWord, setDisplayWord] = useState('');
     const [isDeleting, setIsDeleting] = useState(false);
-    const [menuOpen, setMenuOpen] = useState(false);
 
     useEffect(() => {
         const currentWord = ROTATING_PROVIDERS[wordIndex];
@@ -74,39 +75,11 @@ export default function HomePage() {
 
     return (
         <div className="min-h-screen flex flex-col font-sans" style={{ backgroundColor: HOME_THEME.pageBg }}>
-            <header className="sticky top-0 z-50 w-full border-b border-white/30 bg-white/30 shadow-sm backdrop-blur-xl">
+            <header className="sticky top-0 z-50 w-full border-b border-border bg-white shadow-sm">
                 <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 flex justify-between items-center">
-                    <a
-                        href="/"
-                        className="font-serif font-bold text-2xl md:text-3xl tracking-tight text-text-primary flex items-center gap-2 md:gap-3"
-                        aria-label="Go to home page"
-                    >
-                        <img src="/logo.png" alt="Onya Health" className="h-11 md:h-14 w-auto object-contain scale-110 origin-left" />
-                        <span className="sr-only">Onya Health</span>
-                    </a>
-                    <button
-                        type="button"
-                        onClick={() => setMenuOpen((prev) => !prev)}
-                        className="h-10 w-10 rounded-xl text-text-primary/90 flex items-center justify-center hover:bg-white/30 transition-colors"
-                        aria-label="Toggle navigation"
-                        aria-expanded={menuOpen}
-                    >
-                        {menuOpen ? <X size={18} /> : <Grid2x2 size={18} />}
-                    </button>
+                    <HeaderBrand />
+                    <HeaderDropdown />
                 </div>
-                {menuOpen && (
-                    <nav className="border-t border-white/40 bg-white/70 backdrop-blur-xl px-4 md:px-8 pb-4">
-                        <div className="pt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                            <a href="/patient-login" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">Patient Login</a>
-                            <a href="/doctor" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">Doctor</a>
-                            <a href="/nutritionist" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">Nutritionist</a>
-                            <a href="/psychologist" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">Psychologist</a>
-                            <a href="#for-physicians" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">For Physicians</a>
-                            <a href="#how-it-works" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">How it works</a>
-                            <a href="#faq" onClick={() => setMenuOpen(false)} className="block rounded-lg bg-white border border-border px-3 py-2 text-sm font-semibold text-text-primary">FAQ</a>
-                        </div>
-                    </nav>
-                )}
             </header>
 
             <main className="flex-1">
@@ -121,12 +94,14 @@ export default function HomePage() {
                         />
                     </div>
                     <div className="max-w-7xl mx-auto px-5 md:px-8 text-center relative z-10">
-                        <h1 className="text-4xl md:text-6xl font-serif font-bold leading-[1.1] text-white tracking-tight">
-                            Healthcare made for you
-                        </h1>
-                        <p className="text-base md:text-xl text-white font-semibold leading-relaxed max-w-3xl mx-auto mt-5">
-                            Smart matching connects you with the right doctor, nutritionist, or psychologist fast, so quality care feels simpler and more affordable.
-                        </p>
+                        <div className="-mt-4 md:-mt-5">
+                            <h1 className="text-4xl md:text-6xl font-serif font-bold leading-[1.1] text-white tracking-tight">
+                                Healthcare made for you
+                            </h1>
+                            <p className="text-base md:text-xl text-white font-semibold leading-relaxed max-w-3xl mx-auto mt-5">
+                                Online care that feels simpler, safer, and more connected.
+                            </p>
+                        </div>
                         <div className="mt-5 text-white text-2xl md:text-4xl font-serif font-bold h-12 md:h-14">
                             <span className="capitalize">{displayWord}</span>
                             <span className="animate-pulse ml-1">|</span>
@@ -138,15 +113,15 @@ export default function HomePage() {
                     <div className="max-w-7xl mx-auto px-6 md:px-8">
                         <div className="grid gap-4 md:grid-cols-[auto_1fr] md:items-center">
                             <div className="grid grid-cols-3 gap-5">
-                                {HOME_STATS.map((item) => (
-                                    <div key={item.label}>
-                                        <p className="text-3xl font-bold leading-none text-text-primary">{item.value}</p>
-                                        <p className="mt-1 text-xs font-medium text-bark-500">{item.label}</p>
+                                {HOME_HIGHLIGHTS.map((item) => (
+                                    <div key={item.title}>
+                                        <p className="text-2xl font-bold leading-none text-text-primary">{item.title}</p>
+                                        <p className="mt-1 text-xs font-medium text-bark-500">{item.detail}</p>
                                     </div>
                                 ))}
                             </div>
                             <p className="max-w-2xl text-sm text-bark-600 md:justify-self-end">
-                                AI-guided matching helps you find the right clinician faster, with affordable pricing and trusted quality care across Australia.
+                                Access care faster through a tailored online experience that connects you with the right support across Australia.
                             </p>
                         </div>
                     </div>
@@ -154,7 +129,7 @@ export default function HomePage() {
 
                 <section id="ai-match-specialties" className="max-w-7xl mx-auto px-5 md:px-8 py-10 md:py-14">
                     <h2 className="text-3xl font-serif font-bold text-center text-text-primary mb-10">
-                        AI-matched care by specialty
+                        Support matched to the care you need
                     </h2>
                     <p className="mx-auto mb-8 max-w-3xl text-center text-base text-text-secondary">
                         Tell us what you need and Onya routes you to the most suitable clinician for your situation.
@@ -164,7 +139,7 @@ export default function HomePage() {
                             <a
                                 key={service.slug}
                                 href={`/${service.slug}`}
-                                className="bg-white rounded-3xl border border-border p-5 md:p-6 shadow-sm h-full flex flex-col hover:shadow-md transition-shadow"
+                                className="relative overflow-hidden bg-white rounded-3xl border border-border p-5 md:p-6 shadow-sm h-full flex flex-col hover:shadow-md transition-shadow"
                                 aria-label={`Open ${service.providerName} landing page`}
                             >
                                 <div
@@ -182,6 +157,13 @@ export default function HomePage() {
                                         service.placeholderLabel
                                     )}
                                 </div>
+                                {(service.slug === 'nutritionist' || service.slug === 'psychologist') && (
+                                    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+                                        <span className="absolute bottom-[34px] right-[-116px] block w-[22rem] rotate-[-42deg] border border-amber-300 bg-[#FDE68A] py-3 text-center text-xs font-extrabold uppercase tracking-[0.16em] text-bark-900 shadow-[0_12px_24px_rgba(15,23,42,0.32)]">
+                                            Coming soon
+                                        </span>
+                                    </div>
+                                )}
                                 <h3 className="font-serif text-2xl font-bold text-text-primary mt-5 capitalize">
                                     {service.homeTitle}
                                 </h3>
