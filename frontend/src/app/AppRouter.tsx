@@ -8,7 +8,10 @@ import {
 import { BlogIndexPage } from '../components/blog/BlogIndexPage';
 import { BlogArticlePage } from '../components/blog/BlogArticlePage';
 import {
+  AboutPage,
+  CertificateCampaignPage,
   CertificateVerifyPage,
+  FairWorkCertificatesPage,
   HomePage,
   PatientPortalPage,
   PatientLoginPage,
@@ -29,6 +32,22 @@ export function AppRouter() {
 
   if (pathname === '/patient-login') {
     return <PatientLoginPage />;
+  }
+
+  if (pathname === '/about' || pathname === '/about-us') {
+    return <AboutPage />;
+  }
+
+  if (pathname === '/fair-work-medical-certificates') {
+    return <FairWorkCertificatesPage />;
+  }
+
+  if (
+    pathname === '/medical-certificate-work' ||
+    pathname === '/medical-certificate-university' ||
+    pathname === '/medical-certificate-carers-leave'
+  ) {
+    return <CertificateCampaignPage />;
   }
 
   if (pathname === '/patient/reset-password') {

@@ -76,7 +76,7 @@ export function UsedByPatientsSection() {
 
             <div className="px-6 py-6 text-center md:px-8 md:py-7 lg:px-12">
                 <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-text-secondary">Trusted by patients</p>
-                <p className="mt-1.5 text-lg font-medium text-bark-600">Used by companies across Australia</p>
+                <p className="mt-1.5 text-lg font-medium text-bark-600">Accepted by companies across Australia</p>
 
                 <div className="relative mt-5 overflow-hidden">
                     <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-20 bg-gradient-to-r from-white to-transparent" />
@@ -129,16 +129,16 @@ export function BlogsSection({ onStartConsult }: BlogsSectionProps) {
 
                                 <div className="flex flex-col justify-center">
                                     <div className="mb-3 flex items-center gap-3">
-                                        <span className="rounded bg-blue-500/10 px-2.5 py-1 text-xs font-medium text-blue-300">{item.category}</span>
+                                        <span className="rounded bg-sunlight-400/15 px-2.5 py-1 text-xs font-medium text-sunlight-300">{item.category}</span>
                                         <span className="text-xs text-neutral-500">{item.readTimeMinutes} min read</span>
                                     </div>
-                                    <h3 className="mb-3 text-xl font-semibold leading-tight text-white transition-colors group-hover:text-blue-200 md:text-2xl">
+                                    <h3 className="mb-3 text-xl font-semibold leading-tight text-white transition-colors group-hover:text-sunlight-200 md:text-2xl">
                                         {item.title}
                                     </h3>
                                     <blockquote className="mb-4 border-l-2 border-neutral-700 pl-4 text-sm leading-relaxed text-neutral-400 italic">
                                         {item.excerpt}
                                     </blockquote>
-                                    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-300 transition-colors group-hover:text-blue-200">
+                                    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-sunlight-300 transition-colors group-hover:text-sunlight-200">
                                         Read blog
                                     </span>
                                 </div>
@@ -172,7 +172,7 @@ export function LeadingClinicSection() {
         <section className="w-full bg-white py-0">
             <div className="w-full bg-neutral-950 px-6 py-14 md:px-10 md:py-16 lg:px-14">
                 <div className="max-w-5xl">
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-blue-300">Why Onya Health</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sunlight-300">Why Onya Health</p>
                     <h2 className="mt-3 text-3xl font-bold leading-tight text-white md:text-4xl">
                         What makes Onya Health Australia&apos;s leading telehealth clinic
                     </h2>
@@ -194,28 +194,93 @@ export function LeadingClinicSection() {
     );
 }
 
+const PATIENT_PLATFORM_PILLARS: Array<{ title: string; body: string }> = [
+    {
+        title: 'Know exactly what happens next',
+        body: 'Patients get a clear timeline from submission to doctor decision, which reduces uncertainty and keeps progress visible.',
+    },
+    {
+        title: 'Get outcomes faster with less friction',
+        body: 'Our backend routes requests efficiently so suitable cases reach clinical review quickly without repeated admin back-and-forth.',
+    },
+    {
+        title: 'Stay protected with secure records',
+        body: 'Identity checks, consult data, and documentation are handled through healthcare-focused security workflows.',
+    },
+];
+
+export function PatientPlatformFocusSection({ onStartConsult }: SectionActionProps) {
+    return (
+        <section className="w-full border-t border-border bg-surface">
+            <div className="mx-auto w-full max-w-7xl px-6 py-14 md:px-8 md:py-16">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Patient-first platform</p>
+                <h2 className="mt-3 max-w-3xl text-3xl font-bold leading-tight text-text-primary md:text-4xl">
+                    Built to get patients from request to resolution, faster
+                </h2>
+                <p className="mt-4 max-w-3xl text-base leading-relaxed text-text-secondary">
+                    Onya Health is designed around one goal: better patient outcomes with less waiting and confusion. Every backend workflow
+                    is optimised to help patients submit quickly, get reviewed safely, and receive clear next steps.
+                </p>
+
+                <div className="mt-8 grid gap-4 md:grid-cols-3">
+                    {PATIENT_PLATFORM_PILLARS.map((pillar) => (
+                        <article key={pillar.title} className="rounded-2xl border border-border bg-bg p-5">
+                            <h3 className="text-lg font-semibold text-text-primary">{pillar.title}</h3>
+                            <p className="mt-2 text-sm leading-relaxed text-text-secondary">{pillar.body}</p>
+                        </article>
+                    ))}
+                </div>
+
+                <div className="mt-8 rounded-2xl border border-border bg-white px-5 py-4 md:px-6">
+                    <p className="text-sm leading-relaxed text-text-secondary">
+                        When you are unwell, the experience should feel simple. That is why we prioritise speed, clarity, and safe delivery at
+                        every step.
+                    </p>
+                </div>
+
+                <div className="mt-6">
+                    {onStartConsult ? (
+                        <Button onClick={onStartConsult} className="h-12 px-6 text-sm font-semibold">
+                            Start my medical certificate consult
+                            <ArrowRight size={16} className="ml-2" />
+                        </Button>
+                    ) : (
+                        <a
+                            href={FALLBACK_CONSULT_HREF}
+                            className="inline-flex h-12 items-center justify-center rounded-xl bg-primary px-6 text-sm font-semibold text-white transition hover:bg-primary-hover"
+                        >
+                            Start my medical certificate consult
+                            <ArrowRight size={16} className="ml-2" />
+                        </a>
+                    )}
+                </div>
+            </div>
+        </section>
+    );
+}
+
 export function ReadyToSkipWaitingRoomSection({ onStartConsult }: SectionActionProps) {
     return (
         <section className="w-full bg-white py-0">
             <div className="w-full border-t border-neutral-800 bg-neutral-950 px-6 py-14 text-center md:px-10 md:py-16 lg:px-14">
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-blue-300">Ready when you are</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sunlight-300">Ready when you are</p>
                 <h2 className="mt-3 text-3xl font-bold leading-tight text-white md:text-4xl">Ready to skip the waiting room?</h2>
                 <p className="mx-auto mt-3 max-w-2xl text-base text-neutral-300">
                     Get your medical certificate reviewed and delivered online without clinic queues.
                 </p>
                 <div className="mt-6 flex justify-center">
                     {onStartConsult ? (
-                        <Button onClick={onStartConsult} className="h-11 px-6 text-sm">
+                        <Button onClick={onStartConsult} className="h-14 px-8 text-base font-semibold rounded-2xl shadow-lg">
                             Get medical certificate
-                            <ArrowRight size={16} className="ml-2" />
+                            <ArrowRight size={20} className="ml-2" />
                         </Button>
                     ) : (
                         <a
                             href={FALLBACK_CONSULT_HREF}
-                            className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-6 text-sm font-semibold text-white transition hover:bg-primary-hover"
+                            className="inline-flex h-14 items-center justify-center rounded-2xl bg-primary px-8 text-base font-semibold text-white shadow-lg transition hover:bg-primary-hover"
                         >
                             Get medical certificate
-                            <ArrowRight size={16} className="ml-2" />
+                            <ArrowRight size={20} className="ml-2" />
                         </a>
                     )}
                 </div>

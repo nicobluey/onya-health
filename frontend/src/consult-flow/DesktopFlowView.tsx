@@ -9,18 +9,55 @@ import { LiveActivityToast } from '../components/LiveActivityToast';
 import {
     BlogsSection,
     LeadingClinicSection,
+    PatientPlatformFocusSection,
     ReadyToSkipWaitingRoomSection,
     UsedByPatientsSection,
 } from '../components/LandingExtras';
 import { COPY } from './copy';
-import { Check, ArrowRight } from 'lucide-react';
+import { Check, ArrowRight, Clock3, ShieldCheck } from 'lucide-react';
 import { Button } from '../components/UI';
 import { Footer } from '../components/Footer';
+import { HeaderDropdown } from '../components/HeaderDropdown';
+import { HeaderBrand } from '../components/HeaderBrand';
 import type { CSSProperties } from 'react';
 import type { ServiceConfig } from './services';
 
 interface DesktopFlowViewProps {
     service: ServiceConfig;
+}
+
+const DOCTOR_HERO_OVERLAY_CARDS = [
+    {
+        title: 'Doctor reviewed',
+        detail: 'AHPRA-registered doctor assessment.',
+        icon: ShieldCheck,
+    },
+];
+
+function DoctorHeroOverlayCard({
+    card,
+    className,
+}: {
+    card: (typeof DOCTOR_HERO_OVERLAY_CARDS)[number];
+    className: string;
+}) {
+    const Icon = card.icon;
+
+    return (
+        <article
+            className={`absolute rounded-xl border border-slate-200/85 bg-white/96 px-2.5 py-2 shadow-[0_8px_20px_rgba(15,23,42,0.11)] ${className}`}
+        >
+            <div className="flex items-start gap-2.5">
+                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary/90">
+                    <Icon className="h-3 w-3" />
+                </span>
+                <div>
+                    <p className="text-xs font-semibold text-text-primary">{card.title}</p>
+                    <p className="mt-0.5 text-[11px] leading-relaxed text-text-secondary">{card.detail}</p>
+                </div>
+            </div>
+        </article>
+    );
 }
 
 export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
@@ -34,29 +71,14 @@ export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
 
     return (
         <div className="min-h-screen flex flex-col font-sans" style={themedStyle}>
-            <header className="sticky top-0 z-50 w-full border-b border-white/30 bg-white/30 shadow-sm backdrop-blur-xl">
+            <header className="sticky top-0 z-50 w-full border-b border-border bg-white shadow-sm">
                 <div className="max-w-7xl mx-auto px-8 h-16 flex justify-between items-center">
-                    <a
-                        href="/"
-                        className="font-serif font-bold text-3xl tracking-tight text-text-primary flex items-center gap-3 cursor-pointer"
-                        aria-label="Go to home page"
-                    >
-                        <img src="/logo.png" alt="Onya Health" className="h-14 w-auto object-contain scale-110 origin-left" />
-                        {/* Fallback to text if logo fails to load or looks weird */}
-                        <span className="sr-only">Onya Health</span>
-                    </a>
+                    <HeaderBrand />
 
-                    {view === 'booking' ? (
-                        <div />
-                    ) : (
-                        <div className="flex items-center gap-6">
-                            <a href="/patient-login" className="text-text-primary hover:text-forest-700 transition-colors font-medium">Patient login</a>
-                            <a href="/verify" className="text-text-primary hover:text-forest-700 transition-colors font-medium">Verify</a>
-                            <a href="#how-it-works" className="text-text-primary hover:text-forest-700 transition-colors font-medium">How it works</a>
-                            <a href="#faq" className="text-text-primary hover:text-forest-700 transition-colors font-medium">FAQ</a>
-                            <Button onClick={startBooking} className="px-5 h-10 text-sm">Book now</Button>
-                        </div>
-                    )}
+                    <div className="flex items-center gap-3">
+                        <HeaderDropdown />
+                        {view !== 'booking' && <Button onClick={startBooking} className="px-5 h-10 text-sm">Book now</Button>}
+                    </div>
                 </div>
             </header>
 
@@ -65,43 +87,51 @@ export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
                 <>
                     {isDoctorPage ? (
                         <>
-                            <section className="border-b border-border bg-sunlight-50 py-16">
-                                <div className="mx-auto grid max-w-7xl grid-cols-12 items-center gap-10 px-8">
-                                    <div className="col-span-7">
-                                        <p className="inline-flex rounded-full border border-sunlight-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-bark-600">
-                                            Dedicated medical certificate service
+                            <section className="border-b border-border bg-[linear-gradient(135deg,#fff8ef_0%,#fffaf5_45%,#ffffff_100%)] py-14 lg:py-20">
+                                <div className="mx-auto grid w-full max-w-7xl items-center gap-10 px-5 md:grid-cols-[minmax(0,0.95fr)_minmax(0,1.18fr)] md:px-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)] xl:gap-14">
+                                    <div className="max-w-xl">
+                                        <p className="inline-flex rounded-full border border-sunlight-200 bg-white/90 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-bark-600">
+                                            Australian doctor-reviewed service
                                         </p>
-                                        <h1 className="mt-4 text-6xl leading-[1.04] text-text-primary">
-                                            Online medical certificate consults for work, uni, and carer leave.
+                                        <h1 className="mt-4 text-5xl leading-[1.04] text-text-primary lg:text-6xl">
+                                            Online medical certificate consults.
                                         </h1>
-                                        <p className="mt-5 max-w-2xl text-lg leading-relaxed text-text-secondary">
-                                            Complete your consult online. An Australian-registered doctor reviews your information and provides a certificate outcome when clinically appropriate.
+                                        <p className="mt-5 max-w-xl text-lg leading-relaxed text-text-secondary">
+                                            Complete a short online form, receive doctor review, and get digital delivery if approved.
                                         </p>
 
-                                        <div className="mt-7 grid gap-3 text-sm text-text-primary">
-                                            <p className="rounded-xl border border-border bg-white px-4 py-3">For non-emergency symptoms and short-term incapacity requests.</p>
-                                            <p className="rounded-xl border border-border bg-white px-4 py-3">Doctor review may include follow-up questions before an outcome is issued.</p>
-                                            <p className="rounded-xl border border-border bg-white px-4 py-3">Certificates can start from today onward only. Backdating is not available.</p>
-                                        </div>
-
-                                        <div className="mt-8 max-w-xs">
-                                            <Button className="h-11 px-5 text-sm rounded-xl shadow-sm" onClick={startBooking}>
-                                                Start certificate consult
+                                        <div className="mt-8 max-w-sm lg:mt-9">
+                                            <Button className="h-14 rounded-2xl px-8 text-base font-semibold shadow-lg" onClick={startBooking}>
+                                                Start online consult
                                                 <ArrowRight className="ml-2" />
                                             </Button>
                                         </div>
+
+                                        <div className="mt-3 inline-flex max-w-md items-start gap-1.5 rounded-md border border-slate-200/70 bg-white/75 px-2.5 py-1.5 text-[13px] text-text-primary">
+                                            <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/80" />
+                                            <p className="leading-relaxed">
+                                                <span className="font-medium">Short form:</span> complete your consult details online in under 2 minutes.
+                                            </p>
+                                        </div>
+
+                                        <p className="mt-3 text-sm text-text-secondary">
+                                            Non-emergency symptoms only. Certificates start from today onward.
+                                        </p>
                                     </div>
 
-                                    <div className="col-span-5 space-y-4">
-                                        <div className="overflow-hidden rounded-3xl border border-border bg-white shadow-sm">
-                                            <img
-                                                src="/doctor-consult.png"
-                                                alt="Doctor reviewing an online medical certificate consult"
-                                                className="h-[360px] w-full object-cover"
+                                    <div className="relative h-[430px] overflow-hidden rounded-[32px] border border-slate-200/80 bg-white shadow-[0_28px_70px_rgba(15,23,42,0.18)] md:h-[520px] xl:h-[620px]">
+                                        <img
+                                            src="/Medical Certificate Landing.png"
+                                            alt="Person completing an online medical certificate consult"
+                                            className="absolute inset-0 block h-full w-full object-cover object-[68%_50%]"
+                                            loading="eager"
+                                        />
+                                        <div className="pointer-events-none absolute inset-y-0 left-0 w-44 bg-gradient-to-r from-white/22 to-transparent" />
+                                        <div className="pointer-events-none absolute inset-0 hidden md:block">
+                                            <DoctorHeroOverlayCard
+                                                card={DOCTOR_HERO_OVERLAY_CARDS[0]}
+                                                className="left-9 top-20 w-36 lg:left-12 lg:top-24 lg:w-40"
                                             />
-                                        </div>
-                                        <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                                            Emergency symptoms such as chest pain, severe breathing difficulty, confusion, or collapse require urgent in-person care.
                                         </div>
                                     </div>
                                 </div>
@@ -113,14 +143,12 @@ export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
 
                             <UsedByPatientsSection />
 
-                            <Reviews />
-
-                            <BlogsSection onStartConsult={startBooking} />
+                            <PatientPlatformFocusSection onStartConsult={startBooking} />
 
                             <ReadyToSkipWaitingRoomSection onStartConsult={startBooking} />
 
                             <div id="faq" className="bg-white py-12 border-t border-border">
-                                <FAQ />
+                                <FAQ maxItems={6} />
                             </div>
                         </>
                     ) : (
@@ -145,7 +173,7 @@ export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
                                             {service.heroSubtitle}
                                         </p>
 
-                                        <div className="inline-flex items-center gap-2 text-sm font-semibold bg-white text-black px-4 py-2 rounded-full shadow-md">
+                                        <div className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-text-primary shadow-md">
                                             <span className="relative flex h-2.5 w-2.5">
                                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
                                                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>

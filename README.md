@@ -44,6 +44,29 @@ Backend default: `http://localhost:8787`
 
 Doctor portal login: `http://localhost:8787/doctor/login`
 
+### Landing image generation (OpenAI / ChatGPT image model)
+
+Generate the 3 certificate landing hero images directly into `frontend/public`:
+
+```bash
+npm run images:landing
+npm run images:chatgpt
+```
+
+Dry run (prints targets only, no API calls):
+
+```bash
+npm run images:landing:dry
+```
+
+Generate one variant only:
+
+```bash
+node scripts/generate-landing-images.mjs --only=work
+node scripts/generate-landing-images.mjs --only=university
+node scripts/generate-landing-images.mjs --only=carers-leave
+```
+
 ## Environment variables (backend)
 
 Set these before `npm run backend` in production:
@@ -62,6 +85,11 @@ Set these before `npm run backend` in production:
 - `SUPABASE_SERVICE_ROLE_KEY` - required with `SUPABASE_URL` for backend writes
 - `OPENAI_API_KEY` - optional; enables AI doctor-note generation in review portal
 - `OPENAI_NOTES_MODEL` - optional; defaults to `gpt-5-nano`
+- `OPENAI_IMAGE_MODEL` - optional; defaults to `gpt-image-1.5`
+- `OPENAI_IMAGE_SIZE` - optional; defaults to `1536x1024`
+- `OPENAI_IMAGE_QUALITY` - optional; defaults to `medium`
+- `OPENAI_IMAGE_OUTPUT_FORMAT` - optional; defaults to `png` (`png`, `jpeg`, `webp`)
+- `OPENAI_IMAGE_OUTPUT_COMPRESSION` - optional; defaults to `90` (used for `jpeg`/`webp`)
 - `LOG_LEVEL` - optional; one of `debug`, `info`, `warn`, `error` (default `info`)
 - `LOG_TO_FILE` - optional; `1` to write logs to file, `0` to disable file logging (default `1`)
 - `BACKEND_LOG_FILE` - optional; log file path (default `backend/data/backend.log`)

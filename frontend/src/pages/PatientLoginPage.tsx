@@ -1,6 +1,8 @@
-import { type CSSProperties, useEffect, useState } from 'react';
+import { type CSSProperties, useState } from 'react';
 import { ArrowRight, Lock, Mail } from 'lucide-react';
 import { fetchApiJson } from '../lib/api';
+import { HeaderDropdown } from '../components/HeaderDropdown';
+import { HeaderBrand } from '../components/HeaderBrand';
 
 type FloatingScienceCard = {
     src: string;
@@ -98,17 +100,6 @@ export default function PatientLoginPage() {
     const [error, setError] = useState('');
     const [resetStatus, setResetStatus] = useState('');
 
-    useEffect(() => {
-        const url = new URL(window.location.href);
-        const initialEmail = String(url.searchParams.get('email') || '').trim().toLowerCase();
-        if (initialEmail) {
-            setEmail(initialEmail);
-        }
-        if (url.searchParams.get('checkout') === 'success') {
-            setResetStatus('Payment confirmed. Sign in to access your patient portal.');
-        }
-    }, []);
-
     const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
         setError('');
@@ -195,18 +186,11 @@ export default function PatientLoginPage() {
                 ))}
             </div>
 
-            <header className="sticky top-0 z-20 w-full border-b border-white/40 bg-white/40 backdrop-blur-xl">
+            <header className="sticky top-0 z-20 w-full border-b border-border bg-white shadow-sm">
                 <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 md:px-8">
-                    <a href="/" className="inline-flex items-center" aria-label="Go to home page">
-                        <img src="/logo.png" alt="Onya Health" className="h-11 w-auto object-contain" />
-                    </a>
-                    <div className="flex items-center gap-2">
-                        <a
-                            href="/verify"
-                            className="inline-flex items-center gap-2 rounded-full border border-sand-200 bg-white/90 px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-bark-700 transition hover:border-forest-300"
-                        >
-                            Verify
-                        </a>
+                    <HeaderBrand />
+                    <div className="flex items-center gap-2.5">
+                        <HeaderDropdown buttonClassName="h-9 w-9 rounded-lg text-text-primary/90 flex items-center justify-center hover:bg-sand-75 transition-colors" />
                         <a
                             href="/doctor"
                             className="inline-flex items-center gap-2 rounded-full border border-sand-200 bg-white/90 px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-bark-700 transition hover:border-forest-300"
@@ -307,7 +291,7 @@ export default function PatientLoginPage() {
                                 type="button"
                                 onClick={handleSendResetLink}
                                 disabled={resetSending}
-                                className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-sand-200 bg-white text-sm font-semibold text-bark-700 transition hover:border-[#93c5fd] disabled:cursor-not-allowed disabled:opacity-60"
+                                className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-sand-200 bg-white text-sm font-semibold text-bark-700 transition hover:border-secondary disabled:cursor-not-allowed disabled:opacity-60"
                             >
                                 {resetSending ? 'Sending reset link...' : 'Forgot password? Send reset link'}
                             </button>

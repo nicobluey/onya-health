@@ -42,6 +42,22 @@ export const COPY = {
                 "I agree to the Terms & Conditions and Privacy Policy"
             ]
         },
+        safety: {
+            title: "Safety Check",
+            helper: "To ensure this service is appropriate, please confirm the following statements are true.",
+            checks: [
+                "Heart attack symptoms: I am not experiencing severe chest pain, pressure, or tightness in my chest.",
+                "Severe breathing problems: I am not experiencing significant difficulty breathing.",
+                "Loss of consciousness: I am not confused, extremely drowsy, or losing consciousness.",
+                "Severe injury or bleeding: I do not have a serious injury or uncontrolled bleeding.",
+                "Stroke symptoms: I do not have sudden weakness, numbness, or facial drooping on one side of my body.",
+                "Self-harm risk: I am not having thoughts of harming myself or others.",
+                "Non-urgent care: I understand this service is for non-urgent health issues only."
+            ],
+            alertTitle: "This service may be inappropriate for your current symptoms.",
+            alertBody: "Please seek urgent in-person care or call emergency services (000) if needed.",
+            continueLabel: "Continue"
+        },
         description: {
             prompt: "Tell us about your symptoms",
             helper: "Include context that helps clinical review, for example: first-ever headache vs recurring headache, when symptoms started, and what has changed.",
@@ -105,7 +121,12 @@ export const COPY = {
     faq: {
         title: "Frequently asked questions",
         items: [
-            { q: "Are online medical certificates accepted?", a: "Certificates are issued by an Australian-registered doctor when clinically appropriate. Acceptance decisions are made by your employer, school, or organisation." },
+            {
+                q: "Are online medical certificates accepted?",
+                a: "Usually yes, where evidence meets the Fair Work Act reasonable-person standard. Medical certificates are listed by Fair Work as accepted evidence examples.",
+                linkHref: "/fair-work-medical-certificates",
+                linkLabel: "Read more about Fair Work Act evidence and online certificate acceptance",
+            },
             { q: "Can I request a medical certificate online with Onya Health?", a: "Yes. You can submit a telehealth consult online for doctor review." },
             { q: "Who is eligible?", a: "Anyone currently in Australia with non-emergency, manageable symptoms." },
             { q: "Do I need an in-person clinic visit first?", a: "Not for this online consult pathway. A doctor reviews your information and may request follow-up details if needed." },

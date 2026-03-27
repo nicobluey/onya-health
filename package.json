@@ -12,7 +12,10 @@
     "dcup": "docker compose up --build",
     "dcdown": "docker compose down",
     "supabase:test-record": "node scripts/supabase-test-record.mjs",
-    "billing:backfill": "node scripts/backfill-patient-billing.mjs"
+    "billing:backfill": "node scripts/backfill-patient-billing.mjs",
+    "images:landing": "node scripts/generate-landing-images.mjs",
+    "images:landing:dry": "node scripts/generate-landing-images.mjs --dry-run",
+    "images:chatgpt": "node scripts/generate-landing-images.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",

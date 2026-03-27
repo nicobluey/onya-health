@@ -1,0 +1,27 @@
+<svg width="1200" height="800" viewBox="0 0 1200 800" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgWork" x1="120" y1="80" x2="1080" y2="720" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EEF7FF"/>
+      <stop offset="1" stop-color="#DCEEFF"/>
+    </linearGradient>
+    <linearGradient id="cardWork" x1="320" y1="170" x2="870" y2="600" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F5FAFF"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="800" rx="48" fill="url(#bgWork)"/>
+  <circle cx="190" cy="160" r="110" fill="#CFE8FF"/>
+  <circle cx="1030" cy="670" r="140" fill="#CFE8FF"/>
+  <rect x="250" y="140" width="700" height="520" rx="36" fill="url(#cardWork)" stroke="#B7DCFF" stroke-width="6"/>
+  <rect x="310" y="210" width="390" height="56" rx="14" fill="#2E8CFF" opacity="0.12"/>
+  <rect x="310" y="290" width="320" height="20" rx="10" fill="#9ABFDF"/>
+  <rect x="310" y="330" width="280" height="20" rx="10" fill="#B7CDE3"/>
+  <rect x="310" y="370" width="250" height="20" rx="10" fill="#D2DEEA"/>
+  <rect x="760" y="230" width="130" height="90" rx="18" fill="#2E8CFF"/>
+  <path d="M801 278L824 301L870 255" stroke="white" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="740" y="430" width="180" height="140" rx="24" fill="#0F2742"/>
+  <rect x="770" y="400" width="120" height="34" rx="10" fill="#0F2742"/>
+  <rect x="792" y="472" width="76" height="20" rx="10" fill="#7FB6FF"/>
+  <rect x="790" y="510" width="80" height="14" rx="7" fill="#4F93EC"/>
+  <text x="305" y="530" fill="#35557A" font-family="Arial, sans-serif" font-size="34" font-weight="700">Work Certificate Consult</text>
+</svg>

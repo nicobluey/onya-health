@@ -1,13 +1,8 @@
 import React from 'react';
 import type { ButtonHTMLAttributes, InputHTMLAttributes } from 'react';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check } from 'lucide-react';
-
-export function cn(...inputs: ClassValue[]) {
-    return twMerge(clsx(inputs));
-}
+import { cn } from '../lib/cn';
 
 // --- BUTTON ---
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -20,7 +15,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         const variants = {
             primary: "bg-primary hover:bg-primary-hover text-sand-50 border border-transparent shadow-sm",
             outline: "bg-transparent border-2 border-primary text-primary hover:bg-sand-50",
-            secondary: "bg-white border border-border text-primary hover:bg-sand-75",
+            secondary: "bg-white border border-primary text-primary hover:bg-sunlight-50",
             ghost: "bg-transparent hover:bg-sand-75 text-text-secondary"
         };
 

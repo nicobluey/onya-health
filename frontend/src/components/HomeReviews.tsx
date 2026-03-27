@@ -87,9 +87,9 @@ export function HomeReviews() {
         if (prevCardsPerView.current === cardsPerView) return;
 
         prevCardsPerView.current = cardsPerView;
-        setTransitionEnabled(false);
-        setSlideIndex(cardsPerView + activeIndex);
         requestAnimationFrame(() => {
+            setTransitionEnabled(false);
+            setSlideIndex(cardsPerView + activeIndex);
             requestAnimationFrame(() => setTransitionEnabled(true));
         });
     }, [cardsPerView, activeIndex]);
@@ -167,7 +167,7 @@ export function HomeReviews() {
                             >
                                 <div className="h-full rounded-2xl border border-sand-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md">
                                     <h3 className="mb-3 min-h-[2.75rem] text-2xl font-bold leading-tight text-text-primary">{review.title}</h3>
-                                    <div className="mb-4 flex items-center gap-1 text-black">
+                                    <div className="mb-4 flex items-center gap-1 text-secondary">
                                         {[1, 2, 3, 4, 5].map((star) => (
                                             <Star key={star} size={16} className="fill-current stroke-none" />
                                         ))}
@@ -190,7 +190,7 @@ export function HomeReviews() {
                                 type="button"
                                 aria-label={`Go to review ${idx + 1}`}
                                 onClick={() => jumpTo(idx)}
-                                className={`h-2.5 rounded-full transition-all ${idx === activeIndex ? 'w-7 bg-black' : 'w-2.5 bg-sand-300 hover:bg-sand-400'}`}
+                                className={`h-2.5 rounded-full transition-all ${idx === activeIndex ? 'w-7 bg-primary' : 'w-2.5 bg-sand-300 hover:bg-sand-400'}`}
                             />
                         ))}
                     </div>

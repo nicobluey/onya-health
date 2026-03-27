@@ -1,6 +1,7 @@
 import { ArrowRight } from 'lucide-react';
 import { BLOG_POSTS } from '../../blogs/posts';
-import { BlogShell, formatPublishedDate } from './MarkdownBlocks';
+import { BlogShell } from './MarkdownBlocks';
+import { formatPublishedDate } from './formatPublishedDate';
 
 export function BlogIndexPage() {
     return (

@@ -16,6 +16,9 @@ const FOOTER_GROUPS: FooterLinkGroup[] = [
         title: 'Services',
         links: [
             { label: 'Medical certificates', href: '/doctor' },
+            { label: 'Work certificates', href: '/medical-certificate-work' },
+            { label: 'University certificates', href: '/medical-certificate-university' },
+            { label: "Carer's leave certificates", href: '/medical-certificate-carers-leave' },
             { label: 'General consults', href: '/doctor' },
             { label: 'Psychology support', href: '/psychologist' },
             { label: 'Nutrition consults', href: '/nutritionist' },
@@ -24,7 +27,7 @@ const FOOTER_GROUPS: FooterLinkGroup[] = [
     {
         title: 'Company',
         links: [
-            { label: 'About Onya Health', href: '/' },
+            { label: 'About Onya Health', href: '/about' },
             { label: 'Patient login', href: '/patient-login' },
             { label: 'Verify certificate', href: '/verify' },
             { label: 'Onya blogs', href: '/blog' },
@@ -50,7 +53,7 @@ export function Footer({ onStartConsult, consultHref = '/doctor' }: FooterProps)
                     <div className="flex flex-col gap-8 border-b border-white/20 pb-10 lg:flex-row lg:items-end lg:justify-between">
                         <div>
                             <a href="/" className="inline-flex items-center" aria-label="Onya Health home">
-                                <img src="/logo.png" alt="Onya Health" className="h-10 w-auto brightness-0 invert" />
+                                <img src="/onya-health-logo.png" alt="Onya Health" className="h-10 w-auto brightness-0 invert" />
                             </a>
                             <p className="mt-5 max-w-md text-2xl font-semibold leading-snug text-white">
                                 Healthcare that works around your life.
@@ -138,7 +141,7 @@ export function Footer({ onStartConsult, consultHref = '/doctor' }: FooterProps)
                             We acknowledge Aboriginal and Torres Strait Islander peoples as the Traditional Custodians of Country throughout Australia and pay respect to Elders past and present.
                         </p>
                         <p className="text-left md:text-right">
-                            © {new Date().getFullYear()} Onya Health Pty Ltd
+                            Â© {new Date().getFullYear()} Onya Health Pty Ltd
                             <br />
                             ABN information available on request.
                         </p>
