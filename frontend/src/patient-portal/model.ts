@@ -354,7 +354,7 @@ export function consultTitle(serviceType: string) {
 }
 
 export function formatDate(value?: string | null) {
-  if (!value) return 'â€”';
+  if (!value) return '-';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString('en-AU', {
@@ -395,6 +395,5 @@ export function firstName(fullName: string) {
 export function sectionCardClassName(extraClassName = '') {
   return `rounded-3xl border border-border bg-white shadow-[0_24px_42px_-34px_rgba(15,23,42,0.24)] ${extraClassName}`.trim();
 }
-
 
 
