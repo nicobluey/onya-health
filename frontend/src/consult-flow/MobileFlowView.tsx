@@ -5,7 +5,6 @@ import { UpsellModal } from '../components/UpsellModal';
 import { FAQ } from '../components/FAQ';
 import { HowItWorks } from '../components/HowItWorks';
 import { Reviews } from '../components/Reviews';
-import { LiveActivityToast } from '../components/LiveActivityToast';
 import {
     BlogsSection,
     LeadingClinicSection,
@@ -18,7 +17,7 @@ import { HeaderDropdown } from '../components/HeaderDropdown';
 import { HeaderBrand } from '../components/HeaderBrand';
 
 import { COPY } from './copy';
-import { Check, ArrowRight, Clock3, ShieldCheck } from 'lucide-react';
+import { Check, ArrowRight, ShieldCheck } from 'lucide-react';
 import { Button } from '../components/UI';
 import type { CSSProperties } from 'react';
 import type { ServiceConfig } from './services';
@@ -80,10 +79,10 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
                             <section className="border-b border-border bg-[linear-gradient(135deg,#fff8ef_0%,#fffaf5_45%,#ffffff_100%)] px-4 py-11">
                                 <div className="mx-auto max-w-xl">
                                     <p className="inline-flex rounded-full border border-sunlight-200 bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-bark-600">
-                                        Australian doctor-reviewed service
+                                        AHPRA-registered doctor review
                                     </p>
                                     <h1 className="mt-4 text-4xl font-serif font-bold leading-tight text-text-primary">
-                                        Online medical certificate consults.
+                                        Online medical certificates
                                     </h1>
                                     <p className="mt-4 text-base leading-relaxed text-text-secondary">
                                         Complete a short online form, receive doctor review, and get digital delivery if approved.
@@ -96,14 +95,15 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
                                         </Button>
                                     </div>
 
-                                    <div className="mt-3 inline-flex max-w-full items-start gap-1.5 rounded-md border border-slate-200/70 bg-white/75 px-2.5 py-1.5 text-[13px] text-text-primary">
-                                        <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/80" />
-                                        <p className="leading-relaxed">
-                                            <span className="font-medium">Short form:</span> complete your consult details online in under 2 minutes.
-                                        </p>
-                                    </div>
+                                    <p className="mt-4 flex max-w-md flex-wrap items-center gap-x-2 gap-y-1 text-[13px] font-medium leading-relaxed text-bark-600">
+                                        <span>Doctor reviewed</span>
+                                        <span aria-hidden="true" className="text-bark-300">•</span>
+                                        <span>Under 2 minutes</span>
+                                        <span aria-hidden="true" className="text-bark-300">•</span>
+                                        <span>Digital delivery if approved</span>
+                                    </p>
 
-                                    <p className="mt-3 text-sm text-text-secondary">
+                                    <p className="mt-3 text-xs text-text-secondary">
                                         Non-emergency symptoms only. Certificates start from today onward.
                                     </p>
 
@@ -111,7 +111,7 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
                                         <img
                                             src="/Medical Certificate Landing.png"
                                             alt="Person completing an online medical certificate consult"
-                                            className="h-[290px] w-full object-cover object-[68%_50%]"
+                                            className="h-[290px] w-full object-cover object-[76%_50%]"
                                         />
                                     </div>
 
@@ -152,7 +152,6 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
                             <div id="faq" className="bg-white py-12 px-4 border-t border-border">
                                 <FAQ maxItems={6} />
                             </div>
-                            <LiveActivityToast mobile />
                         </>
                     ) : (
                         <>
@@ -206,7 +205,6 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
                             <div id="faq" className="bg-white py-12 px-4 border-t border-border">
                                 <FAQ />
                             </div>
-                            <LiveActivityToast mobile />
                         </>
                     )}
                 </main>

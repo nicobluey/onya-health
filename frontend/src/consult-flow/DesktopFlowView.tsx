@@ -5,7 +5,6 @@ import { UpsellModal } from '../components/UpsellModal';
 import { FAQ } from '../components/FAQ';
 import { HowItWorks } from '../components/HowItWorks';
 import { Reviews } from '../components/Reviews';
-import { LiveActivityToast } from '../components/LiveActivityToast';
 import {
     BlogsSection,
     LeadingClinicSection,
@@ -14,7 +13,7 @@ import {
     UsedByPatientsSection,
 } from '../components/LandingExtras';
 import { COPY } from './copy';
-import { Check, ArrowRight, Clock3, ShieldCheck } from 'lucide-react';
+import { Check, ArrowRight, ShieldCheck } from 'lucide-react';
 import { Button } from '../components/UI';
 import { Footer } from '../components/Footer';
 import { HeaderDropdown } from '../components/HeaderDropdown';
@@ -91,10 +90,10 @@ export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
                                 <div className="mx-auto grid w-full max-w-7xl items-center gap-10 px-5 md:grid-cols-[minmax(0,0.95fr)_minmax(0,1.18fr)] md:px-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)] xl:gap-14">
                                     <div className="max-w-xl">
                                         <p className="inline-flex rounded-full border border-sunlight-200 bg-white/90 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-bark-600">
-                                            Australian doctor-reviewed service
+                                            AHPRA-registered doctor review
                                         </p>
                                         <h1 className="mt-4 text-5xl leading-[1.04] text-text-primary lg:text-6xl">
-                                            Online medical certificate consults.
+                                            Online medical certificates
                                         </h1>
                                         <p className="mt-5 max-w-xl text-lg leading-relaxed text-text-secondary">
                                             Complete a short online form, receive doctor review, and get digital delivery if approved.
@@ -107,14 +106,15 @@ export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
                                             </Button>
                                         </div>
 
-                                        <div className="mt-3 inline-flex max-w-md items-start gap-1.5 rounded-md border border-slate-200/70 bg-white/75 px-2.5 py-1.5 text-[13px] text-text-primary">
-                                            <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/80" />
-                                            <p className="leading-relaxed">
-                                                <span className="font-medium">Short form:</span> complete your consult details online in under 2 minutes.
-                                            </p>
-                                        </div>
+                                        <p className="mt-4 flex max-w-xl flex-wrap items-center gap-x-2 gap-y-1 text-sm font-medium leading-relaxed text-bark-600">
+                                            <span>Doctor reviewed</span>
+                                            <span aria-hidden="true" className="text-bark-300">•</span>
+                                            <span>Under 2 minutes</span>
+                                            <span aria-hidden="true" className="text-bark-300">•</span>
+                                            <span>Digital delivery if approved</span>
+                                        </p>
 
-                                        <p className="mt-3 text-sm text-text-secondary">
+                                        <p className="mt-3 text-xs text-text-secondary">
                                             Non-emergency symptoms only. Certificates start from today onward.
                                         </p>
                                     </div>
@@ -123,14 +123,14 @@ export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
                                         <img
                                             src="/Medical Certificate Landing.png"
                                             alt="Person completing an online medical certificate consult"
-                                            className="absolute inset-0 block h-full w-full object-cover object-[68%_50%]"
+                                            className="absolute inset-0 block h-full w-full object-cover object-[76%_50%]"
                                             loading="eager"
                                         />
-                                        <div className="pointer-events-none absolute inset-y-0 left-0 w-44 bg-gradient-to-r from-white/22 to-transparent" />
+                                        <div className="pointer-events-none absolute inset-y-0 left-0 w-24 bg-gradient-to-r from-white/16 to-transparent" />
                                         <div className="pointer-events-none absolute inset-0 hidden md:block">
                                             <DoctorHeroOverlayCard
                                                 card={DOCTOR_HERO_OVERLAY_CARDS[0]}
-                                                className="left-9 top-20 w-36 lg:left-12 lg:top-24 lg:w-40"
+                                                className="left-12 top-28 w-36 lg:left-16 lg:top-32 lg:w-40"
                                             />
                                         </div>
                                     </div>
@@ -245,7 +245,6 @@ export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
             )}
 
             <UpsellModal />
-            {view === 'landing' && <LiveActivityToast />}
             <Footer onStartConsult={view === 'landing' ? startBooking : undefined} consultHref={`/${service.slug}`} />
         </div>
     )

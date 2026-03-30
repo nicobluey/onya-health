@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { SERVICE_LIST } from '../consult-flow';
-import { LiveActivityToast } from '../components/LiveActivityToast';
 import { FAQ } from '../components/FAQ';
 import { BlogsSection, UsedByPatientsSection } from '../components/LandingExtras';
 import { Footer } from '../components/Footer';
@@ -38,6 +37,17 @@ export default function HomePage() {
     const [wordIndex, setWordIndex] = useState(0);
     const [displayWord, setDisplayWord] = useState('');
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isHeaderScrolled, setIsHeaderScrolled] = useState(false);
+
+    useEffect(() => {
+        const handleScroll = () => {
+            setIsHeaderScrolled(window.scrollY > 18);
+        };
+
+        handleScroll();
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
 
     useEffect(() => {
         const currentWord = ROTATING_PROVIDERS[wordIndex];
@@ -75,8 +85,8 @@ export default function HomePage() {
 
     return (
         <div className="min-h-screen flex flex-col font-sans" style={{ backgroundColor: HOME_THEME.pageBg }}>
-            <header className="sticky top-0 z-50 w-full border-b border-border bg-white shadow-sm">
-                <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 flex justify-between items-center">
+            <header className={`sticky top-0 z-50 w-full border-b transition-all duration-300 ${isHeaderScrolled ? 'border-white/45 bg-white/65 shadow-[0_10px_28px_rgba(15,23,42,0.12)] backdrop-blur-xl' : 'border-border bg-white shadow-sm'}`}>
+                <div className="mx-auto flex h-16 w-full max-w-[84rem] items-center justify-between px-4 md:px-8">
                     <HeaderBrand />
                     <HeaderDropdown />
                 </div>
@@ -197,12 +207,6 @@ export default function HomePage() {
                 </section>
             </main>
 
-            <div className="hidden md:block">
-                <LiveActivityToast />
-            </div>
-            <div className="md:hidden">
-                <LiveActivityToast mobile />
-            </div>
             <Footer consultHref="/doctor" />
         </div>
     );

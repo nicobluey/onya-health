@@ -207,7 +207,7 @@ export function HowItWorks({ onStartConsult, serviceSlug }: HowItWorksProps) {
                 <div className="mx-auto max-w-6xl px-6 md:px-8">
                     <h2 className="text-center text-3xl font-bold text-text-primary md:text-4xl">How your consult works</h2>
                     <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-text-secondary md:text-base">
-                        Three clear steps from submission to outcome.
+                        Three simple steps from request to doctor review.
                     </p>
 
                     <div className="mt-8 grid gap-4 md:grid-cols-3">
