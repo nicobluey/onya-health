@@ -31,12 +31,6 @@ interface UseCaseConfig {
     metaDescription: string;
 }
 
-const HOME_HIGHLIGHTS = [
-    { title: 'Fast', detail: 'Online assessment' },
-    { title: 'Trusted', detail: 'Practitioner reviewed' },
-    { title: 'Personalised', detail: 'Care matched to your needs' },
-];
-
 const USE_CASES: UseCaseConfig[] = [
     {
         key: 'doctor',
@@ -189,24 +183,6 @@ export default function MedicalCertificateUseCasePage() {
                         </p>
                     </div>
                 </section>
-
-                <div className="border-b border-border bg-white py-4">
-                    <div className="max-w-7xl mx-auto px-6 md:px-8">
-                        <div className="grid gap-4 md:grid-cols-[auto_1fr] md:items-center">
-                            <div className="grid grid-cols-3 gap-5">
-                                {HOME_HIGHLIGHTS.map((item) => (
-                                    <div key={item.title}>
-                                        <p className="text-2xl font-bold leading-none text-text-primary">{item.title}</p>
-                                        <p className="mt-1 text-xs font-medium text-bark-500">{item.detail}</p>
-                                    </div>
-                                ))}
-                            </div>
-                            <p className="max-w-2xl text-sm text-bark-600 md:justify-self-end">
-                                Access care faster through a tailored online experience that connects you with the right support across Australia.
-                            </p>
-                        </div>
-                    </div>
-                </div>
 
                 <div id="how-it-works">
                     <HowItWorks />
