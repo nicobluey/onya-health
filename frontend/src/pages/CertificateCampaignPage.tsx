@@ -832,7 +832,7 @@ export default function CertificateCampaignPage() {
         [pathname]
     );
     const selectedOption = CERTIFICATE_OPTIONS.find((item) => item.key === config.purposeParam) || CERTIFICATE_OPTIONS[0];
-    const bookingHref = '/doctor';
+    const bookingHref = `/doctor/booking?purpose=${config.purposeParam}`;
 
     useEffect(() => {
         document.title = config.metaTitle;
