@@ -114,9 +114,7 @@ function getUseCaseByPath(pathname: string): UseCaseConfig {
 export default function MedicalCertificateUseCasePage() {
     const pathname = window.location.pathname.toLowerCase();
     const currentUseCase = useMemo(() => getUseCaseByPath(pathname), [pathname]);
-    const bookingHref = currentUseCase.purposeParam
-        ? `/doctor?purpose=${currentUseCase.purposeParam}&view=booking`
-        : '/doctor?view=booking';
+    const bookingHref = '/doctor';
 
     useEffect(() => {
         document.title = currentUseCase.metaTitle;

@@ -7,6 +7,7 @@ import {
 } from '../consult-flow';
 import { BlogIndexPage } from '../components/blog/BlogIndexPage';
 import { BlogArticlePage } from '../components/blog/BlogArticlePage';
+import { isHealthTopicRoute } from '../pages/HealthTopicLandingPage';
 import {
   AboutPage,
   CertificateVerifyPage,
@@ -21,9 +22,6 @@ import {
 
 export function AppRouter() {
   const pathname = window.location.pathname.toLowerCase();
-  const params = new URLSearchParams(window.location.search);
-  const view = (params.get('view') || '').trim().toLowerCase();
-  const hasPurpose = Boolean((params.get('purpose') || '').trim());
 
   if (pathname === '/blog') {
     return <BlogIndexPage />;
@@ -46,11 +44,11 @@ export function AppRouter() {
     return <FairWorkCertificatesPage />;
   }
 
-  if (pathname === '/health' || pathname.startsWith('/health/')) {
+  if (isHealthTopicRoute(pathname)) {
     return <HealthTopicLandingPage />;
   }
 
-  if (pathname === '/doctor' && view !== 'booking' && !hasPurpose) {
+  if (pathname === '/doctor') {
     return <MedicalCertificateUseCasePage />;
   }
 

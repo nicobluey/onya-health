@@ -101,6 +101,8 @@ const HEALTH_TOPICS: HealthTopic[] = [
     { slug: 'where-to-get-medical-certificate-fast', title: 'Where to get a medical certificate quickly', intro: 'What to compare when timing matters: speed, clarity, and safe doctor-reviewed outcomes.' },
 ];
 
+const HEALTH_TOPIC_SLUG_SET = new Set(HEALTH_TOPICS.map((topic) => topic.slug));
+
 const BUCKET_GUIDES: Record<TopicBucket, BucketGuide> = {
     respiratory: {
         label: 'Respiratory health',
@@ -452,9 +454,29 @@ function getTopicBucket(slug: string): TopicBucket {
 function getTopicByPath(pathname: string) {
     const normalized = pathname.toLowerCase().replace(/\/+$/, '');
     if (normalized === '/health') return null;
-    if (!normalized.startsWith('/health/')) return null;
-    const slug = normalized.slice('/health/'.length);
+    let slug = '';
+    if (normalized.startsWith('/health/')) {
+        slug = normalized.slice('/health/'.length);
+    } else if (normalized.startsWith('/')) {
+        slug = normalized.slice(1);
+    }
+    if (!slug) return null;
+    if (!HEALTH_TOPIC_SLUG_SET.has(slug)) return null;
     return HEALTH_TOPICS.find((topic) => topic.slug === slug) || null;
+}
+
+export function isHealthTopicRoute(pathname: string) {
+    const normalized = pathname.toLowerCase().replace(/\/+$/, '');
+    if (normalized === '/health' || normalized.startsWith('/health/')) {
+        if (normalized === '/health') return true;
+        const slug = normalized.slice('/health/'.length);
+        return HEALTH_TOPIC_SLUG_SET.has(slug);
+    }
+    if (normalized.startsWith('/')) {
+        const slug = normalized.slice(1);
+        return HEALTH_TOPIC_SLUG_SET.has(slug);
+    }
+    return false;
 }
 
 function estimateReadTime(topic: HealthTopic) {
@@ -513,8 +535,10 @@ function buildArticleSchema(topic: HealthTopic, guide: BucketGuide, canonicalUrl
 export default function HealthTopicLandingPage() {
     const pathname = window.location.pathname;
     const currentTopic = useMemo(() => getTopicByPath(pathname), [pathname]);
-    const bookingHref = '/doctor?view=booking';
-    const canonicalUrl = `${SITE_URL}${pathname}`;
+    const bookingHref = '/doctor';
+    const canonicalUrl = currentTopic
+        ? `${SITE_URL}/health/${currentTopic.slug}`
+        : `${SITE_URL}/health`;
 
     const topicBucket = useMemo(
         () => (currentTopic ? getTopicBucket(currentTopic.slug) : null),
@@ -529,7 +553,7 @@ export default function HealthTopicLandingPage() {
     const relatedTopics = useMemo(() => {
         if (!currentTopic) return HEALTH_TOPICS;
         return HEALTH_TOPICS.filter((topic) => topic.slug !== currentTopic.slug).slice(0, 12);
-    }, [canonicalUrl, currentTopic]);
+    }, [currentTopic]);
 
     useEffect(() => {
         const title = currentTopic
