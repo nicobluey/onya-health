@@ -13,6 +13,17 @@ interface HealthTopic {
     intro: string;
 }
 
+type TopicBucket =
+    | 'respiratory'
+    | 'gastro'
+    | 'pain'
+    | 'mental'
+    | 'womens'
+    | 'skin'
+    | 'chronic'
+    | 'system'
+    | 'certificate';
+
 const HERO_IMAGES = [
     '/HERO.webp',
     '/Medical Certificate Landing.webp',
@@ -106,14 +117,216 @@ function topicTags(topic: HealthTopic) {
     ];
 }
 
+function getTopicBucket(slug: string): TopicBucket {
+    if (/flu|covid|throat|cough|sinus|asthma|hay-fever|ear/.test(slug)) return 'respiratory';
+    if (/gastro|food-poisoning|uti|stomach|ibs|dehydration/.test(slug)) return 'gastro';
+    if (/migraine|headache|back-pain|neck-pain|sciatica|knee|ankle/.test(slug)) return 'pain';
+    if (/anxiety|panic|depression|burnout|insomnia/.test(slug)) return 'mental';
+    if (/period|endometriosis|pcos|menopause/.test(slug)) return 'womens';
+    if (/rash|eczema|hives|conjunctivitis/.test(slug)) return 'skin';
+    if (/blood-pressure|iron|thyroid|diabetes|fatigue/.test(slug)) return 'chronic';
+    if (/wait-times|brisbane|queensland|australia/.test(slug)) return 'system';
+    return 'certificate';
+}
+
+function buildTopicArticle(topic: HealthTopic) {
+    const bucket = getTopicBucket(topic.slug);
+
+    const bucketText: Record<
+        TopicBucket,
+        { overview: string; whatToDo: string[]; watchFor: string[]; nextSteps: string[] }
+    > = {
+        respiratory: {
+            overview:
+                'Respiratory symptoms can change quickly over 24 to 48 hours. Most mild cases improve with hydration, rest, and close symptom tracking, but breathing changes always need faster escalation.',
+            whatToDo: [
+                'Track fever, cough intensity, and breathing comfort morning and evening.',
+                'Prioritise hydration, gentle nutrition, and reduced physical activity.',
+                'Use a simple daily log so symptom trends are easy to explain in consultation.',
+            ],
+            watchFor: [
+                'Breathing difficulty, chest pain, confusion, or persistent high fever.',
+                'Symptoms worsening after initial improvement.',
+                'Inability to stay hydrated due to fatigue or breathlessness.',
+            ],
+            nextSteps: [
+                'If symptoms are mild and stable, continue conservative home care and monitor.',
+                'If symptoms impact work or study, book a doctor-reviewed consult for safe guidance.',
+                'If red-flag symptoms appear, seek urgent in-person care immediately.',
+            ],
+        },
+        gastro: {
+            overview:
+                'Gastrointestinal symptoms often settle with fluid replacement and rest, but dehydration risk is the main concern. A structured recovery plan helps reduce setbacks and repeated symptom cycles.',
+            whatToDo: [
+                'Focus on hydration with regular small volumes across the day.',
+                'Reintroduce simple foods gradually once nausea or vomiting settles.',
+                'Pause strenuous activity and return to routine in stages.',
+            ],
+            watchFor: [
+                'Persistent vomiting, severe abdominal pain, or blood in stool/vomit.',
+                'Signs of dehydration such as dizziness, dark urine, or low urine output.',
+                'Symptoms persisting longer than expected without improvement.',
+            ],
+            nextSteps: [
+                'Document onset, frequency, and severity to support clinical review.',
+                'Use online doctor review for personalised recovery and return-to-work timing.',
+                'Escalate to urgent care if dehydration or severe pain is present.',
+            ],
+        },
+        pain: {
+            overview:
+                'Pain symptoms are best managed by tracking triggers, movement tolerance, and functional impact. Early conservative support can prevent short-term pain from becoming prolonged disruption.',
+            whatToDo: [
+                'Reduce aggravating movements and use paced return to activity.',
+                'Apply basic self-care supports consistently over 48 to 72 hours.',
+                'Track pain score, location changes, and activity limits each day.',
+            ],
+            watchFor: [
+                'Pain with weakness, numbness, or significant mobility loss.',
+                'Severe pain not responding to conservative measures.',
+                'Pain disrupting sleep for multiple nights in a row.',
+            ],
+            nextSteps: [
+                'Use structured symptom notes to improve consultation quality.',
+                'Book doctor review when pain is affecting work, study, or care duties.',
+                'Seek urgent care when pain is severe or neurological symptoms appear.',
+            ],
+        },
+        mental: {
+            overview:
+                'Mental health symptoms often improve with early support, predictable routine, and reduced pressure. Escalation should be faster when symptoms affect safety, sleep, or basic functioning.',
+            whatToDo: [
+                'Simplify commitments and prioritise sleep consistency for several days.',
+                'Use short check-ins with trusted people to reduce isolation.',
+                'Track symptom intensity and functional impact daily.',
+            ],
+            watchFor: [
+                'Escalating distress, panic frequency, or inability to function safely.',
+                'Severe insomnia with daytime deterioration.',
+                'Any concern about immediate safety.',
+            ],
+            nextSteps: [
+                'Use doctor-reviewed consult pathways for practical next-step planning.',
+                'Request short-term documentation when symptoms affect responsibilities.',
+                'If safety is at risk, seek emergency support immediately.',
+            ],
+        },
+        womens: {
+            overview:
+                'Hormonal and reproductive health symptoms can vary month to month. Consistent tracking of pattern, severity, and functional impact usually improves care planning and treatment discussions.',
+            whatToDo: [
+                'Track symptom timing, severity, and impact on daily activities.',
+                'Use a short routine plan for sleep, hydration, and workload adjustments.',
+                'Document what helps and what worsens symptoms.',
+            ],
+            watchFor: [
+                'Pain severity that prevents basic daily function.',
+                'Unexpected bleeding patterns with worsening symptoms.',
+                'Symptoms escalating quickly without relief.',
+            ],
+            nextSteps: [
+                'Book doctor review for tailored advice and safe documentation planning.',
+                'Use consult notes to plan work or study adjustments.',
+                'Seek urgent in-person care for severe or rapidly worsening symptoms.',
+            ],
+        },
+        skin: {
+            overview:
+                'Skin symptoms can look similar across different causes, so progression speed and associated symptoms matter. Conservative management is reasonable for mild, stable presentations.',
+            whatToDo: [
+                'Avoid known triggers and simplify skincare or topical exposure.',
+                'Track spread, itch/pain level, and response to basic measures.',
+                'Use clear photos over time to document progression.',
+            ],
+            watchFor: [
+                'Rapid spread, facial swelling, breathing symptoms, or severe pain.',
+                'Rash with fever or systemic symptoms.',
+                'No improvement after short conservative management.',
+            ],
+            nextSteps: [
+                'Use doctor review when symptoms persist or interfere with routine.',
+                'Bring timeline and trigger notes into consultation.',
+                'Escalate urgently if allergic or severe red-flag symptoms occur.',
+            ],
+        },
+        chronic: {
+            overview:
+                'Longer-term symptom patterns are best managed with regular review and trend tracking. Early identification of worsening patterns helps avoid avoidable disruption.',
+            whatToDo: [
+                'Track symptom pattern, intensity, and activity impact weekly.',
+                'Keep medication, sleep, and nutrition routines consistent.',
+                'Prepare a concise summary for each clinical review.',
+            ],
+            watchFor: [
+                'Sustained worsening despite routine management.',
+                'New symptoms that significantly change your baseline.',
+                'Function dropping across work, study, or care commitments.',
+            ],
+            nextSteps: [
+                'Use online consult review to refine immediate next steps.',
+                'Coordinate follow-up timing based on symptom trend, not guesswork.',
+                'Seek urgent care when sudden severe change occurs.',
+            ],
+        },
+        system: {
+            overview:
+                'Health system timing topics are mostly about planning around access delays. Clear triage decisions and early digital review can reduce wait-related disruption for non-emergency care needs.',
+            whatToDo: [
+                'Decide early whether your concern is emergency, urgent, or routine.',
+                'Use online pathways for non-emergency review when wait times are long.',
+                'Prepare symptom timeline and goals before consult.',
+            ],
+            watchFor: [
+                'Any emergency red-flag symptom where delay is unsafe.',
+                'Rapid symptom worsening while waiting for in-person appointments.',
+                'Functional decline that affects safety or daily needs.',
+            ],
+            nextSteps: [
+                'Use doctor-reviewed telehealth support for non-emergency decisions.',
+                'Plan documentation early when illness affects responsibilities.',
+                'Escalate to emergency services if urgent red flags appear.',
+            ],
+        },
+        certificate: {
+            overview:
+                'Certificate-related searches are usually time-sensitive. The safest pathway is a clear symptom timeline, quick doctor review, and realistic expectations around when documentation is clinically appropriate.',
+            whatToDo: [
+                'Record symptom onset, severity, and impact on your responsibilities.',
+                'Submit clear context early to reduce review delays.',
+                'Plan a conservative recovery window and avoid overcommitting.',
+            ],
+            watchFor: [
+                'Symptoms that are worsening rather than stabilising.',
+                'Uncertainty about safe return-to-work or study timing.',
+                'Any red-flag symptom requiring in-person urgent care.',
+            ],
+            nextSteps: [
+                'Use online doctor review for practical, documented next-step advice.',
+                'Keep communications simple and factual for workplace or institution needs.',
+                'Escalate to urgent care if severe symptoms are present.',
+            ],
+        },
+    };
+
+    const selected = bucketText[bucket];
+    return {
+        overview: `${topic.intro} ${selected.overview}`,
+        whatToDo: selected.whatToDo,
+        watchFor: selected.watchFor,
+        nextSteps: selected.nextSteps,
+    };
+}
+
 export default function HealthTopicLandingPage() {
     const pathname = window.location.pathname;
     const currentTopic = useMemo(() => getTopicByPath(pathname), [pathname]);
     const bookingHref = '/doctor?view=booking';
     const relatedTopics = useMemo(() => {
-        if (!currentTopic) return HEALTH_TOPICS.slice(0, 12);
+        if (!currentTopic) return HEALTH_TOPICS;
         return HEALTH_TOPICS.filter((topic) => topic.slug !== currentTopic.slug).slice(0, 12);
     }, [currentTopic]);
+    const article = useMemo(() => (currentTopic ? buildTopicArticle(currentTopic) : null), [currentTopic]);
 
     useEffect(() => {
         const title = currentTopic
@@ -238,6 +451,55 @@ export default function HealthTopicLandingPage() {
                         </div>
                     </div>
                 </section>
+
+                {currentTopic && article && (
+                    <section className="max-w-7xl mx-auto px-5 md:px-8 pb-8 md:pb-10">
+                        <article className="rounded-3xl border border-border bg-white p-6 md:p-8 shadow-sm">
+                            <h2 className="text-2xl md:text-3xl font-serif font-bold text-text-primary">
+                                {currentTopic.title}: what to do
+                            </h2>
+                            <p className="mt-4 text-base leading-relaxed text-text-secondary">{article.overview}</p>
+
+                            <div className="mt-6 grid gap-5 md:grid-cols-3">
+                                <div className="rounded-2xl border border-border bg-sand-50 p-5">
+                                    <h3 className="text-base font-semibold text-text-primary">What to do now</h3>
+                                    <ul className="mt-3 space-y-2">
+                                        {article.whatToDo.map((line) => (
+                                            <li key={line} className="flex items-start gap-2 text-sm text-text-secondary">
+                                                <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                                                <span>{line}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+
+                                <div className="rounded-2xl border border-border bg-sand-50 p-5">
+                                    <h3 className="text-base font-semibold text-text-primary">When to seek urgent care</h3>
+                                    <ul className="mt-3 space-y-2">
+                                        {article.watchFor.map((line) => (
+                                            <li key={line} className="flex items-start gap-2 text-sm text-text-secondary">
+                                                <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                                                <span>{line}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+
+                                <div className="rounded-2xl border border-border bg-sand-50 p-5">
+                                    <h3 className="text-base font-semibold text-text-primary">Practical next steps</h3>
+                                    <ul className="mt-3 space-y-2">
+                                        {article.nextSteps.map((line) => (
+                                            <li key={line} className="flex items-start gap-2 text-sm text-text-secondary">
+                                                <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                                                <span>{line}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            </div>
+                        </article>
+                    </section>
+                )}
 
                 <section className="max-w-7xl mx-auto px-5 md:px-8 pb-12 md:pb-16">
                     <h2 className="text-2xl md:text-3xl font-serif font-bold text-text-primary">Related topic pages</h2>

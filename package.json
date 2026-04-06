@@ -16,7 +16,8 @@
     "images:landing": "node scripts/generate-landing-images.mjs",
     "images:landing:dry": "node scripts/generate-landing-images.mjs --dry-run",
     "images:chatgpt": "node scripts/generate-landing-images.mjs",
-    "images:webp": "node scripts/convert-public-images-to-webp.mjs"
+    "images:webp": "node scripts/convert-public-images-to-webp.mjs",
+    "sitemap:generate": "node scripts/generate-sitemap.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
