@@ -121,7 +121,7 @@ export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
 
                                     <div className="relative h-[430px] overflow-hidden rounded-[32px] border border-slate-200/80 bg-white shadow-[0_28px_70px_rgba(15,23,42,0.18)] md:h-[520px] xl:h-[620px]">
                                         <img
-                                            src="/Medical Certificate Landing.png"
+                                            src="/Medical Certificate Landing.webp"
                                             alt="Person completing an online medical certificate consult"
                                             className="absolute inset-0 block h-full w-full object-cover object-[68%_50%]"
                                             loading="eager"
@@ -156,7 +156,7 @@ export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
                             <section className="relative min-h-[640px] overflow-hidden pb-32 pt-28" style={{ backgroundColor: service.theme.heroBg }}>
                                 <div className="absolute inset-0">
                                     <img
-                                        src="/HERO.png"
+                                        src="/HERO.webp"
                                         alt=""
                                         aria-hidden="true"
                                         className="h-full w-full object-cover"

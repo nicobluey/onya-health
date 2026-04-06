@@ -17,17 +17,17 @@ interface StatItem {
 }
 
 const PATIENT_ORGS: PatientOrg[] = [
-    { name: 'BHP', logoSrc: '/logos/bhp.png' },
-    { name: 'Commonwealth Bank', logoSrc: '/logos/commbank.png' },
-    { name: 'NAB', logoSrc: '/logos/nab.png' },
-    { name: 'Telstra', logoSrc: '/logos/telstra.png' },
-    { name: 'Woolworths Group', logoSrc: '/logos/woolworths.png' },
-    { name: 'Qantas', logoSrc: '/logos/qantas.png' },
-    { name: 'University of Sydney', logoSrc: '/logos/usyd.png' },
-    { name: 'University of Melbourne', logoSrc: '/logos/unimelb.png' },
-    { name: 'UNSW', logoSrc: '/logos/unsw.png' },
-    { name: 'Monash University', logoSrc: '/logos/monash.png' },
-    { name: 'University of Queensland', logoSrc: '/logos/uq.png' },
+    { name: 'BHP', logoSrc: '/logos/bhp.webp' },
+    { name: 'Commonwealth Bank', logoSrc: '/logos/commbank.webp' },
+    { name: 'NAB', logoSrc: '/logos/nab.webp' },
+    { name: 'Telstra', logoSrc: '/logos/telstra.webp' },
+    { name: 'Woolworths Group', logoSrc: '/logos/woolworths.webp' },
+    { name: 'Qantas', logoSrc: '/logos/qantas.webp' },
+    { name: 'University of Sydney', logoSrc: '/logos/usyd.webp' },
+    { name: 'University of Melbourne', logoSrc: '/logos/unimelb.webp' },
+    { name: 'UNSW', logoSrc: '/logos/unsw.webp' },
+    { name: 'Monash University', logoSrc: '/logos/monash.webp' },
+    { name: 'University of Queensland', logoSrc: '/logos/uq.webp' },
 ];
 
 const STATS: StatItem[] = [

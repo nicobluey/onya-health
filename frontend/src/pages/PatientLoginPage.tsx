@@ -15,14 +15,14 @@ type FloatingScienceCard = {
 
 const SCIENCE_FLOATING_CARDS: FloatingScienceCard[] = [
     {
-        src: '/Blue%20Cells.png',
+        src: '/Blue%20Cells.webp',
         className: '-left-20 top-16 h-36 w-36 md:-left-24 md:top-20 md:h-56 md:w-56',
         tilt: '-8deg',
         duration: '18s',
         delay: '0s',
     },
     {
-        src: '/Green%20Cells.png',
+        src: '/Green%20Cells.webp',
         className: 'right-[-2.9rem] top-24 h-28 w-28 md:right-[5%] md:top-14 md:h-36 md:w-36',
         tilt: '8deg',
         duration: '17s',
@@ -30,14 +30,14 @@ const SCIENCE_FLOATING_CARDS: FloatingScienceCard[] = [
         reverse: true,
     },
     {
-        src: '/Blue%20Bubbles.png',
+        src: '/Blue%20Bubbles.webp',
         className: 'left-[6%] -bottom-10 h-28 w-28 md:left-[8%] md:bottom-10 md:h-36 md:w-36',
         tilt: '-6deg',
         duration: '20s',
         delay: '0.8s',
     },
     {
-        src: '/Orange%20Cells.png',
+        src: '/Orange%20Cells.webp',
         className: 'right-[18%] -bottom-8 h-24 w-24 md:right-[28%] md:bottom-6 md:h-32 md:w-32',
         tilt: '9deg',
         duration: '15s',
@@ -45,14 +45,14 @@ const SCIENCE_FLOATING_CARDS: FloatingScienceCard[] = [
         reverse: true,
     },
     {
-        src: '/Red%20Cells.png',
+        src: '/Red%20Cells.webp',
         className: '-left-9 top-[54%] h-24 w-24 md:left-[1%] md:top-[50%] md:h-32 md:w-32',
         tilt: '-10deg',
         duration: '16s',
         delay: '1.6s',
     },
     {
-        src: '/Red%20Chemicals.png',
+        src: '/Red%20Chemicals.webp',
         className: '-right-8 top-[62%] h-28 w-28 md:right-[1%] md:top-[58%] md:h-36 md:w-36',
         tilt: '10deg',
         duration: '19s',
@@ -60,14 +60,14 @@ const SCIENCE_FLOATING_CARDS: FloatingScienceCard[] = [
         reverse: true,
     },
     {
-        src: '/Red%20Veins.png',
+        src: '/Red%20Veins.webp',
         className: 'left-[34%] -top-9 h-20 w-20 md:left-[42%] md:-top-8 md:h-28 md:w-28',
         tilt: '-5deg',
         duration: '14s',
         delay: '0.2s',
     },
     {
-        src: '/Lab%20Equipment.png',
+        src: '/Lab%20Equipment.webp',
         className: 'right-[34%] -top-7 h-20 w-20 md:right-[36%] md:-top-7 md:h-28 md:w-28',
         tilt: '7deg',
         duration: '15s',
@@ -75,14 +75,14 @@ const SCIENCE_FLOATING_CARDS: FloatingScienceCard[] = [
         reverse: true,
     },
     {
-        src: '/Microscope.png',
+        src: '/Microscope.webp',
         className: 'left-[2%] bottom-[12%] h-24 w-24 md:left-[2%] md:bottom-[18%] md:h-36 md:w-36',
         tilt: '-7deg',
         duration: '17s',
         delay: '2s',
     },
     {
-        src: '/Pipette.png',
+        src: '/Pipette.webp',
         className: 'right-3 bottom-[8%] h-28 w-28 md:-right-12 md:bottom-[8%] md:h-[260px] md:w-[260px]',
         tilt: '8deg',
         duration: '20s',
@@ -206,7 +206,7 @@ export default function PatientLoginPage() {
                 <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
                     <section className="hidden overflow-hidden rounded-3xl border border-sand-200 bg-white shadow-[0_28px_56px_-36px_rgba(15,23,42,0.35)] lg:block">
                         <img
-                            src="/HERO.png"
+                            src="/HERO.webp"
                             alt=""
                             aria-hidden="true"
                             className="h-[360px] w-full object-cover"

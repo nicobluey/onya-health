@@ -16,10 +16,11 @@ const FOOTER_GROUPS: FooterLinkGroup[] = [
         title: 'Services',
         links: [
             { label: 'Medical certificates', href: '/doctor' },
-            { label: 'Work certificates', href: '/medical-certificate-work' },
-            { label: 'University certificates', href: '/medical-certificate-university' },
-            { label: "Carer's leave certificates", href: '/medical-certificate-carers-leave' },
-            { label: 'General consults', href: '/doctor' },
+            { label: 'Doctor certificates', href: '/doctor' },
+            { label: 'Work certificates', href: '/work' },
+            { label: 'Student certificates', href: '/student' },
+            { label: "Caretaker certificates", href: '/caretaker' },
+            { label: 'General consults', href: '/doctor?view=booking' },
             { label: 'Psychology support', href: '/psychologist' },
             { label: 'Nutrition consults', href: '/nutritionist' },
         ],
@@ -30,6 +31,7 @@ const FOOTER_GROUPS: FooterLinkGroup[] = [
             { label: 'About Onya Health', href: '/about' },
             { label: 'Patient login', href: '/patient-login' },
             { label: 'Verify certificate', href: '/verify' },
+            { label: 'Health topics', href: '/health' },
             { label: 'Onya blogs', href: '/blog' },
             { label: 'Contact', href: '/contact' },
         ],
@@ -53,7 +55,7 @@ export function Footer({ onStartConsult, consultHref = '/doctor' }: FooterProps)
                     <div className="flex flex-col gap-8 border-b border-white/20 pb-10 lg:flex-row lg:items-end lg:justify-between">
                         <div>
                             <a href="/" className="inline-flex items-center" aria-label="Onya Health home">
-                                <img src="/onya-health-logo.png" alt="Onya Health" className="h-10 w-auto brightness-0 invert" />
+                                <img src="/onya-health-logo.webp" alt="Onya Health" className="h-10 w-auto brightness-0 invert" />
                             </a>
                             <p className="mt-5 max-w-md text-2xl font-semibold leading-snug text-white">
                                 Healthcare that works around your life.

@@ -1,6 +1,8 @@
 export { default as HomePage } from './HomePage';
 export { default as AboutPage } from './AboutPage';
 export { default as CertificateCampaignPage } from './CertificateCampaignPage';
+export { default as MedicalCertificateUseCasePage } from './MedicalCertificateUseCasePage';
+export { default as HealthTopicLandingPage } from './HealthTopicLandingPage';
 export { default as FairWorkCertificatesPage } from './FairWorkCertificatesPage';
 export { default as PatientLoginPage } from './PatientLoginPage';
 export { default as PatientPortalPage } from './PatientPortalPage';

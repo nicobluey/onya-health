@@ -80,7 +80,7 @@ export default function CertificateVerifyPage() {
       <div className="mx-auto max-w-4xl">
         <header className="mb-6 flex items-center justify-between rounded-2xl border border-sand-200 bg-white px-4 py-3 shadow-sm">
           <a href="/" className="inline-flex items-center" aria-label="Onya Health home">
-            <img src="/logo.png" alt="Onya Health" className="h-10 w-auto object-contain" />
+            <img src="/logo.webp" alt="Onya Health" className="h-10 w-auto object-contain" />
           </a>
           <div className="flex items-center gap-2">
             <a href="/patient-login" className="inline-flex items-center rounded-full border border-sand-200 bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-bark-700">

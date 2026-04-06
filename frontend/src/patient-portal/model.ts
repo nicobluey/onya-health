@@ -167,14 +167,14 @@ export const CONSULT_OPTIONS: ConsultOption[] = [
 
 export const PORTAL_BACKGROUND_CARDS: PortalBackgroundCard[] = [
   {
-    src: '/Blue%20Cells.png',
+    src: '/Blue%20Cells.webp',
     className: '-left-14 top-20 h-28 w-28 md:-left-20 md:top-28 md:h-40 md:w-40',
     tilt: '-8deg',
     duration: '22s',
     delay: '0s',
   },
   {
-    src: '/Green%20Cells.png',
+    src: '/Green%20Cells.webp',
     className: 'right-[-2rem] top-24 h-24 w-24 md:right-[2%] md:top-24 md:h-32 md:w-32',
     tilt: '8deg',
     duration: '20s',
@@ -182,7 +182,7 @@ export const PORTAL_BACKGROUND_CARDS: PortalBackgroundCard[] = [
     reverse: true,
   },
   {
-    src: '/Microscope.png',
+    src: '/Microscope.webp',
     className: 'right-[-2.2rem] bottom-8 h-28 w-28 md:right-[-3rem] md:bottom-16 md:h-40 md:w-40',
     tilt: '7deg',
     duration: '26s',
@@ -190,7 +190,7 @@ export const PORTAL_BACKGROUND_CARDS: PortalBackgroundCard[] = [
     reverse: true,
   },
   {
-    src: '/Lab%20Equipment.png',
+    src: '/Lab%20Equipment.webp',
     className: 'left-2 bottom-12 h-24 w-24 md:left-[2%] md:bottom-20 md:h-32 md:w-32',
     tilt: '-7deg',
     duration: '24s',

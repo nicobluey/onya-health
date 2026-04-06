@@ -136,7 +136,7 @@ export function Reviews() {
         <section className="relative overflow-hidden border-y border-border py-16">
             <div className="absolute inset-0">
                 <img
-                    src="/HERO.png"
+                    src="/HERO.webp"
                     alt=""
                     aria-hidden="true"
                     className="h-full w-full object-cover"

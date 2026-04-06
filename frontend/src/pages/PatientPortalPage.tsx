@@ -106,7 +106,7 @@ function DesktopSidebar({
         <aside className="hidden md:flex w-[260px] shrink-0 flex-col border-r border-[#cbd5e1] bg-[#f8fbff]/95 backdrop-blur">
             <div className="px-5 pt-5">
                 <a href="/" className="inline-flex items-center" aria-label="Go to home page">
-                    <img src="/logo.png" alt="Onya Health" className="h-10 w-auto object-contain" />
+                    <img src="/logo.webp" alt="Onya Health" className="h-10 w-auto object-contain" />
                 </a>
                 <p className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-[#475569]">Platform</p>
                 <nav className="mt-3 space-y-1">
@@ -160,7 +160,7 @@ function MobileTopBar({ activeTab }: { activeTab: MainTab }) {
         <header className="sticky top-0 z-40 border-b border-[#cbd5e1] bg-[#f8fbff]/95 backdrop-blur">
             <div className="flex h-14 items-center justify-between px-4">
                 <a href="/" className="inline-flex items-center" aria-label="Go to home page">
-                    <img src="/logo.png" alt="Onya Health" className="h-10 w-auto object-contain" />
+                    <img src="/logo.webp" alt="Onya Health" className="h-10 w-auto object-contain" />
                 </a>
                 <span className="rounded-full border border-[#cbd5e1] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#334155]">
                     {label}
@@ -462,7 +462,9 @@ function AccountTab({
                         ) : (
                             <a
                                 href="/doctor"
-                                className="inline-flex h-10 items-center justify-center rounded-xl bg-[#2e8cff] px-4 text-sm font-semibold text-white"
+                                className="lw-shine inline-flex h-10 items-center justify-center rounded-xl bg-[#2e8cff] px-4 text-sm font-semibold text-white"
+                                data-magnetic-strength="0.44"
+                                data-magnetic-radius="110"
                             >
                                 Start unlimited plan
                             </a>

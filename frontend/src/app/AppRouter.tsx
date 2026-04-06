@@ -9,10 +9,11 @@ import { BlogIndexPage } from '../components/blog/BlogIndexPage';
 import { BlogArticlePage } from '../components/blog/BlogArticlePage';
 import {
   AboutPage,
-  CertificateCampaignPage,
   CertificateVerifyPage,
   FairWorkCertificatesPage,
+  HealthTopicLandingPage,
   HomePage,
+  MedicalCertificateUseCasePage,
   PatientPortalPage,
   PatientLoginPage,
   PatientResetPasswordPage,
@@ -20,6 +21,9 @@ import {
 
 export function AppRouter() {
   const pathname = window.location.pathname.toLowerCase();
+  const params = new URLSearchParams(window.location.search);
+  const view = (params.get('view') || '').trim().toLowerCase();
+  const hasPurpose = Boolean((params.get('purpose') || '').trim());
 
   if (pathname === '/blog') {
     return <BlogIndexPage />;
@@ -42,12 +46,27 @@ export function AppRouter() {
     return <FairWorkCertificatesPage />;
   }
 
+  if (pathname === '/health' || pathname.startsWith('/health/')) {
+    return <HealthTopicLandingPage />;
+  }
+
+  if (pathname === '/doctor' && view !== 'booking' && !hasPurpose) {
+    return <MedicalCertificateUseCasePage />;
+  }
+
   if (
+    pathname === '/student' ||
+    pathname === '/caretaker' ||
+    pathname === '/ca' ||
+    pathname === '/work' ||
+    pathname === '/medical-certificate-doctor' ||
+    pathname === '/medical-certificate-student' ||
+    pathname === '/medical-certificate-caretaker' ||
     pathname === '/medical-certificate-work' ||
     pathname === '/medical-certificate-university' ||
     pathname === '/medical-certificate-carers-leave'
   ) {
-    return <CertificateCampaignPage />;
+    return <MedicalCertificateUseCasePage />;
   }
 
   if (pathname === '/patient/reset-password') {

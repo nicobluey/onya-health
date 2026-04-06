@@ -8,7 +8,7 @@ export function HeaderBrand({ href = '/', compact = false }: HeaderBrandProps) {
 
     return (
         <a href={href} className="inline-flex items-center" aria-label="Go to home page">
-            <img src="/onya-health-logo.png" alt="Onya Health" className={`${logoSizeClass} w-auto object-contain`} />
+            <img src="/onya-health-logo.webp" alt="Onya Health" className={`${logoSizeClass} w-auto object-contain`} />
         </a>
     );
 }

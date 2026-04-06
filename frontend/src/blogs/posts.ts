@@ -40,7 +40,7 @@ export const BLOG_POSTS: BlogPost[] = [
         excerpt: 'How AI-assisted patient matching helps people find the right online doctor, nutritionist, or psychologist faster in Australia.',
         author: 'Onya Clinical Team',
         publishedAt: '2026-03-01',
-        imageSrc: '/blogs/images/blue-cells.png',
+        imageSrc: '/blogs/images/blue-cells.webp',
         markdown: articleHealthcareMadeForYou,
     }),
     buildPost({
@@ -50,7 +50,7 @@ export const BLOG_POSTS: BlogPost[] = [
         excerpt: 'What patients should expect from affordable telehealth in Australia, including quality standards, access, and clinician review.',
         author: 'Onya Clinical Team',
         publishedAt: '2026-02-28',
-        imageSrc: '/blogs/images/green-cells.png',
+        imageSrc: '/blogs/images/green-cells.webp',
         markdown: articleAffordableQualityTelehealth,
     }),
     buildPost({
@@ -60,7 +60,7 @@ export const BLOG_POSTS: BlogPost[] = [
         excerpt: 'A practical guide to choosing the right online clinician in Australia based on your symptoms, goals, and care preferences.',
         author: 'Onya Clinical Team',
         publishedAt: '2026-02-27',
-        imageSrc: '/blogs/images/microscope.png',
+        imageSrc: '/blogs/images/microscope.webp',
         markdown: articleChooseRightClinician,
     }),
     buildPost({
@@ -70,7 +70,7 @@ export const BLOG_POSTS: BlogPost[] = [
         excerpt: 'Why personal care plans work better when telehealth is easy, consistent, and matched to the right clinician.',
         author: 'Onya Clinical Team',
         publishedAt: '2026-02-26',
-        imageSrc: '/blogs/images/pipette.png',
+        imageSrc: '/blogs/images/pipette.webp',
         markdown: articlePersonalCareWithTelehealth,
     }),
     buildPost({
@@ -80,7 +80,7 @@ export const BLOG_POSTS: BlogPost[] = [
         excerpt: 'What to check before booking an online doctor in Australia, including clinician registration, process quality, and safety signals.',
         author: 'Onya Clinical Team',
         publishedAt: '2026-02-24',
-        imageSrc: '/blogs/images/lab-equipment.png',
+        imageSrc: '/blogs/images/lab-equipment.webp',
         markdown: articleOnlineDoctorAustraliaGuide,
     }),
 ];

@@ -43,19 +43,19 @@ function toSafeFilename(value) {
 const landingImageJobs = [
   {
     key: 'work',
-    outputFile: 'frontend/public/landing-work-certificate.png',
+    outputFile: 'frontend/public/landing-work-certificate.webp',
     prompt:
       'Hyper-realistic photo of an Australian adult at home on a laptop completing an online medical certificate request while mildly unwell, clean modern interior, smartphone and laptop visible, subtle healthcare context, calm trustworthy telehealth mood, natural daylight, professional documentary style, detailed skin texture, realistic hands, no logos, no watermark.',
   },
   {
     key: 'university',
-    outputFile: 'frontend/public/landing-university-certificate.png',
+    outputFile: 'frontend/public/landing-university-certificate.webp',
     prompt:
       'Hyper-realistic photo of a university student in Australia at a desk using laptop and phone to request a medical certificate online, notebooks and assessment papers nearby, mild fatigue expression, tidy student apartment, natural window light, modern telehealth brand style, realistic details, no logos, no watermark.',
   },
   {
     key: 'carers-leave',
-    outputFile: 'frontend/public/landing-carers-certificate.png',
+    outputFile: 'frontend/public/landing-carers-certificate.webp',
     prompt:
       'Hyper-realistic photo of an Australian carer at home completing a telehealth leave request on a smartphone while supporting an older family member in the background, compassionate but calm moment, modern home interior, trustworthy healthcare visual style, realistic skin and hands, no logos, no watermark.',
   },
@@ -139,7 +139,7 @@ async function main() {
   const models = [...new Set([preferredModel, 'gpt-image-1'])];
   const size = process.env.OPENAI_IMAGE_SIZE || '1536x1024';
   const quality = process.env.OPENAI_IMAGE_QUALITY || 'medium';
-  const outputFormat = process.env.OPENAI_IMAGE_OUTPUT_FORMAT || 'png';
+  const outputFormat = process.env.OPENAI_IMAGE_OUTPUT_FORMAT || 'webp';
   const outputCompression = Number(process.env.OPENAI_IMAGE_OUTPUT_COMPRESSION || 90);
 
   if (!dryRun && !apiKey) {

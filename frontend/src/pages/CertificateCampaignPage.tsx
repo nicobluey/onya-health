@@ -101,7 +101,7 @@ const LANDING_CONFIGS: Record<string, LandingConfig> = {
         heroSubheadline:
             'Fast, secure medical certificates for sick leave and work absences without needing to visit a clinic.',
         heroCta: 'Get Work Certificate',
-        heroImageSrc: '/landing-work-certificate.png',
+        heroImageSrc: '/landing-work-certificate.webp',
         heroImageAlt:
             'Australian doctor holding a medical certificate in a clean clinical setting.',
         heroImageLabel: 'Work certificate support',
@@ -162,7 +162,7 @@ const LANDING_CONFIGS: Record<string, LandingConfig> = {
         heroSubheadline:
             'Fast, secure medical certificates for classes, exams, and assessment-related illness.',
         heroCta: 'Get University Certificate',
-        heroImageSrc: '/landing-university-certificate.png',
+        heroImageSrc: '/landing-university-certificate.webp',
         heroImageAlt:
             'University-aged patient using a laptop and phone to complete a telehealth request.',
         heroImageLabel: 'Student telehealth request',
@@ -223,7 +223,7 @@ const LANDING_CONFIGS: Record<string, LandingConfig> = {
         heroSubheadline:
             'Fast, secure certificates when you need leave to care for someone under your care.',
         heroCta: "Get Carer's Certificate",
-        heroImageSrc: '/landing-carers-certificate.png',
+        heroImageSrc: '/landing-carers-certificate.webp',
         heroImageAlt: 'Australian doctor reviewing a carer leave certificate request online.',
         heroImageLabel: "Carer's leave review",
         trustBullets: [
@@ -330,18 +330,18 @@ const PRICING_TIERS: PricingTier[] = [
 ];
 
 const TRUST_LOGOS = [
-    { src: '/logos/anz.png', alt: 'ANZ' },
-    { src: '/logos/bhp.png', alt: 'BHP' },
-    { src: '/logos/commbank.png', alt: 'CommBank' },
-    { src: '/logos/monash.png', alt: 'Monash University' },
-    { src: '/logos/nab.png', alt: 'NAB' },
-    { src: '/logos/qantas.png', alt: 'Qantas' },
-    { src: '/logos/telstra.png', alt: 'Telstra' },
-    { src: '/logos/unimelb.png', alt: 'University of Melbourne' },
-    { src: '/logos/unsw.png', alt: 'UNSW' },
-    { src: '/logos/usyd.png', alt: 'University of Sydney' },
-    { src: '/logos/wesfarmers.png', alt: 'Wesfarmers' },
-    { src: '/logos/woolworths.png', alt: 'Woolworths' },
+    { src: '/logos/anz.webp', alt: 'ANZ' },
+    { src: '/logos/bhp.webp', alt: 'BHP' },
+    { src: '/logos/commbank.webp', alt: 'CommBank' },
+    { src: '/logos/monash.webp', alt: 'Monash University' },
+    { src: '/logos/nab.webp', alt: 'NAB' },
+    { src: '/logos/qantas.webp', alt: 'Qantas' },
+    { src: '/logos/telstra.webp', alt: 'Telstra' },
+    { src: '/logos/unimelb.webp', alt: 'University of Melbourne' },
+    { src: '/logos/unsw.webp', alt: 'UNSW' },
+    { src: '/logos/usyd.webp', alt: 'University of Sydney' },
+    { src: '/logos/wesfarmers.webp', alt: 'Wesfarmers' },
+    { src: '/logos/woolworths.webp', alt: 'Woolworths' },
 ];
 
 const SOCIAL_PROOF_ITEMS: SocialProofItem[] = [

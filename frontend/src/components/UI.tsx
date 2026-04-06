@@ -3,6 +3,7 @@ import type { ButtonHTMLAttributes, InputHTMLAttributes } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Check } from 'lucide-react';
 import { cn } from '../lib/cn';
+import { MagneticButton } from './lightswind/MagneticButton';
 
 // --- BUTTON ---
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -11,25 +12,22 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-    ({ className, variant = 'primary', fullWidth, ...props }, ref) => {
-        const variants = {
-            primary: "bg-primary hover:bg-primary-hover text-sand-50 border border-transparent shadow-sm",
-            outline: "bg-transparent border-2 border-primary text-primary hover:bg-sand-50",
-            secondary: "bg-white border border-primary text-primary hover:bg-sunlight-50",
-            ghost: "bg-transparent hover:bg-sand-75 text-text-secondary"
-        };
-
+    ({ className, variant = 'primary', fullWidth, children, ...props }, ref) => {
         return (
-            <button
+            <MagneticButton
                 ref={ref}
+                variant={variant}
+                size="md"
+                strength={0.42}
+                radius={96}
                 className={cn(
-                    "inline-flex items-center justify-center rounded-xl px-6 py-3 font-semibold transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed",
-                    variants[variant],
                     fullWidth ? "w-full" : "",
                     className
                 )}
                 {...props}
-            />
+            >
+                {children}
+            </MagneticButton>
         );
     }
 );
@@ -124,17 +122,17 @@ export const Modal = ({ isOpen, onClose, children }: { isOpen: boolean; onClose?
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="fixed inset-0 bg-bark-900/40 backdrop-blur-sm z-40"
+                    className="fixed inset-0 z-[80] bg-bark-900/46 backdrop-blur-sm"
                     onClick={onClose}
                 />
                 <motion.div
-                    initial={{ opacity: 0, y: "100%" }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: "100%" }}
+                    initial={{ opacity: 0, y: 36, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 26, scale: 0.98 }}
                     transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                    className="fixed bottom-0 left-0 right-0 w-full md:left-1/2 md:top-1/2 md:bottom-auto md:max-w-md md:-translate-x-1/2 md:-translate-y-1/2 z-50 md:p-4"
+                    className="pointer-events-none fixed inset-0 z-[90] flex items-end justify-center px-0 pb-0 pt-16 md:items-center md:px-4 md:pb-4 md:pt-20"
                 >
-                    <div className="bg-white rounded-t-2xl md:rounded-2xl shadow-xl overflow-hidden max-h-[90vh] overflow-y-auto">
+                    <div className="lw-border-beam pointer-events-auto w-full max-h-[calc(100dvh-4rem)] overflow-y-auto rounded-t-3xl border border-white/75 bg-white shadow-[0_32px_72px_-30px_rgba(15,23,42,0.62)] md:max-h-[calc(100dvh-6rem)] md:max-w-[640px] md:rounded-3xl">
                         {children}
                     </div>
                 </motion.div>

@@ -87,6 +87,180 @@
 }
 
 @layer utilities {
+  .lw-magnetic-ready {
+    --lw-mx: 0px;
+    --lw-my: 0px;
+    transform: translate3d(var(--lw-mx), var(--lw-my), 0);
+    will-change: transform;
+    transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .lw-magnetic {
+    --lw-mx: 0px;
+    --lw-my: 0px;
+  }
+
+  .lw-magnetic.lw-magnetic-ready {
+    transform: none;
+  }
+
+  .lw-button-content {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+
+  .lw-magnetic.lw-magnetic-ready .lw-button-content {
+    transform: translate3d(var(--lw-mx), var(--lw-my), 0);
+    will-change: transform;
+    transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .lw-shine {
+    isolation: isolate;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .lw-shine::before {
+    content: "";
+    position: absolute;
+    left: -155%;
+    top: -120%;
+    width: 72%;
+    height: 320%;
+    transform: rotate(22deg) translateX(0);
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.54), transparent);
+    pointer-events: none;
+    z-index: 0;
+    transition: transform 780ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  .lw-shine:hover::before,
+  .lw-shine:focus-visible::before {
+    transform: rotate(22deg) translateX(345%);
+  }
+
+  .lw-shine-button {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    color: #ffffff;
+    background: linear-gradient(
+      112deg,
+      var(--lw-shine-base, #2e8cff) 0%,
+      #58a8ff 45%,
+      var(--lw-shine-base, #2e8cff) 100%
+    );
+    border: 1px solid rgba(31, 123, 230, 0.82);
+    box-shadow:
+      0 14px 28px -18px var(--lw-shine-glow, rgba(46, 140, 255, 0.72)),
+      inset 0 1px 0 rgba(255, 255, 255, 0.34);
+    text-shadow: 0 1px 2px rgba(15, 23, 42, 0.35);
+  }
+
+  .lw-shine-button::before {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    left: -44%;
+    top: -170%;
+    width: 38%;
+    height: 440%;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.18) 25%,
+      rgba(255, 255, 255, 0.82) 52%,
+      rgba(255, 255, 255, 0.16) 78%,
+      transparent 100%
+    );
+    transform: translateX(-190%) skewX(-20deg);
+    animation: lw-shine-sweep var(--lw-shine-duration, 2.8s) ease-in-out infinite;
+    z-index: 0;
+  }
+
+  .lw-shine-button::after {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    z-index: 1;
+  }
+
+  .lw-shine-button-label {
+    position: relative;
+    z-index: 2;
+    display: inline-flex;
+    width: 100%;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+  }
+
+  .lw-border-beam {
+    position: relative;
+    isolation: isolate;
+  }
+
+  .lw-border-beam::before {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      112deg,
+      rgba(125, 189, 255, 0.36) 0%,
+      rgba(46, 140, 255, 0.92) 22%,
+      rgba(255, 255, 255, 0.95) 44%,
+      rgba(46, 140, 255, 0.84) 68%,
+      rgba(125, 189, 255, 0.3) 100%
+    );
+    background-size: 220% 220%;
+    animation: lw-border-beam 4.5s linear infinite;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    z-index: 2;
+  }
+
+  .lw-border-beam::after {
+    content: "";
+    pointer-events: none;
+    position: absolute;
+    inset: 1px;
+    border-radius: inherit;
+    border: 1px solid rgba(203, 213, 225, 0.74);
+    z-index: 1;
+  }
+
+  @keyframes lw-shine-sweep {
+    0% {
+      transform: translateX(-190%) skewX(-20deg);
+    }
+    64%,
+    100% {
+      transform: translateX(420%) skewX(-20deg);
+    }
+  }
+
+  @keyframes lw-border-beam {
+    from {
+      background-position: 0% 50%;
+    }
+    to {
+      background-position: 200% 50%;
+    }
+  }
+
   .sparkle-field {
     position: absolute;
     inset: 0;
@@ -146,6 +320,23 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
+    .lw-magnetic-ready,
+    .lw-magnetic.lw-magnetic-ready .lw-button-content {
+      transition: none;
+      transform: none;
+    }
+
+    .lw-shine::before {
+      transition: none;
+      transform: rotate(22deg) translateX(0);
+    }
+
+    .lw-shine-button::before,
+    .lw-border-beam::before {
+      animation: none;
+      transform: translateX(0) skewX(-20deg);
+    }
+
     .sparkle,
     .sparkle-core {
       animation: none;
@@ -392,4 +583,3 @@
     }
   }
 }
-

@@ -109,7 +109,7 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
 
                                     <div className="relative mt-6 overflow-hidden rounded-[26px] border border-slate-200/80 bg-white shadow-[0_20px_46px_rgba(15,23,42,0.16)]">
                                         <img
-                                            src="/Medical Certificate Landing.png"
+                                            src="/Medical Certificate Landing.webp"
                                             alt="Person completing an online medical certificate consult"
                                             className="h-[290px] w-full object-cover object-[68%_50%]"
                                         />
@@ -160,7 +160,7 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
                             <section className="pb-16 pt-16 text-center relative overflow-hidden" style={{ backgroundColor: service.theme.heroBg }}>
                                 <div className="absolute inset-0">
                                     <img
-                                        src="/HERO.png"
+                                        src="/HERO.webp"
                                         alt=""
                                         aria-hidden="true"
                                         className="h-full w-full object-cover"

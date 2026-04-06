@@ -163,21 +163,21 @@ function HomeHero({
 
                 <div className="relative hidden min-h-[260px] lg:block">
                     <div className="overflow-hidden rounded-[1.8rem] border border-[#dbe2d9]">
-                        <img src="/HERO.png" alt="" aria-hidden="true" className="h-[260px] w-full object-cover" />
+                        <img src="/HERO.webp" alt="" aria-hidden="true" className="h-[260px] w-full object-cover" />
                     </div>
                     <div
                         className="science-float-card -left-8 -top-5 h-20 w-20"
                         aria-hidden="true"
                         style={{ '--science-tilt': '-7deg', '--drift-duration': '20s', '--drift-delay': '0.3s' } as CSSProperties}
                     >
-                        <img src="/Green%20Cells.png" alt="" className="h-full w-full object-cover" />
+                        <img src="/Green%20Cells.webp" alt="" className="h-full w-full object-cover" />
                     </div>
                     <div
                         className="science-float-card is-reverse -bottom-4 right-3 h-24 w-24"
                         aria-hidden="true"
                         style={{ '--science-tilt': '8deg', '--drift-duration': '18s', '--drift-delay': '0.8s' } as CSSProperties}
                     >
-                        <img src="/Blue%20Cells.png" alt="" className="h-full w-full object-cover" />
+                        <img src="/Blue%20Cells.webp" alt="" className="h-full w-full object-cover" />
                     </div>
                 </div>
             </div>

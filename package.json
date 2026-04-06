@@ -15,7 +15,8 @@
     "billing:backfill": "node scripts/backfill-patient-billing.mjs",
     "images:landing": "node scripts/generate-landing-images.mjs",
     "images:landing:dry": "node scripts/generate-landing-images.mjs --dry-run",
-    "images:chatgpt": "node scripts/generate-landing-images.mjs"
+    "images:chatgpt": "node scripts/generate-landing-images.mjs",
+    "images:webp": "node scripts/convert-public-images-to-webp.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
@@ -28,7 +29,9 @@
     "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "tailwind-merge": "^3.4.0"
+    "react-flip-toolkit": "^7.2.4",
+    "tailwind-merge": "^3.4.0",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
@@ -43,6 +46,7 @@
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
     "postcss": "^8.5.6",
+    "sharp": "^0.34.5",
     "supabase": "^2.76.15",
     "tailwindcss": "^4.1.18",
     "typescript": "~5.9.3",

@@ -9,6 +9,7 @@ import { HomeReviews } from '../components/HomeReviews';
 import { HowItWorks } from '../components/HowItWorks';
 import { HeaderDropdown } from '../components/HeaderDropdown';
 import { HeaderBrand } from '../components/HeaderBrand';
+import { MagneticButton } from '../components/lightswind/MagneticButton';
 
 const ROTATING_PROVIDERS = ['doctor', 'nutritionist', 'psychologist'];
 const HOME_THEME = {
@@ -29,9 +30,9 @@ const HOME_CARD_CTA_BY_SLUG: Record<string, string> = {
 };
 
 const HOME_CARD_IMAGE_BY_SLUG: Record<string, string> = {
-    doctor: '/doctor-consult.png',
-    nutritionist: '/nutrionist.png',
-    psychologist: '/psychologist.png',
+    doctor: '/doctor-consult.webp',
+    nutritionist: '/nutrionist.webp',
+    psychologist: '/psychologist.webp',
 };
 
 export default function HomePage() {
@@ -86,7 +87,7 @@ export default function HomePage() {
                 <section className="relative overflow-hidden pb-12 pt-24 md:min-h-[640px] md:pb-32 md:pt-28" style={{ backgroundColor: HOME_THEME.heroBg }}>
                     <div className="absolute inset-0">
                         <img
-                            src="/HERO.png"
+                            src="/HERO.webp"
                             alt=""
                             aria-hidden="true"
                             className="h-full w-full object-cover"
@@ -109,9 +110,9 @@ export default function HomePage() {
                     </div>
                 </section>
 
-                <div className="bg-white border-b border-border py-4 overflow-hidden">
+                <div className="relative overflow-hidden border-b border-border bg-white py-4">
                     <div className="max-w-7xl mx-auto px-6 md:px-8">
-                        <div className="grid gap-4 md:grid-cols-[auto_1fr] md:items-center">
+                        <div className="relative z-10 grid gap-4 md:grid-cols-[auto_1fr] md:items-center">
                             <div className="grid grid-cols-3 gap-5">
                                 {HOME_HIGHLIGHTS.map((item) => (
                                     <div key={item.title}>
@@ -127,36 +128,37 @@ export default function HomePage() {
                     </div>
                 </div>
 
-                <section id="ai-match-specialties" className="max-w-7xl mx-auto px-5 md:px-8 py-10 md:py-14">
-                    <h2 className="text-3xl font-serif font-bold text-center text-text-primary mb-10">
+                <section id="ai-match-specialties" className="relative overflow-hidden max-w-7xl mx-auto px-5 md:px-8 py-10 md:py-14">
+                    <h2 className="relative z-10 text-3xl font-serif font-bold text-center text-text-primary mb-10">
                         Support matched to the care you need
                     </h2>
-                    <p className="mx-auto mb-8 max-w-3xl text-center text-base text-text-secondary">
+                    <p className="relative z-10 mx-auto mb-8 max-w-3xl text-center text-base text-text-secondary">
                         Tell us what you need and Onya routes you to the most suitable clinician for your situation.
                     </p>
-                    <div className="grid gap-6 md:grid-cols-3 items-stretch">
+                    <div className="relative z-10 grid gap-6 md:grid-cols-3 items-stretch">
                         {SERVICE_LIST.map((service) => (
-                            <a
+                            <article
                                 key={service.slug}
-                                href={`/${service.slug}`}
-                                className="relative overflow-hidden bg-white rounded-3xl border border-border p-5 md:p-6 shadow-sm h-full flex flex-col hover:shadow-md transition-shadow"
+                                className="relative bg-white rounded-3xl border border-border p-5 md:p-6 shadow-sm h-full flex flex-col hover:shadow-md transition-shadow"
                                 aria-label={`Open ${service.providerName} landing page`}
                             >
-                                <div
-                                    className="h-60 overflow-hidden rounded-2xl border border-white/50 flex items-center justify-center text-text-primary font-semibold text-sm md:h-64 md:text-base text-center"
-                                    style={{ backgroundColor: service.theme.cardTint }}
-                                >
-                                    {HOME_CARD_IMAGE_BY_SLUG[service.slug] ? (
-                                        <img
-                                            src={HOME_CARD_IMAGE_BY_SLUG[service.slug]}
-                                            alt={`${service.providerName} preview`}
-                                            className="h-full w-full object-cover"
-                                            loading="lazy"
-                                        />
-                                    ) : (
-                                        service.placeholderLabel
-                                    )}
-                                </div>
+                                <a href={`/${service.slug}`} className="group block">
+                                    <div
+                                        className="h-60 overflow-hidden rounded-2xl border border-white/50 flex items-center justify-center text-text-primary font-semibold text-sm md:h-64 md:text-base text-center"
+                                        style={{ backgroundColor: service.theme.cardTint }}
+                                    >
+                                        {HOME_CARD_IMAGE_BY_SLUG[service.slug] ? (
+                                            <img
+                                                src={HOME_CARD_IMAGE_BY_SLUG[service.slug]}
+                                                alt={`${service.providerName} preview`}
+                                                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.015]"
+                                                loading="lazy"
+                                            />
+                                        ) : (
+                                            service.placeholderLabel
+                                        )}
+                                    </div>
+                                </a>
                                 {(service.slug === 'nutritionist' || service.slug === 'psychologist') && (
                                     <div className="pointer-events-none absolute inset-0 overflow-hidden">
                                         <span className="absolute bottom-[34px] right-[-116px] block w-[22rem] rotate-[-42deg] border border-amber-300 bg-[#FDE68A] py-3 text-center text-xs font-extrabold uppercase tracking-[0.16em] text-bark-900 shadow-[0_12px_24px_rgba(15,23,42,0.32)]">
@@ -170,14 +172,25 @@ export default function HomePage() {
                                 <p className="text-text-secondary mt-3 leading-relaxed min-h-[7rem]">
                                     {service.homeBody}
                                 </p>
-                                <div
-                                    className="mt-auto inline-flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-white font-semibold text-center"
-                                    style={{ backgroundColor: service.theme.primary }}
-                                >
-                                    {HOME_CARD_CTA_BY_SLUG[service.slug] ?? service.primaryCta}
-                                    <ArrowRight size={16} />
+                                <div className="mt-auto">
+                                    <MagneticButton
+                                        variant="primary"
+                                        size="lg"
+                                        strength={0.46}
+                                        radius={112}
+                                        edgePadding={14}
+                                        className="w-full rounded-xl text-center shadow-sm"
+                                        style={{ backgroundColor: service.theme.primary }}
+                                        onClick={() => {
+                                            window.location.href = `/${service.slug}`;
+                                        }}
+                                        aria-label={HOME_CARD_CTA_BY_SLUG[service.slug] ?? service.primaryCta}
+                                    >
+                                        {HOME_CARD_CTA_BY_SLUG[service.slug] ?? service.primaryCta}
+                                        <ArrowRight size={16} />
+                                    </MagneticButton>
                                 </div>
-                            </a>
+                            </article>
                         ))}
                     </div>
                 </section>

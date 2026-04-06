@@ -2,6 +2,7 @@ import { useBooking } from '../consult-flow/state';
 import { COPY } from '../consult-flow/copy';
 import { Modal, Button } from './UI';
 import { Star, Check } from 'lucide-react';
+import { ShineButton } from './lightswind/ShineButton';
 
 export function UpsellModal() {
     const { showUpsell, setUnlimited, nextStep } = useBooking();
@@ -18,7 +19,7 @@ export function UpsellModal() {
 
     return (
         <Modal isOpen={showUpsell}>
-            <div className="p-6 space-y-6">
+            <div className="space-y-6 p-5 pb-[calc(env(safe-area-inset-bottom)+1.1rem)] md:p-6 md:pb-6">
                 <div className="text-center space-y-2">
                     <h3 className="text-xl font-bold text-text-primary">{upsell.title}</h3>
                     <p className="text-text-secondary">{upsell.subtitle}</p>
@@ -47,9 +48,14 @@ export function UpsellModal() {
                         ))}
                     </ul>
 
-                    <Button fullWidth onClick={() => handleChoice(true)}>
+                    <ShineButton
+                        className="w-full rounded-xl py-3 text-base font-semibold"
+                        trailColor="#2e8cff"
+                        blurColor="#7dbdff"
+                        onClick={() => handleChoice(true)}
+                    >
                         {upsell.recommended.cta}
-                    </Button>
+                    </ShineButton>
                     <p className="text-xs text-center text-text-secondary mt-2">{upsell.recommended.micro}</p>
                 </div>
 

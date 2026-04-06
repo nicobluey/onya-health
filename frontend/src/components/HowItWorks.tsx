@@ -124,7 +124,7 @@ function DoctorPreview() {
     return (
         <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
             <img
-                src="/HERO.png"
+                src="/HERO.webp"
                 alt="Doctor reviewing a patient consultation online"
                 className="h-52 w-full object-cover md:h-60"
                 style={{ objectPosition: '58% 76%' }}
@@ -238,14 +238,18 @@ export function HowItWorks({ onStartConsult, serviceSlug }: HowItWorksProps) {
     }
 
     return (
-        <section className="bg-white py-12 md:py-16">
-            <div className="mx-auto max-w-6xl px-6 md:px-8">
+        <section className="relative bg-white py-12 md:py-16">
+            <div className="relative mx-auto max-w-6xl px-6 md:px-8">
                 <div ref={stackRef} className="relative h-[250vh] md:h-[300vh]">
                     <div className="sticky top-16 bg-white pt-7 md:top-20 md:pt-9">
-                        <h2 className="text-center text-3xl font-bold text-text-primary md:text-4xl">{sectionTitle}</h2>
-                        <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-text-secondary md:text-base">
-                            {sectionSubtitle}
-                        </p>
+                        <div>
+                            <h2 className="relative z-10 text-center text-3xl font-bold text-text-primary md:text-4xl">
+                                {sectionTitle}
+                            </h2>
+                            <p className="relative z-10 mx-auto mt-3 max-w-2xl text-center text-sm text-text-secondary md:text-base">
+                                {sectionSubtitle}
+                            </p>
+                        </div>
 
                         <div className="relative mx-auto mt-6 h-[68vh] min-h-[500px] max-h-[660px] w-full max-w-5xl md:mt-8 md:h-[62vh] md:min-h-[500px] md:max-h-[640px]">
                             {timelineSteps.map((step, idx) => (
