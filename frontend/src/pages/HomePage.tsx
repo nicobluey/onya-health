@@ -159,13 +159,6 @@ export default function HomePage() {
                                         )}
                                     </div>
                                 </a>
-                                {(service.slug === 'nutritionist' || service.slug === 'psychologist') && (
-                                    <div className="pointer-events-none absolute inset-0 overflow-hidden">
-                                        <span className="absolute bottom-[34px] right-[-116px] block w-[22rem] rotate-[-42deg] border border-amber-300 bg-[#FDE68A] py-3 text-center text-xs font-extrabold uppercase tracking-[0.16em] text-bark-900 shadow-[0_12px_24px_rgba(15,23,42,0.32)]">
-                                            Coming soon
-                                        </span>
-                                    </div>
-                                )}
                                 <h3 className="font-serif text-2xl font-bold text-text-primary mt-5 capitalize">
                                     {service.homeTitle}
                                 </h3>
@@ -173,6 +166,13 @@ export default function HomePage() {
                                     {service.homeBody}
                                 </p>
                                 <div className="mt-auto">
+                                    {(service.slug === 'nutritionist' || service.slug === 'psychologist') && (
+                                        <div className="mb-3 flex justify-end">
+                                            <span className="inline-flex items-center rounded-full border border-amber-300 bg-[#FDE68A] px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-bark-900 shadow-[0_8px_16px_rgba(15,23,42,0.18)]">
+                                                Coming soon
+                                            </span>
+                                        </div>
+                                    )}
                                     <MagneticButton
                                         variant="primary"
                                         size="lg"
@@ -216,7 +216,7 @@ export default function HomePage() {
             <div className="md:hidden">
                 <LiveActivityToast mobile />
             </div>
-            <Footer consultHref="/doctor" />
+            <Footer consultHref="/doctor/booking" />
         </div>
     );
 }
