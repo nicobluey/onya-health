@@ -136,68 +136,66 @@ export default function HomePage() {
                         Tell us what you need and Onya routes you to the most suitable clinician for your situation.
                     </p>
                     <div className="relative z-10 grid gap-6 md:grid-cols-3 items-stretch">
-                        {SERVICE_LIST.map((service) => (
-                            (() => {
-                                const isComingSoon = service.slug === 'nutritionist' || service.slug === 'psychologist';
+                        {SERVICE_LIST.map((service) => {
+                            const isComingSoon = service.slug === 'nutritionist' || service.slug === 'psychologist';
 
-                                return (
-                                    <article
-                                        key={service.slug}
-                                        className="relative overflow-hidden bg-white rounded-3xl border border-border p-5 md:p-6 shadow-sm h-full flex flex-col hover:shadow-md transition-shadow"
-                                        aria-label={`Open ${service.providerName} landing page`}
-                                    >
-                                        <a href={`/${service.slug}`} className="group block">
-                                            <div
-                                                className="h-60 overflow-hidden rounded-2xl border border-white/50 flex items-center justify-center text-text-primary font-semibold text-sm md:h-64 md:text-base text-center"
-                                                style={{ backgroundColor: service.theme.cardTint }}
-                                            >
-                                                {HOME_CARD_IMAGE_BY_SLUG[service.slug] ? (
-                                                    <img
-                                                        src={HOME_CARD_IMAGE_BY_SLUG[service.slug]}
-                                                        alt={`${service.providerName} preview`}
-                                                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.015]"
-                                                        loading="lazy"
-                                                    />
-                                                ) : (
-                                                    service.placeholderLabel
-                                                )}
-                                            </div>
-                                        </a>
-                                        <h3 className="font-serif text-2xl font-bold text-text-primary mt-5 capitalize">
-                                            {service.homeTitle}
-                                        </h3>
-                                        <p className="text-text-secondary mt-3 leading-relaxed min-h-[7rem]">
-                                            {service.homeBody}
-                                        </p>
-                                        <div className={`relative mt-auto ${isComingSoon ? 'pt-16 md:pt-14' : ''}`}>
-                                            {isComingSoon && (
-                                                <div className="pointer-events-none absolute right-[-98px] bottom-[calc(100%+12px)] z-0 md:right-[-108px]">
-                                                    <span className="block w-[228px] rotate-[-38deg] border border-amber-300 bg-[#FDE68A] py-2 text-center text-[10px] font-extrabold uppercase tracking-[0.16em] text-bark-900 shadow-[0_12px_24px_rgba(15,23,42,0.28)] md:w-[248px] md:py-2.5">
-                                                        Coming soon
-                                                    </span>
-                                                </div>
+                            return (
+                                <article
+                                    key={service.slug}
+                                    className="relative overflow-hidden bg-white rounded-3xl border border-border p-5 md:p-6 shadow-sm h-full flex flex-col hover:shadow-md transition-shadow"
+                                    aria-label={`Open ${service.providerName} landing page`}
+                                >
+                                    <a href={`/${service.slug}`} className="group block">
+                                        <div
+                                            className="h-60 overflow-hidden rounded-2xl border border-white/50 flex items-center justify-center text-text-primary font-semibold text-sm md:h-64 md:text-base text-center"
+                                            style={{ backgroundColor: service.theme.cardTint }}
+                                        >
+                                            {HOME_CARD_IMAGE_BY_SLUG[service.slug] ? (
+                                                <img
+                                                    src={HOME_CARD_IMAGE_BY_SLUG[service.slug]}
+                                                    alt={`${service.providerName} preview`}
+                                                    className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.015]"
+                                                    loading="lazy"
+                                                />
+                                            ) : (
+                                                service.placeholderLabel
                                             )}
-                                            <MagneticButton
-                                                variant="primary"
-                                                size="lg"
-                                                strength={0.46}
-                                                radius={112}
-                                                edgePadding={14}
-                                                className="relative z-10 w-full rounded-xl text-center shadow-sm"
-                                                style={{ backgroundColor: service.theme.primary }}
-                                                onClick={() => {
-                                                    window.location.href = `/${service.slug}`;
-                                                }}
-                                                aria-label={HOME_CARD_CTA_BY_SLUG[service.slug] ?? service.primaryCta}
-                                            >
-                                                {HOME_CARD_CTA_BY_SLUG[service.slug] ?? service.primaryCta}
-                                                <ArrowRight size={16} />
-                                            </MagneticButton>
                                         </div>
-                                    </article>
-                                );
-                            })()
-                        ))}
+                                    </a>
+                                    <h3 className="font-serif text-2xl font-bold text-text-primary mt-5 capitalize">
+                                        {service.homeTitle}
+                                    </h3>
+                                    <p className="text-text-secondary mt-3 leading-relaxed min-h-[7rem]">
+                                        {service.homeBody}
+                                    </p>
+                                    <div className="mt-auto">
+                                        {isComingSoon && (
+                                            <div className="relative mb-2 h-10 overflow-visible">
+                                                <span className="pointer-events-none absolute right-[-86px] top-1 block w-[212px] rotate-[-38deg] border border-amber-300 bg-[#FDE68A] py-2 text-center text-[10px] font-extrabold uppercase tracking-[0.16em] text-bark-900 shadow-[0_12px_24px_rgba(15,23,42,0.28)] md:right-[-98px] md:w-[236px]">
+                                                    Coming soon
+                                                </span>
+                                            </div>
+                                        )}
+                                        <MagneticButton
+                                            variant="primary"
+                                            size="lg"
+                                            strength={0.46}
+                                            radius={112}
+                                            edgePadding={14}
+                                            className="relative z-10 w-full rounded-xl text-center shadow-sm"
+                                            style={{ backgroundColor: service.theme.primary }}
+                                            onClick={() => {
+                                                window.location.href = `/${service.slug}`;
+                                            }}
+                                            aria-label={HOME_CARD_CTA_BY_SLUG[service.slug] ?? service.primaryCta}
+                                        >
+                                            {HOME_CARD_CTA_BY_SLUG[service.slug] ?? service.primaryCta}
+                                            <ArrowRight size={16} />
+                                        </MagneticButton>
+                                    </div>
+                                </article>
+                            );
+                        })}
                     </div>
                 </section>
 
