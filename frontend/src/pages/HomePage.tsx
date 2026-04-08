@@ -139,9 +139,16 @@ export default function HomePage() {
                         {SERVICE_LIST.map((service) => (
                             <article
                                 key={service.slug}
-                                className="relative bg-white rounded-3xl border border-border p-5 md:p-6 shadow-sm h-full flex flex-col hover:shadow-md transition-shadow"
+                                className="relative overflow-hidden bg-white rounded-3xl border border-border p-5 md:p-6 shadow-sm h-full flex flex-col hover:shadow-md transition-shadow"
                                 aria-label={`Open ${service.providerName} landing page`}
                             >
+                                {(service.slug === 'nutritionist' || service.slug === 'psychologist') && (
+                                    <div className="pointer-events-none absolute inset-0 z-20">
+                                        <span className="absolute right-[-92px] top-[36px] block w-[228px] rotate-[42deg] border border-amber-300 bg-[#FDE68A] py-2 text-center text-[10px] font-extrabold uppercase tracking-[0.16em] text-bark-900 shadow-[0_12px_24px_rgba(15,23,42,0.28)] md:right-[-102px] md:top-[42px] md:w-[248px] md:py-2.5">
+                                            Coming soon
+                                        </span>
+                                    </div>
+                                )}
                                 <a href={`/${service.slug}`} className="group block">
                                     <div
                                         className="h-60 overflow-hidden rounded-2xl border border-white/50 flex items-center justify-center text-text-primary font-semibold text-sm md:h-64 md:text-base text-center"
@@ -166,13 +173,6 @@ export default function HomePage() {
                                     {service.homeBody}
                                 </p>
                                 <div className="mt-auto">
-                                    {(service.slug === 'nutritionist' || service.slug === 'psychologist') && (
-                                        <div className="mb-3 flex justify-end">
-                                            <span className="inline-flex items-center rounded-full border border-amber-300 bg-[#FDE68A] px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.14em] text-bark-900 shadow-[0_8px_16px_rgba(15,23,42,0.18)]">
-                                                Coming soon
-                                            </span>
-                                        </div>
-                                    )}
                                     <MagneticButton
                                         variant="primary"
                                         size="lg"
