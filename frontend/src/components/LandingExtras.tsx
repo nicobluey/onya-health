@@ -60,10 +60,10 @@ export function UsedByPatientsSection() {
         <section className="w-full border-b border-border bg-white">
             <div className="w-full border-b border-border">
                 <div className="grid gap-4 px-6 py-4 md:grid-cols-[auto_1fr] md:items-center md:px-8 lg:px-12">
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-5">
+                    <div className="grid grid-cols-[repeat(3,minmax(0,1fr))] gap-3 sm:gap-5">
                         {STATS.map((item) => (
                             <div key={item.label} className="min-w-0">
-                                <p className="break-words text-2xl font-bold leading-tight text-text-primary sm:text-3xl sm:leading-none">{item.value}</p>
+                                <p className="break-words text-2xl font-bold leading-none text-text-primary sm:text-3xl">{item.value}</p>
                                 <p className="mt-1 text-xs font-medium text-bark-500">{item.label}</p>
                             </div>
                         ))}
