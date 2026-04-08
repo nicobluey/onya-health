@@ -169,29 +169,29 @@ export default function HomePage() {
                                         {service.homeBody}
                                     </p>
                                     <div className="mt-auto">
-                                        {isComingSoon && (
-                                            <div className="relative mb-3 h-14 overflow-visible">
-                                                <span className="pointer-events-none absolute bottom-1 right-0 block w-[170px] origin-bottom-right rotate-[38deg] border border-amber-300 bg-[#FDE68A] py-1.5 text-center text-[10px] font-extrabold uppercase tracking-[0.16em] text-bark-900 shadow-[0_12px_24px_rgba(15,23,42,0.24)] md:w-[188px] md:py-2">
+                                        <div className="relative pt-6">
+                                            {isComingSoon && (
+                                                <span className="pointer-events-none absolute right-[-88px] top-[-16px] z-20 block w-[188px] rotate-[-38deg] border border-amber-300 bg-[#FDE68A] py-2 text-center text-[10px] font-extrabold uppercase tracking-[0.16em] text-bark-900 shadow-[0_12px_24px_rgba(15,23,42,0.24)] md:right-[-96px] md:top-[-20px] md:w-[208px]">
                                                     COMING SOON
                                                 </span>
-                                            </div>
-                                        )}
-                                        <MagneticButton
-                                            variant="primary"
-                                            size="lg"
-                                            strength={0.46}
-                                            radius={112}
-                                            edgePadding={14}
-                                            className="w-full rounded-xl text-center shadow-sm"
-                                            style={{ backgroundColor: service.theme.primary }}
-                                            onClick={() => {
-                                                window.location.href = `/${service.slug}`;
-                                            }}
-                                            aria-label={HOME_CARD_CTA_BY_SLUG[service.slug] ?? service.primaryCta}
-                                        >
-                                            {HOME_CARD_CTA_BY_SLUG[service.slug] ?? service.primaryCta}
-                                            <ArrowRight size={16} />
-                                        </MagneticButton>
+                                            )}
+                                            <MagneticButton
+                                                variant="primary"
+                                                size="lg"
+                                                strength={0.46}
+                                                radius={112}
+                                                edgePadding={14}
+                                                className="relative z-10 w-full rounded-xl text-center shadow-sm"
+                                                style={{ backgroundColor: service.theme.primary }}
+                                                onClick={() => {
+                                                    window.location.href = `/${service.slug}`;
+                                                }}
+                                                aria-label={HOME_CARD_CTA_BY_SLUG[service.slug] ?? service.primaryCta}
+                                            >
+                                                {HOME_CARD_CTA_BY_SLUG[service.slug] ?? service.primaryCta}
+                                                <ArrowRight size={16} />
+                                            </MagneticButton>
+                                        </div>
                                     </div>
                                 </article>
                             );
