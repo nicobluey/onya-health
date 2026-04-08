@@ -201,42 +201,6 @@ export function HowItWorks({ onStartConsult, serviceSlug }: HowItWorksProps) {
         ? 'A conservative, doctor-reviewed process for non-emergency certificate requests.'
         : 'Scroll through each stage of the consult flow from booking to doctor-reviewed delivery.';
 
-    if (isDoctorFlow) {
-        return (
-            <section className="bg-white py-12 md:py-16">
-                <div className="mx-auto max-w-6xl px-6 md:px-8">
-                    <h2 className="text-center text-3xl font-bold text-text-primary md:text-4xl">How your consult works</h2>
-                    <p className="mx-auto mt-3 max-w-2xl text-center text-sm text-text-secondary md:text-base">
-                        Three clear steps from submission to outcome.
-                    </p>
-
-                    <div className="mt-8 grid gap-4 md:grid-cols-3">
-                        {DOCTOR_TIMELINE_STEPS.map((step, idx) => (
-                            <article
-                                key={step.title}
-                                className="rounded-2xl border border-border bg-white p-6 shadow-[0_22px_44px_-36px_rgba(15,23,42,0.45)]"
-                            >
-                                <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-white">
-                                    {idx + 1}
-                                </span>
-                                <h3 className="mt-4 text-lg font-semibold text-text-primary">{step.title}</h3>
-                                <p className="mt-2 text-sm leading-relaxed text-text-secondary">{step.description}</p>
-                            </article>
-                        ))}
-                    </div>
-
-                    {onStartConsult && (
-                        <div className="mt-10 flex justify-center">
-                            <Button onClick={onStartConsult} className="h-14 px-8 text-base font-semibold rounded-2xl shadow-lg">
-                                Start consult
-                            </Button>
-                        </div>
-                    )}
-                </div>
-            </section>
-        );
-    }
-
     return (
         <section className="relative bg-white py-12 md:py-16">
             <div className="relative mx-auto max-w-6xl px-6 md:px-8">
@@ -268,7 +232,7 @@ export function HowItWorks({ onStartConsult, serviceSlug }: HowItWorksProps) {
                 {onStartConsult && (
                     <div className="mt-10 flex justify-center">
                         <Button onClick={onStartConsult} className="h-11 px-6 text-sm">
-                            Book your consult
+                            {isDoctorFlow ? 'Start consult' : 'Book your consult'}
                         </Button>
                     </div>
                 )}
