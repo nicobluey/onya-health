@@ -61,6 +61,11 @@ function getPurposeFromSearch(): CertificatePurpose | null {
 }
 
 function getInitialViewFromSearch(): 'landing' | 'booking' {
+    const normalizedPath = window.location.pathname.toLowerCase().replace(/\/+$/, '');
+    if (normalizedPath.endsWith('/booking')) {
+        return 'booking';
+    }
+
     const params = new URLSearchParams(window.location.search);
     const view = (params.get('view') || '').trim().toLowerCase();
     return view === 'booking' ? 'booking' : 'landing';
