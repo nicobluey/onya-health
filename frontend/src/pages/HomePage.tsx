@@ -170,9 +170,9 @@ export default function HomePage() {
                                     </p>
                                     <div className="mt-auto">
                                         {isComingSoon && (
-                                            <div className="relative mb-2 h-10 overflow-visible">
-                                                <span className="pointer-events-none absolute right-[-86px] top-1 block w-[212px] rotate-[-38deg] border border-amber-300 bg-[#FDE68A] py-2 text-center text-[10px] font-extrabold uppercase tracking-[0.16em] text-bark-900 shadow-[0_12px_24px_rgba(15,23,42,0.28)] md:right-[-98px] md:w-[236px]">
-                                                    Coming soon
+                                            <div className="relative mb-3 h-14 overflow-visible">
+                                                <span className="pointer-events-none absolute bottom-1 right-0 block w-[170px] origin-bottom-right rotate-[38deg] border border-amber-300 bg-[#FDE68A] py-1.5 text-center text-[10px] font-extrabold uppercase tracking-[0.16em] text-bark-900 shadow-[0_12px_24px_rgba(15,23,42,0.24)] md:w-[188px] md:py-2">
+                                                    COMING SOON
                                                 </span>
                                             </div>
                                         )}
@@ -182,7 +182,7 @@ export default function HomePage() {
                                             strength={0.46}
                                             radius={112}
                                             edgePadding={14}
-                                            className="relative z-10 w-full rounded-xl text-center shadow-sm"
+                                            className="w-full rounded-xl text-center shadow-sm"
                                             style={{ backgroundColor: service.theme.primary }}
                                             onClick={() => {
                                                 window.location.href = `/${service.slug}`;
