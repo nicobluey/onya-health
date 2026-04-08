@@ -142,13 +142,6 @@ export default function HomePage() {
                                 className="relative overflow-hidden bg-white rounded-3xl border border-border p-5 md:p-6 shadow-sm h-full flex flex-col hover:shadow-md transition-shadow"
                                 aria-label={`Open ${service.providerName} landing page`}
                             >
-                                {(service.slug === 'nutritionist' || service.slug === 'psychologist') && (
-                                    <div className="pointer-events-none absolute inset-0 z-20">
-                                        <span className="absolute right-[-92px] top-[36px] block w-[228px] rotate-[42deg] border border-amber-300 bg-[#FDE68A] py-2 text-center text-[10px] font-extrabold uppercase tracking-[0.16em] text-bark-900 shadow-[0_12px_24px_rgba(15,23,42,0.28)] md:right-[-102px] md:top-[42px] md:w-[248px] md:py-2.5">
-                                            Coming soon
-                                        </span>
-                                    </div>
-                                )}
                                 <a href={`/${service.slug}`} className="group block">
                                     <div
                                         className="h-60 overflow-hidden rounded-2xl border border-white/50 flex items-center justify-center text-text-primary font-semibold text-sm md:h-64 md:text-base text-center"
@@ -172,14 +165,21 @@ export default function HomePage() {
                                 <p className="text-text-secondary mt-3 leading-relaxed min-h-[7rem]">
                                     {service.homeBody}
                                 </p>
-                                <div className="mt-auto">
+                                <div className="relative mt-auto pt-10">
+                                    {(service.slug === 'nutritionist' || service.slug === 'psychologist') && (
+                                        <div className="pointer-events-none absolute right-[-98px] top-0 z-0 md:right-[-108px]">
+                                            <span className="block w-[228px] rotate-[-38deg] border border-amber-300 bg-[#FDE68A] py-2 text-center text-[10px] font-extrabold uppercase tracking-[0.16em] text-bark-900 shadow-[0_12px_24px_rgba(15,23,42,0.28)] md:w-[248px] md:py-2.5">
+                                                Coming soon
+                                            </span>
+                                        </div>
+                                    )}
                                     <MagneticButton
                                         variant="primary"
                                         size="lg"
                                         strength={0.46}
                                         radius={112}
                                         edgePadding={14}
-                                        className="w-full rounded-xl text-center shadow-sm"
+                                        className="relative z-10 w-full rounded-xl text-center shadow-sm"
                                         style={{ backgroundColor: service.theme.primary }}
                                         onClick={() => {
                                             window.location.href = `/${service.slug}`;
