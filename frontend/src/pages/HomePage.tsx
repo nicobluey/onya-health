@@ -171,7 +171,7 @@ export default function HomePage() {
                                     <div className="mt-auto">
                                         <div className="relative pt-6">
                                             {isComingSoon && (
-                                                <span className="pointer-events-none absolute right-[-44%] top-[16px] z-20 block w-[170%] min-w-[300px] max-w-none rotate-[-24deg] border border-amber-300 bg-[#FDE68A] py-3 text-center text-[11px] font-extrabold uppercase tracking-[0.2em] text-bark-900 shadow-[0_12px_24px_rgba(15,23,42,0.24)] md:right-[-46%] md:top-[14px] md:py-3.5 md:text-xs">
+                                                <span className="pointer-events-none absolute bottom-[-26px] right-[-52%] z-20 block w-[170%] min-w-[300px] max-w-none rotate-[-24deg] border border-amber-300 bg-[#FDE68A] py-3 text-center text-[11px] font-extrabold uppercase tracking-[0.2em] text-bark-900 shadow-[0_12px_24px_rgba(15,23,42,0.24)] md:bottom-[-22px] md:right-[-50%] md:py-3.5 md:text-xs">
                                                     COMING SOON
                                                 </span>
                                             )}
