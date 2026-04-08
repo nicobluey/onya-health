@@ -113,10 +113,10 @@ export default function HomePage() {
                 <div className="relative overflow-hidden border-b border-border bg-white py-4">
                     <div className="max-w-7xl mx-auto px-6 md:px-8">
                         <div className="relative z-10 grid gap-4 md:grid-cols-[auto_1fr] md:items-center">
-                            <div className="grid grid-cols-3 gap-5">
+                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-5">
                                 {HOME_HIGHLIGHTS.map((item) => (
-                                    <div key={item.title}>
-                                        <p className="text-2xl font-bold leading-none text-text-primary">{item.title}</p>
+                                    <div key={item.title} className="min-w-0">
+                                        <p className="break-words text-xl font-bold leading-tight text-text-primary sm:text-2xl sm:leading-none">{item.title}</p>
                                         <p className="mt-1 text-xs font-medium text-bark-500">{item.detail}</p>
                                     </div>
                                 ))}

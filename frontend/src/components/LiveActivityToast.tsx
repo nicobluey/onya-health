@@ -20,7 +20,7 @@ export function LiveActivityToast({ mobile = false }: LiveActivityToastProps) {
             autoDismissTimeout={mobile ? 2800 : 3200}
             maxNotifications={1}
             position={mobile ? 'bottom-right' : 'bottom-right'}
-            width={mobile ? 320 : 360}
+            width={mobile ? 'min(320px, calc(100vw - 2rem))' : 360}
             showAvatars={!mobile}
             showTimestamps
             allowDismiss={!mobile}

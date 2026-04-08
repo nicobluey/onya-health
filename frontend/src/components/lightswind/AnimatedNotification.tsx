@@ -33,7 +33,7 @@ export interface AnimatedNotificationProps {
     customMessages?: string[];
     animationDuration?: number;
     position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'center';
-    width?: number;
+    width?: number | string;
     showAvatars?: boolean;
     showTimestamps?: boolean;
     className?: string;
@@ -116,7 +116,7 @@ const Notification: React.FC<{
         <div
             className={cn(
                 'group relative transition-all duration-500 ease-out transform hover:scale-[1.02] hover:-translate-y-1',
-                'w-80 max-w-80 cursor-pointer rounded-xl p-4 flex items-start gap-3',
+                'w-full max-w-80 cursor-pointer rounded-xl p-4 flex items-start gap-3',
                 getVariantStyles(),
                 getPriorityStyles(),
                 notification.fadingOut && 'animate-pulse'
