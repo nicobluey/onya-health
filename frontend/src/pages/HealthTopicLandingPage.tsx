@@ -465,6 +465,7 @@ function getTopicByPath(pathname: string) {
     return HEALTH_TOPICS.find((topic) => topic.slug === slug) || null;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- router uses this pure route helper.
 export function isHealthTopicRoute(pathname: string) {
     const normalized = pathname.toLowerCase().replace(/\/+$/, '');
     if (normalized === '/health' || normalized.startsWith('/health/')) {
@@ -576,7 +577,7 @@ export default function HealthTopicLandingPage() {
             document.head.appendChild(canonicalTag);
         }
         canonicalTag.setAttribute('href', canonicalUrl);
-    }, [currentTopic]);
+    }, [canonicalUrl, currentTopic]);
 
     return (
         <div className="min-h-screen flex flex-col font-sans bg-white">

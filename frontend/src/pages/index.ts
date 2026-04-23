@@ -8,3 +8,7 @@ export { default as PatientLoginPage } from './PatientLoginPage';
 export { default as PatientPortalPage } from './PatientPortalPage';
 export { default as PatientResetPasswordPage } from './PatientResetPasswordPage';
 export { default as CertificateVerifyPage } from './CertificateVerifyPage';
+export { default as PrivacyPolicyPage } from './PrivacyPolicyPage';
+export { default as TermsConditionsPage } from './TermsConditionsPage';
+export { default as ContactPage } from './ContactPage';
+export { default as TrustSafetyPage } from './TrustSafetyPage';

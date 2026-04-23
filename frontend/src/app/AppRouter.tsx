@@ -11,6 +11,7 @@ import { isHealthTopicRoute } from '../pages/HealthTopicLandingPage';
 import {
   AboutPage,
   CertificateVerifyPage,
+  ContactPage,
   FairWorkCertificatesPage,
   HealthTopicLandingPage,
   HomePage,
@@ -18,6 +19,9 @@ import {
   PatientPortalPage,
   PatientLoginPage,
   PatientResetPasswordPage,
+  PrivacyPolicyPage,
+  TermsConditionsPage,
+  TrustSafetyPage,
 } from '../pages';
 
 export function AppRouter() {
@@ -42,6 +46,22 @@ export function AppRouter() {
 
   if (pathname === '/fair-work-medical-certificates') {
     return <FairWorkCertificatesPage />;
+  }
+
+  if (pathname === '/privacy' || pathname === '/privacy-policy') {
+    return <PrivacyPolicyPage />;
+  }
+
+  if (pathname === '/terms' || pathname === '/terms-and-conditions') {
+    return <TermsConditionsPage />;
+  }
+
+  if (pathname === '/contact') {
+    return <ContactPage />;
+  }
+
+  if (pathname === '/trust' || pathname === '/trust-safety') {
+    return <TrustSafetyPage />;
   }
 
   if (isHealthTopicRoute(pathname)) {

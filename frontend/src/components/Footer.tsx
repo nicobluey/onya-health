@@ -40,8 +40,8 @@ const FOOTER_GROUPS: FooterLinkGroup[] = [
         title: 'Support',
         links: [
             { label: 'FAQ', href: '#faq' },
-            { label: 'Privacy', href: '/privacy' },
-            { label: 'Terms', href: '/terms' },
+            { label: 'Privacy policy', href: '/privacy' },
+            { label: 'Terms & conditions', href: '/terms' },
             { label: 'Trust & safety', href: '/trust' },
         ],
     },
@@ -143,9 +143,9 @@ export function Footer({ onStartConsult, consultHref = '/doctor/booking' }: Foot
                             We acknowledge Aboriginal and Torres Strait Islander peoples as the Traditional Custodians of Country throughout Australia and pay respect to Elders past and present.
                         </p>
                         <p className="text-left md:text-right">
-                            Â© {new Date().getFullYear()} Onya Health Pty Ltd
+                            (c) {new Date().getFullYear()} Onya Health Pty Ltd
                             <br />
-                            ABN information available on request.
+                            ABN 85 207 753 898
                         </p>
                     </div>
                 </div>

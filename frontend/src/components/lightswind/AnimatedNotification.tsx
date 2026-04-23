@@ -356,10 +356,11 @@ export const AnimatedNotification: React.FC<AnimatedNotificationProps> = ({
     }, [autoDismissTimeout, dismissNotification, notifications]);
 
     useEffect(() => {
+        const dismissTimeoutMap = dismissTimeouts.current;
         return () => {
             if (generationTimerRef.current) window.clearTimeout(generationTimerRef.current);
-            dismissTimeouts.current.forEach((timeoutId) => window.clearTimeout(timeoutId));
-            dismissTimeouts.current.clear();
+            dismissTimeoutMap.forEach((timeoutId) => window.clearTimeout(timeoutId));
+            dismissTimeoutMap.clear();
         };
     }, []);
 

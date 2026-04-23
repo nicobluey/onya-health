@@ -106,6 +106,15 @@ export default function HomePage() {
                             <span className="capitalize">{displayWord}</span>
                             <span className="animate-pulse ml-1">|</span>
                         </div>
+                        <div className="mt-7 flex justify-center">
+                            <a
+                                href="#ai-match-specialties"
+                                className="inline-flex h-11 items-center justify-center rounded-xl bg-white px-5 text-sm font-semibold text-bark-900 transition hover:bg-sand-100"
+                            >
+                                Get started
+                                <ArrowRight size={16} className="ml-2" />
+                            </a>
+                        </div>
                     </div>
                 </section>
 
@@ -127,7 +136,7 @@ export default function HomePage() {
                     </div>
                 </div>
 
-                <section id="ai-match-specialties" className="relative overflow-hidden max-w-7xl mx-auto px-5 md:px-8 py-10 md:py-14">
+                <section id="ai-match-specialties" className="relative scroll-mt-24 overflow-hidden max-w-7xl mx-auto px-5 md:px-8 py-10 md:py-14">
                     <h2 className="relative z-10 text-3xl font-serif font-bold text-center text-text-primary mb-10">
                         Support matched to the care you need
                     </h2>
