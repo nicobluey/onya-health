@@ -1069,45 +1069,33 @@ export default function PatientPortalPage() {
                 const headers = {
                     Authorization: `Bearer ${activeToken}`,
                 };
-                const [meResult, requestsResult] = await Promise.all([
-                    fetchApiJson('/api/patient/me', { headers }),
-                    fetchApiJson('/api/patient/requests', { headers }),
-                ]);
-                const meRes = meResult.response;
-                const requestsRes = requestsResult.response;
-
-                if (meRes.status === 401 || requestsRes.status === 401) {
+                const { response, payload } = await fetchApiJson('/api/patient/bootstrap', { headers });
+                if (response.status === 401) {
                     window.localStorage.removeItem('onya_patient_token');
                     setToken('');
                     window.location.href = '/patient-login';
                     return;
                 }
 
-                const mePayload = meResult.payload;
-                const requestsPayload = requestsResult.payload;
-
-                if (!meRes.ok) {
-                    throw new Error(mePayload.error || 'Unable to load patient account');
-                }
-                if (!requestsRes.ok) {
-                    throw new Error(requestsPayload.error || 'Unable to load patient requests');
+                if (!response.ok) {
+                    throw new Error(payload.error || 'Unable to load patient portal');
                 }
 
                 if (disposed) return;
 
                 const patientProfile: PatientProfile = {
-                    fullName: mePayload?.patient?.fullName || 'Patient',
-                    email: mePayload?.patient?.email || window.localStorage.getItem('onya_patient_email') || '',
-                    dob: mePayload?.patient?.dob || '',
-                    phone: mePayload?.patient?.phone || '',
+                    fullName: payload?.patient?.fullName || 'Patient',
+                    email: payload?.patient?.email || window.localStorage.getItem('onya_patient_email') || '',
+                    dob: payload?.patient?.dob || '',
+                    phone: payload?.patient?.phone || '',
                 };
                 setPatient(patientProfile);
                 window.localStorage.setItem('onya_patient_email', patientProfile.email);
-                setBilling(normalizeBillingInfo(mePayload?.billing));
+                setBilling(normalizeBillingInfo(payload?.billing));
                 setBillingError('');
                 setBillingActionState('idle');
 
-                const items: PortalRequest[] = Array.isArray(requestsPayload?.requests) ? requestsPayload.requests : [];
+                const items: PortalRequest[] = Array.isArray(payload?.requests) ? payload.requests : [];
                 setRequests(items);
                 const firstQueued = items.find((item) => isQueuedStatus(item.status)) || null;
                 setActiveQueuedRequest(firstQueued);

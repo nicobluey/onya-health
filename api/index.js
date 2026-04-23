@@ -55,7 +55,6 @@ import {
 } from '../backend/lib/email-templates.js';
 import { error, info } from '../backend/lib/logger.js';
 import {
-  getLatestPatientSnapshot,
   getPatientCertificatesForEmail,
   syncPatientProfileFromLatest,
 } from './lib/patient-snapshot.js';
@@ -676,6 +675,33 @@ function buildPatientIdentity({ email, latestCertificate, account }) {
     email: normalizeEmail(email || account?.email || draft.email || ''),
     dob: String(account?.dob || draft.dob || '').trim(),
     phone: String(account?.phone || draft.phone || '').trim(),
+  };
+}
+
+function patientProfileFromCertificate(certificate) {
+  const draft = certificate?.certificateDraft || {};
+  return {
+    fullName: String(draft.fullName || '').trim(),
+    dob: String(draft.dob || '').trim(),
+    phone: String(draft.phone || '').trim(),
+  };
+}
+
+function hasPatientIdentityData(account) {
+  return Boolean(
+    String(account?.fullName || '').trim() ||
+      String(account?.dob || '').trim() ||
+      String(account?.phone || '').trim()
+  );
+}
+
+function getLatestFromPatientCertificates(patientCertificates) {
+  const list = Array.isArray(patientCertificates) ? patientCertificates : [];
+  const latest = list[0] || null;
+  return {
+    patientCertificates: list,
+    latest,
+    latestProfile: patientProfileFromCertificate(latest),
   };
 }
 
@@ -1337,6 +1363,27 @@ async function resolvePatientBillingProfile(patientEmail, certificatesInput = nu
 
   const certificates = Array.isArray(certificatesInput) ? certificatesInput : await listCertificates();
   return resolveLocalBillingProfileFromCertificates(certificates, email);
+}
+
+async function loadPatientPortalSnapshot(email, { includeBilling = true } = {}) {
+  const normalizedEmail = normalizeEmail(email);
+  const account = await getPatientAccountByEmail(normalizedEmail);
+  const certificatesFetchStartedAt = Date.now();
+  const certificates = await listCertificatesByPatientEmail(normalizedEmail);
+  const certificatesFetchDurationMs = Date.now() - certificatesFetchStartedAt;
+  const { patientCertificates, latest } = getLatestFromPatientCertificates(certificates);
+  const queueCount = patientCertificates.filter((item) => isOpenForReview(item.status)).length;
+  const billing = includeBilling ? await resolvePatientBillingProfile(normalizedEmail, certificates) : null;
+
+  return {
+    account,
+    patientCertificates,
+    latest,
+    queueCount,
+    billing,
+    requests: patientCertificates.map(patientSummaryFromCertificate),
+    certificatesFetchDurationMs,
+  };
 }
 
 function buildStripeBillingReturnUrl(req, fallbackPath = STRIPE_BILLING_PORTAL_RETURN_PATH) {
@@ -2057,18 +2104,27 @@ async function createPatientAccountViaSupabase({ email, password, fullName = '',
 async function authenticatePatientViaSupabase(email, password) {
   const config = getSupabaseConfig();
   if (!config.url || !config.anonKey) {
-    return null;
+    return { account: null, shouldFallbackLocal: true };
   }
 
-  const loginResponse = await fetch(`${config.url}/auth/v1/token?grant_type=password`, {
-    method: 'POST',
-    headers: {
-      apikey: config.anonKey,
-      Authorization: `Bearer ${config.anonKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ email, password }),
-  });
+  let loginResponse;
+  try {
+    loginResponse = await fetch(`${config.url}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: {
+        apikey: config.anonKey,
+        Authorization: `Bearer ${config.anonKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+    });
+  } catch (errorObject) {
+    info('patient.login.supabase_auth_unavailable', {
+      email: normalizeEmail(email),
+      message: errorObject?.message || String(errorObject),
+    });
+    return { account: null, shouldFallbackLocal: true };
+  }
 
   const text = await loginResponse.text();
   let data = null;
@@ -2078,12 +2134,19 @@ async function authenticatePatientViaSupabase(email, password) {
     data = null;
   }
 
-  if (!loginResponse.ok) return null;
+  if (!loginResponse.ok) {
+    const authRejected = loginResponse.status === 400 || loginResponse.status === 401 || loginResponse.status === 422;
+    return { account: null, shouldFallbackLocal: !authRejected };
+  }
   const user = data?.user || null;
-  if (!user) return null;
-  if (userHasDoctorRole(user)) return null;
+  if (!user || userHasDoctorRole(user)) {
+    return { account: null, shouldFallbackLocal: false };
+  }
 
-  return toPatientAccountFromSupabaseUser(user, email);
+  return {
+    account: toPatientAccountFromSupabaseUser(user, email),
+    shouldFallbackLocal: false,
+  };
 }
 
 async function updateSupabasePatientPasswordByEmail(email, password) {
@@ -2729,7 +2792,7 @@ export default async function handler(req, res) {
       }
 
       const certificates = await listCertificatesByPatientEmail(expectedEmail);
-      const { latest, latestProfile } = getLatestPatientSnapshot(certificates, expectedEmail);
+      const { latest, latestProfile } = getLatestFromPatientCertificates(certificates);
       const { fullName, dob, phone } = latestProfile;
 
       let account = null;
@@ -2837,10 +2900,16 @@ export default async function handler(req, res) {
       if (password) {
         const authStartedAt = Date.now();
         let account = null;
+        let localFallbackAttempted = false;
         if (supabaseConfig.url && supabaseConfig.anonKey) {
-          account = await authenticatePatientViaSupabase(email, password);
-        }
-        if (!account) {
+          const supabaseAuth = await authenticatePatientViaSupabase(email, password);
+          account = supabaseAuth.account;
+          if (!account && supabaseAuth.shouldFallbackLocal) {
+            localFallbackAttempted = true;
+            account = await authenticatePatientAccount({ email, password });
+          }
+        } else {
+          localFallbackAttempted = true;
           account = await authenticatePatientAccount({ email, password });
         }
         if (!account) {
@@ -2848,23 +2917,33 @@ export default async function handler(req, res) {
           return;
         }
 
-        const snapshotStartedAt = Date.now();
-        const patientCertificates = await listCertificatesByPatientEmail(email);
-        const { latest } = getLatestPatientSnapshot(patientCertificates, email);
-        const snapshotDurationMs = Date.now() - snapshotStartedAt;
-        void syncPatientProfileFromLatest({
-          email,
-          latestCertificate: latest,
-          supabaseEnabled: supabaseConfig.enabled,
-          upsertSupabasePatientMetadata,
-          updatePatientAccountProfile,
-        }).catch((profileSyncError) => {
-          error('patient.profile.sync_after_login_failed', {
+        let latest = null;
+        let snapshotDurationMs = 0;
+        let patientCertificatesCount = 0;
+        let snapshotPerformed = false;
+        if (!hasPatientIdentityData(account)) {
+          snapshotPerformed = true;
+          const snapshotStartedAt = Date.now();
+          const patientCertificates = await listCertificatesByPatientEmail(email);
+          const snapshot = getLatestFromPatientCertificates(patientCertificates);
+          latest = snapshot.latest;
+          patientCertificatesCount = snapshot.patientCertificates.length;
+          snapshotDurationMs = Date.now() - snapshotStartedAt;
+
+          void syncPatientProfileFromLatest({
             email,
-            method: 'password',
-            message: profileSyncError?.message || String(profileSyncError),
+            latestCertificate: latest,
+            supabaseEnabled: supabaseConfig.enabled,
+            upsertSupabasePatientMetadata,
+            updatePatientAccountProfile,
+          }).catch((profileSyncError) => {
+            error('patient.profile.sync_after_login_failed', {
+              email,
+              method: 'password',
+              message: profileSyncError?.message || String(profileSyncError),
+            });
           });
-        });
+        }
 
         const token = issuePatientToken(email);
         sendJson(res, 200, {
@@ -2880,7 +2959,9 @@ export default async function handler(req, res) {
           method: 'password',
           authDurationMs: Date.now() - authStartedAt,
           snapshotDurationMs,
-          certificateCount: patientCertificates.length,
+          snapshotPerformed,
+          certificateCount: patientCertificatesCount,
+          localFallbackAttempted,
           totalDurationMs: Date.now() - loginStartedAt,
         });
         return;
@@ -2888,7 +2969,7 @@ export default async function handler(req, res) {
 
       const snapshotStartedAt = Date.now();
       const patientCertificates = await listCertificatesByPatientEmail(email);
-      const { latest, latestProfile } = getLatestPatientSnapshot(patientCertificates, email);
+      const { latest, latestProfile } = getLatestFromPatientCertificates(patientCertificates);
       const snapshotDurationMs = Date.now() - snapshotStartedAt;
       if (patientCertificates.length === 0) {
         sendJson(res, 404, { error: 'No patient account found for this email yet' });
@@ -3049,7 +3130,7 @@ export default async function handler(req, res) {
       const ensureLatestSnapshot = async () => {
         if (latestSnapshotLoaded) return;
         const certificates = await listCertificatesByPatientEmail(email);
-        const snapshot = getLatestPatientSnapshot(certificates, email);
+        const snapshot = getLatestFromPatientCertificates(certificates);
         latest = snapshot.latest;
         latestProfile = snapshot.latestProfile;
         latestSnapshotLoaded = true;
@@ -3244,7 +3325,7 @@ export default async function handler(req, res) {
         };
         if (!existing) {
           const certificates = await listCertificatesByPatientEmail(email);
-          ({ latestProfile } = getLatestPatientSnapshot(certificates, email));
+          ({ latestProfile } = getLatestFromPatientCertificates(certificates));
           try {
             account = await createPatientAccountViaSupabase({
               email,
@@ -3349,26 +3430,68 @@ export default async function handler(req, res) {
       return;
     }
 
-    if (req.method === 'GET' && routePath === 'patient/me') {
-      const patientMeStartedAt = Date.now();
+    if (req.method === 'GET' && routePath === 'patient/bootstrap') {
+      const patientBootstrapStartedAt = Date.now();
       const patient = await requirePatient(req, res);
       if (!patient) return;
 
       const supabaseConfig = getSupabaseConfig();
-      const account = await getPatientAccountByEmail(patient.email);
-      const certificatesFetchStartedAt = Date.now();
-      const certificates = await listCertificatesByPatientEmail(patient.email);
-      const certificatesFetchDurationMs = Date.now() - certificatesFetchStartedAt;
-      const billing = await resolvePatientBillingProfile(patient.email, certificates);
-      const { patientCertificates, latest } = getLatestPatientSnapshot(certificates, patient.email);
-      if (patientCertificates.length === 0 && !account) {
+      const snapshot = await loadPatientPortalSnapshot(patient.email, { includeBilling: true });
+      if (snapshot.patientCertificates.length === 0 && !snapshot.account) {
         sendJson(res, 404, { error: 'Patient not found' });
         return;
       }
 
       void syncPatientProfileFromLatest({
         email: patient.email,
-        latestCertificate: latest,
+        latestCertificate: snapshot.latest,
+        supabaseEnabled: supabaseConfig.enabled,
+        upsertSupabasePatientMetadata,
+        updatePatientAccountProfile,
+      }).catch((profileSyncError) => {
+        error('patient.profile.sync_after_bootstrap_failed', {
+          email: patient.email,
+          message: profileSyncError?.message || String(profileSyncError),
+        });
+      });
+
+      sendJson(res, 200, {
+        patient: buildPatientIdentity({
+          email: patient.email,
+          latestCertificate: snapshot.latest,
+          account: snapshot.account,
+        }),
+        billing: snapshot.billing,
+        queueCount: snapshot.queueCount,
+        latestRequest: snapshot.latest ? patientSummaryFromCertificate(snapshot.latest) : null,
+        count: snapshot.patientCertificates.length,
+        requests: snapshot.requests,
+      });
+      info('patient.bootstrap.loaded', {
+        email: patient.email,
+        requestCount: snapshot.patientCertificates.length,
+        queueCount: snapshot.queueCount,
+        certificatesFetchDurationMs: snapshot.certificatesFetchDurationMs,
+        totalDurationMs: Date.now() - patientBootstrapStartedAt,
+      });
+      return;
+    }
+
+    if (req.method === 'GET' && routePath === 'patient/me') {
+      const patientMeStartedAt = Date.now();
+      const patient = await requirePatient(req, res);
+      if (!patient) return;
+
+      const supabaseConfig = getSupabaseConfig();
+      const snapshot = await loadPatientPortalSnapshot(patient.email, { includeBilling: true });
+      if (snapshot.patientCertificates.length === 0 && !snapshot.account) {
+        sendJson(res, 404, { error: 'Patient not found' });
+        return;
+      }
+
+      void syncPatientProfileFromLatest({
+        email: patient.email,
+        latestCertificate: snapshot.latest,
         supabaseEnabled: supabaseConfig.enabled,
         upsertSupabasePatientMetadata,
         updatePatientAccountProfile,
@@ -3382,18 +3505,18 @@ export default async function handler(req, res) {
       sendJson(res, 200, {
         patient: buildPatientIdentity({
           email: patient.email,
-          latestCertificate: latest,
-          account,
+          latestCertificate: snapshot.latest,
+          account: snapshot.account,
         }),
-        billing,
-        queueCount: patientCertificates.filter((item) => isOpenForReview(item.status)).length,
-        latestRequest: latest ? patientSummaryFromCertificate(latest) : null,
+        billing: snapshot.billing,
+        queueCount: snapshot.queueCount,
+        latestRequest: snapshot.latest ? patientSummaryFromCertificate(snapshot.latest) : null,
       });
       info('patient.me.loaded', {
         email: patient.email,
-        requestCount: patientCertificates.length,
-        queueCount: patientCertificates.filter((item) => isOpenForReview(item.status)).length,
-        certificatesFetchDurationMs,
+        requestCount: snapshot.patientCertificates.length,
+        queueCount: snapshot.queueCount,
+        certificatesFetchDurationMs: snapshot.certificatesFetchDurationMs,
         totalDurationMs: Date.now() - patientMeStartedAt,
       });
       return;
@@ -3484,18 +3607,16 @@ export default async function handler(req, res) {
       const patient = await requirePatient(req, res);
       if (!patient) return;
 
-      const certificatesFetchStartedAt = Date.now();
-      const patientCertificates = await listCertificatesByPatientEmail(patient.email);
-      const certificatesFetchDurationMs = Date.now() - certificatesFetchStartedAt;
+      const snapshot = await loadPatientPortalSnapshot(patient.email, { includeBilling: false });
 
       sendJson(res, 200, {
-        count: patientCertificates.length,
-        requests: patientCertificates.map(patientSummaryFromCertificate),
+        count: snapshot.patientCertificates.length,
+        requests: snapshot.requests,
       });
       info('patient.requests.loaded', {
         email: patient.email,
-        requestCount: patientCertificates.length,
-        certificatesFetchDurationMs,
+        requestCount: snapshot.patientCertificates.length,
+        certificatesFetchDurationMs: snapshot.certificatesFetchDurationMs,
         totalDurationMs: Date.now() - patientRequestsStartedAt,
       });
       return;
