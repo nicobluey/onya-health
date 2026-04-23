@@ -111,6 +111,17 @@ function mapDbToCertificate(item) {
   };
 }
 
+function extractCertificateEmail(certificate) {
+  return normalizeEmail(
+    certificate?.certificateDraft?.email ||
+      certificate?.rawSubmission?.patient?.email ||
+      certificate?.rawSubmission?.patientEmail ||
+      certificate?.rawSubmission?.email ||
+      certificate?.rawSubmission?.consult?.email ||
+      ''
+  );
+}
+
 function mapSupabaseRowToCertificate(row) {
   const rawMedicalRequest = row.medical_certificate_requests;
   const med = Array.isArray(rawMedicalRequest) ? rawMedicalRequest[0] || {} : rawMedicalRequest || {};
@@ -326,6 +337,16 @@ async function listCertificatesLocal() {
   return db.certificates.map(mapDbToCertificate);
 }
 
+async function listCertificatesByPatientEmailLocal(email) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return [];
+
+  const certificates = await listCertificatesLocal();
+  return certificates
+    .filter((certificate) => extractCertificateEmail(certificate) === normalizedEmail)
+    .sort((a, b) => String(b?.createdAt || '').localeCompare(String(a?.createdAt || '')));
+}
+
 async function getCertificateByIdLocal(id) {
   const db = await readDbRaw();
   const item = db.certificates.find((entry) => entry.id === id);
@@ -428,6 +449,18 @@ async function upsertPatientBillingLocal(patientEmail, patch = {}) {
 async function listCertificatesSupabase() {
   const rows = await supabaseRequest(
     'service_requests?select=*,medical_certificate_requests(*)&order=submitted_at.desc,created_at.desc'
+  );
+  return (rows || []).map(mapSupabaseRowToCertificate);
+}
+
+async function listCertificatesByPatientEmailSupabase(email) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return [];
+
+  const rows = await supabaseRequest(
+    `service_requests?select=*,medical_certificate_requests!inner(*)&medical_certificate_requests.patient_email=eq.${encodeURIComponent(
+      normalizedEmail
+    )}&order=submitted_at.desc,created_at.desc`
   );
   return (rows || []).map(mapSupabaseRowToCertificate);
 }
@@ -726,6 +759,13 @@ export async function listCertificates() {
     return listCertificatesSupabase();
   }
   return listCertificatesLocal();
+}
+
+export async function listCertificatesByPatientEmail(email) {
+  if (getSupabaseConfig().enabled) {
+    return listCertificatesByPatientEmailSupabase(email);
+  }
+  return listCertificatesByPatientEmailLocal(email);
 }
 
 export async function getCertificateById(id) {

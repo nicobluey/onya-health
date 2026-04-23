@@ -37,6 +37,7 @@ import {
   getPatientBillingByEmail,
   isSupabaseStorageEnabled,
   listCertificates,
+  listCertificatesByPatientEmail,
   upsertPatientBillingByEmail,
   updateCertificate,
 } from '../backend/lib/storage.js';
@@ -2727,7 +2728,7 @@ export default async function handler(req, res) {
         return;
       }
 
-      const certificates = await listCertificates();
+      const certificates = await listCertificatesByPatientEmail(expectedEmail);
       const { latest, latestProfile } = getLatestPatientSnapshot(certificates, expectedEmail);
       const { fullName, dob, phone } = latestProfile;
 
@@ -2820,6 +2821,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST' && routePath === 'patient/login') {
+      const loginStartedAt = Date.now();
       const body = await parseJsonBody(req);
       const email = normalizeEmail(body.email);
       const dob = String(body.dob || '').trim();
@@ -2830,11 +2832,10 @@ export default async function handler(req, res) {
         return;
       }
 
-      const certificates = await listCertificates();
-      const { patientCertificates, latest, latestProfile } = getLatestPatientSnapshot(certificates, email);
       const supabaseConfig = getSupabaseConfig();
 
       if (password) {
+        const authStartedAt = Date.now();
         let account = null;
         if (supabaseConfig.url && supabaseConfig.anonKey) {
           account = await authenticatePatientViaSupabase(email, password);
@@ -2847,12 +2848,22 @@ export default async function handler(req, res) {
           return;
         }
 
-        await syncPatientProfileFromLatest({
+        const snapshotStartedAt = Date.now();
+        const patientCertificates = await listCertificatesByPatientEmail(email);
+        const { latest } = getLatestPatientSnapshot(patientCertificates, email);
+        const snapshotDurationMs = Date.now() - snapshotStartedAt;
+        void syncPatientProfileFromLatest({
           email,
           latestCertificate: latest,
           supabaseEnabled: supabaseConfig.enabled,
           upsertSupabasePatientMetadata,
           updatePatientAccountProfile,
+        }).catch((profileSyncError) => {
+          error('patient.profile.sync_after_login_failed', {
+            email,
+            method: 'password',
+            message: profileSyncError?.message || String(profileSyncError),
+          });
         });
 
         const token = issuePatientToken(email);
@@ -2864,10 +2875,21 @@ export default async function handler(req, res) {
             account,
           }),
         });
-        info('patient.login.success', { email, method: 'password' });
+        info('patient.login.success', {
+          email,
+          method: 'password',
+          authDurationMs: Date.now() - authStartedAt,
+          snapshotDurationMs,
+          certificateCount: patientCertificates.length,
+          totalDurationMs: Date.now() - loginStartedAt,
+        });
         return;
       }
 
+      const snapshotStartedAt = Date.now();
+      const patientCertificates = await listCertificatesByPatientEmail(email);
+      const { latest, latestProfile } = getLatestPatientSnapshot(patientCertificates, email);
+      const snapshotDurationMs = Date.now() - snapshotStartedAt;
       if (patientCertificates.length === 0) {
         sendJson(res, 404, { error: 'No patient account found for this email yet' });
         return;
@@ -2882,12 +2904,18 @@ export default async function handler(req, res) {
         return;
       }
 
-      await syncPatientProfileFromLatest({
+      void syncPatientProfileFromLatest({
         email,
         latestCertificate: latest,
         supabaseEnabled: supabaseConfig.enabled,
         upsertSupabasePatientMetadata,
         updatePatientAccountProfile,
+      }).catch((profileSyncError) => {
+        error('patient.profile.sync_after_login_failed', {
+          email,
+          method: 'dob',
+          message: profileSyncError?.message || String(profileSyncError),
+        });
       });
 
       const token = issuePatientToken(email);
@@ -2895,7 +2923,13 @@ export default async function handler(req, res) {
         token,
         patient: buildPatientIdentity({ email, latestCertificate: latest, account: null }),
       });
-      info('patient.login.success', { email, method: 'dob' });
+      info('patient.login.success', {
+        email,
+        method: 'dob',
+        snapshotDurationMs,
+        certificateCount: patientCertificates.length,
+        totalDurationMs: Date.now() - loginStartedAt,
+      });
       return;
     }
 
@@ -3014,7 +3048,7 @@ export default async function handler(req, res) {
       let latestSnapshotLoaded = false;
       const ensureLatestSnapshot = async () => {
         if (latestSnapshotLoaded) return;
-        const certificates = await listCertificates();
+        const certificates = await listCertificatesByPatientEmail(email);
         const snapshot = getLatestPatientSnapshot(certificates, email);
         latest = snapshot.latest;
         latestProfile = snapshot.latestProfile;
@@ -3209,7 +3243,7 @@ export default async function handler(req, res) {
           phone: '',
         };
         if (!existing) {
-          const certificates = await listCertificates();
+          const certificates = await listCertificatesByPatientEmail(email);
           ({ latestProfile } = getLatestPatientSnapshot(certificates, email));
           try {
             account = await createPatientAccountViaSupabase({
@@ -3316,18 +3350,15 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'GET' && routePath === 'patient/me') {
+      const patientMeStartedAt = Date.now();
       const patient = await requirePatient(req, res);
       if (!patient) return;
 
       const supabaseConfig = getSupabaseConfig();
-      let account = null;
-      if (supabaseConfig.enabled) {
-        account = await findSupabasePatientByEmail(patient.email);
-      }
-      if (!account) {
-        account = await getPatientAccountByEmail(patient.email);
-      }
-      const certificates = await listCertificates();
+      const account = await getPatientAccountByEmail(patient.email);
+      const certificatesFetchStartedAt = Date.now();
+      const certificates = await listCertificatesByPatientEmail(patient.email);
+      const certificatesFetchDurationMs = Date.now() - certificatesFetchStartedAt;
       const billing = await resolvePatientBillingProfile(patient.email, certificates);
       const { patientCertificates, latest } = getLatestPatientSnapshot(certificates, patient.email);
       if (patientCertificates.length === 0 && !account) {
@@ -3335,16 +3366,18 @@ export default async function handler(req, res) {
         return;
       }
 
-      const syncedProfile = await syncPatientProfileFromLatest({
+      void syncPatientProfileFromLatest({
         email: patient.email,
         latestCertificate: latest,
         supabaseEnabled: supabaseConfig.enabled,
         upsertSupabasePatientMetadata,
         updatePatientAccountProfile,
+      }).catch((profileSyncError) => {
+        error('patient.profile.sync_after_me_failed', {
+          email: patient.email,
+          message: profileSyncError?.message || String(profileSyncError),
+        });
       });
-      if (syncedProfile) {
-        account = syncedProfile;
-      }
 
       sendJson(res, 200, {
         patient: buildPatientIdentity({
@@ -3355,6 +3388,13 @@ export default async function handler(req, res) {
         billing,
         queueCount: patientCertificates.filter((item) => isOpenForReview(item.status)).length,
         latestRequest: latest ? patientSummaryFromCertificate(latest) : null,
+      });
+      info('patient.me.loaded', {
+        email: patient.email,
+        requestCount: patientCertificates.length,
+        queueCount: patientCertificates.filter((item) => isOpenForReview(item.status)).length,
+        certificatesFetchDurationMs,
+        totalDurationMs: Date.now() - patientMeStartedAt,
       });
       return;
     }
@@ -3375,8 +3415,7 @@ export default async function handler(req, res) {
           ? requestedReturnUrl
           : fallbackReturnUrl;
 
-      const certificates = await listCertificates();
-      const billing = await resolvePatientBillingProfile(patient.email, certificates);
+      const billing = await resolvePatientBillingProfile(patient.email);
       if (!billing.stripeCustomerId) {
         sendJson(res, 409, {
           error: 'No Stripe billing profile found for this patient account.',
@@ -3400,8 +3439,7 @@ export default async function handler(req, res) {
         return;
       }
 
-      const certificates = await listCertificates();
-      const billing = await resolvePatientBillingProfile(patient.email, certificates);
+      const billing = await resolvePatientBillingProfile(patient.email);
       if (!billing.stripeSubscriptionId) {
         sendJson(res, 409, {
           error: 'No active unlimited subscription was found.',
@@ -3423,7 +3461,7 @@ export default async function handler(req, res) {
           message: billingSyncError?.message || String(billingSyncError),
         });
       }
-      const refreshedBilling = await resolvePatientBillingProfile(patient.email, certificates);
+      const refreshedBilling = await resolvePatientBillingProfile(patient.email);
 
       await appendAudit({
         type: 'PATIENT_SUBSCRIPTION_CANCEL_AT_PERIOD_END',
@@ -3442,15 +3480,23 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'GET' && routePath === 'patient/requests') {
+      const patientRequestsStartedAt = Date.now();
       const patient = await requirePatient(req, res);
       if (!patient) return;
 
-      const certificates = await listCertificates();
-      const patientCertificates = getPatientCertificatesForEmail(certificates, patient.email);
+      const certificatesFetchStartedAt = Date.now();
+      const patientCertificates = await listCertificatesByPatientEmail(patient.email);
+      const certificatesFetchDurationMs = Date.now() - certificatesFetchStartedAt;
 
       sendJson(res, 200, {
         count: patientCertificates.length,
         requests: patientCertificates.map(patientSummaryFromCertificate),
+      });
+      info('patient.requests.loaded', {
+        email: patient.email,
+        requestCount: patientCertificates.length,
+        certificatesFetchDurationMs,
+        totalDurationMs: Date.now() - patientRequestsStartedAt,
       });
       return;
     }
