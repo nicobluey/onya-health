@@ -118,6 +118,77 @@ const POST_ONLY_ROUTES = new Set([
 ]);
 
 const stripeSubscriptionCache = new Map();
+const CHECKOUT_TIMING_WINDOW_SIZE = Math.max(
+  20,
+  Number(process.env.CHECKOUT_TIMING_WINDOW_SIZE || 200)
+);
+const checkoutTimingWindows = {
+  total: [],
+  stripe: [],
+  persistence: [],
+};
+
+function normalizeDurationMs(value) {
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue) || numberValue < 0) return null;
+  return Math.round(numberValue * 10) / 10;
+}
+
+function percentile(values, p) {
+  if (!Array.isArray(values) || values.length === 0) return null;
+  if (values.length === 1) return values[0];
+  const rank = (p / 100) * (values.length - 1);
+  const lowerIndex = Math.floor(rank);
+  const upperIndex = Math.ceil(rank);
+  const lower = values[lowerIndex];
+  const upper = values[upperIndex];
+  if (lowerIndex === upperIndex) return lower;
+  const weight = rank - lowerIndex;
+  return lower + (upper - lower) * weight;
+}
+
+function recordCheckoutTimingSample({ totalMs, stripeMs = null, persistenceMs = null }) {
+  const totalNormalized = normalizeDurationMs(totalMs);
+  if (totalNormalized != null) {
+    checkoutTimingWindows.total.push(totalNormalized);
+    if (checkoutTimingWindows.total.length > CHECKOUT_TIMING_WINDOW_SIZE) {
+      checkoutTimingWindows.total.shift();
+    }
+  }
+
+  const stripeNormalized = normalizeDurationMs(stripeMs);
+  if (stripeNormalized != null) {
+    checkoutTimingWindows.stripe.push(stripeNormalized);
+    if (checkoutTimingWindows.stripe.length > CHECKOUT_TIMING_WINDOW_SIZE) {
+      checkoutTimingWindows.stripe.shift();
+    }
+  }
+
+  const persistenceNormalized = normalizeDurationMs(persistenceMs);
+  if (persistenceNormalized != null) {
+    checkoutTimingWindows.persistence.push(persistenceNormalized);
+    if (checkoutTimingWindows.persistence.length > CHECKOUT_TIMING_WINDOW_SIZE) {
+      checkoutTimingWindows.persistence.shift();
+    }
+  }
+
+  const totalSorted = [...checkoutTimingWindows.total].sort((a, b) => a - b);
+  const stripeSorted = [...checkoutTimingWindows.stripe].sort((a, b) => a - b);
+  const persistenceSorted = [...checkoutTimingWindows.persistence].sort((a, b) => a - b);
+
+  return {
+    windowSize: CHECKOUT_TIMING_WINDOW_SIZE,
+    totalSamples: checkoutTimingWindows.total.length,
+    stripeSamples: checkoutTimingWindows.stripe.length,
+    persistenceSamples: checkoutTimingWindows.persistence.length,
+    totalP50Ms: normalizeDurationMs(percentile(totalSorted, 50)),
+    totalP95Ms: normalizeDurationMs(percentile(totalSorted, 95)),
+    stripeP50Ms: normalizeDurationMs(percentile(stripeSorted, 50)),
+    stripeP95Ms: normalizeDurationMs(percentile(stripeSorted, 95)),
+    persistenceP50Ms: normalizeDurationMs(percentile(persistenceSorted, 50)),
+    persistenceP95Ms: normalizeDurationMs(percentile(persistenceSorted, 95)),
+  };
+}
 
 function normalizeOrigin(value) {
   const raw = String(value || '').trim();
@@ -780,6 +851,7 @@ function isStripeEnabled() {
 }
 
 async function createStripeCheckoutSession({ req, certificate, pricing, uiMode = 'hosted' }) {
+  const stripeRequestStartedAt = Date.now();
   const frontendBase = getFrontendBaseUrl(req);
   const params = new URLSearchParams();
   params.set('mode', pricing.mode);
@@ -813,14 +885,28 @@ async function createStripeCheckoutSession({ req, certificate, pricing, uiMode =
     params.set('subscription_data[metadata][patient_email]', certificate.certificateDraft.email || '');
   }
 
-  const response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: params.toString(),
-  });
+  let response;
+  try {
+    response = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    });
+  } catch (errorObject) {
+    error('stripe.checkout_session.create_failed', {
+      certificateId: certificate.id,
+      mode: pricing.mode,
+      uiMode,
+      durationMs: Date.now() - stripeRequestStartedAt,
+      message: errorObject?.message || String(errorObject),
+      status: null,
+      code: null,
+    });
+    throw errorObject;
+  }
 
   const text = await response.text();
   let payload = null;
@@ -832,11 +918,28 @@ async function createStripeCheckoutSession({ req, certificate, pricing, uiMode =
 
   if (!response.ok) {
     const message = payload?.error?.message || `Stripe session create failed (${response.status})`;
+    error('stripe.checkout_session.create_failed', {
+      certificateId: certificate.id,
+      mode: pricing.mode,
+      uiMode,
+      durationMs: Date.now() - stripeRequestStartedAt,
+      message,
+      status: response.status,
+      code: payload?.error?.code || null,
+    });
     const err = new Error(message);
     err.status = response.status;
     err.data = payload;
     throw err;
   }
+
+  info('stripe.checkout_session.create_succeeded', {
+    certificateId: certificate.id,
+    mode: pricing.mode,
+    uiMode,
+    durationMs: Date.now() - stripeRequestStartedAt,
+    stripeSessionId: payload?.id || null,
+  });
 
   return payload;
 }
@@ -2315,174 +2418,232 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST' && routePath === 'checkout/session') {
-      if (!isStripeEnabled()) {
-        sendJson(res, 500, { error: 'Stripe is not configured on the server' });
-        return;
-      }
+      const checkoutStartedAt = Date.now();
+      let checkoutCertificateId = null;
 
-      const body = await parseJsonBody(req);
-      const requestedUiMode = body?.uiMode === 'embedded' ? 'embedded' : 'hosted';
-      const patient = body?.patient || {};
-      const certificateDraft = buildDraftCertificate(body);
-      body.consult = {
-        ...(body?.consult || {}),
-        startDate: certificateDraft.startDate,
-        durationDays: certificateDraft.durationDays,
-        includeCarerCertificate: certificateDraft.includeCarerCertificate,
-      };
-
-      if (!patient.fullName || !patient.email) {
-        sendJson(res, 400, { error: 'fullName and email are required' });
-        return;
-      }
-
-      const risk = calculateRisk(body);
-      const pricing = stripePricingFromRequest(body);
-      const normalizedPatientEmail = normalizeEmail(patient.email);
-      const patientAuth = getPatientAuth(req);
-      const canUseSubscriptionBypass =
-        Boolean(patientAuth?.email) && normalizedPatientEmail === normalizeEmail(patientAuth.email);
-
-      if (canUseSubscriptionBypass) {
-        const certificates = await listCertificates();
-        const billing = await resolvePatientBillingProfile(normalizedPatientEmail, certificates);
-        if (billing.hasActiveUnlimited) {
-          const certificateId = crypto.randomUUID();
-          const verificationCode = buildCertificateVerificationCode(certificateId);
-          const paidAt = new Date().toISOString();
-          const certificate = {
-            id: certificateId,
-            createdAt: paidAt,
-            status: 'pending',
-            serviceType: body.serviceType || 'doctor',
-            risk,
-            certificateDraft,
-            rawSubmission: {
-              ...body,
-              verificationCode,
-              payment: {
-                provider: 'stripe',
-                mode: 'subscription',
-                status: 'paid',
-                paidAt,
-                amount: 0,
-                baseAmount: 0,
-                amountTotal: 0,
-                currency: 'aud',
-                stripeCustomerId: billing.stripeCustomerId || null,
-                stripeSubscriptionId: billing.stripeSubscriptionId || null,
-                includeCarerCertificate: Boolean(certificateDraft.includeCarerCertificate),
-                coveredByUnlimitedPlan: true,
-              },
-            },
-            decision: null,
-          };
-
-          await createCertificate(certificate);
-          await appendAudit({
-            type: 'CHECKOUT_BYPASSED_ACTIVE_SUBSCRIPTION',
-            certificateId: certificate.id,
-            email: normalizedPatientEmail,
-            stripeCustomerId: billing.stripeCustomerId || null,
-            stripeSubscriptionId: billing.stripeSubscriptionId || null,
-          });
-          await appendAudit({
-            type: 'PAYMENT_CONFIRMED',
-            certificateId: certificate.id,
-            provider: 'stripe',
-            trigger: 'active_subscription_coverage',
-            stripeSubscriptionId: billing.stripeSubscriptionId || null,
-          });
-          await sendDoctorReviewEmail(certificate, req);
-
-          info('checkout.session.bypassed_active_subscription', {
-            certificateId: certificate.id,
-            patientEmail: normalizedPatientEmail,
-            stripeCustomerId: billing.stripeCustomerId || null,
-            stripeSubscriptionId: billing.stripeSubscriptionId || null,
-          });
-
-          sendJson(res, 200, {
-            certificateId: certificate.id,
-            verificationCode: getCertificateVerificationCode(certificate),
-            checkoutBypassed: true,
-            status: certificate.status,
-            patientEmail: normalizedPatientEmail,
-            hasActiveUnlimited: true,
-            requiresAccountSetup: false,
-            redirectUrl: '/patient',
-          });
+      try {
+        if (!isStripeEnabled()) {
+          sendJson(res, 500, { error: 'Stripe is not configured on the server' });
           return;
         }
-      }
 
-      const certificateId = crypto.randomUUID();
-      const verificationCode = buildCertificateVerificationCode(certificateId);
-      const certificate = {
-        id: certificateId,
-        createdAt: new Date().toISOString(),
-        status: 'awaiting_payment',
-        serviceType: body.serviceType || 'doctor',
-        risk,
-        certificateDraft,
-        rawSubmission: {
-          ...body,
-          verificationCode,
-          payment: {
-            provider: 'stripe',
-            status: 'initiated',
-            amount: pricing.unitAmount,
-            baseAmount: pricing.baseUnitAmount,
-            carerCertificateAmount: pricing.carerCertificateAmount,
-            includeCarerCertificate: pricing.includeCarerCertificate,
-            currency: 'aud',
-            mode: pricing.mode,
+        const body = await parseJsonBody(req);
+        const requestedUiMode = body?.uiMode === 'embedded' ? 'embedded' : 'hosted';
+        const patient = body?.patient || {};
+        const certificateDraft = buildDraftCertificate(body);
+        body.consult = {
+          ...(body?.consult || {}),
+          startDate: certificateDraft.startDate,
+          durationDays: certificateDraft.durationDays,
+          includeCarerCertificate: certificateDraft.includeCarerCertificate,
+        };
+
+        if (!patient.fullName || !patient.email) {
+          sendJson(res, 400, { error: 'fullName and email are required' });
+          return;
+        }
+
+        const risk = calculateRisk(body);
+        const pricing = stripePricingFromRequest(body);
+        const normalizedPatientEmail = normalizeEmail(patient.email);
+        const patientAuth = getPatientAuth(req);
+        const canUseSubscriptionBypass =
+          Boolean(patientAuth?.email) && normalizedPatientEmail === normalizeEmail(patientAuth.email);
+
+        if (canUseSubscriptionBypass) {
+          const bypassLookupStartedAt = Date.now();
+          const certificates = await listCertificates();
+          const billing = await resolvePatientBillingProfile(normalizedPatientEmail, certificates);
+          const bypassLookupDurationMs = Date.now() - bypassLookupStartedAt;
+
+          if (billing.hasActiveUnlimited) {
+            const certificateId = crypto.randomUUID();
+            const verificationCode = buildCertificateVerificationCode(certificateId);
+            const paidAt = new Date().toISOString();
+            const certificate = {
+              id: certificateId,
+              createdAt: paidAt,
+              status: 'pending',
+              serviceType: body.serviceType || 'doctor',
+              risk,
+              certificateDraft,
+              rawSubmission: {
+                ...body,
+                verificationCode,
+                payment: {
+                  provider: 'stripe',
+                  mode: 'subscription',
+                  status: 'paid',
+                  paidAt,
+                  amount: 0,
+                  baseAmount: 0,
+                  amountTotal: 0,
+                  currency: 'aud',
+                  stripeCustomerId: billing.stripeCustomerId || null,
+                  stripeSubscriptionId: billing.stripeSubscriptionId || null,
+                  includeCarerCertificate: Boolean(certificateDraft.includeCarerCertificate),
+                  coveredByUnlimitedPlan: true,
+                },
+              },
+              decision: null,
+            };
+
+            checkoutCertificateId = certificate.id;
+
+            await createCertificate(certificate);
+            await appendAudit({
+              type: 'CHECKOUT_BYPASSED_ACTIVE_SUBSCRIPTION',
+              certificateId: certificate.id,
+              email: normalizedPatientEmail,
+              stripeCustomerId: billing.stripeCustomerId || null,
+              stripeSubscriptionId: billing.stripeSubscriptionId || null,
+            });
+            await appendAudit({
+              type: 'PAYMENT_CONFIRMED',
+              certificateId: certificate.id,
+              provider: 'stripe',
+              trigger: 'active_subscription_coverage',
+              stripeSubscriptionId: billing.stripeSubscriptionId || null,
+            });
+            await sendDoctorReviewEmail(certificate, req);
+
+            const checkoutDurationMs = Date.now() - checkoutStartedAt;
+            const timingStats = recordCheckoutTimingSample({ totalMs: checkoutDurationMs });
+            info('checkout.session.bypassed_active_subscription', {
+              certificateId: certificate.id,
+              patientEmail: normalizedPatientEmail,
+              stripeCustomerId: billing.stripeCustomerId || null,
+              stripeSubscriptionId: billing.stripeSubscriptionId || null,
+              bypassLookupDurationMs,
+              checkoutDurationMs,
+              timingWindowSize: timingStats.windowSize,
+              totalSamples: timingStats.totalSamples,
+              rollingTotalP50Ms: timingStats.totalP50Ms,
+              rollingTotalP95Ms: timingStats.totalP95Ms,
+            });
+
+            sendJson(res, 200, {
+              certificateId: certificate.id,
+              verificationCode: getCertificateVerificationCode(certificate),
+              checkoutBypassed: true,
+              status: certificate.status,
+              patientEmail: normalizedPatientEmail,
+              hasActiveUnlimited: true,
+              requiresAccountSetup: false,
+              redirectUrl: '/patient',
+            });
+            return;
+          }
+        }
+
+        const certificateId = crypto.randomUUID();
+        checkoutCertificateId = certificateId;
+        const verificationCode = buildCertificateVerificationCode(certificateId);
+        const certificate = {
+          id: certificateId,
+          createdAt: new Date().toISOString(),
+          status: 'awaiting_payment',
+          serviceType: body.serviceType || 'doctor',
+          risk,
+          certificateDraft,
+          rawSubmission: {
+            ...body,
+            verificationCode,
+            payment: {
+              provider: 'stripe',
+              status: 'initiated',
+              amount: pricing.unitAmount,
+              baseAmount: pricing.baseUnitAmount,
+              carerCertificateAmount: pricing.carerCertificateAmount,
+              includeCarerCertificate: pricing.includeCarerCertificate,
+              currency: 'aud',
+              mode: pricing.mode,
+            },
           },
-        },
-        decision: null,
-      };
+          decision: null,
+        };
 
-      const sessionPromise = createStripeCheckoutSession({
-        req,
-        certificate,
-        pricing,
-        uiMode: requestedUiMode,
-      });
-      const persistPromise = createCertificate(certificate);
-      const [session] = await Promise.all([sessionPromise, persistPromise]);
+        const stripeStartedAt = Date.now();
+        const sessionPromise = createStripeCheckoutSession({
+          req,
+          certificate,
+          pricing,
+          uiMode: requestedUiMode,
+        }).then((session) => ({
+          session,
+          durationMs: Date.now() - stripeStartedAt,
+        }));
 
-      appendAudit({
-        type: 'CHECKOUT_SESSION_CREATED',
-        certificateId: certificate.id,
-        provider: 'stripe',
-        stripeSessionId: session.id || null,
-        amount: pricing.unitAmount,
-        mode: pricing.mode,
-        includeCarerCertificate: pricing.includeCarerCertificate,
-      }).catch((auditError) => {
-        error('checkout.session.audit_failed', {
+        const persistenceStartedAt = Date.now();
+        const persistPromise = createCertificate(certificate).then((createdCertificate) => ({
+          createdCertificate,
+          durationMs: Date.now() - persistenceStartedAt,
+        }));
+
+        const [sessionResult, persistenceResult] = await Promise.all([sessionPromise, persistPromise]);
+        const session = sessionResult.session;
+
+        appendAudit({
+          type: 'CHECKOUT_SESSION_CREATED',
           certificateId: certificate.id,
-          message: auditError?.message || String(auditError),
+          provider: 'stripe',
+          stripeSessionId: session.id || null,
+          amount: pricing.unitAmount,
+          mode: pricing.mode,
+          includeCarerCertificate: pricing.includeCarerCertificate,
+        }).catch((auditError) => {
+          error('checkout.session.audit_failed', {
+            certificateId: certificate.id,
+            message: auditError?.message || String(auditError),
+          });
         });
-      });
 
-      info('checkout.session.created', {
-        certificateId: certificate.id,
-        stripeSessionId: session.id || null,
-        mode: pricing.mode,
-        amount: pricing.unitAmount,
-        includeCarerCertificate: pricing.includeCarerCertificate,
-      });
+        const checkoutDurationMs = Date.now() - checkoutStartedAt;
+        const timingStats = recordCheckoutTimingSample({
+          totalMs: checkoutDurationMs,
+          stripeMs: sessionResult.durationMs,
+          persistenceMs: persistenceResult.durationMs,
+        });
+        info('checkout.session.created', {
+          certificateId: certificate.id,
+          stripeSessionId: session.id || null,
+          mode: pricing.mode,
+          amount: pricing.unitAmount,
+          includeCarerCertificate: pricing.includeCarerCertificate,
+          uiMode: requestedUiMode,
+          stripeDurationMs: sessionResult.durationMs,
+          persistenceDurationMs: persistenceResult.durationMs,
+          checkoutDurationMs,
+          timingWindowSize: timingStats.windowSize,
+          totalSamples: timingStats.totalSamples,
+          stripeSamples: timingStats.stripeSamples,
+          persistenceSamples: timingStats.persistenceSamples,
+          rollingTotalP50Ms: timingStats.totalP50Ms,
+          rollingTotalP95Ms: timingStats.totalP95Ms,
+          rollingStripeP50Ms: timingStats.stripeP50Ms,
+          rollingStripeP95Ms: timingStats.stripeP95Ms,
+          rollingPersistenceP50Ms: timingStats.persistenceP50Ms,
+          rollingPersistenceP95Ms: timingStats.persistenceP95Ms,
+        });
 
-      sendJson(res, 200, {
-        certificateId: certificate.id,
-        verificationCode: getCertificateVerificationCode(certificate),
-        checkoutUrl: session.url,
-        sessionId: session.id,
-        clientSecret: session.client_secret || null,
-        uiMode: requestedUiMode,
-      });
-      return;
+        sendJson(res, 200, {
+          certificateId: certificate.id,
+          verificationCode: getCertificateVerificationCode(certificate),
+          checkoutUrl: session.url,
+          sessionId: session.id,
+          clientSecret: session.client_secret || null,
+          uiMode: requestedUiMode,
+        });
+        return;
+      } catch (checkoutError) {
+        error('checkout.session.failed', {
+          certificateId: checkoutCertificateId,
+          durationMs: Date.now() - checkoutStartedAt,
+          message: checkoutError?.message || String(checkoutError),
+          status: checkoutError?.status || null,
+        });
+        throw checkoutError;
+      }
     }
 
     if (req.method === 'POST' && routePath === 'checkout/confirm') {

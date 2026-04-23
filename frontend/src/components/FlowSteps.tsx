@@ -6,6 +6,7 @@ import { Button, SelectableCard, Input } from './UI';
 import { AnimatePresence, motion } from 'framer-motion';
 import { getServiceForPath } from '../consult-flow/services';
 import { fetchApiJson } from '../lib/api';
+import { warmCheckoutPath } from '../lib/performanceWarmup';
 import type { CertificatePurpose, Symptom } from '../types';
 
 // Transitions
@@ -596,6 +597,10 @@ export const CheckoutStep = () => {
     const carerAddonAmount = showCarerUpsell && includeCarerCertificate ? CARER_CERT_UPSELL_DOLLARS : 0;
     const totalAmount = baseAmount + carerAddonAmount;
 
+    useEffect(() => {
+        warmCheckoutPath();
+    }, []);
+
     const handleCheckout = async () => {
         setSubmitError('');
         setSubmitting(true);
@@ -721,7 +726,13 @@ export const CheckoutStep = () => {
                 </div>
             )}
 
-            <Button fullWidth onClick={handleCheckout} disabled={submitting}>
+            <Button
+                fullWidth
+                onClick={handleCheckout}
+                onMouseEnter={warmCheckoutPath}
+                onFocus={warmCheckoutPath}
+                disabled={submitting}
+            >
                 {submitting ? 'Redirecting to secure checkout...' : COPY.steps.checkout.cta}
             </Button>
             {submitError && (

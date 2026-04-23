@@ -19,6 +19,7 @@ import {
     UserRound,
 } from 'lucide-react';
 import { fetchApiJson, getApiBase } from '../lib/api';
+import { warmCheckoutPath } from '../lib/performanceWarmup';
 import HomeTab from '../patient-portal/home/HomeTab';
 import {
     type CheckoutSetupContext,
@@ -284,6 +285,8 @@ function ConsultTab({
                             key={option.id}
                             type="button"
                             onClick={() => onSelectOption(option.id)}
+                            onMouseEnter={option.id === 'medical-certificate' ? warmCheckoutPath : undefined}
+                            onFocus={option.id === 'medical-certificate' ? warmCheckoutPath : undefined}
                             className={`${sectionCardClassName(
                                 'group p-4 text-left transition hover:-translate-y-0.5 hover:shadow-[0_26px_50px_-36px_rgba(15,23,42,0.46)]'
                             )} ${live ? 'border-[#b7dcff] bg-[#f8fbff]' : ''}`}
@@ -1141,6 +1144,10 @@ export default function PatientPortalPage() {
         [activeQueuedRequest, requests]
     );
 
+    useEffect(() => {
+        warmCheckoutPath();
+    }, []);
+
     const openQueuedScreen = () => {
         setLastMainTab(mainTab);
         setActiveQueuedRequest(queuedRequest);
@@ -1160,6 +1167,7 @@ export default function PatientPortalPage() {
     };
 
     const startUnlimitedCertificateRequest = async () => {
+        warmCheckoutPath();
         if (!token) {
             window.location.href = '/patient-login';
             return;

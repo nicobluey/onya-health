@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { warn } from './logger.js';
 
 const DATA_DIR = path.resolve(process.cwd(), 'backend', 'data');
 const DB_PATH = path.join(DATA_DIR, 'db.json');
@@ -29,6 +30,33 @@ const EMPTY_DB = {
 };
 
 let writeQueue = Promise.resolve();
+const patientIdCache = new Map();
+const PATIENT_ID_CACHE_TTL_MS = Math.max(
+  60_000,
+  Number(process.env.PATIENT_ID_CACHE_TTL_MS || 15 * 60 * 1000)
+);
+
+function getCachedPatientId(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return null;
+  const entry = patientIdCache.get(normalized);
+  if (!entry) return null;
+  if (entry.expiresAt < Date.now()) {
+    patientIdCache.delete(normalized);
+    return null;
+  }
+  return entry.id || null;
+}
+
+function setCachedPatientId(email, id) {
+  const normalized = normalizeEmail(email);
+  const normalizedId = String(id || '').trim();
+  if (!normalized || !normalizedId) return;
+  patientIdCache.set(normalized, {
+    id: normalizedId,
+    expiresAt: Date.now() + PATIENT_ID_CACHE_TTL_MS,
+  });
+}
 
 async function ensureDbFile() {
   await fs.mkdir(DATA_DIR, { recursive: true });
@@ -471,10 +499,16 @@ async function insertMedicalRequestResilient(payload) {
 
 async function createPatientForSubmission(certificate) {
   const draft = certificate.certificateDraft || {};
-  const patientEmail = String(draft.email || '').trim();
+  const patientEmail = normalizeEmail(draft.email || '');
   if (!patientEmail) {
     throw new Error('Patient email is required to create a linked auth user');
   }
+
+  const cachedPatientId = getCachedPatientId(patientEmail);
+  if (cachedPatientId) {
+    return cachedPatientId;
+  }
+
   const fullName = String(draft.fullName || '').trim();
   const [firstName = '', ...rest] = fullName.split(/\s+/);
   const lastName = rest.join(' ');
@@ -498,25 +532,34 @@ async function createPatientForSubmission(certificate) {
       throw error;
     }
 
-    const listed = await supabaseAuthAdminRequest('users?page=1&per_page=1000', {
-      method: 'GET',
-    });
-    const allUsers = Array.isArray(listed)
-      ? listed
-      : Array.isArray(listed?.users)
-      ? listed.users
-      : Array.isArray(listed?.data?.users)
-      ? listed.data.users
-      : [];
-    const match = allUsers.find((user) => user?.email?.toLowerCase() === patientEmail.toLowerCase());
-    patientId = match?.id || null;
+    const cachedAfterConflict = getCachedPatientId(patientEmail);
+    if (cachedAfterConflict) {
+      patientId = cachedAfterConflict;
+    } else {
+      const listed = await supabaseAuthAdminRequest('users?page=1&per_page=1000', {
+        method: 'GET',
+      });
+      const allUsers = Array.isArray(listed)
+        ? listed
+        : Array.isArray(listed?.users)
+        ? listed.users
+        : Array.isArray(listed?.data?.users)
+        ? listed.data.users
+        : [];
+      const match = allUsers.find((user) => normalizeEmail(user?.email) === patientEmail);
+      patientId = match?.id || null;
+    }
   }
 
   if (!patientId) {
     throw new Error('Failed to resolve patient auth user id');
   }
 
-  await supabaseRequest('profiles', {
+  setCachedPatientId(patientEmail, patientId);
+
+  // These rows are useful metadata, but they are not required to open Stripe checkout.
+  // Run them in the background so checkout can redirect faster.
+  void supabaseRequest('profiles', {
     method: 'POST',
     prefer: 'resolution=merge-duplicates,return=representation',
     body: {
@@ -529,9 +572,15 @@ async function createPatientForSubmission(certificate) {
       created_at: certificate.createdAt || new Date().toISOString(),
       updated_at: new Date().toISOString(),
     },
+  }).catch((errorObject) => {
+    warn('patient.profile.upsert_failed', {
+      patientId,
+      patientEmail,
+      message: errorObject?.message || String(errorObject),
+    });
   });
 
-  await supabaseRequest('patients', {
+  void supabaseRequest('patients', {
     method: 'POST',
     prefer: 'resolution=merge-duplicates,return=representation',
     body: {
@@ -539,6 +588,12 @@ async function createPatientForSubmission(certificate) {
       consent_telehealth: true,
       consent_marketing: false,
     },
+  }).catch((errorObject) => {
+    warn('patient.row.upsert_failed', {
+      patientId,
+      patientEmail,
+      message: errorObject?.message || String(errorObject),
+    });
   });
 
   return patientId;
