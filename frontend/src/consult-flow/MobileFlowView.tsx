@@ -5,7 +5,6 @@ import { UpsellModal } from '../components/UpsellModal';
 import { FAQ } from '../components/FAQ';
 import { HowItWorks } from '../components/HowItWorks';
 import { Reviews } from '../components/Reviews';
-import { LiveActivityToast } from '../components/LiveActivityToast';
 import {
     BlogsSection,
     LeadingClinicSection,
@@ -152,7 +151,6 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
                             <div id="faq" className="bg-white py-12 px-4 border-t border-border">
                                 <FAQ maxItems={6} />
                             </div>
-                            <LiveActivityToast mobile />
                         </>
                     ) : (
                         <>
@@ -206,7 +204,6 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
                             <div id="faq" className="bg-white py-12 px-4 border-t border-border">
                                 <FAQ />
                             </div>
-                            <LiveActivityToast mobile />
                         </>
                     )}
                 </main>

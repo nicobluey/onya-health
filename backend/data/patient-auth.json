@@ -65,16 +65,18 @@
       "updatedAt": "2026-03-02T23:56:00.045Z",
       "lastLoginAt": "",
       "lastPasswordResetAt": ""
+    },
+    {
+      "email": "demo.patient@onyahealth.local",
+      "passwordHash": "scrypt$fda9176c31aef7f5f30128f836982853$4cffe54610e18b53f8e76748b3518333f33cf62ad26e7a1546c4d1bed31edfc828518e0cdf062ce76f2c0e3b98b79470671126053e8cb378e3a5e6c81d9e987f",
+      "fullName": "Demo Patient",
+      "dob": "1992-08-14",
+      "phone": "0400000000",
+      "createdAt": "2026-04-22T01:34:32.942Z",
+      "updatedAt": "2026-04-22T01:38:02.892Z",
+      "lastLoginAt": "2026-04-22T01:38:02.892Z",
+      "lastPasswordResetAt": ""
     }
   ],
-  "resetTokens": [
-    {
-      "id": "6041a697-a340-4b15-b817-0a96cf53ce11",
-      "email": "kingnicobluey@gmail.com",
-      "tokenHash": "5c51caca2c47dc0f4a8a5b4d6113ae7302e84040d67f1d9a865a2f358f63db0c",
-      "createdAt": "2026-03-11T00:32:26.390Z",
-      "expiresAt": "2026-03-11T01:32:26.390Z",
-      "usedAt": null
-    }
-  ]
+  "resetTokens": []
 }

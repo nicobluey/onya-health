@@ -24,6 +24,11 @@ services:
       CORS_ORIGIN: "http://localhost:5173"
       DOCTOR_LOGIN_EMAIL: "doctor@onyahealth.com"
       DOCTOR_LOGIN_PASSWORD: "ChangeMe123!"
+      SUPABASE_URL: ""
+      SUPABASE_SERVICE_ROLE_KEY: ""
+      SUPABASE_ANON_KEY: ""
+      VITE_SUPABASE_URL: ""
+      VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY: ""
       # RESEND_API_KEY: "set-me-to-send-real-emails"
     volumes:
       - ./backend:/app/backend

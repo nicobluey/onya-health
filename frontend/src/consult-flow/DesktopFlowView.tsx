@@ -5,7 +5,6 @@ import { UpsellModal } from '../components/UpsellModal';
 import { FAQ } from '../components/FAQ';
 import { HowItWorks } from '../components/HowItWorks';
 import { Reviews } from '../components/Reviews';
-import { LiveActivityToast } from '../components/LiveActivityToast';
 import {
     BlogsSection,
     LeadingClinicSection,
@@ -245,7 +244,6 @@ export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
             )}
 
             <UpsellModal />
-            {view === 'landing' && <LiveActivityToast />}
             <Footer onStartConsult={view === 'landing' ? startBooking : undefined} consultHref={`/${service.slug}`} />
         </div>
     )

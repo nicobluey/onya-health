@@ -39,8 +39,8 @@ export const SERVICE_CONFIGS: Record<ServiceSlug, ServiceConfig> = {
         badgeText: 'Your certificate request has been submitted for doctor review.',
         homeTitle: 'Medical certificate consults online',
         homeBody: 'Submit your symptoms and context online, then receive a doctor-reviewed outcome without clinic waiting rooms.',
-        homeReview: 'The steps were clear and I received a fast, professional outcome.',
-        homeReviewer: 'Verified patient',
+        homeReview: 'Guided intake, clear triage, and fast digital outcomes for common certificate requests.',
+        homeReviewer: 'Experience highlight',
         placeholderLabel: 'Doctor consult preview',
         benefitItems: [
             'Australian-registered doctor review',
@@ -69,8 +69,8 @@ export const SERVICE_CONFIGS: Record<ServiceSlug, ServiceConfig> = {
         badgeText: 'Your nutritionist has shared your personalised care plan and next steps.',
         homeTitle: 'Personalised nutrition support',
         homeBody: 'Work with a caring nutritionist who understands your routine, food preferences, and goals to build a plan that actually fits your life.',
-        homeReview: 'I finally have a realistic plan I can stick to. The support felt personal, not generic.',
-        homeReviewer: 'Mia, Melbourne',
+        homeReview: 'Personalized nutrition planning with practical support you can follow day to day.',
+        homeReviewer: 'Experience highlight',
         placeholderLabel: 'Nutrition plan preview',
         benefitItems: [
             'Qualified Australian nutrition professionals',
@@ -99,8 +99,8 @@ export const SERVICE_CONFIGS: Record<ServiceSlug, ServiceConfig> = {
         badgeText: 'Your psychologist has prepared your first care plan and follow-up session.',
         homeTitle: 'Professional therapy from home',
         homeBody: 'Connect with a psychologist online for consistent, confidential care that helps you feel supported between sessions and over time.',
-        homeReview: 'No long waitlists and I could speak from home. It made getting started so much easier.',
-        homeReviewer: 'Sam, Sydney',
+        homeReview: 'Confidential online psychology support with consistent follow-up and structured care.',
+        homeReviewer: 'Experience highlight',
         placeholderLabel: 'Psychology session preview',
         benefitItems: [
             'Registered mental health professionals',

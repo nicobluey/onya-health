@@ -346,24 +346,24 @@ const TRUST_LOGOS = [
 
 const SOCIAL_PROOF_ITEMS: SocialProofItem[] = [
     {
-        title: 'Fast and clear',
-        quote: 'I completed the form quickly and had a clear outcome without needing to leave home.',
-        meta: 'Verified patient | QLD',
+        title: 'Fast request completion',
+        quote: 'Most patients can submit core details in a short online flow that avoids clinic admin friction.',
+        meta: 'Experience highlight | Speed',
     },
     {
-        title: 'Worked for uni pressure',
-        quote: 'When I was sick before an assessment, this gave me a straightforward way to request evidence.',
-        meta: 'Verified patient | NSW',
+        title: 'Doctor-reviewed decision pathway',
+        quote: 'Requests are routed to Australian-registered doctors with conservative suitability checks.',
+        meta: 'Experience highlight | Clinical review',
     },
     {
-        title: 'No clinic queue',
-        quote: "The process was easier than trying to travel while unwell. Everything was handled digitally.",
-        meta: 'Verified patient | VIC',
+        title: 'Clear status communication',
+        quote: 'Patients receive straightforward updates on request progress and next steps.',
+        meta: 'Experience highlight | Transparency',
     },
     {
-        title: 'Helpful for carers leave',
-        quote: "I needed documentation quickly to care for a family member, and the process was professional.",
-        meta: 'Verified patient | SA',
+        title: 'Secure digital delivery',
+        quote: 'When clinically appropriate, documentation is delivered digitally with privacy-first handling.',
+        meta: 'Experience highlight | Delivery',
     },
 ];
 
@@ -565,8 +565,8 @@ function SocialProofCarousel({ bookingHref }: { bookingHref: string }) {
             <div className="mx-auto w-full max-w-6xl px-4 py-14 md:px-6 md:py-16">
                 <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                     <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-secondary">Social proof</p>
-                        <h2 className="mt-2 text-3xl font-bold text-text-primary">What patients say about the process</h2>
+                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-secondary">Experience highlights</p>
+                        <h2 className="mt-2 text-3xl font-bold text-text-primary">What this process is designed to deliver</h2>
                     </div>
                     <a
                         href={bookingHref}
@@ -603,7 +603,7 @@ function SocialProofCarousel({ bookingHref }: { bookingHref: string }) {
                         <button
                             key={item.title}
                             type="button"
-                            aria-label={`Go to testimonial ${index + 1}`}
+                            aria-label={`Go to highlight ${index + 1}`}
                             onClick={() => setActiveIndex(index)}
                             className={`h-2.5 rounded-full transition-all ${
                                 index === activeIndex ? 'w-8 bg-primary' : 'w-2.5 bg-sand-300 hover:bg-sand-400'

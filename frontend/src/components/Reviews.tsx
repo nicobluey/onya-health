@@ -1,48 +1,48 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, ChevronLeft, ChevronRight, Star } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from './UI';
 import { useBooking } from '../consult-flow/state';
 
 const REVIEWS = [
     {
-        title: 'Fast and straightforward',
-        body: 'Filled out the consult on my lunch break and had my certificate approved before my next meeting.',
-        meta: 'Verified patient · QLD'
+        title: 'Structured clinical triage',
+        body: 'Consult inputs are organized so clinicians can review key context quickly and make safer telehealth decisions.',
+        meta: 'Experience feature · Triage'
     },
     {
-        title: 'No waiting room stress',
-        body: 'Everything was online, clear, and easy to follow. It felt professional from start to finish.',
-        meta: 'Verified patient · NSW'
+        title: 'Streamlined online consult flow',
+        body: 'Patients complete one guided path from intake to outcome, with fewer drop-offs and less duplicated admin.',
+        meta: 'Experience feature · Workflow'
     },
     {
-        title: 'Actually helpful support',
-        body: 'I had one question and got a fast reply. The doctor feedback was clear and easy to follow.',
-        meta: 'Verified patient · VIC'
+        title: 'Clear communication checkpoints',
+        body: 'The experience keeps patients informed with direct status updates and practical next-step messaging.',
+        meta: 'Experience feature · Communication'
     },
     {
-        title: 'Best option when sick',
-        body: 'Could not travel, so this saved me. Took minutes to submit and I received everything by email.',
-        meta: 'Verified patient · SA'
+        title: 'Built for common leave scenarios',
+        body: 'The request pathway is tuned for non-emergency documentation needs with conservative suitability checks.',
+        meta: 'Experience feature · Suitability'
     },
     {
-        title: 'Quick approval after-hours',
-        body: 'Submitted late in the evening and still got everything reviewed quickly. Super convenient process.',
-        meta: 'Verified patient · WA'
+        title: 'Faster handover to doctor review',
+        body: 'Captured details are prepared for review so clinicians can focus on decisions rather than chasing missing information.',
+        meta: 'Experience feature · Efficiency'
     },
     {
-        title: 'Clear and professional',
-        body: 'The consult flow was easy and the doctor feedback was clear. This felt reliable and legitimate.',
-        meta: 'Verified patient · TAS'
+        title: 'Professional documentation output',
+        body: 'When appropriate, documentation is generated and delivered in a secure, standardized digital format.',
+        meta: 'Experience feature · Documentation'
     },
     {
-        title: 'Great for busy schedules',
-        body: 'Saved me from missing more work. The whole experience was simple, quick, and very well designed.',
-        meta: 'Verified patient · NT'
+        title: 'Mobile-first experience quality',
+        body: 'All key steps are optimized for smaller screens so patients can complete requests without desktop friction.',
+        meta: 'Experience feature · Mobile'
     },
     {
-        title: 'Smooth from start to finish',
-        body: 'No confusion, no waiting room, and no delays. Everything was handled exactly as promised.',
-        meta: 'Verified patient · ACT'
+        title: 'Designed for operational reliability',
+        body: 'The flow keeps request state, audit events, and delivery actions aligned for fewer edge-case failures.',
+        meta: 'Experience feature · Reliability'
     }
 ];
 
@@ -146,9 +146,9 @@ export function Reviews() {
             <div className="relative mx-auto max-w-7xl px-6 md:px-8">
                 <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-8">
                     <div>
-                        <p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-white/85">Patient Reviews</p>
-                        <h2 className="text-3xl font-serif font-bold text-white md:text-4xl">People trust Onya Health every day</h2>
-                        <p className="mt-3 text-base font-bold text-white md:text-lg">Real feedback from recent consults.</p>
+                        <p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-white/85">Experience Highlights</p>
+                        <h2 className="text-3xl font-serif font-bold text-white md:text-4xl">What patients can expect from this pathway</h2>
+                        <p className="mt-3 text-base font-bold text-white md:text-lg">Feature-level outcomes focused on speed, safety, and clarity.</p>
                     </div>
                     <Button onClick={startBooking} className="hidden h-11 px-6 md:inline-flex">
                         Start Consult
@@ -177,11 +177,6 @@ export function Reviews() {
                             >
                                 <div className="h-full bg-white rounded-2xl border border-sand-200 p-6 shadow-sm hover:shadow-md transition-shadow">
                                     <h3 className="text-2xl font-bold text-text-primary leading-tight mb-3">{review.title}</h3>
-                                    <div className="mb-4 flex items-center gap-1 text-secondary">
-                                        {[1, 2, 3, 4, 5].map((star) => (
-                                            <Star key={star} size={16} className="fill-current stroke-none" />
-                                        ))}
-                                    </div>
                                     <p className="text-text-secondary leading-relaxed mb-6 text-[15px] min-h-[96px]">{review.body}</p>
                                     <div className="border-t border-sand-200 pt-4">
                                         <p className="font-semibold text-text-primary text-sm">{review.meta}</p>
@@ -198,7 +193,7 @@ export function Reviews() {
                             <button
                                 key={idx}
                                 type="button"
-                                aria-label={`Go to review ${idx + 1}`}
+                                aria-label={`Go to highlight ${idx + 1}`}
                                 onClick={() => jumpTo(idx)}
                                 className={`h-2.5 rounded-full transition-all ${idx === activeIndex ? 'bg-primary w-7' : 'bg-sand-300 w-2.5 hover:bg-sand-400'}`}
                             />
@@ -210,7 +205,7 @@ export function Reviews() {
                             type="button"
                             onClick={goPrev}
                             className="h-12 w-12 rounded-xl border border-border bg-white text-text-primary hover:bg-sand-50 flex items-center justify-center"
-                            aria-label="Previous reviews"
+                            aria-label="Previous highlights"
                         >
                             <ChevronLeft size={20} />
                         </button>
@@ -218,7 +213,7 @@ export function Reviews() {
                             type="button"
                             onClick={goNext}
                             className="h-12 w-12 rounded-xl border border-border bg-white text-text-primary hover:bg-sand-50 flex items-center justify-center"
-                            aria-label="Next reviews"
+                            aria-label="Next highlights"
                         >
                             <ChevronRight size={20} />
                         </button>

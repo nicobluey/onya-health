@@ -66,7 +66,7 @@ function loadEnvFile(filePath) {
     if (idx === -1) continue;
     const key = trimmed.slice(0, idx).trim();
     const value = trimmed.slice(idx + 1).trim();
-    if (!process.env[key]) {
+    if (typeof process.env[key] === 'undefined') {
       process.env[key] = value;
     }
   }
@@ -1851,6 +1851,20 @@ async function handleApi(req, res, url) {
     info('patient.checkout_account_setup.completed', {
       email: expectedEmail,
       stripeSessionId: sessionId,
+    });
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/patient/login') {
+    sendJson(res, 405, {
+      error: 'Method not allowed. Use POST to log in.',
+      method: 'POST',
+      endpoint: '/api/patient/login',
+      loginPath: '/patient-login',
+      exampleBody: {
+        email: 'you@example.com',
+        password: 'YourPassword123',
+      },
     });
     return;
   }

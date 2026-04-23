@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { SERVICE_LIST } from '../consult-flow';
-import { LiveActivityToast } from '../components/LiveActivityToast';
 import { FAQ } from '../components/FAQ';
 import { BlogsSection, UsedByPatientsSection } from '../components/LandingExtras';
 import { Footer } from '../components/Footer';
@@ -14,7 +13,7 @@ import { MagneticButton } from '../components/lightswind/MagneticButton';
 const ROTATING_PROVIDERS = ['doctor', 'nutritionist', 'psychologist'];
 const HOME_THEME = {
     pageBg: '#ffffff',
-    heroBg: '#58a8ff',
+    heroBg: '#ffffff',
 };
 
 const HOME_HIGHLIGHTS = [
@@ -214,12 +213,6 @@ export default function HomePage() {
                 </section>
             </main>
 
-            <div className="hidden md:block">
-                <LiveActivityToast />
-            </div>
-            <div className="md:hidden">
-                <LiveActivityToast mobile />
-            </div>
             <Footer consultHref="/doctor/booking" />
         </div>
     );

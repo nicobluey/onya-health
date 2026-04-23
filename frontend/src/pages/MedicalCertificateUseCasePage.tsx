@@ -7,7 +7,6 @@ import { HomeReviews } from '../components/HomeReviews';
 import { HowItWorks } from '../components/HowItWorks';
 import { HeaderDropdown } from '../components/HeaderDropdown';
 import { HeaderBrand } from '../components/HeaderBrand';
-import { LiveActivityToast } from '../components/LiveActivityToast';
 import { MagneticButton } from '../components/lightswind/MagneticButton';
 
 type UseCaseKey = 'doctor' | 'student' | 'caretaker' | 'work';
@@ -254,12 +253,6 @@ export default function MedicalCertificateUseCasePage() {
                 </section>
             </main>
 
-            <div className="hidden md:block">
-                <LiveActivityToast />
-            </div>
-            <div className="md:hidden">
-                <LiveActivityToast mobile />
-            </div>
             <Footer consultHref={bookingHref} />
         </div>
     );

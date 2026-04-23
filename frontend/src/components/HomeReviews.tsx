@@ -1,36 +1,36 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, ChevronLeft, ChevronRight, Star } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const HOME_REVIEWS = [
     {
-        title: 'Matched me to the right clinician fast',
-        body: 'I explained what I needed and got routed to the right provider in minutes. It felt simple and genuinely personalised.',
-        meta: 'Verified patient · QLD'
+        title: 'Smart intake and clinician matching',
+        body: 'A guided intake captures your symptoms and context, then routes your request to the most suitable clinician pathway.',
+        meta: 'Experience feature · Intake'
     },
     {
-        title: 'Affordable and easy to use',
-        body: 'The whole process was clear, quick, and priced fairly. I got quality support without needing to visit a clinic.',
-        meta: 'Verified patient · NSW'
+        title: 'Fast digital-first submission',
+        body: 'Most patients can complete the request quickly on mobile or desktop without paperwork or waiting-room admin.',
+        meta: 'Experience feature · Speed'
     },
     {
-        title: 'Great when time is limited',
-        body: 'I booked during a workday break and was guided to the right clinician straight away. No waiting-room delays at all.',
-        meta: 'Verified patient · VIC'
+        title: 'Clear doctor-reviewed workflow',
+        body: 'Requests are reviewed by Australian clinicians with conservative decision rules and structured follow-up when needed.',
+        meta: 'Experience feature · Clinical safety'
     },
     {
-        title: 'Felt personalised, not generic',
-        body: 'The intake questions were smart and the provider fit was spot on. The recommendations were practical and easy to follow.',
-        meta: 'Verified patient · SA'
+        title: 'Transparent status and next steps',
+        body: 'Patients can track progress and receive clear outcomes so they know what is happening at each stage.',
+        meta: 'Experience feature · Visibility'
     },
     {
-        title: 'Smooth from start to finish',
-        body: 'Everything flowed well, from matching to consult completion. It was one of the easiest healthcare experiences I have had.',
-        meta: 'Verified patient · WA'
+        title: 'Built for secure document delivery',
+        body: 'When clinically appropriate, documentation is delivered digitally through secure channels with minimal friction.',
+        meta: 'Experience feature · Delivery'
     },
     {
-        title: 'Perfect for busy schedules',
-        body: 'Being matched quickly meant I did not spend time searching around. I got quality care without disrupting my day.',
-        meta: 'Verified patient · TAS'
+        title: 'Designed for real-world schedules',
+        body: 'The flow is structured for busy patients who need care access that fits around work, study, or family demands.',
+        meta: 'Experience feature · Convenience'
     },
 ];
 
@@ -133,9 +133,9 @@ export function HomeReviews() {
             <div className="relative mx-auto max-w-7xl px-5 md:px-8">
                 <div className="mb-8 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
                     <div>
-                        <p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-white/85">Patient Reviews</p>
-                        <h2 className="text-3xl font-serif font-bold text-white md:text-4xl">People trust Onya Health every day</h2>
-                        <p className="mt-3 text-base font-bold text-white md:text-lg">Real feedback from recent consults.</p>
+                        <p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-white/85">Experience Highlights</p>
+                        <h2 className="text-3xl font-serif font-bold text-white md:text-4xl">What the Onya experience is built to deliver</h2>
+                        <p className="mt-3 text-base font-bold text-white md:text-lg">Practical features that keep care fast, clear, and reliable.</p>
                     </div>
                     <a
                         href="#how-it-works"
@@ -167,12 +167,7 @@ export function HomeReviews() {
                             >
                                 <div className="h-full rounded-2xl border border-sand-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md">
                                     <h3 className="mb-3 min-h-[2.75rem] text-2xl font-bold leading-tight text-text-primary">{review.title}</h3>
-                                    <div className="mb-4 flex items-center gap-1 text-secondary">
-                                        {[1, 2, 3, 4, 5].map((star) => (
-                                            <Star key={star} size={16} className="fill-current stroke-none" />
-                                        ))}
-                                    </div>
-                                    <p className="mb-5 min-h-[78px] text-[15px] leading-relaxed text-text-secondary">{review.body}</p>
+                                    <p className="mb-5 min-h-[96px] text-[15px] leading-relaxed text-text-secondary">{review.body}</p>
                                     <div className="border-t border-sand-200 pt-4">
                                         <p className="text-sm font-semibold text-text-primary">{review.meta}</p>
                                     </div>
@@ -188,7 +183,7 @@ export function HomeReviews() {
                             <button
                                 key={idx}
                                 type="button"
-                                aria-label={`Go to review ${idx + 1}`}
+                                aria-label={`Go to highlight ${idx + 1}`}
                                 onClick={() => jumpTo(idx)}
                                 className={`h-2.5 rounded-full transition-all ${idx === activeIndex ? 'w-7 bg-primary' : 'w-2.5 bg-sand-300 hover:bg-sand-400'}`}
                             />
@@ -200,7 +195,7 @@ export function HomeReviews() {
                             type="button"
                             onClick={goPrev}
                             className="flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-white text-text-primary hover:bg-sand-50"
-                            aria-label="Previous reviews"
+                            aria-label="Previous highlights"
                         >
                             <ChevronLeft size={20} />
                         </button>
@@ -208,7 +203,7 @@ export function HomeReviews() {
                             type="button"
                             onClick={goNext}
                             className="flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-white text-text-primary hover:bg-sand-50"
-                            aria-label="Next reviews"
+                            aria-label="Next highlights"
                         >
                             <ChevronRight size={20} />
                         </button>
