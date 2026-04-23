@@ -1069,6 +1069,25 @@ export default function PatientPortalPage() {
                 const headers = {
                     Authorization: `Bearer ${activeToken}`,
                 };
+                if (silent) {
+                    const { response, payload } = await fetchApiJson('/api/patient/requests', { headers });
+                    if (response.status === 401) {
+                        window.localStorage.removeItem('onya_patient_token');
+                        setToken('');
+                        window.location.href = '/patient-login';
+                        return;
+                    }
+                    if (!response.ok) {
+                        throw new Error(payload.error || 'Unable to refresh patient requests');
+                    }
+                    if (disposed) return;
+                    const items: PortalRequest[] = Array.isArray(payload?.requests) ? payload.requests : [];
+                    setRequests(items);
+                    const firstQueued = items.find((item) => isQueuedStatus(item.status)) || null;
+                    setActiveQueuedRequest(firstQueued);
+                    return;
+                }
+
                 const { response, payload } = await fetchApiJson('/api/patient/bootstrap', { headers });
                 if (response.status === 401) {
                     window.localStorage.removeItem('onya_patient_token');
