@@ -2,7 +2,6 @@ import type { BookingStep } from '../types';
 import { useBooking } from '../consult-flow/state';
 import {
     formatAud,
-    getOneOffCertificateBandLabel,
     getOneOffCertificatePrice,
     UNLIMITED_MONTHLY_PRICE_AUD,
     ONE_OFF_BASE_PRICE_AUD,
@@ -39,14 +38,8 @@ export function Stepper({ currentStep, showPricing = false }: { currentStep: Boo
     const priceTitle = isUnlimited
         ? `${formatAud(UNLIMITED_MONTHLY_PRICE_AUD)} / month`
         : pricingRevealed
-            ? `${formatAud(oneOffPrice)} one-time`
-            : `${formatAud(ONE_OFF_BASE_PRICE_AUD)} from`;
-
-    const priceSubtitle = isUnlimited
-        ? 'All Access selected'
-        : pricingRevealed
-            ? getOneOffCertificateBandLabel(durationDays)
-            : 'Updates when you choose duration';
+            ? formatAud(oneOffPrice)
+            : formatAud(ONE_OFF_BASE_PRICE_AUD);
 
     return (
         <div className="w-full">
@@ -56,11 +49,11 @@ export function Stepper({ currentStep, showPricing = false }: { currentStep: Boo
                     style={{ width: `${progress}%` }}
                 />
             </div>
-            <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-[0.08em] text-text-secondary">
-                <span>{`Step ${displayIndex + 1} of ${total}`}</span>
-                {showPricing && <span className="price-numerals text-text-primary">{priceTitle}</span>}
-            </div>
-            {showPricing && <p className="mt-1 text-xs text-text-secondary">{priceSubtitle}</p>}
+            {showPricing && (
+                <div className="mt-1 flex justify-end text-sm font-semibold text-text-primary">
+                    {priceTitle}
+                </div>
+            )}
         </div>
     );
 }

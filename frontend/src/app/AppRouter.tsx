@@ -25,7 +25,6 @@ import {
 } from '../pages';
 
 const MED_CERT_LANDING_PATHS = new Set([
-  '/doctor',
   '/student',
   '/caretaker',
   '/ca',
@@ -40,14 +39,9 @@ const MED_CERT_LANDING_PATHS = new Set([
 
 export function AppRouter() {
   const pathname = window.location.pathname.toLowerCase();
-  const searchParams = new URLSearchParams(window.location.search);
-  const viewParam = searchParams.get('view')?.trim().toLowerCase();
-  const shouldOpenBooking = viewParam === 'booking';
 
   if (pathname === '/doctor/booking' || pathname === '/doctor/booking/') {
-    searchParams.set('view', 'booking');
-    const nextPath = `/doctor?${searchParams.toString()}`;
-    window.location.replace(nextPath);
+    window.location.replace('/doctor');
     return null;
   }
 
@@ -64,6 +58,16 @@ export function AppRouter() {
       </BookingProvider>
     );
   };
+
+  if (pathname === '/doctor') {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('view')) {
+      params.delete('view');
+      const cleaned = params.toString();
+      window.history.replaceState({}, '', cleaned ? `/doctor?${cleaned}` : '/doctor');
+    }
+    return renderServiceFlow('doctor');
+  }
 
   if (pathname === '/blog') {
     return <BlogIndexPage />;
@@ -107,9 +111,6 @@ export function AppRouter() {
   }
 
   if (MED_CERT_LANDING_PATHS.has(pathname)) {
-    if (shouldOpenBooking) {
-      return renderServiceFlow('doctor');
-    }
     return <MedicalCertificateUseCasePage />;
   }
 

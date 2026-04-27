@@ -416,7 +416,7 @@ export const DatesStep = () => {
                         Length: {durationLabel}
                     </p>
                     <p className="mt-1 text-sm text-text-secondary">
-                        One-off price: <span className="price-numerals text-text-primary">{formatAud(estimatedOneOffPrice)}</span> ({pricingBandLabel})
+                        One-off price: <span className="font-semibold text-text-primary">{formatAud(estimatedOneOffPrice)}</span> ({pricingBandLabel})
                     </p>
                 </div>
 
@@ -694,7 +694,7 @@ export const CheckoutStep = () => {
                     <span className="font-medium text-text-primary">
                         {isUnlimited ? "Unlimited Certificates" : "One-off Certificate"}
                     </span>
-                    <span className="price-numerals text-text-primary">
+                    <span className="font-bold text-text-primary">
                         ${baseAmount.toFixed(2)}
                     </span>
                 </div>
@@ -710,7 +710,7 @@ export const CheckoutStep = () => {
                             <p className="mt-1 text-sm text-text-secondary">
                                 Optional add-on if you need carer leave documentation for this request.
                             </p>
-                            <p className="price-numerals mt-2 text-sm text-text-primary">+${CARER_CERT_UPSELL_DOLLARS.toFixed(2)}</p>
+                            <p className="mt-2 text-sm font-semibold text-text-primary">+${CARER_CERT_UPSELL_DOLLARS.toFixed(2)}</p>
                         </div>
                         <button
                             type="button"
@@ -735,7 +735,7 @@ export const CheckoutStep = () => {
                 <div className="rounded-xl border border-border bg-sand-50 p-4">
                     <div className="flex items-center justify-between text-sm">
                         <span className="text-text-secondary">Total due today</span>
-                        <span className="price-numerals text-base text-text-primary">${totalAmount.toFixed(2)}</span>
+                        <span className="text-base font-bold text-text-primary">${totalAmount.toFixed(2)}</span>
                     </div>
                 </div>
             )}

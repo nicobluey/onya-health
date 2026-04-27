@@ -1,7 +1,7 @@
 export const COPY = {
     hero: {
         title: "Medical certificates online, reviewed by Australian-registered doctors.",
-        subtitle: "Start from $9.70 online. If clinically appropriate, your certificate is issued digitally and sent to you.",
+        subtitle: "$9.70 for 1 day, $15 for anything above one day. If clinically appropriate, your certificate is issued digitally and sent to you.",
         cta: "Book now",
         trust: [
             "Australia-only service",
@@ -89,7 +89,7 @@ export const COPY = {
             },
             oneoff: {
                 title: "One-off Certificate",
-                price: "From $9.70 one-time",
+                price: "$9.70 for 1 day · $15 for 2+ days",
                 bullets: [
                     "One certificate for this consult",
                     "No ongoing commitment"

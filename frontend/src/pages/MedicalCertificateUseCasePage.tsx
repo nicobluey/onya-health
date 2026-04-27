@@ -41,12 +41,12 @@ const USE_CASES: UseCaseConfig[] = [
         heroObjectClass: 'object-[64%_44%] md:object-[52%_44%]',
         heroImageAlt: 'Doctor reviewing an online medical certificate request',
         cardTitle: 'Doctor certificates',
-        cardBody: 'Doctor-reviewed certificate requests with pricing from $9.70 and instant digital delivery if approved.',
+        cardBody: 'Doctor-reviewed certificate requests with pricing at $9.70 for 1 day and instant digital delivery if approved.',
         cardCta: 'Book now',
         cardImageClass: 'object-[62%_44%]',
         purposeParam: null,
         metaTitle: 'Medical Certificates from $9 Delivered Instantly | Onya Health',
-        metaDescription: 'Medical certificates from $9 delivered instantly online (from $9.70 for 1 day). Anything above one day is $15, or choose All Access at $19/month. Doctor-reviewed in Australia.',
+        metaDescription: 'Medical certificates from $9 delivered instantly online ($9.70 for 1 day). Anything above one day is $15, or choose All Access at $19/month. Doctor-reviewed in Australia.',
     },
     {
         key: 'student',
@@ -62,8 +62,8 @@ const USE_CASES: UseCaseConfig[] = [
         cardCta: 'Book now',
         cardImageClass: 'object-[50%_42%]',
         purposeParam: 'university',
-        metaTitle: 'Student Medical Certificates from $9.70 | Onya Health',
-        metaDescription: 'Online student medical certificates from $9.70 with doctor review and instant digital delivery if approved.',
+        metaTitle: 'Student Medical Certificates | $9.70 for 1 Day | Onya Health',
+        metaDescription: 'Online student medical certificates at $9.70 for 1 day with doctor review and instant digital delivery if approved.',
     },
     {
         key: 'caretaker',
@@ -79,8 +79,8 @@ const USE_CASES: UseCaseConfig[] = [
         cardCta: 'Book now',
         cardImageClass: 'object-[52%_46%]',
         purposeParam: 'carers-leave',
-        metaTitle: 'Carer Medical Certificates from $9.70 | Onya Health',
-        metaDescription: 'Online carer leave certificates from $9.70 with secure doctor-reviewed outcomes and instant digital delivery if approved.',
+        metaTitle: 'Carer Medical Certificates | $9.70 for 1 Day | Onya Health',
+        metaDescription: 'Online carer leave certificates at $9.70 for 1 day with secure doctor-reviewed outcomes and instant digital delivery if approved.',
     },
     {
         key: 'work',
@@ -96,8 +96,8 @@ const USE_CASES: UseCaseConfig[] = [
         cardCta: 'Book now',
         cardImageClass: 'object-[66%_42%]',
         purposeParam: 'work',
-        metaTitle: 'Work Medical Certificates from $9.70 | Onya Health',
-        metaDescription: 'Online work medical certificates from $9.70 with doctor review and instant digital delivery if approved.',
+        metaTitle: 'Work Medical Certificates | $9.70 for 1 Day | Onya Health',
+        metaDescription: 'Online work medical certificates at $9.70 for 1 day with doctor review and instant digital delivery if approved.',
     },
 ];
 
@@ -113,9 +113,7 @@ function getUseCaseByPath(pathname: string): UseCaseConfig {
 export default function MedicalCertificateUseCasePage() {
     const pathname = window.location.pathname.toLowerCase();
     const currentUseCase = useMemo(() => getUseCaseByPath(pathname), [pathname]);
-    const bookingHref = currentUseCase.purposeParam
-        ? `/doctor?view=booking&purpose=${currentUseCase.purposeParam}`
-        : '/doctor?view=booking';
+    const bookingHref = '/doctor';
 
     useEffect(() => {
         document.title = currentUseCase.metaTitle;
@@ -186,7 +184,7 @@ export default function MedicalCertificateUseCasePage() {
                             </span>
                         </div>
                         <p className="mx-auto mt-2 max-w-2xl text-xs font-medium text-white/90">
-                            Medical certificates from $9 delivered instantly online (from $9.70 for 1 day).
+                            Medical certificates from $9 delivered instantly online ($9.70 for 1 day).
                         </p>
                     </div>
                 </section>

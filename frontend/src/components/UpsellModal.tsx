@@ -44,7 +44,7 @@ export function UpsellModal() {
                             <Star className="text-sunlight-300 fill-sunlight-300" size={18} />
                             <h4 className="font-bold text-lg text-text-primary">{upsell.recommended.title}</h4>
                         </div>
-                        <p className="price-numerals text-text-primary">{unlimitedPriceText}</p>
+                        <p className="text-text-primary font-medium">{unlimitedPriceText}</p>
                     </div>
 
                     <ul className="space-y-2 mb-6">
@@ -72,7 +72,7 @@ export function UpsellModal() {
                     <div className="flex justify-between items-start mb-4">
                         <div>
                             <h4 className="font-bold text-text-primary">{upsell.oneoff.title}</h4>
-                            <p className="price-numerals text-sm text-text-secondary">{oneOffPriceText}</p>
+                            <p className="text-sm text-text-secondary">{oneOffPriceText}</p>
                         </div>
                     </div>
 

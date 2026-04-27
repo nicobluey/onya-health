@@ -112,13 +112,6 @@
     --lw-my: 0px;
   }
 
-  .price-numerals {
-    font-variant-numeric: tabular-nums lining-nums;
-    font-feature-settings: "tnum" 1, "lnum" 1;
-    font-weight: 300;
-    letter-spacing: -0.015em;
-  }
-
   .lw-magnetic.lw-magnetic-ready {
     transform: none;
   }

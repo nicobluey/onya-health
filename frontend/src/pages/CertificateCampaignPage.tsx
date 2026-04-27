@@ -96,7 +96,7 @@ const LANDING_CONFIGS: Record<string, LandingConfig> = {
         purposeParam: 'work',
         metaTitle: 'Work Medical Certificate Online | OnyaHealth',
         metaDescription:
-            'Work medical certificates from $9 delivered instantly online (from $9.70 for 1 day). Anything above one day is $15 with Australian doctor review.',
+            'Work medical certificates from $9 delivered instantly online ($9.70 for 1 day). Anything above one day is $15 with Australian doctor review.',
         heroHeadline: 'Online Work Medical Certificates Reviewed by Australian Doctors',
         heroSubheadline:
             'Fast, secure medical certificates for sick leave and work absences without needing to visit a clinic.',
@@ -157,7 +157,7 @@ const LANDING_CONFIGS: Record<string, LandingConfig> = {
         purposeParam: 'university',
         metaTitle: 'University Medical Certificate Online | OnyaHealth',
         metaDescription:
-            'University medical certificates from $9 delivered instantly online (from $9.70 for 1 day). Anything above one day is $15 with doctor review.',
+            'University medical certificates from $9 delivered instantly online ($9.70 for 1 day). Anything above one day is $15 with doctor review.',
         heroHeadline: 'Online University Medical Certificates for Illness or Assessment Impact',
         heroSubheadline:
             'Fast, secure medical certificates for classes, exams, and assessment-related illness.',
@@ -218,7 +218,7 @@ const LANDING_CONFIGS: Record<string, LandingConfig> = {
         purposeParam: 'carers-leave',
         metaTitle: "Carer's Leave Certificate Online | OnyaHealth",
         metaDescription:
-            "Carer's leave certificates from $9 delivered instantly online (from $9.70 for 1 day). Anything above one day is $15 with Australian doctor review.",
+            "Carer's leave certificates from $9 delivered instantly online ($9.70 for 1 day). Anything above one day is $15 with Australian doctor review.",
         heroHeadline: "Online Carer's Leave Certificates Reviewed by Australian Doctors",
         heroSubheadline:
             'Fast, secure certificates when you need leave to care for someone under your care.',
@@ -501,7 +501,7 @@ function PricingSection() {
                         <h2 className="mt-2 text-3xl font-bold text-text-primary">Simple pricing that updates by duration</h2>
                     </div>
                     <p className="max-w-xl text-sm leading-relaxed text-text-secondary md:text-base">
-                        Start from $9.70, pay $15 for anything above one day, or choose All Access at $19/month.
+                        $9.70 for 1 day, $15 for anything above one day, or choose All Access at $19/month.
                     </p>
                 </div>
                 <div className="mt-8 grid gap-4 md:grid-cols-3">
@@ -510,7 +510,7 @@ function PricingSection() {
                             <p className="inline-flex rounded-full border border-border bg-surface px-3 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-text-secondary">
                                 {tier.label}
                             </p>
-                            <h3 className="price-numerals mt-4 text-xl text-text-primary">{tier.title}</h3>
+                            <h3 className="mt-4 text-xl font-semibold text-text-primary">{tier.title}</h3>
                             <p className="mt-3 text-sm leading-relaxed text-text-secondary">{tier.note}</p>
                         </article>
                     ))}
@@ -837,7 +837,7 @@ export default function CertificateCampaignPage() {
         [pathname]
     );
     const selectedOption = CERTIFICATE_OPTIONS.find((item) => item.key === config.purposeParam) || CERTIFICATE_OPTIONS[0];
-    const bookingHref = `/doctor?view=booking&purpose=${config.purposeParam}`;
+    const bookingHref = '/doctor';
 
     useEffect(() => {
         document.title = config.metaTitle;
