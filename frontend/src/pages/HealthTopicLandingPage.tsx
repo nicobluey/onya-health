@@ -536,7 +536,7 @@ function buildArticleSchema(topic: HealthTopic, guide: BucketGuide, canonicalUrl
 export default function HealthTopicLandingPage() {
     const pathname = window.location.pathname;
     const currentTopic = useMemo(() => getTopicByPath(pathname), [pathname]);
-    const bookingHref = '/doctor';
+    const bookingHref = '/doctor#book';
     const canonicalUrl = currentTopic
         ? `${SITE_URL}/health/${currentTopic.slug}`
         : `${SITE_URL}/health`;

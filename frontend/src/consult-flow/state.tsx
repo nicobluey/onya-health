@@ -66,6 +66,11 @@ function getInitialViewFromSearch(): 'landing' | 'booking' {
         return 'booking';
     }
 
+    const hash = (window.location.hash || '').trim().toLowerCase();
+    if (hash.startsWith('#book')) {
+        return 'booking';
+    }
+
     const params = new URLSearchParams(window.location.search);
     const view = (params.get('view') || '').trim().toLowerCase();
     return view === 'booking' ? 'booking' : 'landing';
@@ -106,6 +111,26 @@ export function BookingProvider({ children }: { children: ReactNode }) {
 
     const updateState = (updates: Partial<BookingState>) => {
         setState(prev => ({ ...prev, ...updates }));
+    };
+
+    const goHome = () => {
+        const normalizedPath = window.location.pathname.toLowerCase().replace(/\/+$/, '');
+        const hash = (window.location.hash || '').trim().toLowerCase();
+
+        if (normalizedPath === '/doctor' && hash.startsWith('#book')) {
+            const params = new URLSearchParams(window.location.search);
+            params.delete('view');
+            const cleaned = params.toString();
+            window.location.href = cleaned ? `/doctor?${cleaned}` : '/doctor';
+            return;
+        }
+
+        updateState({
+            view: 'landing',
+            step: preselectedPurpose ? 'compliance' : 'purpose',
+            purpose: preselectedPurpose,
+            showUpsell: false
+        });
     };
 
     const nextStep = () => {
@@ -156,12 +181,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
         prevStep,
         goToStep,
         startBooking: () => updateState({ view: 'booking' }),
-        goHome: () => updateState({
-            view: 'landing',
-            step: preselectedPurpose ? 'compliance' : 'purpose',
-            purpose: preselectedPurpose,
-            showUpsell: false
-        })
+        goHome
     };
 
     const { Provider } = BookingContext;

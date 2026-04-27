@@ -25,6 +25,7 @@ import {
 } from '../pages';
 
 const MED_CERT_LANDING_PATHS = new Set([
+  '/doctor',
   '/student',
   '/caretaker',
   '/ca',
@@ -41,7 +42,10 @@ export function AppRouter() {
   const pathname = window.location.pathname.toLowerCase();
 
   if (pathname === '/doctor/booking' || pathname === '/doctor/booking/') {
-    window.location.replace('/doctor');
+    const params = new URLSearchParams(window.location.search);
+    params.delete('view');
+    const cleaned = params.toString();
+    window.location.replace(cleaned ? `/doctor?${cleaned}#book` : '/doctor#book');
     return null;
   }
 
@@ -61,12 +65,22 @@ export function AppRouter() {
 
   if (pathname === '/doctor') {
     const params = new URLSearchParams(window.location.search);
+    const viewParam = (params.get('view') || '').trim().toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    const shouldOpenBooking = hash.startsWith('#book') || viewParam === 'booking';
+
     if (params.has('view')) {
       params.delete('view');
       const cleaned = params.toString();
-      window.history.replaceState({}, '', cleaned ? `/doctor?${cleaned}` : '/doctor');
+      const targetBase = cleaned ? `/doctor?${cleaned}` : '/doctor';
+      window.history.replaceState({}, '', shouldOpenBooking ? `${targetBase}#book` : targetBase);
     }
-    return renderServiceFlow('doctor');
+
+    if (shouldOpenBooking) {
+      return renderServiceFlow('doctor');
+    }
+
+    return <MedicalCertificateUseCasePage />;
   }
 
   if (pathname === '/blog') {
