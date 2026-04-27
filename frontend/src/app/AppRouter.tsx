@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import {
   BookingProvider,
   DesktopFlowView,
@@ -39,6 +40,20 @@ const MED_CERT_LANDING_PATHS = new Set([
 ]);
 
 export function AppRouter() {
+  const [, setLocationTick] = useState(0);
+
+  useEffect(() => {
+    const onLocationChange = () => setLocationTick((value) => value + 1);
+
+    window.addEventListener('hashchange', onLocationChange);
+    window.addEventListener('popstate', onLocationChange);
+
+    return () => {
+      window.removeEventListener('hashchange', onLocationChange);
+      window.removeEventListener('popstate', onLocationChange);
+    };
+  }, []);
+
   const pathname = window.location.pathname.toLowerCase();
 
   if (pathname === '/doctor/booking' || pathname === '/doctor/booking/') {
