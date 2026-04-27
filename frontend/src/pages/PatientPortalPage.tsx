@@ -1,4 +1,4 @@
-import { type CSSProperties, type FormEvent, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
     ArrowLeft,
     CalendarDays,
@@ -21,6 +21,11 @@ import {
 import { fetchApiJson, getApiBase } from '../lib/api';
 import { warmCheckoutPath } from '../lib/performanceWarmup';
 import HomeTab from '../patient-portal/home/HomeTab';
+import OnboardingFlow from '../weight-loss-reset/components/OnboardingFlow';
+import WeightLossResetDashboard from '../weight-loss-reset/components/WeightLossResetDashboard';
+import { generateMealPlan, withRecalculatedTotals, swapMealInPlan } from '../weight-loss-reset/mealPlanning';
+import { loadWeightLossRecipes } from '../weight-loss-reset/recipeData';
+import { useWeightLossResetState } from '../weight-loss-reset/useWeightLossResetState';
 import {
     type CheckoutSetupContext,
     type ConsultOption,
@@ -54,6 +59,7 @@ import {
     sectionCardClassName,
     statusLabel,
 } from '../patient-portal/model';
+import type { MealType, OnboardingAnswers, Recipe } from '../weight-loss-reset/types';
 
 function PortalBackdropArt() {
     return (
@@ -944,8 +950,31 @@ function CheckoutAccountSetupScreen({
 }
 
 export default function PatientPortalPage() {
+    const initialSearchParams = useMemo(() => new URLSearchParams(window.location.search), []);
+    const requestedProgram = initialSearchParams.get('program')?.toLowerCase() || '';
+    const openWeightLossFromRoute = requestedProgram === 'weight-loss-reset' || requestedProgram === 'nutritionist';
     const [mainTab, setMainTab] = useState<MainTab>('home');
+    const {
+        state: weightLossResetState,
+        cardState: weightLossResetCardState,
+        latestWeight: latestWeightFromWeightLoss,
+        progressPercent: weightLossProgressPercent,
+        updateOnboardingAnswers,
+        saveOnboardingStep,
+        completeOnboarding,
+        markBookingComplete,
+        setMealPlan,
+        replaceMealPlan,
+        addWeightLog,
+        addMessage,
+        toggleGroceryItem,
+    } = useWeightLossResetState();
+    const [weightLossRecipes, setWeightLossRecipes] = useState<Recipe[]>([]);
+    const [weightLossRecipeError, setWeightLossRecipeError] = useState('');
+    const [weightLossRecipesReady, setWeightLossRecipesReady] = useState(false);
+
     const [portalScreen, setPortalScreen] = useState<PortalScreen>('main');
+    const [programRouteHandled, setProgramRouteHandled] = useState(false);
     const [lastMainTab, setLastMainTab] = useState<MainTab>('home');
     const [selectedConsultOptionId, setSelectedConsultOptionId] = useState<ConsultOptionId | null>(null);
     const [loading, setLoading] = useState(true);
@@ -980,6 +1009,47 @@ export default function PatientPortalPage() {
         if (!portalDataReady) return;
         window.localStorage.setItem(profileStorageKey, JSON.stringify(portalData));
     }, [portalDataReady, portalData, profileStorageKey]);
+
+    useEffect(() => {
+        let disposed = false;
+        loadWeightLossRecipes()
+            .then((recipes) => {
+                if (disposed) return;
+                setWeightLossRecipes(recipes);
+                setWeightLossRecipeError('');
+                setWeightLossRecipesReady(true);
+            })
+            .catch(() => {
+                if (disposed) return;
+                setWeightLossRecipeError('Recipe dataset could not be loaded. A fallback plan will still be available.');
+                setWeightLossRecipesReady(true);
+            });
+
+        return () => {
+            disposed = true;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!openWeightLossFromRoute || programRouteHandled) return;
+        setMainTab('home');
+        setPortalScreen(
+            weightLossResetState.dietitianBookingComplete && weightLossResetState.onboardingComplete
+                ? 'weight-loss-reset'
+                : 'weight-loss-onboarding'
+        );
+        setProgramRouteHandled(true);
+
+        const nextUrl = new URL(window.location.href);
+        nextUrl.searchParams.delete('program');
+        const search = nextUrl.searchParams.toString();
+        window.history.replaceState({}, '', `${nextUrl.pathname}${search ? `?${search}` : ''}${nextUrl.hash}`);
+    }, [
+        openWeightLossFromRoute,
+        programRouteHandled,
+        weightLossResetState.dietitianBookingComplete,
+        weightLossResetState.onboardingComplete,
+    ]);
 
     useEffect(() => {
         let disposed = false;
@@ -1058,6 +1128,28 @@ export default function PatientPortalPage() {
 
             const activeToken = token || window.localStorage.getItem('onya_patient_token') || '';
             if (!activeToken) {
+                if (
+                    openWeightLossFromRoute ||
+                    weightLossResetState.onboardingStep > 0 ||
+                    weightLossResetState.onboardingComplete ||
+                    weightLossResetState.dietitianBookingComplete
+                ) {
+                    const preferredName = weightLossResetState.onboardingAnswers.firstName?.trim() || 'Patient';
+                    const preferredEmail = window.localStorage.getItem('onya_patient_email') || 'patient@demo.local';
+                    setPatient({
+                        fullName: preferredName,
+                        email: preferredEmail,
+                    });
+                    setRequests([]);
+                    setBilling(null);
+                    setBillingError('');
+                    setBillingActionState('idle');
+                    if (!silent) {
+                        setLoading(false);
+                        setLoadError('');
+                    }
+                    return;
+                }
                 window.location.href = '/patient-login';
                 return;
             }
@@ -1138,7 +1230,15 @@ export default function PatientPortalPage() {
             disposed = true;
             window.clearInterval(pollTimer);
         };
-    }, [token, checkoutSetupContext]);
+    }, [
+        token,
+        checkoutSetupContext,
+        openWeightLossFromRoute,
+        weightLossResetState.onboardingAnswers.firstName,
+        weightLossResetState.onboardingStep,
+        weightLossResetState.onboardingComplete,
+        weightLossResetState.dietitianBookingComplete,
+    ]);
 
     const firstNameValue = useMemo(() => firstName(patient.fullName || ''), [patient.fullName]);
     const latestRequest = useMemo(() => (requests.length > 0 ? requests[0] : null), [requests]);
@@ -1260,6 +1360,78 @@ export default function PatientPortalPage() {
         }
     };
 
+    const openWeightLossOnboarding = () => {
+        setLastMainTab(mainTab);
+        setMainTab('home');
+        setPortalScreen('weight-loss-onboarding');
+    };
+
+    const openWeightLossDashboard = () => {
+        setLastMainTab(mainTab);
+        setMainTab('home');
+        if (!weightLossResetState.mealPlan && weightLossResetState.onboardingComplete && weightLossResetState.dietitianBookingComplete) {
+            generateAndStoreWeightLossMealPlan(weightLossResetState.onboardingAnswers);
+        }
+        setPortalScreen('weight-loss-reset');
+    };
+
+    const generateAndStoreWeightLossMealPlan = useCallback(
+        (answers = weightLossResetState.onboardingAnswers) => {
+            if (!weightLossRecipesReady || weightLossRecipes.length === 0) return;
+            const generated = generateMealPlan({ recipes: weightLossRecipes, answers });
+            setMealPlan(generated.mealPlan);
+        },
+        [setMealPlan, weightLossRecipes, weightLossRecipesReady, weightLossResetState.onboardingAnswers]
+    );
+
+    const handleWeightLossOnboardingProgress = useCallback(
+        (answers: OnboardingAnswers, step: number) => {
+            updateOnboardingAnswers(answers);
+            saveOnboardingStep(step);
+        },
+        [saveOnboardingStep, updateOnboardingAnswers]
+    );
+
+    const handleWeightLossBookingComplete = useCallback(
+        async (answers: OnboardingAnswers) => {
+            updateOnboardingAnswers(answers);
+            completeOnboarding();
+            markBookingComplete();
+
+            if (weightLossRecipesReady && weightLossRecipes.length > 0) {
+                const generated = generateMealPlan({ recipes: weightLossRecipes, answers });
+                setMealPlan(generated.mealPlan);
+                return;
+            }
+
+            const fallbackRecipes = await loadWeightLossRecipes();
+            const generated = generateMealPlan({ recipes: fallbackRecipes, answers });
+            setMealPlan(generated.mealPlan);
+        },
+        [
+            completeOnboarding,
+            markBookingComplete,
+            setMealPlan,
+            updateOnboardingAnswers,
+            weightLossRecipes,
+            weightLossRecipesReady,
+        ]
+    );
+
+    const handleWeightLossSwapMeal = useCallback(
+        (dayIndex: number, mealType: MealType, recipeId: string) => {
+            if (!weightLossResetState.mealPlan) return;
+            const swapped = swapMealInPlan({
+                mealPlan: weightLossResetState.mealPlan,
+                dayIndex,
+                mealType,
+                replacementRecipeId: recipeId,
+            });
+            replaceMealPlan(withRecalculatedTotals(swapped, new Map(weightLossRecipes.map((recipe) => [recipe.id, recipe]))));
+        },
+        [replaceMealPlan, weightLossRecipes, weightLossResetState.mealPlan]
+    );
+
     const openConsultOption = (optionId: ConsultOptionId) => {
         const option = CONSULT_OPTIONS.find((item) => item.id === optionId);
         if (!option) return;
@@ -1274,6 +1446,16 @@ export default function PatientPortalPage() {
                 window.location.href = '/doctor';
                 return;
             }
+
+            if (option.id === 'weight-loss') {
+                if (weightLossResetState.dietitianBookingComplete && weightLossResetState.onboardingComplete) {
+                    openWeightLossDashboard();
+                    return;
+                }
+                openWeightLossOnboarding();
+                return;
+            }
+
             setPortalScreen('call-prep');
             return;
         }
@@ -1471,6 +1653,44 @@ export default function PatientPortalPage() {
     };
 
     const renderPortalContent = (mode: LayoutMode) => {
+        if (portalScreen === 'weight-loss-onboarding') {
+            return (
+                <OnboardingFlow
+                    initialAnswers={weightLossResetState.onboardingAnswers}
+                    initialStep={weightLossResetState.onboardingStep}
+                    onSaveProgress={handleWeightLossOnboardingProgress}
+                    onMarkOnboardingComplete={completeOnboarding}
+                    onBookingComplete={handleWeightLossBookingComplete}
+                    onOpenDashboard={openWeightLossDashboard}
+                />
+            );
+        }
+
+        if (portalScreen === 'weight-loss-reset') {
+            return (
+                <div className="space-y-3">
+                    {weightLossRecipeError && (
+                        <p className="rounded-xl border border-[#dbeeff] bg-[#f8fbff] px-3 py-2 text-xs text-[#475569]">
+                            {weightLossRecipeError}
+                        </p>
+                    )}
+                    <WeightLossResetDashboard
+                        answers={weightLossResetState.onboardingAnswers}
+                        mealPlan={weightLossResetState.mealPlan}
+                        recipes={weightLossRecipes}
+                        weightLogs={weightLossResetState.weightLogs}
+                        messages={weightLossResetState.messages}
+                        groceryCheckedItems={weightLossResetState.groceryCheckedItems}
+                        onRegeneratePlan={() => generateAndStoreWeightLossMealPlan(weightLossResetState.onboardingAnswers)}
+                        onSwapMeal={handleWeightLossSwapMeal}
+                        onAddWeightLog={addWeightLog}
+                        onAddMessage={addMessage}
+                        onToggleGroceryItem={toggleGroceryItem}
+                    />
+                </div>
+            );
+        }
+
         if (portalScreen === 'call-prep') {
             return <CallPrepScreen onBack={closeOverlayScreen} onStartCall={startCallAndQueue} />;
         }
@@ -1504,6 +1724,15 @@ export default function PatientPortalPage() {
                     onOpenQueue={openQueuedScreen}
                     onDownloadCertificate={downloadCertificatePdf}
                     onGoToTab={setTab}
+                    weightLossResetCard={{
+                        cardState: weightLossResetCardState,
+                        currentWeight: latestWeightFromWeightLoss,
+                        goalWeight: weightLossResetState.onboardingAnswers.goalWeightKg,
+                        progressPercent: weightLossProgressPercent,
+                        onStart: openWeightLossOnboarding,
+                        onContinueBooking: openWeightLossOnboarding,
+                        onOpen: openWeightLossDashboard,
+                    }}
                 />
             );
         }

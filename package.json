@@ -17,7 +17,8 @@
     "images:landing:dry": "node scripts/generate-landing-images.mjs --dry-run",
     "images:chatgpt": "node scripts/generate-landing-images.mjs",
     "images:webp": "node scripts/convert-public-images-to-webp.mjs",
-    "sitemap:generate": "node scripts/generate-sitemap.mjs"
+    "sitemap:generate": "node scripts/generate-sitemap.mjs",
+    "nutrition:data": "node scripts/generate-weight-loss-recipes.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",

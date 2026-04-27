@@ -9,7 +9,13 @@
 } from 'lucide-react';
 
 export type MainTab = 'home' | 'consult' | 'account';
-export type PortalScreen = 'main' | 'call-prep' | 'queued' | 'consult-coming-soon';
+export type PortalScreen =
+  | 'main'
+  | 'call-prep'
+  | 'queued'
+  | 'consult-coming-soon'
+  | 'weight-loss-onboarding'
+  | 'weight-loss-reset';
 export type RecordTab = 'medical-history' | 'allergies' | 'medications';
 export type LayoutMode = 'desktop' | 'mobile';
 
@@ -149,11 +155,11 @@ export const CONSULT_OPTIONS: ConsultOption[] = [
   },
   {
     id: 'weight-loss',
-    title: 'Weight Loss',
-    subtitle: 'Start or continue your weight support plan',
+    title: 'Weight Loss Reset',
+    subtitle: 'Dietitian-supported plan with personalised meals and progress support',
     icon: Scale,
-    status: 'coming-soon',
-    badge: 'COMING SOON',
+    status: 'available',
+    badge: 'LIVE',
   },
   {
     id: 'psychology',
@@ -395,5 +401,4 @@ export function firstName(fullName: string) {
 export function sectionCardClassName(extraClassName = '') {
   return `rounded-3xl border border-border bg-white shadow-[0_24px_42px_-34px_rgba(15,23,42,0.24)] ${extraClassName}`.trim();
 }
-
 

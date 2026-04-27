@@ -31,6 +31,8 @@ import {
     queueStageIndex,
     statusLabel,
 } from '../model';
+import PatientDashboardWeightLossCard from '../../weight-loss-reset/components/PatientDashboardWeightLossCard';
+import type { WeightLossResetCardState } from '../../weight-loss-reset/types';
 
 const RECORD_TAB_META: Record<
     RecordTab,
@@ -777,6 +779,7 @@ export default function HomeTab({
     onOpenQueue,
     onDownloadCertificate,
     onGoToTab,
+    weightLossResetCard,
 }: {
     mode: LayoutMode;
     firstNameValue: string;
@@ -792,6 +795,15 @@ export default function HomeTab({
     onOpenQueue: () => void;
     onDownloadCertificate: (request: PortalRequest) => void;
     onGoToTab: (tab: Exclude<MainTab, 'home'>) => void;
+    weightLossResetCard: {
+        cardState: WeightLossResetCardState;
+        currentWeight?: number;
+        goalWeight?: number;
+        progressPercent: number;
+        onStart: () => void;
+        onContinueBooking: () => void;
+        onOpen: () => void;
+    };
 }) {
     const desktop = mode === 'desktop';
 
@@ -799,6 +811,16 @@ export default function HomeTab({
         return (
             <section className="space-y-6">
                 <HomeHero firstNameValue={firstNameValue} requestCount={requests.length} onGoToTab={onGoToTab} />
+                <PatientDashboardWeightLossCard
+                    cardState={weightLossResetCard.cardState}
+                    firstName={firstNameValue}
+                    currentWeight={weightLossResetCard.currentWeight}
+                    goalWeight={weightLossResetCard.goalWeight}
+                    progressPercent={weightLossResetCard.progressPercent}
+                    onStart={weightLossResetCard.onStart}
+                    onContinueBooking={weightLossResetCard.onContinueBooking}
+                    onOpen={weightLossResetCard.onOpen}
+                />
 
                 <div className="grid gap-6 xl:grid-cols-[1.65fr_1fr]">
                     <div className="space-y-6">
@@ -822,6 +844,16 @@ export default function HomeTab({
     return (
         <section className="space-y-5">
             <HomeHero firstNameValue={firstNameValue} requestCount={requests.length} onGoToTab={onGoToTab} />
+            <PatientDashboardWeightLossCard
+                cardState={weightLossResetCard.cardState}
+                firstName={firstNameValue}
+                currentWeight={weightLossResetCard.currentWeight}
+                goalWeight={weightLossResetCard.goalWeight}
+                progressPercent={weightLossResetCard.progressPercent}
+                onStart={weightLossResetCard.onStart}
+                onContinueBooking={weightLossResetCard.onContinueBooking}
+                onOpen={weightLossResetCard.onOpen}
+            />
             <QueueStatusCard request={queuedRequest} onOpenQueue={onOpenQueue} />
             <PreviousConsultQueue requests={requests} onDownloadCertificate={onDownloadCertificate} />
             <MedicalRecordsSection

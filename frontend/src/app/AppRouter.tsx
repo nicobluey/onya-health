@@ -151,6 +151,16 @@ export function AppRouter() {
     return <CertificateVerifyPage />;
   }
 
+  if (
+    pathname === '/nutritionist' ||
+    pathname === '/nutritionist/' ||
+    pathname === '/weight-loss-reset' ||
+    pathname === '/weight-loss-reset/'
+  ) {
+    window.location.replace('/patient?program=weight-loss-reset');
+    return null;
+  }
+
   if (pathname === '/patient' || pathname.startsWith('/patient/')) {
     return <PatientPortalPage />;
   }

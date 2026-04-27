@@ -145,7 +145,7 @@ export default function HomePage() {
                     </p>
                     <div className="relative z-10 grid gap-6 md:grid-cols-3 items-stretch">
                         {SERVICE_LIST.map((service) => {
-                            const isComingSoon = service.slug === 'nutritionist' || service.slug === 'psychologist';
+                            const isComingSoon = service.slug === 'psychologist';
 
                             return (
                                 <article
