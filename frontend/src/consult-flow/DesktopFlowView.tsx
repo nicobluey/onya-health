@@ -220,7 +220,7 @@ export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
                             &larr; Back to Home
                         </button>
                         <Stepper currentStep={step} showPricing={service.slug === 'doctor'} />
-                        <div className="bg-white rounded-3xl shadow-xl border border-border p-10 min-h-[500px] transition-all relative overflow-hidden">
+                        <div className="bg-white rounded-3xl shadow-xl border border-border p-10 min-h-[500px] transition-all relative overflow-visible">
                             <StepRenderer />
                         </div>
                     </div>

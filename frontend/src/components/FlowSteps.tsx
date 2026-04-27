@@ -376,7 +376,7 @@ export const DatesStep = () => {
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: -6 }}
                                     transition={{ duration: 0.16 }}
-                                    className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-border bg-white shadow-lg"
+                                    className="relative z-40 mt-2 max-h-72 w-full overflow-y-auto rounded-xl border border-border bg-white shadow-lg"
                                     role="listbox"
                                     aria-label="Certificate duration options"
                                 >

@@ -209,7 +209,7 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
                 </main>
             ) : (
                 <main className="flex-1 px-4 py-6 bg-white">
-                    <div className="bg-white rounded-2xl shadow-sm border border-border p-5 mb-8">
+                    <div className="bg-white rounded-2xl shadow-sm border border-border p-5 mb-8 relative overflow-visible">
                         <StepRenderer />
                     </div>
                     {/* Trust Chips Mobile */}
