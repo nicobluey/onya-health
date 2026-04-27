@@ -1,7 +1,8 @@
 import type { OnboardingAnswers } from './types';
 
 export const WEIGHT_LOSS_RESET_PROGRAM_NAME = 'Weight Loss Reset';
-export const WEIGHT_LOSS_RESET_PRICE_COPY = 'Unlimited dietitian support from $7/week';
+export const WEIGHT_LOSS_RESET_PRICE_COPY = 'Unlimited dietitian support from $75/week';
+export const WEIGHT_LOSS_RESET_MIN_PLAN_WEEKS = 8;
 export const FELICITY_ID = 'felicity';
 
 const configuredCalendly = String(import.meta.env.VITE_FELICITY_CALENDLY_URL || '').trim();
@@ -97,4 +98,3 @@ export const PREFERRED_MEAL_STYLE_OPTIONS = [
 ] as const;
 
 export const FALLBACK_RECIPE_IMAGE_URL = '/nutrionist.webp';
-

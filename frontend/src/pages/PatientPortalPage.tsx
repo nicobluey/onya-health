@@ -1,4 +1,4 @@
-import { type CSSProperties, type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ArrowLeft,
     CalendarDays,
@@ -972,6 +972,9 @@ export default function PatientPortalPage() {
     const [weightLossRecipes, setWeightLossRecipes] = useState<Recipe[]>([]);
     const [weightLossRecipeError, setWeightLossRecipeError] = useState('');
     const [weightLossRecipesReady, setWeightLossRecipesReady] = useState(false);
+    const [weightLossRecipesLoading, setWeightLossRecipesLoading] = useState(false);
+    const weightLossRecipesPromiseRef = useRef<Promise<Recipe[]> | null>(null);
+    const weightLossStateRef = useRef(weightLossResetState);
 
     const [portalScreen, setPortalScreen] = useState<PortalScreen>('main');
     const [programRouteHandled, setProgramRouteHandled] = useState(false);
@@ -1011,24 +1014,52 @@ export default function PatientPortalPage() {
     }, [portalDataReady, portalData, profileStorageKey]);
 
     useEffect(() => {
-        let disposed = false;
-        loadWeightLossRecipes()
+        weightLossStateRef.current = weightLossResetState;
+    }, [weightLossResetState]);
+
+    const ensureWeightLossRecipesLoaded = useCallback(async () => {
+        if (weightLossRecipesReady && weightLossRecipes.length > 0) {
+            return weightLossRecipes;
+        }
+        if (weightLossRecipesPromiseRef.current) {
+            return weightLossRecipesPromiseRef.current;
+        }
+
+        setWeightLossRecipesLoading(true);
+        const promise = loadWeightLossRecipes()
             .then((recipes) => {
-                if (disposed) return;
                 setWeightLossRecipes(recipes);
                 setWeightLossRecipeError('');
                 setWeightLossRecipesReady(true);
+                return recipes;
             })
             .catch(() => {
-                if (disposed) return;
                 setWeightLossRecipeError('Recipe dataset could not be loaded. A fallback plan will still be available.');
                 setWeightLossRecipesReady(true);
+                return [] as Recipe[];
+            })
+            .finally(() => {
+                setWeightLossRecipesLoading(false);
+                weightLossRecipesPromiseRef.current = null;
             });
 
-        return () => {
-            disposed = true;
-        };
-    }, []);
+        weightLossRecipesPromiseRef.current = promise;
+        return promise;
+    }, [weightLossRecipes, weightLossRecipesReady]);
+
+    useEffect(() => {
+        if (weightLossRecipesReady || weightLossRecipesLoading) return;
+        const needsWeightLossData =
+            openWeightLossFromRoute || portalScreen === 'weight-loss-onboarding' || portalScreen === 'weight-loss-reset';
+        if (!needsWeightLossData) return;
+        void ensureWeightLossRecipesLoaded();
+    }, [
+        ensureWeightLossRecipesLoaded,
+        openWeightLossFromRoute,
+        portalScreen,
+        weightLossRecipesLoading,
+        weightLossRecipesReady,
+    ]);
 
     useEffect(() => {
         if (!openWeightLossFromRoute || programRouteHandled) return;
@@ -1128,13 +1159,14 @@ export default function PatientPortalPage() {
 
             const activeToken = token || window.localStorage.getItem('onya_patient_token') || '';
             if (!activeToken) {
+                const currentWeightLossState = weightLossStateRef.current;
                 if (
                     openWeightLossFromRoute ||
-                    weightLossResetState.onboardingStep > 0 ||
-                    weightLossResetState.onboardingComplete ||
-                    weightLossResetState.dietitianBookingComplete
+                    currentWeightLossState.onboardingStep > 0 ||
+                    currentWeightLossState.onboardingComplete ||
+                    currentWeightLossState.dietitianBookingComplete
                 ) {
-                    const preferredName = weightLossResetState.onboardingAnswers.firstName?.trim() || 'Patient';
+                    const preferredName = currentWeightLossState.onboardingAnswers.firstName?.trim() || 'Patient';
                     const preferredEmail = window.localStorage.getItem('onya_patient_email') || 'patient@demo.local';
                     setPatient({
                         fullName: preferredName,
@@ -1230,15 +1262,7 @@ export default function PatientPortalPage() {
             disposed = true;
             window.clearInterval(pollTimer);
         };
-    }, [
-        token,
-        checkoutSetupContext,
-        openWeightLossFromRoute,
-        weightLossResetState.onboardingAnswers.firstName,
-        weightLossResetState.onboardingStep,
-        weightLossResetState.onboardingComplete,
-        weightLossResetState.dietitianBookingComplete,
-    ]);
+    }, [token, checkoutSetupContext, openWeightLossFromRoute]);
 
     const firstNameValue = useMemo(() => firstName(patient.fullName || ''), [patient.fullName]);
     const latestRequest = useMemo(() => (requests.length > 0 ? requests[0] : null), [requests]);
@@ -1370,18 +1394,19 @@ export default function PatientPortalPage() {
         setLastMainTab(mainTab);
         setMainTab('home');
         if (!weightLossResetState.mealPlan && weightLossResetState.onboardingComplete && weightLossResetState.dietitianBookingComplete) {
-            generateAndStoreWeightLossMealPlan(weightLossResetState.onboardingAnswers);
+            void generateAndStoreWeightLossMealPlan(weightLossResetState.onboardingAnswers);
         }
         setPortalScreen('weight-loss-reset');
     };
 
     const generateAndStoreWeightLossMealPlan = useCallback(
-        (answers = weightLossResetState.onboardingAnswers) => {
-            if (!weightLossRecipesReady || weightLossRecipes.length === 0) return;
-            const generated = generateMealPlan({ recipes: weightLossRecipes, answers });
+        async (answers = weightLossStateRef.current.onboardingAnswers) => {
+            const recipes = await ensureWeightLossRecipesLoaded();
+            if (recipes.length === 0) return;
+            const generated = generateMealPlan({ recipes, answers });
             setMealPlan(generated.mealPlan);
         },
-        [setMealPlan, weightLossRecipes, weightLossRecipesReady, weightLossResetState.onboardingAnswers]
+        [ensureWeightLossRecipesLoaded, setMealPlan]
     );
 
     const handleWeightLossOnboardingProgress = useCallback(
@@ -1398,23 +1423,17 @@ export default function PatientPortalPage() {
             completeOnboarding();
             markBookingComplete();
 
-            if (weightLossRecipesReady && weightLossRecipes.length > 0) {
-                const generated = generateMealPlan({ recipes: weightLossRecipes, answers });
-                setMealPlan(generated.mealPlan);
-                return;
-            }
-
-            const fallbackRecipes = await loadWeightLossRecipes();
-            const generated = generateMealPlan({ recipes: fallbackRecipes, answers });
+            const recipes = await ensureWeightLossRecipesLoaded();
+            if (recipes.length === 0) return;
+            const generated = generateMealPlan({ recipes, answers });
             setMealPlan(generated.mealPlan);
         },
         [
             completeOnboarding,
+            ensureWeightLossRecipesLoaded,
             markBookingComplete,
             setMealPlan,
             updateOnboardingAnswers,
-            weightLossRecipes,
-            weightLossRecipesReady,
         ]
     );
 
@@ -1669,6 +1688,11 @@ export default function PatientPortalPage() {
         if (portalScreen === 'weight-loss-reset') {
             return (
                 <div className="space-y-3">
+                    {weightLossRecipesLoading && (
+                        <p className="rounded-xl border border-[#dbe2d9] bg-[#f8faf7] px-3 py-2 text-sm text-[#5f7063]">
+                            Loading meal images and recipes...
+                        </p>
+                    )}
                     {weightLossRecipeError && (
                         <p className="rounded-xl border border-[#dbeeff] bg-[#f8fbff] px-3 py-2 text-xs text-[#475569]">
                             {weightLossRecipeError}
@@ -1681,7 +1705,9 @@ export default function PatientPortalPage() {
                         weightLogs={weightLossResetState.weightLogs}
                         messages={weightLossResetState.messages}
                         groceryCheckedItems={weightLossResetState.groceryCheckedItems}
-                        onRegeneratePlan={() => generateAndStoreWeightLossMealPlan(weightLossResetState.onboardingAnswers)}
+                        onRegeneratePlan={() => {
+                            void generateAndStoreWeightLossMealPlan(weightLossResetState.onboardingAnswers);
+                        }}
                         onSwapMeal={handleWeightLossSwapMeal}
                         onAddWeightLog={addWeightLog}
                         onAddMessage={addMessage}
