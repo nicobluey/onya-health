@@ -24,8 +24,46 @@ import {
   TrustSafetyPage,
 } from '../pages';
 
+const MED_CERT_LANDING_PATHS = new Set([
+  '/doctor',
+  '/student',
+  '/caretaker',
+  '/ca',
+  '/work',
+  '/medical-certificate-doctor',
+  '/medical-certificate-student',
+  '/medical-certificate-caretaker',
+  '/medical-certificate-work',
+  '/medical-certificate-university',
+  '/medical-certificate-carers-leave',
+]);
+
 export function AppRouter() {
   const pathname = window.location.pathname.toLowerCase();
+  const searchParams = new URLSearchParams(window.location.search);
+  const viewParam = searchParams.get('view')?.trim().toLowerCase();
+  const shouldOpenBooking = viewParam === 'booking';
+
+  if (pathname === '/doctor/booking' || pathname === '/doctor/booking/') {
+    searchParams.set('view', 'booking');
+    const nextPath = `/doctor?${searchParams.toString()}`;
+    window.location.replace(nextPath);
+    return null;
+  }
+
+  const renderServiceFlow = (serviceKey: keyof typeof SERVICE_CONFIGS) => {
+    const service = SERVICE_CONFIGS[serviceKey];
+    return (
+      <BookingProvider>
+        <div className="md:hidden">
+          <MobileFlowView service={service} />
+        </div>
+        <div className="hidden md:block">
+          <DesktopFlowView service={service} />
+        </div>
+      </BookingProvider>
+    );
+  };
 
   if (pathname === '/blog') {
     return <BlogIndexPage />;
@@ -68,22 +106,10 @@ export function AppRouter() {
     return <HealthTopicLandingPage />;
   }
 
-  if (pathname === '/doctor') {
-    return <MedicalCertificateUseCasePage />;
-  }
-
-  if (
-    pathname === '/student' ||
-    pathname === '/caretaker' ||
-    pathname === '/ca' ||
-    pathname === '/work' ||
-    pathname === '/medical-certificate-doctor' ||
-    pathname === '/medical-certificate-student' ||
-    pathname === '/medical-certificate-caretaker' ||
-    pathname === '/medical-certificate-work' ||
-    pathname === '/medical-certificate-university' ||
-    pathname === '/medical-certificate-carers-leave'
-  ) {
+  if (MED_CERT_LANDING_PATHS.has(pathname)) {
+    if (shouldOpenBooking) {
+      return renderServiceFlow('doctor');
+    }
     return <MedicalCertificateUseCasePage />;
   }
 
@@ -105,16 +131,5 @@ export function AppRouter() {
     return <HomePage />;
   }
 
-  const service = SERVICE_CONFIGS[serviceSlug];
-
-  return (
-    <BookingProvider>
-      <div className="md:hidden">
-        <MobileFlowView service={service} />
-      </div>
-      <div className="hidden md:block">
-        <DesktopFlowView service={service} />
-      </div>
-    </BookingProvider>
-  );
+  return renderServiceFlow(serviceSlug);
 }

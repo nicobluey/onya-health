@@ -5,6 +5,13 @@ import { COPY } from '../consult-flow/copy';
 import { Button, SelectableCard, Input } from './UI';
 import { AnimatePresence, motion } from 'framer-motion';
 import { getServiceForPath } from '../consult-flow/services';
+import {
+    formatAud,
+    getOneOffCertificateBandLabel,
+    getOneOffCertificatePrice,
+    getOneOffPricingBandLabel,
+    UNLIMITED_MONTHLY_PRICE_AUD,
+} from '../consult-flow/pricing';
 import { fetchApiJson } from '../lib/api';
 import { warmCheckoutPath } from '../lib/performanceWarmup';
 import type { CertificatePurpose, Symptom } from '../types';
@@ -290,6 +297,8 @@ export const DatesStep = () => {
 
     const selectedDuration = durationOptions.find((option) => option.value === durationDays) || durationOptions[0];
     const durationLabel = durationDays > 7 ? 'More than 7 days' : `${durationDays} day${durationDays > 1 ? 's' : ''}`;
+    const estimatedOneOffPrice = getOneOffCertificatePrice(durationDays);
+    const pricingBandLabel = getOneOffPricingBandLabel(durationDays);
 
     const dateToInputValue = (value: Date | null) => {
         const source = value || today;
@@ -405,6 +414,9 @@ export const DatesStep = () => {
                     </p>
                     <p className="text-sm text-text-secondary">
                         Length: {durationLabel}
+                    </p>
+                    <p className="mt-1 text-sm text-text-secondary">
+                        One-off price: <span className="price-numerals text-text-primary">{formatAud(estimatedOneOffPrice)}</span> ({pricingBandLabel})
                     </p>
                 </div>
 
@@ -593,9 +605,10 @@ export const CheckoutStep = () => {
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState('');
     const showCarerUpsell = !isUnlimited;
-    const baseAmount = isUnlimited ? 19 : 25;
+    const baseAmount = isUnlimited ? UNLIMITED_MONTHLY_PRICE_AUD : getOneOffCertificatePrice(durationDays);
     const carerAddonAmount = showCarerUpsell && includeCarerCertificate ? CARER_CERT_UPSELL_DOLLARS : 0;
     const totalAmount = baseAmount + carerAddonAmount;
+    const oneOffLabel = getOneOffCertificateBandLabel(durationDays);
 
     useEffect(() => {
         warmCheckoutPath();
@@ -681,11 +694,12 @@ export const CheckoutStep = () => {
                     <span className="font-medium text-text-primary">
                         {isUnlimited ? "Unlimited Certificates" : "One-off Certificate"}
                     </span>
-                    <span className="font-bold text-text-primary">
+                    <span className="price-numerals text-text-primary">
                         ${baseAmount.toFixed(2)}
                     </span>
                 </div>
                 {isUnlimited && <div className="text-xs text-forest-700 font-medium">Billed monthly</div>}
+                {!isUnlimited && <div className="text-xs text-text-secondary font-medium">{oneOffLabel}</div>}
             </div>
 
             {showCarerUpsell && (
@@ -696,7 +710,7 @@ export const CheckoutStep = () => {
                             <p className="mt-1 text-sm text-text-secondary">
                                 Optional add-on if you need carer leave documentation for this request.
                             </p>
-                            <p className="mt-2 text-sm font-semibold text-text-primary">+${CARER_CERT_UPSELL_DOLLARS.toFixed(2)}</p>
+                            <p className="price-numerals mt-2 text-sm text-text-primary">+${CARER_CERT_UPSELL_DOLLARS.toFixed(2)}</p>
                         </div>
                         <button
                             type="button"
@@ -721,7 +735,7 @@ export const CheckoutStep = () => {
                 <div className="rounded-xl border border-border bg-sand-50 p-4">
                     <div className="flex items-center justify-between text-sm">
                         <span className="text-text-secondary">Total due today</span>
-                        <span className="text-base font-bold text-text-primary">${totalAmount.toFixed(2)}</span>
+                        <span className="price-numerals text-base text-text-primary">${totalAmount.toFixed(2)}</span>
                     </div>
                 </div>
             )}

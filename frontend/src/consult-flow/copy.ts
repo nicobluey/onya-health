@@ -1,7 +1,7 @@
 export const COPY = {
     hero: {
         title: "Medical certificates online, reviewed by Australian-registered doctors.",
-        subtitle: "Complete a short consult from home. If clinically appropriate, your certificate is issued digitally and sent to you.",
+        subtitle: "Start from $9.70 online. If clinically appropriate, your certificate is issued digitally and sent to you.",
         cta: "Book now",
         trust: [
             "Australia-only service",
@@ -89,7 +89,7 @@ export const COPY = {
             },
             oneoff: {
                 title: "One-off Certificate",
-                price: "$25 one-time",
+                price: "From $9.70 one-time",
                 bullets: [
                     "One certificate for this consult",
                     "No ongoing commitment"

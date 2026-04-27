@@ -94,9 +94,13 @@ const STRIPE_PRICE_PRODUCT_MULTI_DAY_ONE_OFF = process.env.STRIPE_PRICE_PRODUCT_
 const STRIPE_PRICE_PRODUCT_MULTI_DAY_RECURRING = process.env.STRIPE_PRICE_PRODUCT_MULTI_DAY_RECURRING || 'prod_U3xTbAyYCjVi3J';
 const CERTIFICATE_TIME_ZONE = process.env.CERTIFICATE_TIME_ZONE || 'Australia/Brisbane';
 
-const STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS || 1121);
-const STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS || 2711);
-const STRIPE_AMOUNT_RECURRING_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_RECURRING_AUD_CENTS || 1917);
+const STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS || 970);
+const STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS || 1500);
+const STRIPE_AMOUNT_RECURRING_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_RECURRING_AUD_CENTS || 1900);
+const STRIPE_MULTI_DAY_MIN_DAYS = Math.max(
+  2,
+  Number(process.env.STRIPE_MULTI_DAY_MIN_DAYS || 2)
+);
 const STRIPE_AMOUNT_CARER_CERT_AUD_CENTS = Math.max(
   0,
   Number(process.env.STRIPE_AMOUNT_CARER_CERT_AUD_CENTS || 1000)
@@ -335,7 +339,7 @@ function stripePricingFromRequest(body) {
     };
   }
 
-  if (durationDays <= 1) {
+  if (durationDays < STRIPE_MULTI_DAY_MIN_DAYS) {
     const baseUnitAmount = STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS;
     return {
       mode: 'payment',
@@ -344,8 +348,8 @@ function stripePricingFromRequest(body) {
       includeCarerCertificate,
       unitAmount: baseUnitAmount + carerCertificateAmount,
       productId: STRIPE_PRICE_PRODUCT_SINGLE_DAY,
-      displayName: 'Medical Consultation (Single day)',
-      description: 'One-day medical certificate request',
+      displayName: `Medical Consultation (${STRIPE_MULTI_DAY_MIN_DAYS - 1} days or less)`,
+      description: `Medical certificate request for ${STRIPE_MULTI_DAY_MIN_DAYS - 1} days or less`,
     };
   }
 
@@ -357,8 +361,8 @@ function stripePricingFromRequest(body) {
     includeCarerCertificate,
     unitAmount: baseUnitAmount + carerCertificateAmount,
     productId: STRIPE_PRICE_PRODUCT_MULTI_DAY_ONE_OFF,
-    displayName: 'Medical Consultation (Multi-day)',
-    description: 'Multi-day medical certificate request',
+    displayName: `Medical Consultation (${STRIPE_MULTI_DAY_MIN_DAYS}+ days)`,
+    description: `Medical certificate request for ${STRIPE_MULTI_DAY_MIN_DAYS}+ days`,
   };
 }
 

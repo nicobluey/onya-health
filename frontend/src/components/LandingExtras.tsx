@@ -52,7 +52,7 @@ const LEADING_POINTS: Array<{ title: string; body: string }> = [
 ];
 
 const LOGO_TRACK = [...PATIENT_ORGS, ...PATIENT_ORGS];
-const FALLBACK_CONSULT_HREF = '/doctor/booking';
+const FALLBACK_CONSULT_HREF = '/doctor?view=booking';
 const FEATURED_BLOGS = BLOG_POSTS.slice(0, 3);
 
 export function UsedByPatientsSection() {

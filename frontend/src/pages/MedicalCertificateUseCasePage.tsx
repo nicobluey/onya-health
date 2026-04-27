@@ -35,18 +35,18 @@ const USE_CASES: UseCaseConfig[] = [
         key: 'doctor',
         path: '/doctor',
         aliases: ['/medical-certificate-doctor'],
-        title: 'Doctor-reviewed medical certificates online',
-        subtitle: 'A fast digital pathway to request medical certificate outcomes with conservative doctor review.',
+        title: 'Medical certificates from $9 delivered instantly',
+        subtitle: '1 day certificates are $9.70, anything above one day is $15, or choose All Access for $19/month.',
         heroImage: '/Medical Certificate Landing.webp',
         heroObjectClass: 'object-[64%_44%] md:object-[52%_44%]',
         heroImageAlt: 'Doctor reviewing an online medical certificate request',
         cardTitle: 'Doctor certificates',
-        cardBody: 'General medical certificate requests with doctor-reviewed outcomes.',
+        cardBody: 'Doctor-reviewed certificate requests with pricing from $9.70 and instant digital delivery if approved.',
         cardCta: 'Book now',
         cardImageClass: 'object-[62%_44%]',
         purposeParam: null,
-        metaTitle: 'Doctor Medical Certificate Landing | Onya Health',
-        metaDescription: 'Doctor-reviewed online medical certificate requests with a clear, secure digital flow.',
+        metaTitle: 'Medical Certificates from $9 Delivered Instantly | Onya Health',
+        metaDescription: 'Medical certificates from $9 delivered instantly online (from $9.70 for 1 day). Anything above one day is $15, or choose All Access at $19/month. Doctor-reviewed in Australia.',
     },
     {
         key: 'student',
@@ -62,8 +62,8 @@ const USE_CASES: UseCaseConfig[] = [
         cardCta: 'Book now',
         cardImageClass: 'object-[50%_42%]',
         purposeParam: 'university',
-        metaTitle: 'Student Medical Certificate Landing | Onya Health',
-        metaDescription: 'Online student medical certificate requests for class, exam, and assessment disruptions.',
+        metaTitle: 'Student Medical Certificates from $9.70 | Onya Health',
+        metaDescription: 'Online student medical certificates from $9.70 with doctor review and instant digital delivery if approved.',
     },
     {
         key: 'caretaker',
@@ -79,8 +79,8 @@ const USE_CASES: UseCaseConfig[] = [
         cardCta: 'Book now',
         cardImageClass: 'object-[52%_46%]',
         purposeParam: 'carers-leave',
-        metaTitle: 'Carer Medical Certificate Landing | Onya Health',
-        metaDescription: 'Online carer leave documentation requests with secure doctor-reviewed outcomes.',
+        metaTitle: 'Carer Medical Certificates from $9.70 | Onya Health',
+        metaDescription: 'Online carer leave certificates from $9.70 with secure doctor-reviewed outcomes and instant digital delivery if approved.',
     },
     {
         key: 'work',
@@ -96,8 +96,8 @@ const USE_CASES: UseCaseConfig[] = [
         cardCta: 'Book now',
         cardImageClass: 'object-[66%_42%]',
         purposeParam: 'work',
-        metaTitle: 'Work Medical Certificate Landing | Onya Health',
-        metaDescription: 'Online work medical certificate requests with doctor review and secure digital delivery.',
+        metaTitle: 'Work Medical Certificates from $9.70 | Onya Health',
+        metaDescription: 'Online work medical certificates from $9.70 with doctor review and instant digital delivery if approved.',
     },
 ];
 
@@ -114,15 +114,23 @@ export default function MedicalCertificateUseCasePage() {
     const pathname = window.location.pathname.toLowerCase();
     const currentUseCase = useMemo(() => getUseCaseByPath(pathname), [pathname]);
     const bookingHref = currentUseCase.purposeParam
-        ? `/doctor/booking?purpose=${currentUseCase.purposeParam}`
-        : '/doctor/booking';
+        ? `/doctor?view=booking&purpose=${currentUseCase.purposeParam}`
+        : '/doctor?view=booking';
 
     useEffect(() => {
         document.title = currentUseCase.metaTitle;
-        const descriptionTag = document.querySelector('meta[name="description"]');
-        if (descriptionTag) {
-            descriptionTag.setAttribute('content', currentUseCase.metaDescription);
-        }
+        const updateMeta = (selector: string, value: string) => {
+            const tag = document.querySelector(selector);
+            if (tag) {
+                tag.setAttribute('content', value);
+            }
+        };
+
+        updateMeta('meta[name="description"]', currentUseCase.metaDescription);
+        updateMeta('meta[property="og:title"]', currentUseCase.metaTitle);
+        updateMeta('meta[property="og:description"]', currentUseCase.metaDescription);
+        updateMeta('meta[name="twitter:title"]', currentUseCase.metaTitle);
+        updateMeta('meta[name="twitter:description"]', currentUseCase.metaDescription);
     }, [currentUseCase.metaDescription, currentUseCase.metaTitle]);
 
     return (
@@ -178,7 +186,7 @@ export default function MedicalCertificateUseCasePage() {
                             </span>
                         </div>
                         <p className="mx-auto mt-2 max-w-2xl text-xs font-medium text-white/90">
-                            Most certificates can be delivered under 30 minutes.
+                            Medical certificates from $9 delivered instantly online (from $9.70 for 1 day).
                         </p>
                     </div>
                 </section>

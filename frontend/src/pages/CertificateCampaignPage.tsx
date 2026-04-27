@@ -96,7 +96,7 @@ const LANDING_CONFIGS: Record<string, LandingConfig> = {
         purposeParam: 'work',
         metaTitle: 'Work Medical Certificate Online | OnyaHealth',
         metaDescription:
-            'Online work medical certificate requests reviewed by Australian doctors for common sick leave needs.',
+            'Work medical certificates from $9 delivered instantly online (from $9.70 for 1 day). Anything above one day is $15 with Australian doctor review.',
         heroHeadline: 'Online Work Medical Certificates Reviewed by Australian Doctors',
         heroSubheadline:
             'Fast, secure medical certificates for sick leave and work absences without needing to visit a clinic.',
@@ -157,7 +157,7 @@ const LANDING_CONFIGS: Record<string, LandingConfig> = {
         purposeParam: 'university',
         metaTitle: 'University Medical Certificate Online | OnyaHealth',
         metaDescription:
-            'Online university medical certificate requests for classes, exams, and assessment-related illness.',
+            'University medical certificates from $9 delivered instantly online (from $9.70 for 1 day). Anything above one day is $15 with doctor review.',
         heroHeadline: 'Online University Medical Certificates for Illness or Assessment Impact',
         heroSubheadline:
             'Fast, secure medical certificates for classes, exams, and assessment-related illness.',
@@ -218,7 +218,7 @@ const LANDING_CONFIGS: Record<string, LandingConfig> = {
         purposeParam: 'carers-leave',
         metaTitle: "Carer's Leave Certificate Online | OnyaHealth",
         metaDescription:
-            "Online carer's leave certificate requests reviewed by Australian doctors for common caring situations.",
+            "Carer's leave certificates from $9 delivered instantly online (from $9.70 for 1 day). Anything above one day is $15 with Australian doctor review.",
         heroHeadline: "Online Carer's Leave Certificates Reviewed by Australian Doctors",
         heroSubheadline:
             'Fast, secure certificates when you need leave to care for someone under your care.',
@@ -318,14 +318,19 @@ const HOW_IT_WORKS_STEPS = [
 
 const PRICING_TIERS: PricingTier[] = [
     {
-        label: '1-2 days',
-        title: 'Short-duration certificate pricing',
-        note: 'Best for brief absences. Final pricing is shown clearly before payment.',
+        label: '1 day',
+        title: '$9.70 one-time',
+        note: 'For short absence periods. Final pricing is shown clearly before payment.',
     },
     {
-        label: '3+ days',
-        title: 'Extended-duration certificate pricing',
-        note: 'For longer recovery windows. Extra clinical context may be requested where needed.',
+        label: '2+ days',
+        title: '$15.00 one-time',
+        note: 'For anything above one day. Extra clinical context may be requested where needed.',
+    },
+    {
+        label: 'All Access',
+        title: '$19.00 per month',
+        note: 'Unlimited medical certificates with no lock-in contract.',
     },
 ];
 
@@ -493,19 +498,19 @@ function PricingSection() {
                 <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                     <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-secondary">Cost</p>
-                        <h2 className="mt-2 text-3xl font-bold text-text-primary">Simple pricing by certificate duration</h2>
+                        <h2 className="mt-2 text-3xl font-bold text-text-primary">Simple pricing that updates by duration</h2>
                     </div>
                     <p className="max-w-xl text-sm leading-relaxed text-text-secondary md:text-base">
-                        Choose the duration bracket that matches your request. You will see the final amount before payment.
+                        Start from $9.70, pay $15 for anything above one day, or choose All Access at $19/month.
                     </p>
                 </div>
-                <div className="mt-8 grid gap-4 md:grid-cols-2">
+                <div className="mt-8 grid gap-4 md:grid-cols-3">
                     {PRICING_TIERS.map((tier) => (
                         <article key={tier.label} className="rounded-2xl border border-border bg-bg p-6">
                             <p className="inline-flex rounded-full border border-border bg-surface px-3 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-text-secondary">
                                 {tier.label}
                             </p>
-                            <h3 className="mt-4 text-xl font-semibold text-text-primary">{tier.title}</h3>
+                            <h3 className="price-numerals mt-4 text-xl text-text-primary">{tier.title}</h3>
                             <p className="mt-3 text-sm leading-relaxed text-text-secondary">{tier.note}</p>
                         </article>
                     ))}
@@ -832,7 +837,7 @@ export default function CertificateCampaignPage() {
         [pathname]
     );
     const selectedOption = CERTIFICATE_OPTIONS.find((item) => item.key === config.purposeParam) || CERTIFICATE_OPTIONS[0];
-    const bookingHref = `/doctor/booking?purpose=${config.purposeParam}`;
+    const bookingHref = `/doctor?view=booking&purpose=${config.purposeParam}`;
 
     useEffect(() => {
         document.title = config.metaTitle;

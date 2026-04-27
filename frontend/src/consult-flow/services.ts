@@ -123,7 +123,6 @@ export const SERVICE_CONFIGS: Record<ServiceSlug, ServiceConfig> = {
 
 const ROUTES: Record<string, ServiceSlug> = {
     '/doctor': 'doctor',
-    '/doctor/booking': 'doctor',
     '/nutritionist': 'nutritionist',
     '/psychologist': 'psychologist',
 };

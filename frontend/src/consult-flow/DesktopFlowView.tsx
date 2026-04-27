@@ -219,7 +219,7 @@ export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
                         <button onClick={goHome} className="text-sm text-text-secondary hover:text-text-primary flex items-center gap-2 mb-4">
                             &larr; Back to Home
                         </button>
-                        <Stepper currentStep={step} />
+                        <Stepper currentStep={step} showPricing={service.slug === 'doctor'} />
                         <div className="bg-white rounded-3xl shadow-xl border border-border p-10 min-h-[500px] transition-all relative overflow-hidden">
                             <StepRenderer />
                         </div>

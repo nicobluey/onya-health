@@ -1,11 +1,16 @@
 import { useBooking } from '../consult-flow/state';
 import { COPY } from '../consult-flow/copy';
+import {
+    formatAud,
+    getOneOffCertificatePrice,
+    UNLIMITED_MONTHLY_PRICE_AUD,
+} from '../consult-flow/pricing';
 import { Modal, Button } from './UI';
 import { Star, Check } from 'lucide-react';
 import { ShineButton } from './lightswind/ShineButton';
 
 export function UpsellModal() {
-    const { showUpsell, setUnlimited, nextStep } = useBooking();
+    const { showUpsell, setUnlimited, nextStep, durationDays } = useBooking();
     // We use nextStep to proceed. nextStep handles transition from 'upsell' -> 'details'.
 
     if (!showUpsell) return null;
@@ -16,6 +21,9 @@ export function UpsellModal() {
     };
 
     const { upsell } = COPY.steps;
+    const oneOffPrice = getOneOffCertificatePrice(durationDays);
+    const unlimitedPriceText = `${formatAud(UNLIMITED_MONTHLY_PRICE_AUD)} / month — cancel anytime`;
+    const oneOffPriceText = `${formatAud(oneOffPrice)} one-time`;
 
     return (
         <Modal isOpen={showUpsell}>
@@ -36,7 +44,7 @@ export function UpsellModal() {
                             <Star className="text-sunlight-300 fill-sunlight-300" size={18} />
                             <h4 className="font-bold text-lg text-text-primary">{upsell.recommended.title}</h4>
                         </div>
-                        <p className="text-text-primary font-medium">{upsell.recommended.price}</p>
+                        <p className="price-numerals text-text-primary">{unlimitedPriceText}</p>
                     </div>
 
                     <ul className="space-y-2 mb-6">
@@ -64,7 +72,7 @@ export function UpsellModal() {
                     <div className="flex justify-between items-start mb-4">
                         <div>
                             <h4 className="font-bold text-text-primary">{upsell.oneoff.title}</h4>
-                            <p className="text-sm text-text-secondary">{upsell.oneoff.price}</p>
+                            <p className="price-numerals text-sm text-text-secondary">{oneOffPriceText}</p>
                         </div>
                     </div>
 

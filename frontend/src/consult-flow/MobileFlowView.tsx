@@ -67,7 +67,7 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
                 </div>
                 {view === 'booking' && (
                     <div className="px-4 pb-3 pt-1">
-                        <Stepper currentStep={step} />
+                        <Stepper currentStep={step} showPricing={service.slug === 'doctor'} />
                     </div>
                 )}
             </header>

@@ -20,7 +20,7 @@ const FOOTER_GROUPS: FooterLinkGroup[] = [
             { label: 'Work certificates', href: '/work' },
             { label: 'Student certificates', href: '/student' },
             { label: "Caretaker certificates", href: '/caretaker' },
-            { label: 'General consults', href: '/doctor/booking' },
+            { label: 'General consults', href: '/doctor?view=booking' },
             { label: 'Psychology support', href: '/psychologist' },
             { label: 'Nutrition consults', href: '/nutritionist' },
         ],
@@ -47,7 +47,7 @@ const FOOTER_GROUPS: FooterLinkGroup[] = [
     },
 ];
 
-export function Footer({ onStartConsult, consultHref = '/doctor/booking' }: FooterProps) {
+export function Footer({ onStartConsult, consultHref = '/doctor?view=booking' }: FooterProps) {
     return (
         <section className="w-full bg-bark-900 text-white">
             <footer className="w-full px-6 pb-8 pt-10 md:px-10 md:pb-10 md:pt-14 lg:px-14">

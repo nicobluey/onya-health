@@ -222,7 +222,7 @@ export default function HomePage() {
                 </section>
             </main>
 
-            <Footer consultHref="/doctor/booking" />
+            <Footer consultHref="/doctor?view=booking" />
         </div>
     );
 }
