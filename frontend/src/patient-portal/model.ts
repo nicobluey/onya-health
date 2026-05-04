@@ -155,8 +155,8 @@ export const CONSULT_OPTIONS: ConsultOption[] = [
   },
   {
     id: 'weight-loss',
-    title: 'Weight Loss Reset',
-    subtitle: 'Dietitian-supported plan with personalised meals and progress support',
+    title: 'Personalised Nutrition Plan',
+    subtitle: 'Dietitian-supported plan with personalised meals, prep guidance, and progress support',
     icon: Scale,
     status: 'available',
     badge: 'LIVE',
@@ -401,4 +401,3 @@ export function firstName(fullName: string) {
 export function sectionCardClassName(extraClassName = '') {
   return `rounded-3xl border border-border bg-white shadow-[0_24px_42px_-34px_rgba(15,23,42,0.24)] ${extraClassName}`.trim();
 }
-

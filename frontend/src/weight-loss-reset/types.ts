@@ -12,6 +12,7 @@ export interface Recipe {
   title: string;
   description?: string;
   imageUrl?: string;
+  serves?: number;
   ingredients: Ingredient[];
   instructions?: string[];
   calories?: number;
@@ -49,6 +50,11 @@ export interface MealPlan {
   days: MealPlanDay[];
   generatedBy: 'rules' | 'openai';
   notes?: string[];
+  prepDayPlan?: {
+    title: string;
+    sharedIngredients: string[];
+    steps: string[];
+  };
   generatedAt?: string;
 }
 

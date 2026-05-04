@@ -202,6 +202,13 @@ function recipeEstimatedTotalMinutes(recipe: Recipe) {
   return 0;
 }
 
+function recipeHasValidIngredientList(recipe: Recipe) {
+  const ingredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+  if (ingredients.length < 3) return false;
+  const validIngredients = ingredients.filter((ingredient) => /[a-z]/i.test(String(ingredient.name || '').trim()));
+  return validIngredients.length >= 3;
+}
+
 function isMainMealCandidate(recipe: Recipe, mealType: MealType) {
   if (mealType === 'snack') return true;
   const calories = Number(recipe.calories || 0);
@@ -231,6 +238,7 @@ function isBreakfastMealCandidate(recipe: Recipe, stage: 1 | 2 | 3) {
   if (stage <= 2 && calories > (stage === 1 ? BREAKFAST_MAX_CALORIES_STRICT : BREAKFAST_MAX_CALORIES_RELAXED)) return false;
   if (stage <= 2 && totalMinutes > (stage === 1 ? BREAKFAST_MAX_TOTAL_MINUTES_STRICT : BREAKFAST_MAX_TOTAL_MINUTES_RELAXED)) return false;
   if (stage === 1 && ingredientCount > BREAKFAST_MAX_INGREDIENTS_STRICT) return false;
+  if (stage <= 2 && !recipeHasValidIngredientList(recipe)) return false;
 
   return true;
 }
@@ -254,6 +262,7 @@ function isMainMealPlanningCandidate(recipe: Recipe, mealType: MealType, stage: 
   }
 
   if (stage <= 2 && calories > 1200) return false;
+  if (stage <= 2 && !recipeHasValidIngredientList(recipe)) return false;
   return true;
 }
 
@@ -522,10 +531,112 @@ function calculateDayTotals(day: MealPlanDay, recipeMap: Map<string, Recipe>) {
   };
 }
 
+function parseRecipeServesCount(recipe: Recipe) {
+  const direct = Number(recipe.serves || 0);
+  if (Number.isFinite(direct) && direct > 0) return direct;
+  const fromSource = String(recipe.source?.serves || '').trim().toLowerCase();
+  if (!fromSource) return 1;
+  const numbers = [...fromSource.matchAll(/(\d+(?:\.\d+)?)/g)]
+    .map((entry) => Number(entry[1]))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  if (numbers.length === 0) return 1;
+  if (numbers.length === 1) return numbers[0];
+  return numbers.reduce((sum, value) => sum + value, 0) / numbers.length;
+}
+
+function buildRecipeUsageMapFromMealPlan(mealPlan: MealPlan | null) {
+  const usage = new Map<string, number>();
+  if (!mealPlan) return usage;
+  for (const day of mealPlan.days || []) {
+    const ids = [day.meals.breakfast, day.meals.lunch, day.meals.dinner, ...(day.meals.snacks || [])].filter(Boolean) as string[];
+    for (const id of ids) {
+      usage.set(id, (usage.get(id) || 0) + 1);
+    }
+  }
+  return usage;
+}
+
+function buildPrepDayPlan(mealPlan: MealPlan | null, recipeMap: Map<string, Recipe>) {
+  if (!mealPlan || mealPlan.days.length === 0) return undefined;
+  const usage = buildRecipeUsageMapFromMealPlan(mealPlan);
+  if (usage.size === 0) return undefined;
+
+  const repeatedRecipes = [...usage.entries()]
+    .filter(([, count]) => count >= 2)
+    .map(([id, count]) => ({ recipe: recipeMap.get(id), count }))
+    .filter((entry): entry is { recipe: Recipe; count: number } => Boolean(entry.recipe))
+    .sort((a, b) => b.count - a.count || a.recipe.title.localeCompare(b.recipe.title))
+    .slice(0, 4);
+
+  const ingredientFrequency = new Map<string, number>();
+  for (const recipe of recipeMap.values()) {
+    if (!usage.has(recipe.id)) continue;
+    const seenInRecipe = new Set<string>();
+    for (const ingredient of recipe.ingredients || []) {
+      const base = normalizeIngredientBaseName(String(ingredient.name || ''));
+      const canonical = canonicalizeIngredientBaseName(base);
+      if (!canonical || shouldIgnoreCanonicalIngredient(canonical)) continue;
+      if (seenInRecipe.has(canonical)) continue;
+      seenInRecipe.add(canonical);
+      ingredientFrequency.set(canonical, (ingredientFrequency.get(canonical) || 0) + 1);
+    }
+  }
+
+  const sharedIngredients = [...ingredientFrequency.entries()]
+    .filter(([, frequency]) => frequency >= 2)
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 12)
+    .map(([name]) => toIngredientDisplayName(name));
+
+  const repeatedMealLabels = repeatedRecipes.length > 0
+    ? repeatedRecipes.map((entry) => `${entry.recipe.title} (${entry.count} meals)`).join(', ')
+    : 'your selected meals';
+
+  const steps = [
+    `Batch-cook repeated recipes first: ${repeatedMealLabels}.`,
+    sharedIngredients.length > 0
+      ? `Wash and prep shared ingredients together: ${sharedIngredients.slice(0, 8).join(', ')}.`
+      : 'Wash, chop, and portion all vegetables and herbs before cooking.',
+    'Cook grains and proteins in larger batches, then cool and portion into labelled containers.',
+    'Prepare sauces/dressings in jars so meals can be assembled quickly on busy days.',
+    'Store 3 days in the fridge and freeze extra portions for later in the week.',
+  ];
+
+  return {
+    title: 'Prep day game plan',
+    sharedIngredients,
+    steps,
+  };
+}
+
 interface PlanQualityCheckResult {
   valid: boolean;
   score: number;
   issues: string[];
+}
+
+function averageIngredientOverlapForDays(days: MealPlanDay[], recipeMap: Map<string, Recipe>) {
+  const overlaps: number[] = [];
+  const coreRecipes: Recipe[] = [];
+
+  for (const day of days) {
+    const breakfast = day.meals.breakfast ? recipeMap.get(day.meals.breakfast) : undefined;
+    const lunch = day.meals.lunch ? recipeMap.get(day.meals.lunch) : undefined;
+    const dinner = day.meals.dinner ? recipeMap.get(day.meals.dinner) : undefined;
+    if (breakfast) coreRecipes.push(breakfast);
+    if (lunch) coreRecipes.push(lunch);
+    if (dinner) coreRecipes.push(dinner);
+    if (lunch && dinner) {
+      overlaps.push(tokenOverlapCount(ingredientTokenSet(lunch), ingredientTokenSet(dinner)));
+    }
+  }
+
+  for (let index = 1; index < coreRecipes.length; index += 1) {
+    overlaps.push(tokenOverlapCount(ingredientTokenSet(coreRecipes[index - 1]), ingredientTokenSet(coreRecipes[index])));
+  }
+
+  if (overlaps.length === 0) return 0;
+  return overlaps.reduce((sum, value) => sum + value, 0) / overlaps.length;
 }
 
 function evaluateGeneratedPlanQuality({
@@ -588,6 +699,10 @@ function evaluateGeneratedPlanQuality({
       score -= 6;
       issues.push(`Daily energy looks high on ${day.label}.`);
     }
+    if ((totals.calories || 0) > 0 && (totals.calories || 0) < 900) {
+      score -= 10;
+      issues.push(`Daily energy looks too low on ${day.label}.`);
+    }
   }
 
   const breakfastRepeatMax = useMealPrepPattern ? 5 : 4;
@@ -617,6 +732,13 @@ function evaluateGeneratedPlanQuality({
   if (poolSizes.dinner >= 4 && dinnerCounts.size < 2) {
     score -= 10;
     issues.push('Dinner choices are over-repeated.');
+  }
+
+  const averageIngredientOverlap = averageIngredientOverlapForDays(days, recipeMap);
+  const overlapTarget = useMealPrepPattern ? 3 : 1.5;
+  if (averageIngredientOverlap < overlapTarget) {
+    score -= useMealPrepPattern ? 14 : 8;
+    issues.push('Meals do not share enough core ingredients for practical prep and shopping.');
   }
 
   if (criticalIssues.length > 0) {
@@ -855,27 +977,33 @@ export function generateMealPlan({
       selectedDays = candidateDays;
       selectedQuality = quality;
       if (attemptIndex > 0) {
-        notes.push('Plan quality check reranked your weekly meals for better practicality and variety.');
+        notes.push('Plan reshuffled for better practicality and variety.');
       }
       break;
     }
   }
 
   const days = selectedDays;
+  const baseMealPlan: MealPlan = {
+    days,
+    generatedBy: 'rules',
+    notes,
+    generatedAt: new Date().toISOString(),
+  };
 
   if (days.some((day) => !day.meals.breakfast || !day.meals.lunch || !day.meals.dinner)) {
-    notes.push('Some meals use fallback matching because available recipes were limited for your profile.');
+    notes.push('Some meals were broadened because available recipe matches were limited for your profile.');
   }
   if (selectedQuality && !selectedQuality.valid && selectedQuality.issues.length > 0) {
-    notes.push(`Plan quality fallback used: ${selectedQuality.issues[0]}`);
+    notes.push(`Plan quality warning: ${selectedQuality.issues[0]}`);
   }
+
+  const prepDayPlan = buildPrepDayPlan(baseMealPlan, recipeMap);
 
   return {
     mealPlan: {
-      days,
-      generatedBy: 'rules',
-      notes,
-      generatedAt: new Date().toISOString(),
+      ...baseMealPlan,
+      prepDayPlan,
     },
     notes,
   };
@@ -954,12 +1082,16 @@ export function swapMealInPlan({
 }
 
 export function withRecalculatedTotals(mealPlan: MealPlan, recipeMap: Map<string, Recipe>) {
-  return {
+  const nextMealPlan: MealPlan = {
     ...mealPlan,
     days: mealPlan.days.map((day) => ({
       ...day,
       totals: calculateDayTotals(day, recipeMap),
     })),
+  };
+  return {
+    ...nextMealPlan,
+    prepDayPlan: buildPrepDayPlan(nextMealPlan, recipeMap),
   };
 }
 
@@ -1376,7 +1508,10 @@ function formatQuantityLabels(quantityTotals: Map<string, number>, unparsedCount
 
   const unparsed = [...remainingUnparsed]
     .sort((a, b) => a.label.localeCompare(b.label))
-    .map(({ label, count }) => (count > 1 ? `${label} x${count}` : label));
+    .map(({ label, count }) => {
+      if (count <= 1.01) return label;
+      return `${label} x${formatAggregatedAmount(count)}`;
+    });
 
   return [...totals, ...looseLabels, ...unparsed];
 }
@@ -1506,6 +1641,14 @@ function canonicalizeIngredientBaseName(baseName: string) {
     .trim();
 
   value = value.replace(/\b(halves|half|chunks|chunk|diced|sliced|chopped|minced|grated|crushed|washed|rinsed|trimmed|finely|roughly|thinly)\b$/g, '').trim();
+  value = value
+    .replace(/\bblueberrie\b/g, 'blueberry')
+    .replace(/\bstrawberrie\b/g, 'strawberry')
+    .replace(/\bpeache\b/g, 'peach')
+    .replace(/\bpotatoe\b/g, 'potato')
+    .replace(/\btomatoe\b/g, 'tomato')
+    .replace(/\bcouscou\b/g, 'couscous')
+    .trim();
   if (value.endsWith('ies') && value.length > 4) {
     value = `${value.slice(0, -3)}y`;
   } else if (/(ches|shes|xes|zes)$/.test(value) && value.length > 5) {
@@ -1569,12 +1712,25 @@ function shouldIgnoreCanonicalIngredient(baseName: string) {
   return false;
 }
 
-function buildGroceryListForRecipeIds(recipeIds: string[], recipeMap: Map<string, Recipe>) {
+function toRecipeUsageMap(recipeUsage: string[] | Map<string, number>) {
+  if (recipeUsage instanceof Map) return new Map(recipeUsage);
+  const usage = new Map<string, number>();
+  for (const recipeId of recipeUsage) {
+    if (!recipeId) continue;
+    usage.set(recipeId, (usage.get(recipeId) || 0) + 1);
+  }
+  return usage;
+}
+
+function buildGroceryListForRecipeIds(recipeUsage: string[] | Map<string, number>, recipeMap: Map<string, Recipe>) {
+  const usage = toRecipeUsageMap(recipeUsage);
   const bucket = new Map<string, GroceryItem & { quantityTotals: Map<string, number>; unparsedCounts: Map<string, number> }>();
 
-  for (const recipeId of recipeIds) {
+  for (const [recipeId, requiredPortions] of usage.entries()) {
     const recipe = recipeMap.get(recipeId);
     if (!recipe) continue;
+    const serves = Math.max(1, parseRecipeServesCount(recipe));
+    const scaleFactor = Math.max(0.01, requiredPortions / serves);
 
     for (const ingredient of recipe.ingredients) {
       const line = cleanIngredientLine(ingredient.name || '');
@@ -1591,18 +1747,16 @@ function buildGroceryListForRecipeIds(recipeIds: string[], recipeMap: Map<string
       const quantityLabel =
         [ingredient.quantity, ingredient.unit].filter(Boolean).join(' ').trim() || extractInlineQuantity(line);
       const aggregatedQuantity = extractAggregatedQuantity(quantityLabel) || extractAggregatedQuantity(line);
-      const preferredCategory = normalizeText(ingredient.category || '');
-      const category =
-        preferredCategory && preferredCategory !== 'pantry' ? preferredCategory : inferGroceryCategory(canonicalBaseName);
+      const category = inferGroceryCategory(canonicalBaseName);
       const existing = bucket.get(key);
 
       if (!existing) {
         const quantityTotals = new Map<string, number>();
         const unparsedCounts = new Map<string, number>();
         if (aggregatedQuantity) {
-          quantityTotals.set(aggregatedQuantity.unit, aggregatedQuantity.amount);
+          quantityTotals.set(aggregatedQuantity.unit, aggregatedQuantity.amount * scaleFactor);
         } else if (quantityLabel) {
-          unparsedCounts.set(quantityLabel, 1);
+          unparsedCounts.set(quantityLabel, scaleFactor);
         }
         bucket.set(key, {
           key,
@@ -1618,10 +1772,10 @@ function buildGroceryListForRecipeIds(recipeIds: string[], recipeMap: Map<string
       if (aggregatedQuantity) {
         existing.quantityTotals.set(
           aggregatedQuantity.unit,
-          (existing.quantityTotals.get(aggregatedQuantity.unit) || 0) + aggregatedQuantity.amount
+          (existing.quantityTotals.get(aggregatedQuantity.unit) || 0) + aggregatedQuantity.amount * scaleFactor
         );
       } else if (quantityLabel) {
-        existing.unparsedCounts.set(quantityLabel, (existing.unparsedCounts.get(quantityLabel) || 0) + 1);
+        existing.unparsedCounts.set(quantityLabel, (existing.unparsedCounts.get(quantityLabel) || 0) + scaleFactor);
       }
     }
   }
@@ -1649,35 +1803,44 @@ function buildGroceryListForRecipeIds(recipeIds: string[], recipeMap: Map<string
 export function buildGroceryListByMealType(mealPlan: MealPlan | null, recipeMap: Map<string, Recipe>): MealGroceryBreakdown[] {
   if (!mealPlan) return [];
 
-  const idsByMealType: Record<MealType, string[]> = {
-    breakfast: [],
-    lunch: [],
-    dinner: [],
-    snack: [],
+  const usageByMealType: Record<MealType, Map<string, number>> = {
+    breakfast: new Map<string, number>(),
+    lunch: new Map<string, number>(),
+    dinner: new Map<string, number>(),
+    snack: new Map<string, number>(),
   };
 
   for (const day of mealPlan.days) {
-    if (day.meals.breakfast) idsByMealType.breakfast.push(day.meals.breakfast);
-    if (day.meals.lunch) idsByMealType.lunch.push(day.meals.lunch);
-    if (day.meals.dinner) idsByMealType.dinner.push(day.meals.dinner);
+    if (day.meals.breakfast) {
+      usageByMealType.breakfast.set(day.meals.breakfast, (usageByMealType.breakfast.get(day.meals.breakfast) || 0) + 1);
+    }
+    if (day.meals.lunch) {
+      usageByMealType.lunch.set(day.meals.lunch, (usageByMealType.lunch.get(day.meals.lunch) || 0) + 1);
+    }
+    if (day.meals.dinner) {
+      usageByMealType.dinner.set(day.meals.dinner, (usageByMealType.dinner.get(day.meals.dinner) || 0) + 1);
+    }
     for (const snackId of day.meals.snacks || []) {
-      if (snackId) idsByMealType.snack.push(snackId);
+      if (snackId) {
+        usageByMealType.snack.set(snackId, (usageByMealType.snack.get(snackId) || 0) + 1);
+      }
     }
   }
 
   const order: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
   return order
     .map((mealType) => {
-      const uniqueIds = [...new Set(idsByMealType[mealType])];
-      const recipeTitles = uniqueIds
+      const usage = usageByMealType[mealType];
+      const recipeIds = [...usage.keys()];
+      const recipeTitles = recipeIds
         .map((id) => recipeMap.get(id)?.title || '')
         .filter(Boolean)
         .sort((a, b) => a.localeCompare(b));
       return {
         mealType,
-        recipeIds: uniqueIds,
+        recipeIds,
         recipeTitles,
-        groups: buildGroceryListForRecipeIds(uniqueIds, recipeMap),
+        groups: buildGroceryListForRecipeIds(usage, recipeMap),
       };
     })
     .filter((entry) => entry.recipeTitles.length > 0 || entry.groups.length > 0);
@@ -1685,10 +1848,8 @@ export function buildGroceryListByMealType(mealPlan: MealPlan | null, recipeMap:
 
 export function buildGroceryListFromMealPlan(mealPlan: MealPlan | null, recipeMap: Map<string, Recipe>) {
   if (!mealPlan) return [];
-  const recipeIds = mealPlan.days.flatMap((day) =>
-    [day.meals.breakfast, day.meals.lunch, day.meals.dinner, ...(day.meals.snacks || [])].filter(Boolean),
-  ) as string[];
-  return buildGroceryListForRecipeIds(recipeIds, recipeMap);
+  const usage = buildRecipeUsageMapFromMealPlan(mealPlan);
+  return buildGroceryListForRecipeIds(usage, recipeMap);
 }
 
 export function getCurrentWeight(weightLogs: WeightLogEntry[], startingWeight?: number) {

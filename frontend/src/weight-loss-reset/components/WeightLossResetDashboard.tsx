@@ -9,7 +9,7 @@ import {
   Weight,
 } from 'lucide-react';
 import {
-  WEIGHT_LOSS_RESET_MIN_PLAN_WEEKS,
+  getHealthFocusDisplayLabel,
   WEIGHT_LOSS_RESET_PRICE_COPY,
   WEIGHT_LOSS_RESET_PROGRAM_NAME,
 } from '../constants';
@@ -50,6 +50,19 @@ function buildRecipeTimeMeta(recipe: Recipe) {
   return `${prepLabel} • ${cookLabel}`;
 }
 
+function readRecipeServes(recipe: Recipe) {
+  const direct = Number(recipe.serves || 0);
+  if (Number.isFinite(direct) && direct > 0) return Math.round(direct * 10) / 10;
+  const fromSource = String(recipe.source?.serves || '').trim().toLowerCase();
+  const values = [...fromSource.matchAll(/(\d+(?:\.\d+)?)/g)]
+    .map((entry) => Number(entry[1]))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  if (values.length === 0) return undefined;
+  if (values.length === 1) return Math.round(values[0] * 10) / 10;
+  const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+  return Math.round(average * 10) / 10;
+}
+
 function MealCard({
   recipe,
   onViewDetails,
@@ -59,6 +72,7 @@ function MealCard({
   onViewDetails: () => void;
   onSwap: () => void;
 }) {
+  const serves = readRecipeServes(recipe);
   return (
     <article className="overflow-hidden rounded-2xl border border-[#dbe2d9] bg-white">
       <img src={recipe.imageUrl || '/nutrionist.webp'} alt={recipe.title} className="h-40 w-full object-cover" loading="lazy" />
@@ -68,6 +82,7 @@ function MealCard({
           <p className="mt-1 text-xs text-[#5f7063]">
             {recipe.calories || '—'} cal • {recipe.protein || '—'}g protein • {buildRecipeTimeMeta(recipe)}
           </p>
+          {serves ? <p className="mt-1 text-[11px] text-[#5f7063]">Serves {serves}</p> : null}
         </div>
         <div className="flex gap-2">
           <button
@@ -222,11 +237,16 @@ export default function WeightLossResetDashboard({
     ];
   }, [mealPlan]);
   const generationMessages = useMemo(() => buildGenerationMessages(answers), [answers]);
+  const focusLabel = useMemo(() => getHealthFocusDisplayLabel(answers.primaryHealthFocus), [answers.primaryHealthFocus]);
   const visiblePlanNotes = useMemo(
     () =>
       (mealPlan?.notes || []).filter((note) => {
         const normalized = String(note || '').toLowerCase();
-        return !normalized.includes('fallback generated');
+        return !(
+          normalized.includes('fallback') ||
+          normalized.includes('deterministic') ||
+          normalized.includes('quality warning')
+        );
       }),
     [mealPlan?.notes]
   );
@@ -261,6 +281,7 @@ export default function WeightLossResetDashboard({
     () => [...messages].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
     [messages]
   );
+  const selectedRecipeServes = selectedRecipe ? readRecipeServes(selectedRecipe) : undefined;
 
   useEffect(() => {
     let disposed = false;
@@ -335,7 +356,7 @@ export default function WeightLossResetDashboard({
         <div className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
           <div>
             <p className="text-sm font-medium text-[#5f7063]">
-              {WEIGHT_LOSS_RESET_PROGRAM_NAME} • Week {weekNumber} of your {WEIGHT_LOSS_RESET_MIN_PLAN_WEEKS}+ week plan
+              {WEIGHT_LOSS_RESET_PROGRAM_NAME} • Week {weekNumber} • Focus: {focusLabel}
             </p>
             <h1 className="mt-1 text-3xl font-semibold tracking-tight text-[#18251e]">Welcome back, {answers.firstName || 'there'}</h1>
             <p className="mt-2 text-sm text-[#5f7063]">
@@ -389,7 +410,9 @@ export default function WeightLossResetDashboard({
 
             <article className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-3">
               <p className="text-sm font-semibold text-[#18251e]">{WEIGHT_LOSS_RESET_PRICE_COPY}</p>
-              <p className="mt-1 text-xs text-[#5f7063]">Minimum {WEIGHT_LOSS_RESET_MIN_PLAN_WEEKS}-week plan. General nutrition support, not medical advice.</p>
+              <p className="mt-1 text-xs text-[#5f7063]">
+                Preference-led weekly planning with practical prep guidance. General nutrition support, not medical advice.
+              </p>
             </article>
 
             <article className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-3">
@@ -469,6 +492,24 @@ export default function WeightLossResetDashboard({
 
           {visiblePlanNotes.length ? (
             <article className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-3 text-sm text-[#5f7063]">{visiblePlanNotes.join(' ')}</article>
+          ) : null}
+
+          {mealPlan?.prepDayPlan ? (
+            <article className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-4">
+              <h3 className="text-base font-semibold text-[#18251e]">{mealPlan.prepDayPlan.title}</h3>
+              {mealPlan.prepDayPlan.sharedIngredients.length > 0 ? (
+                <p className="mt-1 text-sm text-[#5f7063]">
+                  Shared ingredients: {mealPlan.prepDayPlan.sharedIngredients.slice(0, 12).join(', ')}
+                </p>
+              ) : null}
+              <ol className="mt-3 space-y-1 text-sm text-[#334155]">
+                {mealPlan.prepDayPlan.steps.map((step, index) => (
+                  <li key={`prep-step-${index}`}>
+                    {index + 1}. {step}
+                  </li>
+                ))}
+              </ol>
+            </article>
           ) : null}
 
           {mealPlan?.days.map((day) => (
@@ -723,6 +764,9 @@ export default function WeightLossResetDashboard({
               {selectedRecipe.fat || '—'}g fat
             </p>
             <p className="mt-1 text-sm text-[#5f7063]">{buildRecipeTimeMeta(selectedRecipe)}</p>
+            {selectedRecipeServes ? (
+              <p className="mt-1 text-sm text-[#5f7063]">Serves: {selectedRecipeServes}</p>
+            ) : null}
 
             <section className="mt-4 grid gap-4 md:grid-cols-2">
               <div>

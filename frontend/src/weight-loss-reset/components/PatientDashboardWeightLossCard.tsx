@@ -30,10 +30,10 @@ export default function PatientDashboardWeightLossCard({
 }) {
   const ctaLabel =
     cardState === 'not-started'
-      ? 'Start Weight Loss Reset'
+      ? 'Start nutrition plan'
       : cardState === 'onboarding'
         ? 'Continue with Felicity'
-        : 'Open Weight Loss Reset';
+        : 'Open nutrition plan';
 
   const ctaAction = cardState === 'not-started' ? onStart : cardState === 'onboarding' ? onContinueBooking : onOpen;
   const expertLabel = getFelicityExpertLabel(primaryHealthFocus);

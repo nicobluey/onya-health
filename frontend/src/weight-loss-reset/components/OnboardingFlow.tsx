@@ -24,6 +24,7 @@ import {
   FAVORITE_FOOD_OPTIONS,
   FELICITY_CALENDLY_URL,
   getFelicityExpertLabel,
+  getHealthFocusDisplayLabel,
   GROCERY_PREFERENCE_OPTIONS,
   HEALTH_FOCUS_OPTIONS,
   HAS_REAL_CALENDLY_URL,
@@ -276,6 +277,7 @@ export default function OnboardingFlow({
 
   const activeFocus = HEALTH_FOCUS_OPTIONS.find((entry) => entry.value === answers.primaryHealthFocus);
   const felicityExpertLabel = getFelicityExpertLabel(answers.primaryHealthFocus);
+  const focusLabel = getHealthFocusDisplayLabel(answers.primaryHealthFocus);
   const selectedFavoriteFoodLabels = FAVORITE_FOOD_OPTIONS.filter((entry) =>
     (answers.favoriteFoods || []).map((value) => value.toLowerCase()).includes(entry.value.toLowerCase())
   ).map((entry) => entry.label);
@@ -298,7 +300,9 @@ export default function OnboardingFlow({
       <header className="mb-6">
         <h1 className="text-3xl font-semibold tracking-tight text-[#18251e]">{WEIGHT_LOSS_RESET_PROGRAM_NAME}</h1>
         <p className="mt-1 text-sm text-[#5f7063]">
-          {isPreferenceUpdate ? 'Update your intake preferences' : `Step ${Math.min(step + 1, 11)} of 11`} • {WEIGHT_LOSS_RESET_PRICE_COPY} • Minimum {WEIGHT_LOSS_RESET_MIN_PLAN_WEEKS}-week plan
+          {isPreferenceUpdate
+            ? 'Update your intake preferences'
+            : `Step ${Math.min(step + 1, 11)} of 11 • ${focusLabel} support with Felicity`} • {WEIGHT_LOSS_RESET_PRICE_COPY}
         </p>
         <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#edf1ec]">
           <div className="h-full rounded-full bg-[#1f5f3f] transition-all duration-300" style={{ width: `${progress}%` }} />
@@ -829,14 +833,14 @@ export default function OnboardingFlow({
           <p className="mt-2 text-sm text-[#5f7063]">
             {isPreferenceUpdate
               ? 'Your meal plan has been refreshed using your latest intake preferences.'
-              : 'Your Weight Loss Reset dashboard is unlocked with meal planning, grocery support, progress tracking, and messaging.'}
+              : 'Your nutrition dashboard is unlocked with meal planning, grocery support, progress tracking, and messaging.'}
           </p>
           <button
             type="button"
             onClick={onOpenDashboard}
             className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#1f5f3f] px-5 text-sm font-semibold text-white transition hover:bg-[#174830]"
           >
-            Open Weight Loss Reset dashboard
+            Open nutrition dashboard
             <ArrowRight size={16} />
           </button>
         </div>

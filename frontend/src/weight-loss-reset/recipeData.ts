@@ -39,6 +39,16 @@ function normalizeText(value: string) {
   return String(value || '').toLowerCase().trim();
 }
 
+function parseServesCount(raw: unknown) {
+  const text = String(raw || '').trim().toLowerCase();
+  if (!text) return undefined;
+  const matches = [...text.matchAll(/(\d+(?:\.\d+)?)/g)].map((entry) => Number(entry[1])).filter((value) => Number.isFinite(value) && value > 0);
+  if (matches.length === 0) return undefined;
+  if (matches.length === 1) return Math.round(matches[0] * 100) / 100;
+  const average = matches.reduce((sum, value) => sum + value, 0) / matches.length;
+  return Math.round(average * 100) / 100;
+}
+
 function extractNumberFromText(raw: unknown) {
   const text = String(raw || '').replace(/,/g, '').trim();
   const match = text.match(/(\d+(?:\.\d+)?)/);
@@ -132,10 +142,13 @@ function normalizeRecipe(recipe: Recipe, fallbackImageUrl: string): Recipe {
   const protein = normalizeMacroValue(nutritionRaw.Protein || nutritionRaw.protein, recipe.protein);
   const carbs = normalizeMacroValue(nutritionRaw.Carbohydrates || nutritionRaw.carbohydrates, recipe.carbs);
   const fat = normalizeMacroValue(nutritionRaw['Total Fat'] || nutritionRaw.totalFat || nutritionRaw.fat, recipe.fat);
+  const source = safeSourceRecord(recipe);
+  const serves = parseServesCount(source.serves);
 
   return {
     ...recipe,
     imageUrl: recipe.imageUrl || fallbackImageUrl || FALLBACK_RECIPE_IMAGE_URL,
+    serves,
     dietaryTags: Array.isArray(recipe.dietaryTags) ? recipe.dietaryTags : [],
     allergens: Array.isArray(recipe.allergens) ? recipe.allergens : [],
     ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],

@@ -1,6 +1,6 @@
 import type { OnboardingAnswers } from './types';
 
-export const WEIGHT_LOSS_RESET_PROGRAM_NAME = 'Weight Loss Reset';
+export const WEIGHT_LOSS_RESET_PROGRAM_NAME = 'Personalised Nutrition Plan';
 export const WEIGHT_LOSS_RESET_PRICE_COPY = 'Unlimited dietitian support from $75/week';
 export const WEIGHT_LOSS_RESET_MIN_PLAN_WEEKS = 8;
 export const FELICITY_ID = 'felicity';
@@ -27,11 +27,11 @@ export const DEFAULT_ONBOARDING_ANSWERS: OnboardingAnswers = {
   heightCm: undefined,
   currentWeightKg: undefined,
   goalWeightKg: undefined,
-  mainGoal: 'Lose weight sustainably',
+  mainGoal: 'Build consistent, balanced meals',
   motivation: '',
   timeframeWeeks: undefined,
   biggestChallenge: '',
-  primaryHealthFocus: 'weight loss',
+  primaryHealthFocus: 'general healthy eating',
   dietaryRequirements: ['no specific requirements'],
   favoriteFoods: [],
   allergiesText: '',
@@ -92,6 +92,13 @@ export function getFelicityExpertLabel(primaryHealthFocus?: string) {
   if (normalized === 'general healthy eating') return 'healthy eating expert';
 
   return `${normalized} expert`;
+}
+
+export function getHealthFocusDisplayLabel(primaryHealthFocus?: string) {
+  const normalized = String(primaryHealthFocus || '').trim().toLowerCase();
+  const match = HEALTH_FOCUS_OPTIONS.find((option) => option.value === normalized);
+  if (match) return match.label;
+  return 'General healthy eating';
 }
 
 export const QUICK_ALLERGY_CHIPS = ['Peanuts', 'Tree nuts', 'Dairy', 'Egg', 'Soy', 'Shellfish', 'Gluten'];

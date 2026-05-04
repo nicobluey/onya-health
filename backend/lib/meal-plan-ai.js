@@ -54,6 +54,28 @@ const SWEET_OR_SNACK_KEYWORDS = [
   'beverage',
   'drink',
 ];
+const INGREDIENT_TOKEN_STOP_WORDS = new Set([
+  'and',
+  'with',
+  'from',
+  'fresh',
+  'dried',
+  'extra',
+  'virgin',
+  'olive',
+  'oil',
+  'salt',
+  'pepper',
+  'ground',
+  'cup',
+  'cups',
+  'tbsp',
+  'tsp',
+  'teaspoon',
+  'teaspoons',
+  'tablespoon',
+  'tablespoons',
+]);
 
 function hashSeed(input) {
   const text = String(input || '');
@@ -154,6 +176,44 @@ function estimateTotalMinutes(recipe) {
   if (Number.isFinite(prep) && prep > 0) return prep;
   if (Number.isFinite(cook) && cook > 0) return cook;
   return 0;
+}
+
+function parseServesCount(recipe) {
+  const raw = recipe?.serves ?? recipe?.source?.serves ?? '';
+  const text = String(raw || '').trim().toLowerCase();
+  if (!text) return 1;
+  const values = [...text.matchAll(/(\d+(?:\.\d+)?)/g)]
+    .map((entry) => Number(entry[1]))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  if (values.length === 0) return 1;
+  if (values.length === 1) return values[0];
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function ingredientTokenSet(recipe) {
+  const tokens = new Set();
+  const ingredients = Array.isArray(recipe?.ingredients) ? recipe.ingredients : [];
+  for (const ingredient of ingredients) {
+    const parts = normalizeText(ingredient?.name || '')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(Boolean);
+    for (const part of parts) {
+      if (part.length < 3) continue;
+      if (INGREDIENT_TOKEN_STOP_WORDS.has(part)) continue;
+      tokens.add(part);
+    }
+  }
+  return tokens;
+}
+
+function tokenOverlapCount(left, right) {
+  if (!(left instanceof Set) || !(right instanceof Set) || left.size === 0 || right.size === 0) return 0;
+  let count = 0;
+  for (const token of left) {
+    if (right.has(token)) count += 1;
+  }
+  return count;
 }
 
 function isMainMealCandidate(recipe) {
@@ -415,7 +475,7 @@ export function generateFallbackMealPlan({ recipes, includeSnack = false, seedSa
       selectedDays = attemptDays;
       selectedQuality = quality;
       if (attemptIndex > 0) {
-        notes.push('Fallback planner reranked meals for better practicality and variety.');
+        notes.push('Plan reshuffled for better practicality and variety.');
       }
       break;
     }
@@ -428,7 +488,7 @@ export function generateFallbackMealPlan({ recipes, includeSnack = false, seedSa
   );
   if (hasMissingCoreMeals) return null;
   if (selectedQuality && !selectedQuality.valid && selectedQuality.issues.length > 0) {
-    notes.push(`Fallback quality warning: ${selectedQuality.issues[0]}`);
+    notes.push(`Plan quality warning: ${selectedQuality.issues[0]}`);
   }
 
   return {
@@ -480,6 +540,7 @@ function parseJsonFromText(text) {
 }
 
 function compactRecipe(recipe) {
+  const serves = parseServesCount(recipe);
   return {
     id: String(recipe?.id || ''),
     title: String(recipe?.title || ''),
@@ -498,6 +559,7 @@ function compactRecipe(recipe) {
     cardTags: Array.isArray(recipe?.source?.cardTags) ? recipe.source.cardTags.slice(0, 12) : [],
     collections: Array.isArray(recipe?.source?.collections) ? recipe.source.collections.slice(0, 10) : [],
     ingredients: Array.isArray(recipe?.ingredients) ? recipe.ingredients.map((entry) => String(entry?.name || '').trim()).filter(Boolean).slice(0, 18) : [],
+    serves: Number.isFinite(serves) && serves > 0 ? Math.round(serves * 100) / 100 : 1,
     estimatedCost: recipe?.estimatedCost ? String(recipe.estimatedCost) : '',
     dietitian: String(recipe?.source?.dietitian || ''),
   };
@@ -562,11 +624,44 @@ function buildRecipeMetaMap(recipes) {
       cookTimeMinutes: Number(recipe?.cookTimeMinutes || 0),
       totalTimeMinutes: Number(recipe?.totalTimeMinutes || 0),
       ingredients: Array.isArray(recipe?.ingredients) ? recipe.ingredients : [],
+      ingredientTokens: ingredientTokenSet(recipe),
+      serves: parseServesCount(recipe),
       dietaryTags: Array.isArray(recipe?.dietaryTags) ? recipe.dietaryTags : [],
       source: recipe?.source && typeof recipe.source === 'object' ? recipe.source : {},
     });
   }
   return map;
+}
+
+function ingredientOverlapAverageForPlan(plan, recipeMetaMap) {
+  if (!plan || !Array.isArray(plan.days) || plan.days.length === 0) return 0;
+  const overlaps = [];
+  const coreIds = [];
+
+  for (const day of plan.days) {
+    const breakfast = String(day?.meals?.breakfast || '').trim();
+    const lunch = String(day?.meals?.lunch || '').trim();
+    const dinner = String(day?.meals?.dinner || '').trim();
+    if (breakfast) coreIds.push(breakfast);
+    if (lunch) coreIds.push(lunch);
+    if (dinner) coreIds.push(dinner);
+
+    const lunchMeta = recipeMetaMap.get(lunch);
+    const dinnerMeta = recipeMetaMap.get(dinner);
+    if (lunchMeta && dinnerMeta) {
+      overlaps.push(tokenOverlapCount(lunchMeta.ingredientTokens, dinnerMeta.ingredientTokens));
+    }
+  }
+
+  for (let index = 1; index < coreIds.length; index += 1) {
+    const previousMeta = recipeMetaMap.get(coreIds[index - 1]);
+    const currentMeta = recipeMetaMap.get(coreIds[index]);
+    if (!previousMeta || !currentMeta) continue;
+    overlaps.push(tokenOverlapCount(previousMeta.ingredientTokens, currentMeta.ingredientTokens));
+  }
+
+  if (overlaps.length === 0) return 0;
+  return overlaps.reduce((sum, value) => sum + value, 0) / overlaps.length;
 }
 
 function calculatePlanQuality(plan, recipeMetaMap, answers = {}) {
@@ -618,6 +713,10 @@ function calculatePlanQuality(plan, recipeMetaMap, answers = {}) {
       score -= 6;
       issues.push(`Daily energy is too high on ${day?.label || 'a day'}.`);
     }
+    if (dailyCalories > 0 && dailyCalories < 900) {
+      score -= 10;
+      issues.push(`Daily energy is likely too low on ${day?.label || 'a day'}.`);
+    }
   }
 
   const useMealPrepPattern = String(answers?.groceryPreference || '').toLowerCase() === 'meal prep friendly';
@@ -635,6 +734,13 @@ function calculatePlanQuality(plan, recipeMetaMap, answers = {}) {
   if ([...dinnerCounts.values()].some((count) => count > dinnerMax)) {
     score -= 8;
     issues.push('Dinner variety is too low for the week.');
+  }
+
+  const averageIngredientOverlap = ingredientOverlapAverageForPlan(plan, recipeMetaMap);
+  const minOverlapTarget = useMealPrepPattern ? 3 : 1.5;
+  if (averageIngredientOverlap < minOverlapTarget) {
+    score -= useMealPrepPattern ? 14 : 8;
+    issues.push('Meals do not share enough core ingredients for practical weekly prep.');
   }
 
   if (criticalIssues.length > 0) {
@@ -670,6 +776,8 @@ async function callOpenAiForMealPlan({ answers, recipes, includeSnack, seedSalt 
     'If preferredCuisines is provided, prioritize those cuisines while still ensuring a complete plan.',
     'Avoid heavy or long-prep breakfasts unless no practical alternatives exist.',
     'For lunch and dinner, avoid very light snack-like options and avoid dessert-style meals when substantial options exist.',
+    'Prefer ingredient overlap across the week so grocery shopping is manageable and meal-prep is realistic.',
+    'Use recipe serves metadata and avoid unrealistic combinations (e.g., dessert as dinner unless explicitly required).',
     'Avoid assigning the same recipe to all 7 days unless the catalog is extremely limited.',
     'Treat cuisine and meal-style preferences as soft preferences, not hard exclusions.',
     'Output schema:',
@@ -746,6 +854,7 @@ async function callOpenAiForPlanRepair({ answers, recipes, includeSnack, seedSal
     'Use only recipe ids from the provided catalog. Never invent ids.',
     'Keep breakfasts practical and avoid heavy long-prep breakfast picks when alternatives exist.',
     'Keep lunch and dinner substantial (not dessert/snack-like) when alternatives exist.',
+    'Increase ingredient overlap where reasonable so the grocery list stays practical.',
     includeSnack ? 'Include one snack id per day in snacks array.' : 'Do not include snacks unless requested.',
     'Output schema:',
     '{"notes": string[], "days": [{"breakfast":"id","lunch":"id","dinner":"id","snacks":["id"]}]}',
