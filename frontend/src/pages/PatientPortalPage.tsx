@@ -23,7 +23,7 @@ import { warmCheckoutPath } from '../lib/performanceWarmup';
 import HomeTab from '../patient-portal/home/HomeTab';
 import OnboardingFlow from '../weight-loss-reset/components/OnboardingFlow';
 import WeightLossResetDashboard from '../weight-loss-reset/components/WeightLossResetDashboard';
-import { generateMealPlan, withRecalculatedTotals, swapMealInPlan } from '../weight-loss-reset/mealPlanning';
+import { generateMealPlan, postProcessGeneratedMealPlan, swapMealInPlan } from '../weight-loss-reset/mealPlanning';
 import { loadWeightLossRecipes } from '../weight-loss-reset/recipeData';
 import { useWeightLossResetState } from '../weight-loss-reset/useWeightLossResetState';
 import {
@@ -1464,7 +1464,7 @@ export default function PatientPortalPage() {
                         });
 
                         if (response.ok && payload?.mealPlan?.days?.length === 7) {
-                            setMealPlan(withRecalculatedTotals(payload.mealPlan, recipeMap));
+                            setMealPlan(postProcessGeneratedMealPlan(payload.mealPlan, answers, recipeMap));
                             return;
                         }
                     } catch {
@@ -1477,7 +1477,7 @@ export default function PatientPortalPage() {
                     answers,
                     seedSalt,
                 });
-                setMealPlan(withRecalculatedTotals(generated.mealPlan, recipeMap));
+                setMealPlan(postProcessGeneratedMealPlan(generated.mealPlan, answers, recipeMap));
             } finally {
                 isGeneratingMealPlanRef.current = false;
                 setIsGeneratingMealPlan(false);
@@ -1527,7 +1527,13 @@ export default function PatientPortalPage() {
                 mealType,
                 replacementRecipeId: recipeId,
             });
-            replaceMealPlan(withRecalculatedTotals(swapped, new Map(weightLossRecipes.map((recipe) => [recipe.id, recipe]))));
+            replaceMealPlan(
+                postProcessGeneratedMealPlan(
+                    swapped,
+                    weightLossStateRef.current.onboardingAnswers,
+                    new Map(weightLossRecipes.map((recipe) => [recipe.id, recipe]))
+                )
+            );
         },
         [replaceMealPlan, weightLossRecipes, weightLossResetState.mealPlan]
     );
@@ -1544,10 +1550,16 @@ export default function PatientPortalPage() {
         const hasUnknownRecipes = plannedIds.some((id) => !recipeIdSet.has(id));
         if (!hasUnknownRecipes) {
             const recipeMap = new Map(weightLossRecipes.map((recipe) => [recipe.id, recipe]));
-            const recalculated = withRecalculatedTotals(weightLossResetState.mealPlan, recipeMap);
+            const recalculated = postProcessGeneratedMealPlan(
+                weightLossResetState.mealPlan,
+                weightLossResetState.onboardingAnswers,
+                recipeMap
+            );
             const currentTotals = JSON.stringify(weightLossResetState.mealPlan.days.map((day) => day.totals || {}));
             const nextTotals = JSON.stringify(recalculated.days.map((day) => day.totals || {}));
-            if (currentTotals === nextTotals) return;
+            const currentStructure = JSON.stringify(weightLossResetState.mealPlan.days.map((day) => day.meals || {}));
+            const nextStructure = JSON.stringify(recalculated.days.map((day) => day.meals || {}));
+            if (currentTotals === nextTotals && currentStructure === nextStructure) return;
             replaceMealPlan(recalculated);
             return;
         }

@@ -50,6 +50,16 @@ function buildRecipeTimeMeta(recipe: Recipe) {
   return `${prepLabel} • ${cookLabel}`;
 }
 
+function formatMinutesLabel(totalMinutes: number) {
+  const value = Math.max(0, Math.round(Number(totalMinutes || 0)));
+  if (!value) return 'n/a';
+  const hours = Math.floor(value / 60);
+  const minutes = value % 60;
+  if (hours > 0 && minutes > 0) return `${hours}h ${minutes}m`;
+  if (hours > 0) return `${hours}h`;
+  return `${minutes}m`;
+}
+
 function readRecipeServes(recipe: Recipe) {
   const direct = Number(recipe.serves || 0);
   if (Number.isFinite(direct) && direct > 0) return Math.round(direct * 10) / 10;
@@ -226,18 +236,39 @@ export default function WeightLossResetDashboard({
 
   const recipeMap = useMemo(() => new Map(recipes.map((recipe) => [recipe.id, recipe])), [recipes]);
   const groceryGroups = useMemo(() => buildGroceryListFromMealPlan(mealPlan, recipeMap), [mealPlan, recipeMap]);
-  const groceryRecipeIds = useMemo(() => {
-    if (!mealPlan) return [] as string[];
-    return [
-      ...new Set(
-        mealPlan.days
-          .flatMap((day) => [day.meals.breakfast, day.meals.lunch, day.meals.dinner, ...(day.meals.snacks || [])])
-          .filter((recipeId): recipeId is string => Boolean(recipeId))
-      ),
-    ];
-  }, [mealPlan]);
+  const groceryRecipeSummaries = useMemo(() => {
+    if (!mealPlan) return [] as Array<{ key: string; title: string; imageUrl: string; count: number }>;
+    const byKey = new Map<string, { key: string; title: string; imageUrl: string; count: number }>();
+
+    for (const day of mealPlan.days) {
+      for (const recipeId of [day.meals.breakfast, day.meals.lunch, day.meals.dinner, ...(day.meals.snacks || [])]) {
+        if (!recipeId) continue;
+        const recipe = recipeMap.get(recipeId);
+        if (!recipe) continue;
+        const dedupeKey = String(recipe.source?.url || recipe.title || recipe.id).trim().toLowerCase();
+        if (!dedupeKey) continue;
+        const existing = byKey.get(dedupeKey);
+        if (existing) {
+          existing.count += 1;
+          continue;
+        }
+        byKey.set(dedupeKey, {
+          key: dedupeKey,
+          title: recipe.title,
+          imageUrl: recipe.imageUrl || '/nutrionist.webp',
+          count: 1,
+        });
+      }
+    }
+
+    return [...byKey.values()].sort((a, b) => a.title.localeCompare(b.title));
+  }, [mealPlan, recipeMap]);
   const generationMessages = useMemo(() => buildGenerationMessages(answers), [answers]);
   const focusLabel = useMemo(() => getHealthFocusDisplayLabel(answers.primaryHealthFocus), [answers.primaryHealthFocus]);
+  const visibleCoreMealTypes = useMemo<PrimaryMealType[]>(
+    () => (Number(answers.mealsPerDay || 3) <= 2 ? ['lunch', 'dinner'] : ['breakfast', 'lunch', 'dinner']),
+    [answers.mealsPerDay]
+  );
   const visiblePlanNotes = useMemo(
     () =>
       (mealPlan?.notes || []).filter((note) => {
@@ -496,19 +527,32 @@ export default function WeightLossResetDashboard({
 
           {mealPlan?.prepDayPlan ? (
             <article className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-4">
-              <h3 className="text-base font-semibold text-[#18251e]">{mealPlan.prepDayPlan.title}</h3>
-              {mealPlan.prepDayPlan.sharedIngredients.length > 0 ? (
-                <p className="mt-1 text-sm text-[#5f7063]">
-                  Shared ingredients: {mealPlan.prepDayPlan.sharedIngredients.slice(0, 12).join(', ')}
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-base font-semibold text-[#18251e]">{mealPlan.prepDayPlan.title}</h3>
+                <p className="rounded-full border border-[#dbe2d9] bg-white px-3 py-1 text-xs font-semibold text-[#334155]">
+                  {mealPlan.prepDayPlan.prepDay || answers.prepDay || 'Sunday'} • ~{formatMinutesLabel(mealPlan.prepDayPlan.totalPrepMinutes)}
                 </p>
+              </div>
+
+              {mealPlan.prepDayPlan.sharedIngredients.length > 0 ? (
+                <div className="mt-3 rounded-xl border border-[#dbe2d9] bg-white p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.05em] text-[#475569]">Shared Ingredients</p>
+                  <p className="mt-1 text-sm text-[#334155]">
+                    {mealPlan.prepDayPlan.sharedIngredients.slice(0, 14).join(', ')}
+                  </p>
+                </div>
               ) : null}
-              <ol className="mt-3 space-y-1 text-sm text-[#334155]">
-                {mealPlan.prepDayPlan.steps.map((step, index) => (
-                  <li key={`prep-step-${index}`}>
-                    {index + 1}. {step}
-                  </li>
-                ))}
-              </ol>
+
+              <div className="mt-3 rounded-xl border border-[#dbe2d9] bg-white p-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.05em] text-[#475569]">Step-By-Step</p>
+                <ol className="mt-2 space-y-1 text-sm text-[#334155]">
+                  {mealPlan.prepDayPlan.steps.map((step, index) => (
+                    <li key={`prep-step-${index}`}>
+                      {index + 1}. {step}
+                    </li>
+                  ))}
+                </ol>
+              </div>
             </article>
           ) : null}
 
@@ -522,7 +566,7 @@ export default function WeightLossResetDashboard({
               </div>
 
               <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                {(['breakfast', 'lunch', 'dinner'] as PrimaryMealType[]).map((mealType) => {
+                {visibleCoreMealTypes.map((mealType) => {
                   const recipeId = day.meals[mealType];
                   const recipe = recipeId ? recipeMap.get(recipeId) : null;
                   if (!recipe) {
@@ -579,26 +623,29 @@ export default function WeightLossResetDashboard({
             </p>
           ) : (
             <div className="space-y-4">
-              {groceryRecipeIds.length > 0 && (
+              {groceryRecipeSummaries.length > 0 && (
                 <article className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-3">
                   <h3 className="text-sm font-semibold text-[#18251e]">Meals included in this week</h3>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {groceryRecipeIds.map((recipeId) => {
-                      const recipe = recipeMap.get(recipeId);
-                      if (!recipe) return null;
+                    {groceryRecipeSummaries.map((entry) => {
                       return (
                         <div
-                          key={`grocery-recipe-${recipe.id}`}
+                          key={`grocery-recipe-${entry.key}`}
                           className="inline-flex max-w-[280px] items-center gap-2 rounded-full border border-[#dbe2d9] bg-white px-2 py-1"
-                          title={recipe.title}
+                          title={entry.title}
                         >
                           <img
-                            src={recipe.imageUrl || '/nutrionist.webp'}
-                            alt={recipe.title}
+                            src={entry.imageUrl}
+                            alt={entry.title}
                             className="h-6 w-6 shrink-0 rounded-full object-cover"
                             loading="lazy"
                           />
-                          <span className="truncate text-xs text-[#334155]">{recipe.title}</span>
+                          <span className="truncate text-xs text-[#334155]">{entry.title}</span>
+                          {entry.count > 1 ? (
+                            <span className="rounded-full bg-[#f1f5f9] px-1.5 py-0.5 text-[10px] font-semibold text-[#475569]">
+                              x{entry.count}
+                            </span>
+                          ) : null}
                         </div>
                       );
                     })}

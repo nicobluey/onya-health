@@ -52,6 +52,8 @@ export interface MealPlan {
   notes?: string[];
   prepDayPlan?: {
     title: string;
+    prepDay: string;
+    totalPrepMinutes: number;
     sharedIngredients: string[];
     steps: string[];
   };
@@ -102,6 +104,7 @@ export interface OnboardingAnswers {
   daysPerWeek: number;
   budgetPreference: 'low cost' | 'balanced' | 'premium';
   groceryPreference: 'simple supermarket ingredients' | 'fastest meals possible' | 'high variety' | 'meal prep friendly';
+  prepDay: string;
   preferredMealStyle:
     | 'quick and easy'
     | 'family friendly'

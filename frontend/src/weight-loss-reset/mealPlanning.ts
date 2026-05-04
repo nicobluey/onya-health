@@ -79,6 +79,11 @@ const SWEET_OR_SNACK_KEYWORDS = [
   'drink',
 ];
 
+function getCoreMealTypesForMealsPerDay(mealsPerDay: number): Array<'breakfast' | 'lunch' | 'dinner'> {
+  if (Number(mealsPerDay || 0) <= 2) return ['lunch', 'dinner'];
+  return ['breakfast', 'lunch', 'dinner'];
+}
+
 function normalizeText(value: string) {
   return value.toLowerCase().trim();
 }
@@ -531,6 +536,103 @@ function calculateDayTotals(day: MealPlanDay, recipeMap: Map<string, Recipe>) {
   };
 }
 
+function buildBestEffortPool({
+  recipes,
+  mealType,
+  answers,
+}: {
+  recipes: Recipe[];
+  mealType: 'breakfast' | 'lunch' | 'dinner';
+  answers: OnboardingAnswers;
+}) {
+  const strict = buildCandidatePool({ recipes, mealType, answers, stage: 1 });
+  if (strict.length > 0) return strict;
+  const relaxed = buildCandidatePool({ recipes, mealType, answers, stage: 2 });
+  if (relaxed.length > 0) return relaxed;
+  const loose = buildCandidatePool({ recipes, mealType, answers, stage: 3 });
+  if (loose.length > 0) return loose;
+  const fallback = recipes.filter((recipe) =>
+    mealType === 'breakfast'
+      ? recipe.mealType === 'breakfast'
+      : recipe.mealType === mealType || recipe.mealType === 'lunch' || recipe.mealType === 'dinner',
+  );
+  return fallback.length > 0 ? fallback : recipes;
+}
+
+function normalizeMealAssignmentsForPracticality(mealPlan: MealPlan, answers: OnboardingAnswers, recipeMap: Map<string, Recipe>): MealPlan {
+  const recipes = [...recipeMap.values()];
+  if (recipes.length === 0 || mealPlan.days.length === 0) return mealPlan;
+
+  const coreMealTypes = getCoreMealTypesForMealsPerDay(answers.mealsPerDay);
+  const pools = {
+    breakfast: buildBestEffortPool({ recipes, mealType: 'breakfast', answers }),
+    lunch: buildBestEffortPool({ recipes, mealType: 'lunch', answers }),
+    dinner: buildBestEffortPool({ recipes, mealType: 'dinner', answers }),
+  };
+  const repeatGuard = answers.groceryPreference === 'meal prep friendly' ? 4 : 3;
+  const usageByType: Record<'breakfast' | 'lunch' | 'dinner', Map<string, number>> = {
+    breakfast: new Map(),
+    lunch: new Map(),
+    dinner: new Map(),
+  };
+
+  const nextDays = mealPlan.days.map((day) => ({ ...day, meals: { ...day.meals } }));
+  for (let dayIndex = 0; dayIndex < nextDays.length; dayIndex += 1) {
+    const day = nextDays[dayIndex];
+
+    for (const mealType of coreMealTypes) {
+      const rawId = String(day.meals[mealType] || '').trim();
+      const currentRecipe = rawId ? recipeMap.get(rawId) : undefined;
+      const validCurrent = Boolean(currentRecipe && recipePassesMealPlanningHeuristics(currentRecipe, mealType, 1));
+      const sameDayCoreIds = new Set(
+        coreMealTypes
+          .map((entry) => String(day.meals[entry] || '').trim())
+          .filter((entry) => entry && entry !== rawId),
+      );
+      const previousId = dayIndex > 0 ? String(nextDays[dayIndex - 1].meals[mealType] || '').trim() : '';
+      const existingCount = rawId ? usageByType[mealType].get(rawId) || 0 : 0;
+
+      let pickedId = rawId;
+      const needsReplacement = !rawId || !validCurrent || existingCount >= repeatGuard || sameDayCoreIds.has(rawId);
+      if (needsReplacement) {
+        const candidates = pools[mealType]
+          .filter((recipe) => recipePassesMealPlanningHeuristics(recipe, mealType, 2))
+          .map((recipe) => {
+            const alreadyUsed = usageByType[mealType].get(recipe.id) || 0;
+            return {
+              recipe,
+              alreadyUsed,
+              preference: recipePreferenceScore(recipe, answers),
+              isSameAsPreviousDay: recipe.id === previousId ? 1 : 0,
+              isSameDayCollision: sameDayCoreIds.has(recipe.id) ? 1 : 0,
+            };
+          })
+          .sort(
+            (a, b) =>
+              a.isSameDayCollision - b.isSameDayCollision ||
+              a.alreadyUsed - b.alreadyUsed ||
+              a.isSameAsPreviousDay - b.isSameAsPreviousDay ||
+              b.preference - a.preference ||
+              a.recipe.title.localeCompare(b.recipe.title),
+          );
+
+        const firstNonColliding = candidates.find((entry) => entry.isSameDayCollision === 0);
+        pickedId = (firstNonColliding || candidates[0])?.recipe.id || rawId;
+      }
+
+      day.meals[mealType] = pickedId || undefined;
+      if (pickedId) {
+        usageByType[mealType].set(pickedId, (usageByType[mealType].get(pickedId) || 0) + 1);
+      }
+    }
+  }
+
+  return {
+    ...mealPlan,
+    days: nextDays,
+  };
+}
+
 function parseRecipeServesCount(recipe: Recipe) {
   const direct = Number(recipe.serves || 0);
   if (Number.isFinite(direct) && direct > 0) return direct;
@@ -556,7 +658,7 @@ function buildRecipeUsageMapFromMealPlan(mealPlan: MealPlan | null) {
   return usage;
 }
 
-function buildPrepDayPlan(mealPlan: MealPlan | null, recipeMap: Map<string, Recipe>) {
+function buildPrepDayPlan(mealPlan: MealPlan | null, recipeMap: Map<string, Recipe>, prepDay: string) {
   if (!mealPlan || mealPlan.days.length === 0) return undefined;
   const usage = buildRecipeUsageMapFromMealPlan(mealPlan);
   if (usage.size === 0) return undefined;
@@ -592,6 +694,18 @@ function buildPrepDayPlan(mealPlan: MealPlan | null, recipeMap: Map<string, Reci
     ? repeatedRecipes.map((entry) => `${entry.recipe.title} (${entry.count} meals)`).join(', ')
     : 'your selected meals';
 
+  const totalPrepMinutes = repeatedRecipes.reduce((sum, entry) => {
+    const minutes = Math.max(
+      0,
+      Number(entry.recipe.totalTimeMinutes || 0) ||
+        Number(entry.recipe.prepTimeMinutes || 0) + Number(entry.recipe.cookTimeMinutes || 0) ||
+        Number(entry.recipe.prepTimeMinutes || 0) ||
+        Number(entry.recipe.cookTimeMinutes || 0),
+    );
+    const batchMultiplier = Math.min(1.8, 0.9 + entry.count * 0.25);
+    return sum + Math.round(minutes * batchMultiplier);
+  }, 20);
+
   const steps = [
     `Batch-cook repeated recipes first: ${repeatedMealLabels}.`,
     sharedIngredients.length > 0
@@ -604,6 +718,8 @@ function buildPrepDayPlan(mealPlan: MealPlan | null, recipeMap: Map<string, Reci
 
   return {
     title: 'Prep day game plan',
+    prepDay: prepDay || 'Sunday',
+    totalPrepMinutes,
     sharedIngredients,
     steps,
   };
@@ -644,15 +760,20 @@ function evaluateGeneratedPlanQuality({
   recipeMap,
   useMealPrepPattern,
   poolSizes,
+  coreMealTypes,
 }: {
   days: MealPlanDay[];
   recipeMap: Map<string, Recipe>;
   useMealPrepPattern: boolean;
   poolSizes: Record<'breakfast' | 'lunch' | 'dinner', number>;
+  coreMealTypes: Array<'breakfast' | 'lunch' | 'dinner'>;
 }): PlanQualityCheckResult {
   let score = 100;
   const issues: string[] = [];
   const criticalIssues: string[] = [];
+  const needsBreakfast = coreMealTypes.includes('breakfast');
+  const needsLunch = coreMealTypes.includes('lunch');
+  const needsDinner = coreMealTypes.includes('dinner');
 
   const breakfastCounts = new Map<string, number>();
   const lunchCounts = new Map<string, number>();
@@ -662,44 +783,54 @@ function evaluateGeneratedPlanQuality({
     const breakfastId = String(day.meals.breakfast || '').trim();
     const lunchId = String(day.meals.lunch || '').trim();
     const dinnerId = String(day.meals.dinner || '').trim();
-    if (!breakfastId || !lunchId || !dinnerId) {
+    if ((needsBreakfast && !breakfastId) || (needsLunch && !lunchId) || (needsDinner && !dinnerId)) {
       criticalIssues.push(`Missing core meal on ${day.label}.`);
       continue;
     }
 
-    const breakfastRecipe = recipeMap.get(breakfastId);
-    const lunchRecipe = recipeMap.get(lunchId);
-    const dinnerRecipe = recipeMap.get(dinnerId);
-    if (!breakfastRecipe || !lunchRecipe || !dinnerRecipe) {
+    const breakfastRecipe = breakfastId ? recipeMap.get(breakfastId) : undefined;
+    const lunchRecipe = lunchId ? recipeMap.get(lunchId) : undefined;
+    const dinnerRecipe = dinnerId ? recipeMap.get(dinnerId) : undefined;
+    if ((needsBreakfast && !breakfastRecipe) || (needsLunch && !lunchRecipe) || (needsDinner && !dinnerRecipe)) {
       criticalIssues.push(`Recipe metadata missing for ${day.label}.`);
       continue;
     }
 
-    if (!recipePassesMealPlanningHeuristics(breakfastRecipe, 'breakfast', 1)) {
+    if (needsBreakfast && breakfastRecipe && !recipePassesMealPlanningHeuristics(breakfastRecipe, 'breakfast', 1)) {
       criticalIssues.push(`Breakfast on ${day.label} is too heavy or impractical.`);
     }
-    if (!recipePassesMealPlanningHeuristics(lunchRecipe, 'lunch', 1)) {
+    if (needsLunch && lunchRecipe && !recipePassesMealPlanningHeuristics(lunchRecipe, 'lunch', 1)) {
       criticalIssues.push(`Lunch on ${day.label} is too light, too sweet, or impractical.`);
     }
-    if (!recipePassesMealPlanningHeuristics(dinnerRecipe, 'dinner', 1)) {
+    if (needsDinner && dinnerRecipe && !recipePassesMealPlanningHeuristics(dinnerRecipe, 'dinner', 1)) {
       criticalIssues.push(`Dinner on ${day.label} is too light, too sweet, or impractical.`);
     }
 
-    if (breakfastId === lunchId || breakfastId === dinnerId || lunchId === dinnerId) {
+    const coreIds = [needsBreakfast ? breakfastId : '', needsLunch ? lunchId : '', needsDinner ? dinnerId : ''].filter(Boolean);
+    const uniqueCoreIds = new Set(coreIds);
+    if (uniqueCoreIds.size !== coreIds.length) {
       score -= 8;
       issues.push(`Repeated core meal in the same day (${day.label}).`);
     }
 
-    breakfastCounts.set(breakfastId, (breakfastCounts.get(breakfastId) || 0) + 1);
-    lunchCounts.set(lunchId, (lunchCounts.get(lunchId) || 0) + 1);
-    dinnerCounts.set(dinnerId, (dinnerCounts.get(dinnerId) || 0) + 1);
+    if (needsBreakfast && breakfastId) {
+      breakfastCounts.set(breakfastId, (breakfastCounts.get(breakfastId) || 0) + 1);
+    }
+    if (needsLunch && lunchId) {
+      lunchCounts.set(lunchId, (lunchCounts.get(lunchId) || 0) + 1);
+    }
+    if (needsDinner && dinnerId) {
+      dinnerCounts.set(dinnerId, (dinnerCounts.get(dinnerId) || 0) + 1);
+    }
 
     const totals = calculateDayTotals(day, recipeMap);
-    if ((totals.calories || 0) > 2400) {
+    const maxDailyCalories = coreMealTypes.length <= 2 ? 1900 : 2400;
+    const minDailyCalories = coreMealTypes.length <= 2 ? 700 : 900;
+    if ((totals.calories || 0) > maxDailyCalories) {
       score -= 6;
       issues.push(`Daily energy looks high on ${day.label}.`);
     }
-    if ((totals.calories || 0) > 0 && (totals.calories || 0) < 900) {
+    if ((totals.calories || 0) > 0 && (totals.calories || 0) < minDailyCalories) {
       score -= 10;
       issues.push(`Daily energy looks too low on ${day.label}.`);
     }
@@ -708,28 +839,28 @@ function evaluateGeneratedPlanQuality({
   const breakfastRepeatMax = useMealPrepPattern ? 5 : 4;
   const lunchRepeatMax = useMealPrepPattern ? 4 : 3;
   const dinnerRepeatMax = useMealPrepPattern ? 4 : 3;
-  if ([...breakfastCounts.values()].some((count) => count > breakfastRepeatMax)) {
+  if (needsBreakfast && [...breakfastCounts.values()].some((count) => count > breakfastRepeatMax)) {
     score -= 10;
     issues.push('Breakfast variety is too low for the week.');
   }
-  if ([...lunchCounts.values()].some((count) => count > lunchRepeatMax)) {
+  if (needsLunch && [...lunchCounts.values()].some((count) => count > lunchRepeatMax)) {
     score -= 8;
     issues.push('Lunch variety is too low for the week.');
   }
-  if ([...dinnerCounts.values()].some((count) => count > dinnerRepeatMax)) {
+  if (needsDinner && [...dinnerCounts.values()].some((count) => count > dinnerRepeatMax)) {
     score -= 8;
     issues.push('Dinner variety is too low for the week.');
   }
 
-  if (poolSizes.breakfast >= 3 && breakfastCounts.size < 2) {
+  if (needsBreakfast && poolSizes.breakfast >= 3 && breakfastCounts.size < 2) {
     score -= 12;
     issues.push('Breakfast choices are over-repeated.');
   }
-  if (poolSizes.lunch >= 4 && lunchCounts.size < 2) {
+  if (needsLunch && poolSizes.lunch >= 4 && lunchCounts.size < 2) {
     score -= 10;
     issues.push('Lunch choices are over-repeated.');
   }
-  if (poolSizes.dinner >= 4 && dinnerCounts.size < 2) {
+  if (needsDinner && poolSizes.dinner >= 4 && dinnerCounts.size < 2) {
     score -= 10;
     issues.push('Dinner choices are over-repeated.');
   }
@@ -782,8 +913,9 @@ export function generateMealPlan({
 
   const baseSeed = `${answers.firstName}|${answers.age || ''}|${answers.goalWeightKg || ''}|${answers.biggestChallenge}|${answers.mainGoal}|${seedSalt}`;
 
+  const coreMealTypes = getCoreMealTypesForMealsPerDay(answers.mealsPerDay);
   const requiresSnack = answers.mealsPerDay >= 4;
-  const mealTypesForDay: MealType[] = requiresSnack ? ['breakfast', 'lunch', 'dinner', 'snack'] : ['breakfast', 'lunch', 'dinner'];
+  const mealTypesForDay: MealType[] = requiresSnack ? [...coreMealTypes, 'snack'] : [...coreMealTypes];
 
   const candidatePools = {
     breakfast: buildCandidatePool({ recipes, mealType: 'breakfast', answers, stage: 1 }),
@@ -904,9 +1036,11 @@ export function generateMealPlan({
           });
 
       const breakfastId =
-        breakfastRecipe?.id ||
-        candidatePools.breakfast[dayIndex % candidatePools.breakfast.length]?.id ||
-        fallbackCatalog[dayIndex % fallbackCatalog.length]?.id;
+        coreMealTypes.includes('breakfast')
+          ? breakfastRecipe?.id ||
+            candidatePools.breakfast[dayIndex % candidatePools.breakfast.length]?.id ||
+            fallbackCatalog[dayIndex % fallbackCatalog.length]?.id
+          : undefined;
       const lunchId =
         lunchRecipe?.id ||
         candidatePools.lunch[dayIndex % candidatePools.lunch.length]?.id ||
@@ -945,7 +1079,7 @@ export function generateMealPlan({
       };
       day.totals = calculateDayTotals(day, recipeMap);
       days.push(day);
-      lastBreakfastId = breakfastId || lastBreakfastId;
+      if (breakfastId) lastBreakfastId = breakfastId;
       lastLunchId = lunchId || lastLunchId;
       lastDinnerId = dinnerId || lastDinnerId;
       lastSnackId = snacks[0] || lastSnackId;
@@ -965,6 +1099,7 @@ export function generateMealPlan({
       recipeMap,
       useMealPrepPattern,
       poolSizes,
+      coreMealTypes,
     });
 
     if (quality.score > bestScore) {
@@ -991,14 +1126,14 @@ export function generateMealPlan({
     generatedAt: new Date().toISOString(),
   };
 
-  if (days.some((day) => !day.meals.breakfast || !day.meals.lunch || !day.meals.dinner)) {
+  if (days.some((day) => coreMealTypes.some((mealType) => !day.meals[mealType]))) {
     notes.push('Some meals were broadened because available recipe matches were limited for your profile.');
   }
   if (selectedQuality && !selectedQuality.valid && selectedQuality.issues.length > 0) {
     notes.push(`Plan quality warning: ${selectedQuality.issues[0]}`);
   }
 
-  const prepDayPlan = buildPrepDayPlan(baseMealPlan, recipeMap);
+  const prepDayPlan = buildPrepDayPlan(baseMealPlan, recipeMap, answers.prepDay || 'Sunday');
 
   return {
     mealPlan: {
@@ -1081,6 +1216,86 @@ export function swapMealInPlan({
   };
 }
 
+function constrainMealsPerDay(mealPlan: MealPlan, answers: OnboardingAnswers): MealPlan {
+  const coreMealTypes = getCoreMealTypesForMealsPerDay(answers.mealsPerDay);
+  const includeSnack = answers.mealsPerDay >= 4;
+  const nextDays = mealPlan.days.map((day) => ({
+    ...day,
+    meals: {
+      breakfast: coreMealTypes.includes('breakfast') ? day.meals.breakfast : undefined,
+      lunch: coreMealTypes.includes('lunch') ? day.meals.lunch : undefined,
+      dinner: coreMealTypes.includes('dinner') ? day.meals.dinner : undefined,
+      snacks: includeSnack ? day.meals.snacks : undefined,
+    },
+  }));
+  return {
+    ...mealPlan,
+    days: nextDays,
+  };
+}
+
+function compactMealPrepVariety(mealPlan: MealPlan, answers: OnboardingAnswers, recipeMap: Map<string, Recipe>): MealPlan {
+  if (answers.groceryPreference !== 'meal prep friendly') return mealPlan;
+  const coreMealTypes = getCoreMealTypesForMealsPerDay(answers.mealsPerDay);
+  const targetUniqueByType: Record<'breakfast' | 'lunch' | 'dinner', number> = {
+    breakfast: coreMealTypes.includes('breakfast') ? 2 : 0,
+    lunch: coreMealTypes.length <= 2 ? 2 : 3,
+    dinner: coreMealTypes.length <= 2 ? 2 : 3,
+  };
+
+  const nextDays = mealPlan.days.map((day) => ({ ...day, meals: { ...day.meals } }));
+  for (const mealType of coreMealTypes) {
+    const targetUnique = targetUniqueByType[mealType];
+    if (targetUnique <= 0) continue;
+    const counts = new Map<string, number>();
+    for (const day of nextDays) {
+      const id = String(day.meals[mealType] || '').trim();
+      if (!id) continue;
+      counts.set(id, (counts.get(id) || 0) + 1);
+    }
+    if (counts.size <= targetUnique) continue;
+
+    const keepIds = [...counts.entries()]
+      .map(([id, count]) => {
+        const recipe = recipeMap.get(id);
+        return { id, count, preference: recipe ? recipePreferenceScore(recipe, answers) : 0 };
+      })
+      .sort((a, b) => b.count - a.count || b.preference - a.preference || a.id.localeCompare(b.id))
+      .slice(0, targetUnique)
+      .map((entry) => entry.id);
+
+    if (keepIds.length === 0) continue;
+    const pattern = MEAL_PREP_PATTERNS[mealType];
+    for (let dayIndex = 0; dayIndex < nextDays.length; dayIndex += 1) {
+      const currentId = String(nextDays[dayIndex].meals[mealType] || '').trim();
+      if (keepIds.includes(currentId)) continue;
+      nextDays[dayIndex].meals[mealType] = keepIds[(pattern[dayIndex % pattern.length] || 0) % keepIds.length];
+    }
+  }
+
+  return {
+    ...mealPlan,
+    days: nextDays,
+  };
+}
+
+export function postProcessGeneratedMealPlan(mealPlan: MealPlan, answers: OnboardingAnswers, recipeMap: Map<string, Recipe>) {
+  const constrained = constrainMealsPerDay(mealPlan, answers);
+  const practical = normalizeMealAssignmentsForPracticality(constrained, answers, recipeMap);
+  const compacted = compactMealPrepVariety(practical, answers, recipeMap);
+  const prepDay = answers.prepDay || compacted.prepDayPlan?.prepDay || 'Sunday';
+  const withPrepDay = compacted.prepDayPlan
+    ? {
+        ...compacted,
+        prepDayPlan: {
+          ...compacted.prepDayPlan,
+          prepDay,
+        },
+      }
+    : compacted;
+  return withRecalculatedTotals(withPrepDay, recipeMap);
+}
+
 export function withRecalculatedTotals(mealPlan: MealPlan, recipeMap: Map<string, Recipe>) {
   const nextMealPlan: MealPlan = {
     ...mealPlan,
@@ -1091,7 +1306,7 @@ export function withRecalculatedTotals(mealPlan: MealPlan, recipeMap: Map<string
   };
   return {
     ...nextMealPlan,
-    prepDayPlan: buildPrepDayPlan(nextMealPlan, recipeMap),
+    prepDayPlan: buildPrepDayPlan(nextMealPlan, recipeMap, mealPlan.prepDayPlan?.prepDay || 'Sunday'),
   };
 }
 
@@ -1123,6 +1338,12 @@ const SENTENCE_NOISE_PATTERNS = [
   /available in most grocery stores/i,
   /substitute/i,
   /time-saving option/i,
+  /serving suggestion/i,
+  /included in nutrition/i,
+  /to garnish/i,
+  /for garnish/i,
+  /optional toppings/i,
+  /^note[:\s]/i,
   /^optional[:\s]/i,
 ];
 const IGNORED_CANONICAL_INGREDIENTS = new Set([
@@ -1136,6 +1357,20 @@ const IGNORED_CANONICAL_INGREDIENTS = new Set([
   'ice',
   'ice-cube',
   'ice cube',
+]);
+const GENERIC_CANONICAL_INGREDIENTS = new Set([
+  'low fat',
+  'reduced fat',
+  'fat free',
+  'roasted',
+  'mixed',
+  'desiccated',
+  'seed',
+  'nuts',
+  'few cashew',
+  'freshly ground black pepper',
+  'salt and pepper',
+  'salt and black pepper',
 ]);
 const LEADING_DESCRIPTORS = new Set([
   'and',
@@ -1265,37 +1500,36 @@ const QUANTITY_UNIT_ALIASES: Record<string, string> = {
   heads: 'head',
   pita: 'pita',
   pitas: 'pita',
-  date: 'date',
-  dates: 'date',
-  peach: 'peach',
-  peaches: 'peach',
-  leek: 'leek',
-  leeks: 'leek',
+  banana: 'banana',
+  bananas: 'banana',
+  avocado: 'avocado',
+  avocados: 'avocado',
+  carrot: 'carrot',
+  carrots: 'carrot',
+  onion: 'onion',
+  onions: 'onion',
+  zucchini: 'zucchini',
+  zucchinis: 'zucchini',
+  capsicum: 'capsicum',
+  capsicums: 'capsicum',
+  tomato: 'tomato',
+  tomatoes: 'tomato',
+  potato: 'potato',
+  potatoes: 'potato',
   lemon: 'lemon',
   lemons: 'lemon',
   lime: 'lime',
   limes: 'lime',
   orange: 'orange',
   oranges: 'orange',
-  pomegranate: 'pomegranate',
-  pomegranates: 'pomegranate',
-  avocado: 'avocado',
-  avocados: 'avocado',
-  banana: 'banana',
-  bananas: 'banana',
-  carrot: 'carrot',
-  carrots: 'carrot',
-  onion: 'onion',
-  onions: 'onion',
-  capsicum: 'capsicum',
-  potato: 'potato',
-  potatoes: 'potato',
-  tomato: 'tomato',
-  tomatoes: 'tomato',
-  zucchini: 'zucchini',
-  zucchinis: 'zucchini',
+  date: 'date',
+  dates: 'date',
+  peach: 'peach',
+  peaches: 'peach',
   mango: 'mango',
   mangoes: 'mango',
+  leek: 'leek',
+  leeks: 'leek',
 };
 const MEASURE_UNITS = new Set(['cup', 'tbsp', 'tsp', 'g', 'kg', 'ml', 'l']);
 const UNIT_DISPLAY_ORDER = [
@@ -1321,8 +1555,20 @@ const UNIT_DISPLAY_ORDER = [
   'bag',
   'head',
   'pita',
+  'banana',
+  'avocado',
+  'carrot',
+  'onion',
+  'zucchini',
+  'capsicum',
+  'tomato',
+  'potato',
+  'lemon',
+  'lime',
+  'orange',
   'date',
   'peach',
+  'mango',
   'leek',
 ];
 
@@ -1383,9 +1629,13 @@ function extractAggregatedQuantity(line: string) {
 
   const compactUnitMatch = source.match(/^(\d+(?:\.\d+)?)(g|kg|ml|l)\b/i);
   if (compactUnitMatch) {
+    const normalized = normalizeAggregatedUnitAmount(
+      Number(compactUnitMatch[1]),
+      normalizeQuantityUnitToken(compactUnitMatch[2]) || compactUnitMatch[2].toLowerCase(),
+    );
     return {
-      amount: Number(compactUnitMatch[1]),
-      unit: normalizeQuantityUnitToken(compactUnitMatch[2]) || compactUnitMatch[2].toLowerCase(),
+      amount: normalized.amount,
+      unit: normalized.unit,
     };
   }
 
@@ -1406,9 +1656,13 @@ function extractAggregatedQuantity(line: string) {
       if (Number.isFinite(multiplier) && multiplier > 0) {
         amount *= multiplier;
       }
-      return {
+      const normalized = normalizeAggregatedUnitAmount(
         amount,
-        unit: normalizeQuantityUnitToken(multipliedMatch[2]) || multipliedMatch[2].toLowerCase(),
+        normalizeQuantityUnitToken(multipliedMatch[2]) || multipliedMatch[2].toLowerCase(),
+      );
+      return {
+        amount: normalized.amount,
+        unit: normalized.unit,
       };
     }
   }
@@ -1438,7 +1692,22 @@ function extractAggregatedQuantity(line: string) {
     }
   }
 
-  return unit ? { amount, unit } : null;
+  if (!unit) return null;
+  const normalized = normalizeAggregatedUnitAmount(amount, unit);
+  return { amount: normalized.amount, unit: normalized.unit };
+}
+
+function normalizeAggregatedUnitAmount(amount: number, unit: string) {
+  let normalizedAmount = Number(amount || 0);
+  let normalizedUnit = unit;
+  if (unit === 'kg') {
+    normalizedAmount *= 1000;
+    normalizedUnit = 'g';
+  } else if (unit === 'l') {
+    normalizedAmount *= 1000;
+    normalizedUnit = 'ml';
+  }
+  return { amount: normalizedAmount, unit: normalizedUnit };
 }
 
 function formatAggregatedAmount(amount: number) {
@@ -1478,8 +1747,17 @@ function formatQuantityLabels(quantityTotals: Map<string, number>, unparsedCount
       return a[0].localeCompare(b[0]);
     })
     .map(([unit, amount]) => {
-      const unitLabel = formatQuantityUnit(unit, amount);
-      return [formatAggregatedAmount(amount), unitLabel].filter(Boolean).join(' ');
+      let displayAmount = amount;
+      let displayUnit = unit;
+      if (unit === 'g' && amount >= 1000) {
+        displayAmount = amount / 1000;
+        displayUnit = 'kg';
+      } else if (unit === 'ml' && amount >= 1000) {
+        displayAmount = amount / 1000;
+        displayUnit = 'l';
+      }
+      const unitLabel = formatQuantityUnit(displayUnit, displayAmount);
+      return [formatAggregatedAmount(displayAmount), unitLabel].filter(Boolean).join(' ');
     });
 
   const looseTotals = new Map<string, number>();
@@ -1519,6 +1797,9 @@ function formatQuantityLabels(quantityTotals: Map<string, number>, unparsedCount
 function shouldIgnoreIngredientLine(line: string) {
   const normalized = normalizeText(line);
   if (!normalized) return true;
+  if (/\boptional\b/i.test(line)) return true;
+  if (/\bto serve\b/i.test(line)) return true;
+  if (/\bgarnish\b/i.test(line)) return true;
   const lettersOnly = line.replace(/[^A-Za-z]/g, '');
   const isUpperHeading =
     lettersOnly.length >= 4 &&
@@ -1555,7 +1836,8 @@ function normalizeIngredientBaseName(rawLine: string) {
     /^(?:about|approx(?:\.|imately)?)?\s*(?:\d+\s+\d+\/\d+|\d+\s*[¼½¾⅓⅔⅛⅜⅝⅞]|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]|(?:half|quarter|one|two|three|four|five|six|seven|eight|nine|ten|a|an)\b)(?:\s*-\s*(?:\d+\s+\d+\/\d+|\d+\s*[¼½¾⅓⅔⅛⅜⅝⅞]|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]))?\s*/i,
     '',
   );
-  value = value.replace(/^(?:juice|rind|zest|seeds?)\s+of\s+/i, '');
+  value = value.replace(/^(?:juice(?:\s+and\s+rind)?|rind|zest|seeds?|arils?)\s+of\s+/i, '');
+  value = value.replace(/^juice\s+and\s+rind\s+of\s+/i, '');
 
   const tokens = value.split(/\s+/).filter(Boolean);
   while (tokens.length > 1) {
@@ -1627,6 +1909,8 @@ function canonicalizeIngredientBaseName(baseName: string) {
     .replace(/\bthai basil\b/g, 'basil')
     .replace(/\blemon or lime\b/g, 'lemon')
     .replace(/\bsriracha or chilli\b/g, 'chilli')
+    .replace(/\bleon juice\b/g, 'lemon juice')
+    .replace(/\bjuice and rind of\b/g, '')
     .replace(/\bcoconut\b$/g, '')
     .replace(/\bextra chia seed\b/g, '')
     .replace(/\bfor cooking\b/g, '')
@@ -1685,7 +1969,7 @@ function inferGroceryCategory(baseName: string) {
   ) {
     return 'protein';
   }
-  if (containsAny(text, ['yoghurt', 'yogurt', 'milk', 'feta', 'ricotta', 'cheese', 'haloumi', 'bocconcini', 'chevre'])) {
+  if (containsAny(text, ['yoghurt', 'yogurt', 'milk', 'feta', 'ricotta', 'cheese', 'haloumi', 'bocconcini', 'chevre', 'kefir'])) {
     return 'dairy';
   }
   if (containsAny(text, ['rice', 'pasta', 'noodle', 'oats', 'flour', 'farro', 'freekeh', 'quinoa', 'couscous', 'tortilla', 'spaghetti', 'pita', 'polenta'])) {
@@ -1708,7 +1992,11 @@ function shouldIgnoreCanonicalIngredient(baseName: string) {
   const normalized = normalizeText(baseName);
   if (!normalized) return true;
   if (IGNORED_CANONICAL_INGREDIENTS.has(normalized)) return true;
+  if (GENERIC_CANONICAL_INGREDIENTS.has(normalized)) return true;
   if (/^water\s+as\s+needed\b/.test(normalized)) return true;
+  if (/^arils?\s+from\b/.test(normalized)) return true;
+  if (/^juice\s+of\b/.test(normalized)) return true;
+  if (/^rind\s+of\b/.test(normalized)) return true;
   return false;
 }
 

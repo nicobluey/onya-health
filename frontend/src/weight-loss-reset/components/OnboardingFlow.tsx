@@ -583,6 +583,21 @@ export default function OnboardingFlow({
                 <option value="premium">premium</option>
               </select>
             </label>
+
+            <label className="space-y-1">
+              <span className="text-sm font-semibold text-[#334155]">Preferred prep day</span>
+              <select
+                value={answers.prepDay || 'Sunday'}
+                onChange={(event) => setAnswers((current) => ({ ...current, prepDay: event.target.value }))}
+                className={inputClassName}
+              >
+                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day) => (
+                  <option key={day} value={day}>
+                    {day}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
 
           <div>
@@ -746,6 +761,7 @@ export default function OnboardingFlow({
               </p>
               <p className="mt-1 text-sm text-[#5f7063]">Dietary: {answers.dietaryRequirements.join(', ')}</p>
               <p className="text-sm text-[#5f7063]">Meal style: {answers.preferredMealStyle}</p>
+              <p className="text-sm text-[#5f7063]">Prep day: {answers.prepDay || 'Sunday'}</p>
               <p className="text-sm text-[#5f7063]">
                 Favourite foods: {selectedFavoriteFoodLabels.join(', ') || 'No favourite foods selected'}
               </p>

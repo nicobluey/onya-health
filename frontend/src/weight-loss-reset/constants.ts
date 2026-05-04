@@ -42,6 +42,7 @@ export const DEFAULT_ONBOARDING_ANSWERS: OnboardingAnswers = {
   daysPerWeek: 7,
   budgetPreference: 'balanced',
   groceryPreference: 'simple supermarket ingredients',
+  prepDay: 'Sunday',
   preferredMealStyle: 'no preference',
   preferredCuisines: [],
   supportWanted: 'yes',
