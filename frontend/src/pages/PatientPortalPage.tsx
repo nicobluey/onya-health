@@ -1424,53 +1424,7 @@ export default function PatientPortalPage() {
                 const recipes = await ensureWeightLossRecipesLoaded();
                 if (recipes.length === 0) return;
                 const seedSalt = options.refresh ? String(Date.now()) : '';
-                const includeSnack = (answers?.mealsPerDay || 3) >= 4;
                 const recipeMap = new Map(recipes.map((recipe) => [recipe.id, recipe]));
-
-                const activeToken = token || window.localStorage.getItem('onya_patient_token') || '';
-                if (activeToken) {
-                    try {
-                        const { response, payload } = await fetchApiJson('/api/patient/meal-plan/generate', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                Authorization: `Bearer ${activeToken}`,
-                            },
-                            body: JSON.stringify({
-                                answers,
-                                includeSnack,
-                                seedSalt,
-                                recipes: recipes.map((recipe) => ({
-                                    id: recipe.id,
-                                    title: recipe.title,
-                                    description: recipe.description,
-                                    mealType: recipe.mealType,
-                                    serves: recipe.serves,
-                                    ingredients: recipe.ingredients,
-                                    instructions: recipe.instructions,
-                                    calories: recipe.calories,
-                                    protein: recipe.protein,
-                                    carbs: recipe.carbs,
-                                    fat: recipe.fat,
-                                    prepTimeMinutes: recipe.prepTimeMinutes,
-                                    cookTimeMinutes: recipe.cookTimeMinutes,
-                                    totalTimeMinutes: recipe.totalTimeMinutes,
-                                    dietaryTags: recipe.dietaryTags,
-                                    allergens: recipe.allergens,
-                                    estimatedCost: recipe.estimatedCost,
-                                    source: recipe.source,
-                                })),
-                            }),
-                        });
-
-                        if (response.ok && payload?.mealPlan?.days?.length === 7) {
-                            setMealPlan(postProcessGeneratedMealPlan(payload.mealPlan, answers, recipeMap));
-                            return;
-                        }
-                    } catch {
-                        // Fall back to deterministic rules engine below.
-                    }
-                }
 
                 const generated = generateMealPlan({
                     recipes,
@@ -1483,7 +1437,7 @@ export default function PatientPortalPage() {
                 setIsGeneratingMealPlan(false);
             }
         },
-        [ensureWeightLossRecipesLoaded, setMealPlan, token]
+        [ensureWeightLossRecipesLoaded, setMealPlan]
     );
 
     const handleWeightLossOnboardingProgress = useCallback(

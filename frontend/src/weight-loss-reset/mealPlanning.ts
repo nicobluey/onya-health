@@ -2088,6 +2088,93 @@ function toRecipeUsageMap(recipeUsage: string[] | Map<string, number>) {
   return usage;
 }
 
+function groceryItemCategoryPriority(category: string) {
+  const normalized = normalizeText(category);
+  if (normalized === 'protein') return 6;
+  if (normalized === 'produce') return 5;
+  if (normalized === 'grains') return 4;
+  if (normalized === 'dairy') return 4;
+  if (normalized === 'herbs & spices') return 2;
+  return 1;
+}
+
+function scoreGroceryItem(item: GroceryItem) {
+  let score = groceryItemCategoryPriority(item.category) * 10;
+  const quantities = Array.isArray(item.quantities) ? item.quantities : [];
+  const hasParsedQuantity = quantities.some((entry) => /\d/.test(String(entry || '')));
+  if (hasParsedQuantity) score += 8;
+  score += Math.min(8, quantities.length * 2);
+  if (item.name.length <= 20) score += 1;
+  return score;
+}
+
+function capGroceryGroupsComplexity(groups: GroceryGroup[], recipeUsage: Map<string, number>) {
+  const totalPortions = [...recipeUsage.values()].reduce((sum, value) => sum + Math.max(0, Number(value || 0)), 0);
+  const maxItems = Math.max(24, Math.min(84, Math.round(totalPortions * 4.5)));
+
+  const flat = groups.flatMap((group) =>
+    group.items.map((item) => ({
+      ...item,
+      category: group.category || item.category,
+      score: scoreGroceryItem(item),
+    })),
+  );
+
+  if (flat.length <= maxItems) return groups;
+
+  const perCategoryCaps: Record<string, number> = {
+    protein: Math.ceil(maxItems * 0.22),
+    produce: Math.ceil(maxItems * 0.32),
+    grains: Math.ceil(maxItems * 0.16),
+    dairy: Math.ceil(maxItems * 0.16),
+    'herbs & spices': Math.ceil(maxItems * 0.1),
+    pantry: Math.ceil(maxItems * 0.2),
+  };
+  const categoryCounts = new Map<string, number>();
+  const selected: Array<GroceryItem & { score: number }> = [];
+
+  const sorted = flat
+    .slice()
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
+
+  for (const item of sorted) {
+    if (selected.length >= maxItems) break;
+    const category = item.category || 'pantry';
+    const currentCount = categoryCounts.get(category) || 0;
+    const categoryCap = perCategoryCaps[category] || Math.ceil(maxItems * 0.18);
+    if (currentCount >= categoryCap) continue;
+    selected.push(item);
+    categoryCounts.set(category, currentCount + 1);
+  }
+
+  if (selected.length < Math.min(maxItems, sorted.length)) {
+    for (const item of sorted) {
+      if (selected.length >= maxItems) break;
+      if (selected.some((entry) => entry.key === item.key)) continue;
+      selected.push(item);
+    }
+  }
+
+  const byCategory = new Map<string, GroceryItem[]>();
+  for (const item of selected) {
+    const groupItems = byCategory.get(item.category) || [];
+    groupItems.push({
+      key: item.key,
+      name: item.name,
+      category: item.category,
+      quantities: item.quantities,
+    });
+    byCategory.set(item.category, groupItems);
+  }
+
+  return [...byCategory.entries()]
+    .map(([category, items]) => ({
+      category,
+      items: items.sort((a, b) => a.name.localeCompare(b.name)),
+    }))
+    .sort((a, b) => a.category.localeCompare(b.category));
+}
+
 function buildGroceryListForRecipeIds(recipeUsage: string[] | Map<string, number>, recipeMap: Map<string, Recipe>) {
   const usage = toRecipeUsageMap(recipeUsage);
   const bucket = new Map<string, GroceryItem & { quantityTotals: Map<string, number>; unparsedCounts: Map<string, number> }>();
@@ -2167,12 +2254,14 @@ function buildGroceryListForRecipeIds(recipeUsage: string[] | Map<string, number
     byCategory.get(normalizedItem.category)?.push(normalizedItem);
   }
 
-  return [...byCategory.entries()]
+  const groups = [...byCategory.entries()]
     .map(([category, items]) => ({
       category,
       items: items.sort((a, b) => a.name.localeCompare(b.name)),
     }))
     .sort((a, b) => a.category.localeCompare(b.category));
+
+  return capGroceryGroupsComplexity(groups, usage);
 }
 
 export function buildGroceryListByMealType(mealPlan: MealPlan | null, recipeMap: Map<string, Recipe>): MealGroceryBreakdown[] {
