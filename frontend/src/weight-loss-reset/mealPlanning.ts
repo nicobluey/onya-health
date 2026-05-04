@@ -662,7 +662,7 @@ function inferGroceryCategory(baseName: string) {
     containsAny(text, [
       'carrot', 'onion', 'tomato', 'capsicum', 'zucchini', 'spinach', 'kale', 'lettuce', 'mint', 'parsley',
       'coriander', 'basil', 'ginger', 'pumpkin', 'beetroot', 'cucumber', 'lemon', 'lime', 'fruit', 'berries', 'kiwi',
-      'mushroom', 'snow pea', 'broccoli', 'celery', 'avocado', 'chilli', 'peach', 'date',
+      'mushroom', 'snow pea', 'broccoli', 'celery', 'avocado', 'chilli', 'peach', 'date', 'banana', 'grape', 'apple',
     ])
   ) {
     return 'produce';
