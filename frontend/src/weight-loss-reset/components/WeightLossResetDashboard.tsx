@@ -156,13 +156,16 @@ function buildGenerationMessages(answers: OnboardingAnswers) {
   const allergyLabel = allergyTerms.length > 0 ? toDisplayList(allergyTerms) : 'no listed allergy triggers';
   const preferredCuisines = (answers.preferredCuisines || []).map((entry) => String(entry || '').trim()).filter(Boolean).slice(0, 4);
   const cuisineLabel = preferredCuisines.length > 0 ? toDisplayList(preferredCuisines) : 'all cuisine styles';
+  const favoriteFoods = (answers.favoriteFoods || []).map((entry) => String(entry || '').trim()).filter(Boolean).slice(0, 4);
+  const favoriteFoodsLabel = favoriteFoods.length > 0 ? toDisplayList(favoriteFoods) : 'your usual favourite ingredients';
 
   return [
     `Reviewing your intake preferences: ${dietaryLabel}.`,
     `Filtering recipes for ${allergyLabel}.`,
     `Prioritising ${cuisineLabel} meals for your plan.`,
+    `Biasing meal picks toward ${favoriteFoodsLabel}.`,
     `Matching ${answers.preferredMealStyle} meals across ${answers.mealsPerDay} meals per day.`,
-    `Balancing calories and protein toward your goal: ${answers.mainGoal || 'sustainable progress'}.`,
+    `Balancing calories and protein for your ${answers.primaryHealthFocus || 'weight loss'} focus.`,
     'Crafting your weekly plan and syncing groceries to each selected meal.',
   ];
 }
@@ -260,14 +263,25 @@ export default function WeightLossResetDashboard({
   );
 
   useEffect(() => {
+    let disposed = false;
+
     if (!isGeneratingPlan) {
-      setGenerationProgress(0);
-      setGenerationMessageIndex(0);
-      return;
+      const resetTimer = window.setTimeout(() => {
+        if (disposed) return;
+        setGenerationProgress(0);
+        setGenerationMessageIndex(0);
+      }, 0);
+      return () => {
+        disposed = true;
+        window.clearTimeout(resetTimer);
+      };
     }
 
-    setGenerationProgress(6);
-    setGenerationMessageIndex(0);
+    const initialTimer = window.setTimeout(() => {
+      if (disposed) return;
+      setGenerationProgress(6);
+      setGenerationMessageIndex(0);
+    }, 0);
 
     const progressTimer = window.setInterval(() => {
       setGenerationProgress((current) => {
@@ -282,6 +296,8 @@ export default function WeightLossResetDashboard({
     }, 2200);
 
     return () => {
+      disposed = true;
+      window.clearTimeout(initialTimer);
       window.clearInterval(progressTimer);
       window.clearInterval(messageTimer);
     };

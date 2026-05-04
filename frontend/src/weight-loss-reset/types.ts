@@ -77,7 +77,17 @@ export interface OnboardingAnswers {
   motivation: string;
   timeframeWeeks?: number;
   biggestChallenge: string;
+  primaryHealthFocus:
+    | 'weight loss'
+    | 'pcos'
+    | 'gut health'
+    | 'sports performance'
+    | "women's health"
+    | 'blood sugar balance'
+    | 'family nutrition'
+    | 'general healthy eating';
   dietaryRequirements: string[];
+  favoriteFoods: string[];
   allergiesText: string;
   allergyChips: string[];
   dislikes: string;

@@ -44,9 +44,14 @@ function readInitialState(): WeightLossResetState {
   const onboardingAnswers: OnboardingAnswers = {
     ...DEFAULT_ONBOARDING_ANSWERS,
     ...(onboardingRaw?.answers || {}),
+    primaryHealthFocus:
+      typeof onboardingRaw?.answers?.primaryHealthFocus === 'string' && onboardingRaw?.answers?.primaryHealthFocus.trim()
+        ? onboardingRaw.answers.primaryHealthFocus
+        : DEFAULT_ONBOARDING_ANSWERS.primaryHealthFocus,
     dietaryRequirements: Array.isArray(onboardingRaw?.answers?.dietaryRequirements)
       ? onboardingRaw?.answers?.dietaryRequirements || DEFAULT_ONBOARDING_ANSWERS.dietaryRequirements
       : DEFAULT_ONBOARDING_ANSWERS.dietaryRequirements,
+    favoriteFoods: Array.isArray(onboardingRaw?.answers?.favoriteFoods) ? onboardingRaw?.answers?.favoriteFoods || [] : [],
     allergyChips: Array.isArray(onboardingRaw?.answers?.allergyChips) ? onboardingRaw?.answers?.allergyChips || [] : [],
     preferredCuisines: Array.isArray(onboardingRaw?.answers?.preferredCuisines) ? onboardingRaw?.answers?.preferredCuisines || [] : [],
     supportAreas: Array.isArray(onboardingRaw?.answers?.supportAreas)

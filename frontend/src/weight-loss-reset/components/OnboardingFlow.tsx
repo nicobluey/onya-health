@@ -1,11 +1,31 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, ArrowRight, CalendarDays, CheckCircle2 } from 'lucide-react';
+import {
+  Apple,
+  ArrowLeft,
+  ArrowRight,
+  Beef,
+  CalendarDays,
+  CheckCircle2,
+  Cherry,
+  Citrus,
+  CookingPot,
+  Fish,
+  Leaf,
+  Salad,
+  Sandwich,
+  UtensilsCrossed,
+  Wheat,
+  type LucideIcon,
+} from 'lucide-react';
 import {
   BIGGEST_CHALLENGE_OPTIONS,
   CUISINE_PREFERENCE_OPTIONS,
   DIETARY_REQUIREMENT_OPTIONS,
+  FAVORITE_FOOD_OPTIONS,
   FELICITY_CALENDLY_URL,
+  getFelicityExpertLabel,
   GROCERY_PREFERENCE_OPTIONS,
+  HEALTH_FOCUS_OPTIONS,
   HAS_REAL_CALENDLY_URL,
   PREFERRED_MEAL_STYLE_OPTIONS,
   QUICK_ALLERGY_CHIPS,
@@ -20,6 +40,21 @@ const inputClassName =
   'h-11 w-full rounded-xl border border-[#dbe2d9] bg-white px-3 text-sm text-[#18251e] outline-none transition focus:border-[#1f5f3f]';
 const textareaClassName =
   'min-h-20 w-full rounded-xl border border-[#dbe2d9] bg-white px-3 py-2 text-sm text-[#18251e] outline-none transition focus:border-[#1f5f3f]';
+
+const foodOptionIcons: Record<(typeof FAVORITE_FOOD_OPTIONS)[number]['value'], LucideIcon> = {
+  apple: Apple,
+  pear: Apple,
+  berries: Cherry,
+  citrus: Citrus,
+  'leafy greens': Leaf,
+  'salad bowls': Salad,
+  seafood: Fish,
+  'lean meats': Beef,
+  'stir-fry': UtensilsCrossed,
+  soups: CookingPot,
+  'rice bowls': Sandwich,
+  pasta: Wheat,
+};
 
 function ChoiceButton({
   active,
@@ -67,8 +102,11 @@ function stepValidation(step: number, answers: OnboardingAnswers) {
     if (!answers.mealsPerDay || answers.mealsPerDay < 2 || answers.mealsPerDay > 5) return 'Meals per day should be between 2 and 5.';
     if (!answers.daysPerWeek || answers.daysPerWeek < 3 || answers.daysPerWeek > 7) return 'Days per week should be between 3 and 7.';
   }
-  if (step === 6 && answers.supportWanted === 'yes' && answers.supportAreas.length === 0) {
-    return 'Choose at least one support area so Felicity can tailor your plan.';
+  if (step === 6) {
+    if (!answers.primaryHealthFocus.trim()) return 'Choose the main area you want expert support with.';
+    if (answers.supportWanted === 'yes' && answers.supportAreas.length === 0) {
+      return 'Choose at least one support area so Felicity can tailor your plan.';
+    }
   }
   return '';
 }
@@ -221,6 +259,26 @@ export default function OnboardingFlow({
       };
     });
   };
+
+  const toggleFavoriteFood = (value: string) => {
+    setAnswers((current) => {
+      const existing = new Set((current.favoriteFoods || []).map((entry) => entry.toLowerCase()));
+      const normalized = value.toLowerCase();
+      if (existing.has(normalized)) existing.delete(normalized);
+      else existing.add(normalized);
+
+      return {
+        ...current,
+        favoriteFoods: FAVORITE_FOOD_OPTIONS.filter((entry) => existing.has(entry.value.toLowerCase())).map((entry) => entry.value),
+      };
+    });
+  };
+
+  const activeFocus = HEALTH_FOCUS_OPTIONS.find((entry) => entry.value === answers.primaryHealthFocus);
+  const felicityExpertLabel = getFelicityExpertLabel(answers.primaryHealthFocus);
+  const selectedFavoriteFoodLabels = FAVORITE_FOOD_OPTIONS.filter((entry) =>
+    (answers.favoriteFoods || []).map((value) => value.toLowerCase()).includes(entry.value.toLowerCase())
+  ).map((entry) => entry.label);
 
   const completeBooking = async () => {
     try {
@@ -573,8 +631,52 @@ export default function OnboardingFlow({
       {step === 6 && (
         <div className="space-y-4">
           <div>
-            <h2 className="text-2xl font-semibold text-[#18251e]">Support preferences</h2>
-            <p className="mt-1 text-sm text-[#5f7063]">Tell Felicity how you want to work together.</p>
+            <h2 className="text-2xl font-semibold text-[#18251e]">Focus and support preferences</h2>
+            <p className="mt-1 text-sm text-[#5f7063]">Tell us what you want help with and what foods you enjoy most.</p>
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-semibold text-[#334155]">What do you want expert support for most?</p>
+            <div className="grid gap-2 md:grid-cols-2">
+              {HEALTH_FOCUS_OPTIONS.map((option) => (
+                <button
+                  type="button"
+                  key={option.value}
+                  onClick={() => setAnswers((current) => ({ ...current, primaryHealthFocus: option.value }))}
+                  className={`rounded-xl border p-3 text-left transition ${
+                    answers.primaryHealthFocus === option.value
+                      ? 'border-[#1f5f3f] bg-[#eff4ef]'
+                      : 'border-[#dbe2d9] bg-white hover:border-[#b9c8ba]'
+                  }`}
+                >
+                  <p className="text-sm font-semibold text-[#18251e]">{option.label}</p>
+                  <p className="mt-1 text-xs text-[#5f7063]">{option.supportingCopy}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-2 text-sm font-semibold text-[#334155]">Foods and meal styles you want more of (optional)</p>
+            <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+              {FAVORITE_FOOD_OPTIONS.map((option) => {
+                const Icon = foodOptionIcons[option.value];
+                const active = (answers.favoriteFoods || []).map((entry) => entry.toLowerCase()).includes(option.value.toLowerCase());
+                return (
+                  <button
+                    type="button"
+                    key={option.value}
+                    onClick={() => toggleFavoriteFood(option.value)}
+                    className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition ${
+                      active ? 'border-[#1f5f3f] bg-[#eff4ef] text-[#1f5f3f]' : 'border-[#dbe2d9] bg-white text-[#334155] hover:border-[#b9c8ba]'
+                    }`}
+                  >
+                    <Icon size={16} />
+                    <span>{option.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -603,6 +705,10 @@ export default function OnboardingFlow({
               ))}
             </div>
           </div>
+
+          <p className="rounded-xl border border-[#dbe2d9] bg-[#f8faf7] px-3 py-2 text-sm text-[#5f7063]">
+            Current match preview: Felicity, your <span className="font-semibold text-[#1f5f3f]">{felicityExpertLabel}</span>.
+          </p>
         </div>
       )}
 
@@ -631,8 +737,14 @@ export default function OnboardingFlow({
 
             <div className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-3 md:col-span-2">
               <p className="text-sm font-semibold text-[#18251e]">Food and support preferences</p>
+              <p className="mt-1 text-sm text-[#5f7063]">
+                Focus match: {activeFocus?.label || 'General healthy eating'} with Felicity ({felicityExpertLabel})
+              </p>
               <p className="mt-1 text-sm text-[#5f7063]">Dietary: {answers.dietaryRequirements.join(', ')}</p>
               <p className="text-sm text-[#5f7063]">Meal style: {answers.preferredMealStyle}</p>
+              <p className="text-sm text-[#5f7063]">
+                Favourite foods: {selectedFavoriteFoodLabels.join(', ') || 'No favourite foods selected'}
+              </p>
               <p className="text-sm text-[#5f7063]">Cuisines: {answers.preferredCuisines.join(', ') || 'No cuisine preference selected'}</p>
               <p className="text-sm text-[#5f7063]">Support areas: {answers.supportAreas.join(', ') || 'Not selected yet'}</p>
             </div>
@@ -645,13 +757,15 @@ export default function OnboardingFlow({
 
       {step === 8 && (
         <div className="space-y-4">
-          <h2 className="text-2xl font-semibold text-[#18251e]">Based on your goals, Felicity is the best fit for your Weight Loss Reset plan.</h2>
+          <h2 className="text-2xl font-semibold text-[#18251e]">
+            You&apos;re matched with Felicity, your {felicityExpertLabel}.
+          </h2>
           <p className="text-sm leading-relaxed text-[#5f7063]">
-            Felicity specialises in practical, sustainable weight loss support and can help adjust your plan around your lifestyle, preferences,
-            budget, and routine.
+            Based on your focus area ({activeFocus?.label || 'General healthy eating'}), Felicity will tailor your plan around your lifestyle,
+            food preferences, budget, and routine.
           </p>
           <div className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-4">
-            <p className="text-sm font-semibold text-[#18251e]">Felicity</p>
+            <p className="text-sm font-semibold text-[#18251e]">Felicity • {felicityExpertLabel}</p>
             <p className="text-sm text-[#5f7063]">Accredited Dietitian</p>
             <p className="mt-2 text-sm text-[#5f7063]">
               Support style: practical, kind, realistic, non-judgemental. {WEIGHT_LOSS_RESET_PRICE_COPY}.

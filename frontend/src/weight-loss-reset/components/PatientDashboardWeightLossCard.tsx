@@ -1,5 +1,6 @@
 import { ArrowRight, CalendarCheck2, UserRound } from 'lucide-react';
 import {
+  getFelicityExpertLabel,
   WEIGHT_LOSS_RESET_MIN_PLAN_WEEKS,
   WEIGHT_LOSS_RESET_PRICE_COPY,
   WEIGHT_LOSS_RESET_PROGRAM_NAME,
@@ -9,6 +10,7 @@ import type { WeightLossResetCardState } from '../types';
 export default function PatientDashboardWeightLossCard({
   cardState,
   firstName,
+  primaryHealthFocus,
   currentWeight,
   goalWeight,
   progressPercent,
@@ -18,6 +20,7 @@ export default function PatientDashboardWeightLossCard({
 }: {
   cardState: WeightLossResetCardState;
   firstName: string;
+  primaryHealthFocus?: string;
   currentWeight?: number;
   goalWeight?: number;
   progressPercent: number;
@@ -33,6 +36,7 @@ export default function PatientDashboardWeightLossCard({
         : 'Open Weight Loss Reset';
 
   const ctaAction = cardState === 'not-started' ? onStart : cardState === 'onboarding' ? onContinueBooking : onOpen;
+  const expertLabel = getFelicityExpertLabel(primaryHealthFocus);
 
   return (
     <section className="rounded-3xl border border-[#dbe2d9] bg-white p-5 shadow-[0_24px_42px_-34px_rgba(15,23,42,0.24)] sm:p-6">
@@ -61,7 +65,7 @@ export default function PatientDashboardWeightLossCard({
         <div className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-4">
           <div className="flex items-center gap-2 text-[#1f5f3f]">
             <UserRound size={16} />
-            <p className="text-sm font-semibold text-[#18251e]">Matched dietitian: Felicity</p>
+            <p className="text-sm font-semibold text-[#18251e]">Matched with Felicity • {expertLabel}</p>
           </div>
           <p className="mt-1 text-sm text-[#5f7063]">Practical, kind, realistic, non-judgemental support.</p>
 

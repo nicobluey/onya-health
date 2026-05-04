@@ -1868,6 +1868,7 @@ export default function PatientPortalPage() {
                     onGoToTab={setTab}
                     weightLossResetCard={{
                         cardState: weightLossResetCardState,
+                        primaryHealthFocus: weightLossResetState.onboardingAnswers.primaryHealthFocus,
                         currentWeight: latestWeightFromWeightLoss,
                         goalWeight: weightLossResetState.onboardingAnswers.goalWeightKg,
                         progressPercent: weightLossProgressPercent,

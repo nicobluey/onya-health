@@ -65,6 +65,10 @@ function normalizeCuisinePreferences(preferences: string[]) {
   return [...new Set(lowered.filter((item) => item !== 'no preference' && item !== 'not specified'))];
 }
 
+function normalizeFavoriteFoods(preferences: string[]) {
+  return [...new Set((preferences || []).map((item) => normalizeText(item)).filter(Boolean))];
+}
+
 function readUnknownStringArray(value: unknown) {
   if (Array.isArray(value)) {
     return value.map((entry) => String(entry || '').trim()).filter(Boolean);
@@ -196,6 +200,7 @@ function recipePreferenceScore(recipe: Recipe, answers: OnboardingAnswers) {
   const title = recipe.title.toLowerCase();
   const tags = recipe.dietaryTags.map((tag) => tag.toLowerCase());
   const cuisinePreferences = normalizeCuisinePreferences(answers.preferredCuisines || []);
+  const favoriteFoods = normalizeFavoriteFoods(answers.favoriteFoods || []);
   const timeMinutes = recipe.totalTimeMinutes || recipe.prepTimeMinutes || 40;
 
   if (tags.includes('high-protein')) score += 5;
@@ -220,6 +225,15 @@ function recipePreferenceScore(recipe: Recipe, answers: OnboardingAnswers) {
 
   if (answers.budgetPreference === 'low cost' && String(recipe.estimatedCost).toLowerCase().includes('low')) score += 2;
   if (answers.budgetPreference === 'premium' && String(recipe.estimatedCost).toLowerCase().includes('premium')) score += 1;
+
+  if (favoriteFoods.length > 0) {
+    const ingredientText = recipe.ingredients.map((ingredient) => normalizeText(ingredient.name || '')).join(' ');
+    const descriptor = normalizeText(`${recipe.title} ${recipe.description || ''} ${ingredientText}`);
+    const favouriteFoodMatches = favoriteFoods.reduce((count, preference) => {
+      return descriptor.includes(preference) ? count + 1 : count;
+    }, 0);
+    score += favouriteFoodMatches * 3;
+  }
 
   return score;
 }

@@ -797,6 +797,7 @@ export default function HomeTab({
     onGoToTab: (tab: Exclude<MainTab, 'home'>) => void;
     weightLossResetCard: {
         cardState: WeightLossResetCardState;
+        primaryHealthFocus?: string;
         currentWeight?: number;
         goalWeight?: number;
         progressPercent: number;
@@ -814,6 +815,7 @@ export default function HomeTab({
                 <PatientDashboardWeightLossCard
                     cardState={weightLossResetCard.cardState}
                     firstName={firstNameValue}
+                    primaryHealthFocus={weightLossResetCard.primaryHealthFocus}
                     currentWeight={weightLossResetCard.currentWeight}
                     goalWeight={weightLossResetCard.goalWeight}
                     progressPercent={weightLossResetCard.progressPercent}
@@ -847,6 +849,7 @@ export default function HomeTab({
             <PatientDashboardWeightLossCard
                 cardState={weightLossResetCard.cardState}
                 firstName={firstNameValue}
+                primaryHealthFocus={weightLossResetCard.primaryHealthFocus}
                 currentWeight={weightLossResetCard.currentWeight}
                 goalWeight={weightLossResetCard.goalWeight}
                 progressPercent={weightLossResetCard.progressPercent}

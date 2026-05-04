@@ -31,7 +31,9 @@ export const DEFAULT_ONBOARDING_ANSWERS: OnboardingAnswers = {
   motivation: '',
   timeframeWeeks: undefined,
   biggestChallenge: '',
+  primaryHealthFocus: 'weight loss',
   dietaryRequirements: ['no specific requirements'],
+  favoriteFoods: [],
   allergiesText: '',
   allergyChips: [],
   dislikes: '',
@@ -45,6 +47,52 @@ export const DEFAULT_ONBOARDING_ANSWERS: OnboardingAnswers = {
   supportWanted: 'yes',
   supportAreas: ['meal planning', 'accountability'],
 };
+
+export const HEALTH_FOCUS_OPTIONS: Array<{
+  value: OnboardingAnswers['primaryHealthFocus'];
+  label: string;
+  supportingCopy: string;
+}> = [
+  { value: 'weight loss', label: 'Weight loss', supportingCopy: 'Sustainable fat loss and consistency.' },
+  { value: 'pcos', label: 'PCOS', supportingCopy: 'Hormone-aware food structure and symptom support.' },
+  { value: 'blood sugar balance', label: 'Blood sugar balance', supportingCopy: 'Steadier energy and fewer crashes.' },
+  { value: 'gut health', label: 'Gut health', supportingCopy: 'Bloating, digestion, and fibre balance support.' },
+  { value: "women's health", label: "Women's health", supportingCopy: 'Cycle-friendly nutrition and daily routine support.' },
+  { value: 'sports performance', label: 'Sports performance', supportingCopy: 'Fuelling, recovery, and protein timing support.' },
+  { value: 'family nutrition', label: 'Family nutrition', supportingCopy: 'Practical meals that suit household needs.' },
+  { value: 'general healthy eating', label: 'General healthy eating', supportingCopy: 'Simple structure for everyday health.' },
+];
+
+export const FAVORITE_FOOD_OPTIONS = [
+  { value: 'apple', label: 'Apples' },
+  { value: 'pear', label: 'Pears' },
+  { value: 'berries', label: 'Berries' },
+  { value: 'citrus', label: 'Citrus' },
+  { value: 'leafy greens', label: 'Leafy greens' },
+  { value: 'salad bowls', label: 'Salad bowls' },
+  { value: 'seafood', label: 'Seafood' },
+  { value: 'lean meats', label: 'Lean meats' },
+  { value: 'stir-fry', label: 'Stir-fry' },
+  { value: 'soups', label: 'Soups' },
+  { value: 'rice bowls', label: 'Rice bowls' },
+  { value: 'pasta', label: 'Pasta' },
+] as const;
+
+export function getFelicityExpertLabel(primaryHealthFocus?: string) {
+  const normalized = String(primaryHealthFocus || '').trim().toLowerCase();
+  if (!normalized) return 'nutrition support expert';
+
+  if (normalized === 'pcos') return 'PCOS expert';
+  if (normalized === 'weight loss') return 'weight loss expert';
+  if (normalized === 'blood sugar balance') return 'blood sugar balance expert';
+  if (normalized === 'gut health') return 'gut health expert';
+  if (normalized === 'sports performance') return 'sports performance expert';
+  if (normalized === "women's health") return "women's health expert";
+  if (normalized === 'family nutrition') return 'family nutrition expert';
+  if (normalized === 'general healthy eating') return 'healthy eating expert';
+
+  return `${normalized} expert`;
+}
 
 export const QUICK_ALLERGY_CHIPS = ['Peanuts', 'Tree nuts', 'Dairy', 'Egg', 'Soy', 'Shellfish', 'Gluten'];
 
