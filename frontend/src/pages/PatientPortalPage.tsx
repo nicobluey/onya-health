@@ -1082,6 +1082,7 @@ export default function PatientPortalPage() {
         weightLossResetState.onboardingComplete,
     ]);
 
+
     useEffect(() => {
         let disposed = false;
 
@@ -1400,13 +1401,62 @@ export default function PatientPortalPage() {
     };
 
     const generateAndStoreWeightLossMealPlan = useCallback(
-        async (answers = weightLossStateRef.current.onboardingAnswers) => {
+        async (
+            answers = weightLossStateRef.current.onboardingAnswers,
+            options: { refresh?: boolean } = {},
+        ) => {
             const recipes = await ensureWeightLossRecipesLoaded();
             if (recipes.length === 0) return;
-            const generated = generateMealPlan({ recipes, answers });
+            const seedSalt = options.refresh ? String(Date.now()) : '';
+            const includeSnack = (answers?.mealsPerDay || 3) >= 4;
+
+            const activeToken = token || window.localStorage.getItem('onya_patient_token') || '';
+            if (activeToken) {
+                try {
+                    const { response, payload } = await fetchApiJson('/api/patient/meal-plan/generate', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${activeToken}`,
+                        },
+                        body: JSON.stringify({
+                            answers,
+                            includeSnack,
+                            seedSalt,
+                            recipes: recipes.map((recipe) => ({
+                                id: recipe.id,
+                                title: recipe.title,
+                                mealType: recipe.mealType,
+                                calories: recipe.calories,
+                                protein: recipe.protein,
+                                carbs: recipe.carbs,
+                                fat: recipe.fat,
+                                prepTimeMinutes: recipe.prepTimeMinutes,
+                                dietaryTags: recipe.dietaryTags,
+                                allergens: recipe.allergens,
+                                estimatedCost: recipe.estimatedCost,
+                                source: recipe.source,
+                            })),
+                        }),
+                    });
+
+                    if (response.ok && payload?.mealPlan?.days?.length === 7) {
+                        setMealPlan(payload.mealPlan);
+                        return;
+                    }
+                } catch {
+                    // Fall back to deterministic rules engine below.
+                }
+            }
+
+            const generated = generateMealPlan({
+                recipes,
+                answers,
+                seedSalt,
+            });
             setMealPlan(generated.mealPlan);
         },
-        [ensureWeightLossRecipesLoaded, setMealPlan]
+        [ensureWeightLossRecipesLoaded, setMealPlan, token]
     );
 
     const handleWeightLossOnboardingProgress = useCallback(
@@ -1422,17 +1472,12 @@ export default function PatientPortalPage() {
             updateOnboardingAnswers(answers);
             completeOnboarding();
             markBookingComplete();
-
-            const recipes = await ensureWeightLossRecipesLoaded();
-            if (recipes.length === 0) return;
-            const generated = generateMealPlan({ recipes, answers });
-            setMealPlan(generated.mealPlan);
+            await generateAndStoreWeightLossMealPlan(answers, { refresh: true });
         },
         [
             completeOnboarding,
-            ensureWeightLossRecipesLoaded,
+            generateAndStoreWeightLossMealPlan,
             markBookingComplete,
-            setMealPlan,
             updateOnboardingAnswers,
         ]
     );
@@ -1450,6 +1495,27 @@ export default function PatientPortalPage() {
         },
         [replaceMealPlan, weightLossRecipes, weightLossResetState.mealPlan]
     );
+
+    useEffect(() => {
+        if (!weightLossRecipesReady || weightLossRecipes.length === 0) return;
+        if (!weightLossResetState.mealPlan) return;
+
+        const recipeIdSet = new Set(weightLossRecipes.map((recipe) => recipe.id));
+        const plannedIds = weightLossResetState.mealPlan.days.flatMap((day) =>
+            [day.meals.breakfast, day.meals.lunch, day.meals.dinner, ...(day.meals.snacks || [])].filter(Boolean),
+        ) as string[];
+
+        const hasUnknownRecipes = plannedIds.some((id) => !recipeIdSet.has(id));
+        if (!hasUnknownRecipes) return;
+
+        void generateAndStoreWeightLossMealPlan(weightLossResetState.onboardingAnswers, { refresh: true });
+    }, [
+        generateAndStoreWeightLossMealPlan,
+        weightLossRecipes,
+        weightLossRecipesReady,
+        weightLossResetState.mealPlan,
+        weightLossResetState.onboardingAnswers,
+    ]);
 
     const openConsultOption = (optionId: ConsultOptionId) => {
         const option = CONSULT_OPTIONS.find((item) => item.id === optionId);
@@ -1706,7 +1772,7 @@ export default function PatientPortalPage() {
                         messages={weightLossResetState.messages}
                         groceryCheckedItems={weightLossResetState.groceryCheckedItems}
                         onRegeneratePlan={() => {
-                            void generateAndStoreWeightLossMealPlan(weightLossResetState.onboardingAnswers);
+                            void generateAndStoreWeightLossMealPlan(weightLossResetState.onboardingAnswers, { refresh: true });
                         }}
                         onSwapMeal={handleWeightLossSwapMeal}
                         onAddWeightLog={addWeightLog}

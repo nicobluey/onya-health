@@ -553,6 +553,22 @@ export default function WeightLossResetDashboard({
             <div className="mt-3 text-xs text-[#5f7063]">
               {selectedRecipe.dietaryTags.length > 0 && <p>Dietary tags: {selectedRecipe.dietaryTags.join(', ')}</p>}
               {selectedRecipe.allergens.length > 0 && <p>Allergens: {selectedRecipe.allergens.join(', ')}</p>}
+              {typeof selectedRecipe.source?.dietitian === 'string' && selectedRecipe.source?.dietitian ? (
+                <p>Recipe courtesy of: {selectedRecipe.source.dietitian}</p>
+              ) : null}
+              {typeof selectedRecipe.source?.url === 'string' && selectedRecipe.source?.url ? (
+                <p>
+                  Source:{' '}
+                  <a
+                    href={selectedRecipe.source.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-semibold text-[#1f5f3f] underline"
+                  >
+                    View original recipe
+                  </a>
+                </p>
+              ) : null}
             </div>
           </article>
         </ModalShell>

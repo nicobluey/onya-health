@@ -210,13 +210,15 @@ function calculateDayTotals(day: MealPlanDay, recipeMap: Map<string, Recipe>) {
 export function generateMealPlan({
   recipes,
   answers,
+  seedSalt = '',
 }: {
   recipes: Recipe[];
   answers: OnboardingAnswers;
+  seedSalt?: string;
 }): MealPlanGenerationResult {
   const notes: string[] = [];
   const random = seededRandom(
-    `${answers.firstName}|${answers.age || ''}|${answers.goalWeightKg || ''}|${answers.biggestChallenge}|${answers.mainGoal}`
+    `${answers.firstName}|${answers.age || ''}|${answers.goalWeightKg || ''}|${answers.biggestChallenge}|${answers.mainGoal}|${seedSalt}`
   );
   const usedCount: Record<string, number> = {};
 
