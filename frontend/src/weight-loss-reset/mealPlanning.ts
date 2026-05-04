@@ -663,6 +663,8 @@ const QUANTITY_UNIT_ALIASES: Record<string, string> = {
   cloves: 'clove',
   egg: 'egg',
   eggs: 'egg',
+  eggwhite: 'egg white',
+  eggwhites: 'egg white',
   piece: 'piece',
   pieces: 'piece',
   fillet: 'fillet',
@@ -683,6 +685,14 @@ const QUANTITY_UNIT_ALIASES: Record<string, string> = {
   peaches: 'peach',
   leek: 'leek',
   leeks: 'leek',
+  lemon: 'lemon',
+  lemons: 'lemon',
+  lime: 'lime',
+  limes: 'lime',
+  orange: 'orange',
+  oranges: 'orange',
+  pomegranate: 'pomegranate',
+  pomegranates: 'pomegranate',
   avocado: 'avocado',
   avocados: 'avocado',
   banana: 'banana',
@@ -780,6 +790,7 @@ function normalizeQuantityUnitToken(token: string) {
 
 function extractAggregatedQuantity(line: string) {
   const source = normalizeFractionCharacters(cleanIngredientLine(line).toLowerCase())
+    .replace(/^(?:juice|rind|zest|seeds?)\s+of\s+/i, '')
     .replace(/^(?:about|approx(?:\.|imately)?)\s+/i, '')
     .trim();
   if (!source) return null;
@@ -831,9 +842,14 @@ function extractAggregatedQuantity(line: string) {
   }
 
   let unit = '';
-  for (const token of unitTokens.slice(0, 4)) {
-    unit = normalizeQuantityUnitToken(token);
-    if (unit) break;
+  if (unitTokens.length >= 2) {
+    unit = normalizeQuantityUnitToken(`${unitTokens[0]}${unitTokens[1]}`);
+  }
+  if (!unit) {
+    for (const token of unitTokens.slice(0, 4)) {
+      unit = normalizeQuantityUnitToken(token);
+      if (unit) break;
+    }
   }
 
   return unit ? { amount, unit } : null;
@@ -847,9 +863,22 @@ function formatAggregatedAmount(amount: number) {
 
 function formatQuantityUnit(unit: string, amount: number) {
   if (!unit) return '';
+  if (unit === 'cup') return Math.abs(amount - 1) < 0.000001 ? 'cup' : 'cups';
   if (MEASURE_UNITS.has(unit)) return unit;
   if (Math.abs(amount - 1) < 0.000001) return unit;
-  return unit.endsWith('s') ? unit : `${unit}s`;
+  if (unit.endsWith('ch') || unit.endsWith('sh') || unit.endsWith('x') || unit.endsWith('z') || unit.endsWith('s')) {
+    return `${unit}es`;
+  }
+  if (unit.endsWith('y') && !/[aeiou]y$/.test(unit)) {
+    return `${unit.slice(0, -1)}ies`;
+  }
+  if (unit.endsWith('f')) {
+    return `${unit.slice(0, -1)}ves`;
+  }
+  if (unit.endsWith('fe')) {
+    return `${unit.slice(0, -2)}ves`;
+  }
+  return `${unit}s`;
 }
 
 function formatQuantityLabels(quantityTotals: Map<string, number>, unparsedCounts: Map<string, number>) {
@@ -936,6 +965,7 @@ function normalizeIngredientBaseName(rawLine: string) {
     /^(?:about|approx(?:\.|imately)?)?\s*(?:\d+\s+\d+\/\d+|\d+\s*[¼½¾⅓⅔⅛⅜⅝⅞]|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]|(?:half|quarter|one|two|three|four|five|six|seven|eight|nine|ten|a|an)\b)(?:\s*-\s*(?:\d+\s+\d+\/\d+|\d+\s*[¼½¾⅓⅔⅛⅜⅝⅞]|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]))?\s*/i,
     '',
   );
+  value = value.replace(/^(?:juice|rind|zest|seeds?)\s+of\s+/i, '');
 
   const tokens = value.split(/\s+/).filter(Boolean);
   while (tokens.length > 1) {
@@ -988,6 +1018,7 @@ function canonicalizeIngredientBaseName(baseName: string) {
     .replace(/\bcashews?\b/g, 'cashew')
     .replace(/\bwalnuts?\b/g, 'walnut')
     .replace(/\bto serve\b/g, '')
+    .replace(/\bfresh coriander or parsley\b/g, 'coriander')
     .replace(/\bfor garnish(?:ing)?\b/g, '')
     .replace(/\bto garnish\b/g, '')
     .replace(/\bto sprinkle on top\b/g, '')
@@ -1178,9 +1209,13 @@ export function buildGroceryListByMealType(mealPlan: MealPlan | null, recipeMap:
 
 export function buildGroceryListFromMealPlan(mealPlan: MealPlan | null, recipeMap: Map<string, Recipe>) {
   if (!mealPlan) return [];
-  const recipeIds = mealPlan.days.flatMap((day) =>
-    [day.meals.breakfast, day.meals.lunch, day.meals.dinner, ...(day.meals.snacks || [])].filter(Boolean),
-  ) as string[];
+  const recipeIds = [
+    ...new Set(
+      mealPlan.days.flatMap((day) =>
+        [day.meals.breakfast, day.meals.lunch, day.meals.dinner, ...(day.meals.snacks || [])].filter(Boolean),
+      ),
+    ),
+  ] as string[];
   return buildGroceryListForRecipeIds(recipeIds, recipeMap);
 }
 
