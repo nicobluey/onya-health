@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useMemo, useState } from 'react';
+import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
 import {
   ArrowRight,
   MessageCircle,
@@ -138,6 +138,39 @@ function mealTypeLabel(mealType: MealType) {
   return 'Snack';
 }
 
+function toDisplayList(items: string[]) {
+  if (items.length === 0) return '';
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
+}
+
+function buildGenerationMessages(answers: OnboardingAnswers) {
+  const normalizedDietary = (answers.dietaryRequirements || [])
+    .map((item) => String(item || '').trim().toLowerCase())
+    .filter((item) => item && item !== 'no specific requirements')
+    .slice(0, 3);
+  const dietaryLabel =
+    normalizedDietary.length > 0 ? toDisplayList(normalizedDietary) : 'your general eating preferences';
+
+  const allergyTerms = [
+    ...answers.allergyChips,
+    ...String(answers.allergiesText || '')
+      .split(/[,\n;]/g)
+      .map((item) => item.trim())
+      .filter(Boolean),
+  ].slice(0, 4);
+  const allergyLabel = allergyTerms.length > 0 ? toDisplayList(allergyTerms) : 'no listed allergy triggers';
+
+  return [
+    `Reviewing your intake preferences: ${dietaryLabel}.`,
+    `Filtering recipes for ${allergyLabel}.`,
+    `Matching ${answers.preferredMealStyle} meals across ${answers.mealsPerDay} meals per day.`,
+    `Balancing calories and protein toward your goal: ${answers.mainGoal || 'sustainable progress'}.`,
+    'Crafting your weekly plan and syncing groceries to each selected meal.',
+  ];
+}
+
 export default function WeightLossResetDashboard({
   answers,
   mealPlan,
@@ -174,10 +207,21 @@ export default function WeightLossResetDashboard({
   const [weightDate, setWeightDate] = useState(new Date().toISOString().slice(0, 10));
   const [weightValue, setWeightValue] = useState('');
   const [weightNote, setWeightNote] = useState('');
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [generationMessageIndex, setGenerationMessageIndex] = useState(0);
 
   const recipeMap = useMemo(() => new Map(recipes.map((recipe) => [recipe.id, recipe])), [recipes]);
   const groceryGroups = useMemo(() => buildGroceryListFromMealPlan(mealPlan, recipeMap), [mealPlan, recipeMap]);
   const groceryByMeal = useMemo(() => buildGroceryListByMealType(mealPlan, recipeMap), [mealPlan, recipeMap]);
+  const generationMessages = useMemo(() => buildGenerationMessages(answers), [answers]);
+  const visiblePlanNotes = useMemo(
+    () =>
+      (mealPlan?.notes || []).filter((note) => {
+        const normalized = String(note || '').toLowerCase();
+        return !normalized.includes('fallback generated');
+      }),
+    [mealPlan?.notes]
+  );
 
   const currentWeight = getCurrentWeight(weightLogs, answers.currentWeightKg);
   const progressPercent = calculateGoalProgress({
@@ -209,6 +253,34 @@ export default function WeightLossResetDashboard({
     () => [...messages].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
     [messages]
   );
+
+  useEffect(() => {
+    if (!isGeneratingPlan) {
+      setGenerationProgress(0);
+      setGenerationMessageIndex(0);
+      return;
+    }
+
+    setGenerationProgress(6);
+    setGenerationMessageIndex(0);
+
+    const progressTimer = window.setInterval(() => {
+      setGenerationProgress((current) => {
+        if (current >= 92) return current;
+        const increment = 0.8 + Math.random() * 2.2;
+        return Math.min(92, current + increment);
+      });
+    }, 180);
+
+    const messageTimer = window.setInterval(() => {
+      setGenerationMessageIndex((current) => (current + 1) % generationMessages.length);
+    }, 2200);
+
+    return () => {
+      window.clearInterval(progressTimer);
+      window.clearInterval(messageTimer);
+    };
+  }, [generationMessages.length, isGeneratingPlan]);
 
   const submitWeight = (event: FormEvent) => {
     event.preventDefault();
@@ -360,8 +432,22 @@ export default function WeightLossResetDashboard({
             </article>
           )}
 
-          {mealPlan?.notes?.length ? (
-            <article className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-3 text-sm text-[#5f7063]">{mealPlan.notes.join(' ')}</article>
+          {isGeneratingPlan ? (
+            <article className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-4">
+              <p className="text-sm font-semibold text-[#18251e]">Generating your updated meal plan...</p>
+              <p className="mt-1 text-sm text-[#5f7063]">{generationMessages[generationMessageIndex]}</p>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#dbe2d9]">
+                <div
+                  className="h-full rounded-full bg-[#1f5f3f] transition-[width] duration-300"
+                  style={{ width: `${Math.max(6, Math.min(100, generationProgress))}%` }}
+                />
+              </div>
+              <p className="mt-1 text-xs text-[#5f7063]">{Math.round(Math.max(6, Math.min(100, generationProgress)))}%</p>
+            </article>
+          ) : null}
+
+          {visiblePlanNotes.length ? (
+            <article className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-3 text-sm text-[#5f7063]">{visiblePlanNotes.join(' ')}</article>
           ) : null}
 
           {mealPlan?.days.map((day) => (
