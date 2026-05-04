@@ -217,6 +217,20 @@ export function generateMealPlan({
   seedSalt?: string;
 }): MealPlanGenerationResult {
   const notes: string[] = [];
+  const catalog = recipes.filter((recipe) => String(recipe?.id || '').trim());
+  if (catalog.length === 0) {
+    notes.push('No recipes available yet. Please refresh once the recipe catalog finishes loading.');
+    return {
+      mealPlan: {
+        days: [],
+        generatedBy: 'rules',
+        notes,
+        generatedAt: new Date().toISOString(),
+      },
+      notes,
+    };
+  }
+
   const random = seededRandom(
     `${answers.firstName}|${answers.age || ''}|${answers.goalWeightKg || ''}|${answers.biggestChallenge}|${answers.mainGoal}|${seedSalt}`
   );
@@ -254,8 +268,16 @@ export function generateMealPlan({
     );
   }
 
+  const fallbackCatalog = catalog;
+  if (candidatePools.breakfast.length === 0) candidatePools.breakfast = fallbackCatalog;
+  if (candidatePools.lunch.length === 0) candidatePools.lunch = fallbackCatalog;
+  if (candidatePools.dinner.length === 0) candidatePools.dinner = fallbackCatalog;
+  if (candidatePools.snack.length === 0) {
+    candidatePools.snack = candidatePools.breakfast.length > 0 ? candidatePools.breakfast : fallbackCatalog;
+  }
+
   const days: MealPlanDay[] = [];
-  const recipeMap = new Map(recipes.map((recipe) => [recipe.id, recipe]));
+  const recipeMap = new Map(catalog.map((recipe) => [recipe.id, recipe]));
 
   for (let dayIndex = 0; dayIndex < MEAL_PLAN_DAYS.length; dayIndex += 1) {
     const breakfastRecipe = pickRecipe({
@@ -277,6 +299,19 @@ export function generateMealPlan({
       dayOffset: dayIndex + 2,
     });
 
+    const breakfastId =
+      breakfastRecipe?.id ||
+      candidatePools.breakfast[dayIndex % candidatePools.breakfast.length]?.id ||
+      fallbackCatalog[dayIndex % fallbackCatalog.length]?.id;
+    const lunchId =
+      lunchRecipe?.id ||
+      candidatePools.lunch[dayIndex % candidatePools.lunch.length]?.id ||
+      fallbackCatalog[(dayIndex + 1) % fallbackCatalog.length]?.id;
+    const dinnerId =
+      dinnerRecipe?.id ||
+      candidatePools.dinner[dayIndex % candidatePools.dinner.length]?.id ||
+      fallbackCatalog[(dayIndex + 2) % fallbackCatalog.length]?.id;
+
     const snacks = requiresSnack
       ? [
           pickRecipe({
@@ -294,9 +329,9 @@ export function generateMealPlan({
       dayIndex,
       label: MEAL_PLAN_DAYS[dayIndex],
       meals: {
-        breakfast: breakfastRecipe?.id,
-        lunch: lunchRecipe?.id,
-        dinner: dinnerRecipe?.id,
+        breakfast: breakfastId,
+        lunch: lunchId,
+        dinner: dinnerId,
         snacks: snacks.length > 0 ? snacks : undefined,
       },
     };

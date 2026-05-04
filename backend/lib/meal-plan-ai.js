@@ -1,5 +1,115 @@
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
 const PLAN_DAY_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const CORE_MEAL_TYPES = ['breakfast', 'lunch', 'dinner'];
+
+function hashSeed(input) {
+  const text = String(input || '');
+  let hash = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    hash = (hash << 5) - hash + text.charCodeAt(index);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+}
+
+function normalizeMealType(value) {
+  const mealType = String(value || '').trim().toLowerCase();
+  if (mealType === 'breakfast' || mealType === 'lunch' || mealType === 'dinner' || mealType === 'snack') {
+    return mealType;
+  }
+  return '';
+}
+
+function pickRecipeId(pool, usedCounts, offset) {
+  if (!Array.isArray(pool) || pool.length === 0) return '';
+
+  const sorted = [...pool].sort((a, b) => {
+    const useDelta = (usedCounts[a] || 0) - (usedCounts[b] || 0);
+    if (useDelta !== 0) return useDelta;
+    return a.localeCompare(b);
+  });
+
+  const chosenId = sorted[offset % sorted.length] || '';
+  if (chosenId) {
+    usedCounts[chosenId] = (usedCounts[chosenId] || 0) + 1;
+  }
+  return chosenId;
+}
+
+export function generateFallbackMealPlan({ recipes, includeSnack = false, seedSalt = '', answers = {} }) {
+  const uniqueById = new Map();
+  for (const recipe of Array.isArray(recipes) ? recipes : []) {
+    const id = String(recipe?.id || '').trim();
+    if (!id || uniqueById.has(id)) continue;
+    uniqueById.set(id, {
+      id,
+      mealType: normalizeMealType(recipe?.mealType),
+    });
+  }
+
+  const allRecipeIds = [...uniqueById.keys()];
+  if (allRecipeIds.length === 0) return null;
+
+  const poolByType = {
+    breakfast: [],
+    lunch: [],
+    dinner: [],
+    snack: [],
+  };
+
+  for (const recipe of uniqueById.values()) {
+    if (recipe.mealType && poolByType[recipe.mealType]) {
+      poolByType[recipe.mealType].push(recipe.id);
+    }
+  }
+
+  const breakfastPool = poolByType.breakfast.length > 0 ? poolByType.breakfast : allRecipeIds;
+  const lunchPool = poolByType.lunch.length > 0 ? poolByType.lunch : allRecipeIds;
+  const dinnerPool = poolByType.dinner.length > 0 ? poolByType.dinner : allRecipeIds;
+  const snackPool =
+    poolByType.snack.length > 0
+      ? poolByType.snack
+      : poolByType.breakfast.length > 0
+        ? poolByType.breakfast
+        : allRecipeIds;
+
+  const usedCounts = {};
+  const seedSource = `${seedSalt}|${JSON.stringify(answers || {})}|${allRecipeIds.length}`;
+  const seed = hashSeed(seedSource);
+  const notes = [
+    'Plan generated with deterministic fallback to guarantee a complete breakfast, lunch, and dinner schedule.',
+  ];
+
+  const days = PLAN_DAY_LABELS.map((label, dayIndex) => {
+    const breakfast = pickRecipeId(breakfastPool, usedCounts, seed + dayIndex * 3 + 0);
+    const lunch = pickRecipeId(lunchPool, usedCounts, seed + dayIndex * 3 + 1);
+    const dinner = pickRecipeId(dinnerPool, usedCounts, seed + dayIndex * 3 + 2);
+    const snack = includeSnack ? pickRecipeId(snackPool, usedCounts, seed + dayIndex * 3 + 3) : '';
+
+    return {
+      dayIndex,
+      label,
+      meals: {
+        breakfast: breakfast || allRecipeIds[(seed + dayIndex) % allRecipeIds.length],
+        lunch: lunch || allRecipeIds[(seed + dayIndex + 1) % allRecipeIds.length],
+        dinner: dinner || allRecipeIds[(seed + dayIndex + 2) % allRecipeIds.length],
+        snacks: includeSnack && snack ? [snack] : undefined,
+      },
+    };
+  });
+
+  const hasMissingCoreMeals = days.some((day) =>
+    CORE_MEAL_TYPES.some((mealType) => !String(day?.meals?.[mealType] || '').trim()),
+  );
+  if (hasMissingCoreMeals) return null;
+
+  return {
+    days,
+    generatedBy: 'rules',
+    notes,
+    generatedAt: new Date().toISOString(),
+  };
+}
 
 function extractResponseText(payload) {
   if (!payload) return '';
@@ -172,4 +282,3 @@ export async function generateOpenAiMealPlan({ answers, recipes, includeSnack = 
     return null;
   }
 }
-

@@ -31,7 +31,7 @@ import {
 } from './lib/doctor-auth.js';
 import { calculateRisk } from './lib/risk.js';
 import { buildCertificatePdf } from './lib/pdf.js';
-import { generateOpenAiMealPlan } from './lib/meal-plan-ai.js';
+import { generateFallbackMealPlan, generateOpenAiMealPlan } from './lib/meal-plan-ai.js';
 import { generateDoctorNotes, generateMoreInfoDraft } from './lib/notes.js';
 import {
   appendAudit,
@@ -2199,19 +2199,34 @@ async function handleApi(req, res, url) {
       seedSalt,
     });
 
-    if (!aiMealPlan) {
+    if (aiMealPlan) {
       sendJson(res, 200, {
-        ok: false,
+        ok: true,
+        generatedBy: 'openai',
+        mealPlan: aiMealPlan,
+      });
+      return;
+    }
+
+    const fallbackMealPlan = generateFallbackMealPlan({
+      answers,
+      recipes,
+      includeSnack,
+      seedSalt,
+    });
+    if (fallbackMealPlan) {
+      sendJson(res, 200, {
+        ok: true,
         generatedBy: 'rules',
-        error: 'AI meal plan generation unavailable. Use rules fallback.',
+        mealPlan: fallbackMealPlan,
       });
       return;
     }
 
     sendJson(res, 200, {
-      ok: true,
-      generatedBy: 'openai',
-      mealPlan: aiMealPlan,
+      ok: false,
+      generatedBy: 'rules',
+      error: 'Unable to generate meal plan from provided recipe catalog.',
     });
     return;
   }
