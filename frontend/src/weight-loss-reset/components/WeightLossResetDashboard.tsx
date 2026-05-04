@@ -19,6 +19,32 @@ import type { DietitianMessage, MealPlan, MealType, OnboardingAnswers, Recipe, W
 type DashboardTab = 'overview' | 'meal-plan' | 'grocery' | 'progress' | 'messages';
 type PrimaryMealType = 'breakfast' | 'lunch' | 'dinner';
 
+function readSourceTime(recipe: Recipe, key: 'prepTime' | 'cookTime') {
+  const raw = recipe.source?.[key];
+  if (typeof raw !== 'string') return '';
+  const value = raw.trim();
+  if (!value || value === '-' || value.toLowerCase() === 'n/a') return '';
+  return value;
+}
+
+function buildRecipeTimeMeta(recipe: Recipe) {
+  const segments: string[] = [];
+  if (typeof recipe.prepTimeMinutes === 'number' && Number.isFinite(recipe.prepTimeMinutes) && recipe.prepTimeMinutes > 0) {
+    segments.push(`${recipe.prepTimeMinutes} min prep`);
+  } else {
+    const prepFromSource = readSourceTime(recipe, 'prepTime');
+    if (prepFromSource) segments.push(`${prepFromSource} prep`);
+  }
+
+  const cookFromSource = readSourceTime(recipe, 'cookTime');
+  if (cookFromSource) {
+    segments.push(`${cookFromSource} cook`);
+  }
+
+  if (segments.length === 0) return 'Time unavailable';
+  return segments.join(' • ');
+}
+
 function MealCard({
   recipe,
   onViewDetails,
@@ -35,7 +61,7 @@ function MealCard({
         <div>
           <h4 className="line-clamp-2 text-sm font-semibold text-[#18251e]">{recipe.title}</h4>
           <p className="mt-1 text-xs text-[#5f7063]">
-            {recipe.calories || '—'} cal • {recipe.protein || '—'}g protein • {recipe.prepTimeMinutes || 25} min prep
+            {recipe.calories || '—'} cal • {recipe.protein || '—'}g protein • {buildRecipeTimeMeta(recipe)}
           </p>
         </div>
         <div className="flex gap-2">
@@ -533,6 +559,7 @@ export default function WeightLossResetDashboard({
               {selectedRecipe.calories || '—'} cal • {selectedRecipe.protein || '—'}g protein • {selectedRecipe.carbs || '—'}g carbs •{' '}
               {selectedRecipe.fat || '—'}g fat
             </p>
+            <p className="mt-1 text-sm text-[#5f7063]">{buildRecipeTimeMeta(selectedRecipe)}</p>
 
             <section className="mt-4 grid gap-4 md:grid-cols-2">
               <div>
@@ -595,7 +622,7 @@ export default function WeightLossResetDashboard({
                   <article key={recipe.id} className="rounded-xl border border-[#dbe2d9] bg-[#f8faf7] p-3">
                     <p className="text-sm font-semibold text-[#18251e]">{recipe.title}</p>
                     <p className="mt-1 text-xs text-[#5f7063]">
-                      {recipe.calories || '—'} cal • {recipe.protein || '—'}g protein • {recipe.prepTimeMinutes || '—'} min
+                      {recipe.calories || '—'} cal • {recipe.protein || '—'}g protein • {buildRecipeTimeMeta(recipe)}
                     </p>
                     <button
                       type="button"

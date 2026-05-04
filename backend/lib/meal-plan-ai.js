@@ -2,6 +2,18 @@ const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
 const PLAN_DAY_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const CORE_MEAL_TYPES = ['breakfast', 'lunch', 'dinner'];
 const OPENAI_MEAL_PLAN_TIMEOUT_MS = Math.max(3000, Number(process.env.OPENAI_MEAL_PLAN_TIMEOUT_MS || 9000));
+const MEAL_PREP_PATTERNS = {
+  breakfast: [0, 0, 1, 1, 0, 1, 0],
+  lunch: [0, 0, 1, 1, 2, 2, 1],
+  dinner: [0, 0, 1, 1, 2, 2, 1],
+  snack: [0, 1, 0, 1, 0, 1, 0],
+};
+const MEAL_PREP_BASE_COUNTS = {
+  breakfast: 2,
+  lunch: 3,
+  dinner: 3,
+  snack: 2,
+};
 
 function hashSeed(input) {
   const text = String(input || '');
@@ -21,20 +33,21 @@ function normalizeMealType(value) {
   return '';
 }
 
-function pickRecipeId(pool, usedCounts, offset) {
-  if (!Array.isArray(pool) || pool.length === 0) return '';
+function pickBaseIds(pool, target, seedOffset) {
+  const unique = [...new Set(Array.isArray(pool) ? pool.filter(Boolean) : [])];
+  if (unique.length === 0) return [];
+  const size = Math.max(1, Math.min(target, unique.length));
+  const start = Math.abs(Number(seedOffset || 0)) % unique.length;
+  const rotated = [...unique.slice(start), ...unique.slice(0, start)];
+  return rotated.slice(0, size);
+}
 
-  const sorted = [...pool].sort((a, b) => {
-    const useDelta = (usedCounts[a] || 0) - (usedCounts[b] || 0);
-    if (useDelta !== 0) return useDelta;
-    return a.localeCompare(b);
-  });
-
-  const chosenId = sorted[offset % sorted.length] || '';
-  if (chosenId) {
-    usedCounts[chosenId] = (usedCounts[chosenId] || 0) + 1;
-  }
-  return chosenId;
+function selectMealPrepId({ baseIds, fallbackPool, dayIndex, mealType }) {
+  const source = baseIds.length > 0 ? baseIds : fallbackPool;
+  if (source.length === 0) return '';
+  const pattern = MEAL_PREP_PATTERNS[mealType] || [0];
+  const slot = pattern[dayIndex % pattern.length] || 0;
+  return source[slot % source.length] || '';
 }
 
 export function generateFallbackMealPlan({ recipes, includeSnack = false, seedSalt = '', answers = {} }) {
@@ -74,18 +87,44 @@ export function generateFallbackMealPlan({ recipes, includeSnack = false, seedSa
         ? poolByType.breakfast
         : allRecipeIds;
 
-  const usedCounts = {};
   const seedSource = `${seedSalt}|${JSON.stringify(answers || {})}|${allRecipeIds.length}`;
   const seed = hashSeed(seedSource);
   const notes = [
-    'Plan generated with deterministic fallback to guarantee a complete breakfast, lunch, and dinner schedule.',
+    'Meal-prep fallback generated: breakfasts, lunches, and dinners are intentionally repeated for faster batch cooking.',
   ];
 
+  const breakfastBase = pickBaseIds(breakfastPool, MEAL_PREP_BASE_COUNTS.breakfast, seed + 11);
+  const lunchBase = pickBaseIds(lunchPool, MEAL_PREP_BASE_COUNTS.lunch, seed + 23);
+  const dinnerBase = pickBaseIds(dinnerPool, MEAL_PREP_BASE_COUNTS.dinner, seed + 37);
+  const snackBase = pickBaseIds(snackPool, MEAL_PREP_BASE_COUNTS.snack, seed + 41);
+
   const days = PLAN_DAY_LABELS.map((label, dayIndex) => {
-    const breakfast = pickRecipeId(breakfastPool, usedCounts, seed + dayIndex * 3 + 0);
-    const lunch = pickRecipeId(lunchPool, usedCounts, seed + dayIndex * 3 + 1);
-    const dinner = pickRecipeId(dinnerPool, usedCounts, seed + dayIndex * 3 + 2);
-    const snack = includeSnack ? pickRecipeId(snackPool, usedCounts, seed + dayIndex * 3 + 3) : '';
+    const breakfast = selectMealPrepId({
+      baseIds: breakfastBase,
+      fallbackPool: breakfastPool,
+      dayIndex,
+      mealType: 'breakfast',
+    });
+    const lunch = selectMealPrepId({
+      baseIds: lunchBase,
+      fallbackPool: lunchPool,
+      dayIndex,
+      mealType: 'lunch',
+    });
+    const dinner = selectMealPrepId({
+      baseIds: dinnerBase,
+      fallbackPool: dinnerPool,
+      dayIndex,
+      mealType: 'dinner',
+    });
+    const snack = includeSnack
+      ? selectMealPrepId({
+          baseIds: snackBase,
+          fallbackPool: snackPool,
+          dayIndex,
+          mealType: 'snack',
+        })
+      : '';
 
     return {
       dayIndex,

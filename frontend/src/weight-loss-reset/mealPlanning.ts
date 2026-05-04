@@ -19,6 +19,19 @@ export interface MealPlanGenerationResult {
 }
 
 const CRITICAL_REQUIREMENTS = new Set(['vegetarian', 'vegan', 'gluten free', 'dairy free', 'nut free', 'halal', 'kosher']);
+const MEAL_PREP_PATTERNS: Record<MealType, number[]> = {
+  breakfast: [0, 0, 1, 1, 0, 1, 0],
+  lunch: [0, 0, 1, 1, 2, 2, 1],
+  dinner: [0, 0, 1, 1, 2, 2, 1],
+  snack: [0, 1, 0, 1, 0, 1, 0],
+};
+const MEAL_PREP_BASE_COUNTS: Record<MealType, number> = {
+  breakfast: 2,
+  lunch: 3,
+  dinner: 3,
+  snack: 2,
+};
+
 function normalizeText(value: string) {
   return value.toLowerCase().trim();
 }
@@ -156,26 +169,40 @@ function buildCandidatePool({
     .sort((a, b) => recipePreferenceScore(b, answers) - recipePreferenceScore(a, answers) || a.title.localeCompare(b.title));
 }
 
-function pickRecipe({
+function pickMealPrepBaseRecipes({
   candidates,
+  mealType,
   random,
-  usedCount,
-  dayOffset,
 }: {
   candidates: Recipe[];
+  mealType: MealType;
   random: () => number;
-  usedCount: Record<string, number>;
-  dayOffset: number;
 }) {
-  if (candidates.length === 0) return undefined;
+  if (candidates.length === 0) return [] as Recipe[];
+  const targetCount = MEAL_PREP_BASE_COUNTS[mealType];
+  const sliceSize = Math.min(candidates.length, Math.max(targetCount * 3, targetCount));
+  const pool = candidates.slice(0, sliceSize);
+  const start = Math.floor(random() * pool.length);
+  const rotated = [...pool.slice(start), ...pool.slice(0, start)];
+  return rotated.slice(0, Math.max(1, Math.min(targetCount, rotated.length)));
+}
 
-  const leastUsed = candidates.filter((recipe) => (usedCount[recipe.id] || 0) < 2);
-  const pool = leastUsed.length > 0 ? leastUsed : candidates;
-  const jitter = Math.floor(random() * Math.min(4, pool.length));
-  const index = (dayOffset + jitter) % pool.length;
-  const picked = pool[index];
-  usedCount[picked.id] = (usedCount[picked.id] || 0) + 1;
-  return picked;
+function selectMealPrepRecipe({
+  baseRecipes,
+  dayIndex,
+  mealType,
+  fallbackPool,
+}: {
+  baseRecipes: Recipe[];
+  dayIndex: number;
+  mealType: MealType;
+  fallbackPool: Recipe[];
+}) {
+  const pattern = MEAL_PREP_PATTERNS[mealType];
+  const source = baseRecipes.length > 0 ? baseRecipes : fallbackPool;
+  if (source.length === 0) return undefined;
+  const slot = pattern[dayIndex % pattern.length] || 0;
+  return source[slot % source.length];
 }
 
 function calculateDayTotals(day: MealPlanDay, recipeMap: Map<string, Recipe>) {
@@ -234,7 +261,6 @@ export function generateMealPlan({
   const random = seededRandom(
     `${answers.firstName}|${answers.age || ''}|${answers.goalWeightKg || ''}|${answers.biggestChallenge}|${answers.mainGoal}|${seedSalt}`
   );
-  const usedCount: Record<string, number> = {};
 
   const requiresSnack = answers.mealsPerDay >= 4;
   const mealTypesForDay: MealType[] = requiresSnack ? ['breakfast', 'lunch', 'dinner', 'snack'] : ['breakfast', 'lunch', 'dinner'];
@@ -276,27 +302,37 @@ export function generateMealPlan({
     candidatePools.snack = candidatePools.breakfast.length > 0 ? candidatePools.breakfast : fallbackCatalog;
   }
 
+  const mealPrepBases = {
+    breakfast: pickMealPrepBaseRecipes({ candidates: candidatePools.breakfast, mealType: 'breakfast', random }),
+    lunch: pickMealPrepBaseRecipes({ candidates: candidatePools.lunch, mealType: 'lunch', random }),
+    dinner: pickMealPrepBaseRecipes({ candidates: candidatePools.dinner, mealType: 'dinner', random }),
+    snack: pickMealPrepBaseRecipes({ candidates: candidatePools.snack, mealType: 'snack', random }),
+  };
+  notes.push(
+    'Meal-prep mode enabled: lunches and dinners are intentionally repeated across the week to reduce cooking sessions and simplify groceries.'
+  );
+
   const days: MealPlanDay[] = [];
   const recipeMap = new Map(catalog.map((recipe) => [recipe.id, recipe]));
 
   for (let dayIndex = 0; dayIndex < MEAL_PLAN_DAYS.length; dayIndex += 1) {
-    const breakfastRecipe = pickRecipe({
-      candidates: candidatePools.breakfast,
-      random,
-      usedCount,
-      dayOffset: dayIndex,
+    const breakfastRecipe = selectMealPrepRecipe({
+      baseRecipes: mealPrepBases.breakfast,
+      dayIndex,
+      mealType: 'breakfast',
+      fallbackPool: candidatePools.breakfast,
     });
-    const lunchRecipe = pickRecipe({
-      candidates: candidatePools.lunch,
-      random,
-      usedCount,
-      dayOffset: dayIndex + 1,
+    const lunchRecipe = selectMealPrepRecipe({
+      baseRecipes: mealPrepBases.lunch,
+      dayIndex,
+      mealType: 'lunch',
+      fallbackPool: candidatePools.lunch,
     });
-    const dinnerRecipe = pickRecipe({
-      candidates: candidatePools.dinner,
-      random,
-      usedCount,
-      dayOffset: dayIndex + 2,
+    const dinnerRecipe = selectMealPrepRecipe({
+      baseRecipes: mealPrepBases.dinner,
+      dayIndex,
+      mealType: 'dinner',
+      fallbackPool: candidatePools.dinner,
     });
 
     const breakfastId =
@@ -312,18 +348,15 @@ export function generateMealPlan({
       candidatePools.dinner[dayIndex % candidatePools.dinner.length]?.id ||
       fallbackCatalog[(dayIndex + 2) % fallbackCatalog.length]?.id;
 
-    const snacks = requiresSnack
-      ? [
-          pickRecipe({
-            candidates: candidatePools.snack.length > 0 ? candidatePools.snack : candidatePools.breakfast,
-            random,
-            usedCount,
-            dayOffset: dayIndex + 3,
-          }),
-        ]
-          .filter(Boolean)
-          .map((recipe) => recipe?.id as string)
-      : [];
+    const snackRecipe = requiresSnack
+      ? selectMealPrepRecipe({
+          baseRecipes: mealPrepBases.snack,
+          dayIndex,
+          mealType: 'snack',
+          fallbackPool: candidatePools.snack.length > 0 ? candidatePools.snack : candidatePools.breakfast,
+        })
+      : undefined;
+    const snacks = snackRecipe?.id ? [snackRecipe.id] : [];
 
     const day: MealPlanDay = {
       dayIndex,
@@ -436,6 +469,99 @@ export function withRecalculatedTotals(mealPlan: MealPlan, recipeMap: Map<string
   };
 }
 
+const LEADING_UNIT_WORDS = new Set([
+  'cup', 'cups', 'tbsp', 'tablespoon', 'tablespoons', 'tsp', 'teaspoon', 'teaspoons', 'g', 'kg', 'ml', 'l',
+  'oz', 'lb', 'clove', 'cloves', 'can', 'cans', 'tin', 'tins', 'packet', 'packets', 'bunch', 'bunches', 'sprig',
+  'sprigs', 'slice', 'slices', 'fillet', 'fillets', 'piece', 'pieces', 'handful', 'handfuls', 'stalk', 'stalks',
+  'stick', 'sticks', 'x',
+]);
+const IGNORED_INGREDIENT_LINES = [
+  'dressing',
+  'salad dressing',
+  'serve with',
+  'serving suggestion',
+  'optional serving suggestion',
+];
+
+function cleanIngredientLine(value: string) {
+  return String(value || '')
+    .replace(/[•]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function shouldIgnoreIngredientLine(line: string) {
+  const normalized = normalizeText(line);
+  if (!normalized) return true;
+  return IGNORED_INGREDIENT_LINES.some((prefix) => normalized === prefix || normalized.startsWith(prefix));
+}
+
+function extractInlineQuantity(line: string) {
+  const match = line.match(
+    /^((?:about|approx(?:\.|imately)?)?\s*(?:\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]|half|quarter|one|two|three|four|five|six|seven|eight|nine|ten|a|an)(?:\s*-\s*(?:\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]))?(?:\s+[a-zA-Z%]+){0,2})/i
+  );
+  return match ? match[1].trim() : '';
+}
+
+function normalizeIngredientBaseName(rawLine: string) {
+  let value = cleanIngredientLine(rawLine);
+  value = value.replace(/\([^)]*\)/g, ' ');
+  value = value.split(',')[0] || value;
+  value = value.replace(/^[^a-zA-Z0-9]+/, '').trim();
+  value = value.replace(
+    /^(?:about|approx(?:\.|imately)?)?\s*(?:\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]|half|quarter|one|two|three|four|five|six|seven|eight|nine|ten|a|an)(?:\s*-\s*(?:\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]))?\s*/i,
+    '',
+  );
+
+  const tokens = value.split(/\s+/).filter(Boolean);
+  while (tokens.length > 1) {
+    const token = normalizeText(tokens[0]);
+    if (LEADING_UNIT_WORDS.has(token) || /^\d+(g|kg|ml|l)$/i.test(token)) {
+      tokens.shift();
+      continue;
+    }
+    break;
+  }
+
+  value = tokens.join(' ').replace(/^(of|fresh|dried)\s+/i, '').replace(/\s+/g, ' ').trim();
+  return value;
+}
+
+function toIngredientDisplayName(baseName: string) {
+  const lower = normalizeText(baseName);
+  return lower.replace(/\b([a-z])/g, (match) => match.toUpperCase());
+}
+
+function inferGroceryCategory(baseName: string) {
+  const text = normalizeText(baseName);
+  if (
+    containsAny(text, [
+      'carrot', 'onion', 'tomato', 'capsicum', 'zucchini', 'spinach', 'kale', 'lettuce', 'mint', 'parsley',
+      'coriander', 'pumpkin', 'beetroot', 'cucumber', 'lemon', 'lime', 'fruit', 'berries', 'kiwi', 'mushroom',
+      'snow pea', 'broccoli', 'celery', 'avocado', 'chilli',
+    ])
+  ) {
+    return 'produce';
+  }
+  if (
+    containsAny(text, [
+      'chicken', 'beef', 'salmon', 'fish', 'egg', 'tofu', 'beans', 'lentil', 'chickpea', 'steak', 'tuna',
+    ])
+  ) {
+    return 'protein';
+  }
+  if (containsAny(text, ['yoghurt', 'yogurt', 'milk', 'feta', 'ricotta', 'cheese'])) {
+    return 'dairy';
+  }
+  if (containsAny(text, ['rice', 'pasta', 'noodle', 'oats', 'flour', 'farro', 'freekeh', 'quinoa', 'couscous', 'tortilla'])) {
+    return 'grains';
+  }
+  if (containsAny(text, ['cumin', 'paprika', 'turmeric', 'cinnamon', 'garlic powder', 'masala', 'pepper', 'salt', 'mustard seed'])) {
+    return 'herbs & spices';
+  }
+  return 'pantry';
+}
+
 export function buildGroceryListFromMealPlan(mealPlan: MealPlan | null, recipeMap: Map<string, Recipe>) {
   if (!mealPlan) return [];
 
@@ -454,17 +580,26 @@ export function buildGroceryListFromMealPlan(mealPlan: MealPlan | null, recipeMa
       if (!recipe) continue;
 
       for (const ingredient of recipe.ingredients) {
-        const name = ingredient.name.trim();
-        if (!name) continue;
-        const key = normalizeText(name);
-        const quantityLabel = [ingredient.quantity, ingredient.unit].filter(Boolean).join(' ').trim();
+        const line = cleanIngredientLine(ingredient.name || '');
+        if (!line || shouldIgnoreIngredientLine(line)) continue;
+
+        const baseName = normalizeIngredientBaseName(line);
+        if (!baseName) continue;
+
+        const displayName = toIngredientDisplayName(baseName);
+        const key = normalizeText(baseName);
+        const quantityLabel =
+          [ingredient.quantity, ingredient.unit].filter(Boolean).join(' ').trim() || extractInlineQuantity(line);
+        const preferredCategory = normalizeText(ingredient.category || '');
+        const category =
+          preferredCategory && preferredCategory !== 'pantry' ? preferredCategory : inferGroceryCategory(baseName);
         const existing = bucket.get(key);
 
         if (!existing) {
           bucket.set(key, {
             key,
-            name,
-            category: ingredient.category || 'pantry',
+            name: displayName,
+            category,
             quantities: quantityLabel ? [quantityLabel] : [],
           });
           continue;
