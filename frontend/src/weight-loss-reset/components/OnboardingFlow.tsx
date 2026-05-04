@@ -75,16 +75,20 @@ function stepValidation(step: number, answers: OnboardingAnswers) {
 export default function OnboardingFlow({
   initialAnswers,
   initialStep,
+  mode = 'initial',
   onSaveProgress,
   onMarkOnboardingComplete,
   onBookingComplete,
+  onCompletePreferenceUpdate,
   onOpenDashboard,
 }: {
   initialAnswers: OnboardingAnswers;
   initialStep: number;
+  mode?: 'initial' | 'update';
   onSaveProgress: (answers: OnboardingAnswers, step: number) => void;
   onMarkOnboardingComplete: () => void;
   onBookingComplete: (answers: OnboardingAnswers) => Promise<void> | void;
+  onCompletePreferenceUpdate?: (answers: OnboardingAnswers) => Promise<void> | void;
   onOpenDashboard: () => void;
 }) {
   const [answers, setAnswers] = useState<OnboardingAnswers>(initialAnswers);
@@ -92,6 +96,7 @@ export default function OnboardingFlow({
   const [error, setError] = useState('');
   const [unlocking, setUnlocking] = useState(false);
   const saveProgressRef = useRef(onSaveProgress);
+  const isPreferenceUpdate = mode === 'update';
 
   useEffect(() => {
     saveProgressRef.current = onSaveProgress;
@@ -107,6 +112,28 @@ export default function OnboardingFlow({
   }, [step]);
 
   const next = () => {
+    if (isPreferenceUpdate && step === 7) {
+      const message = stepValidation(step, answers);
+      if (message) {
+        setError(message);
+        return;
+      }
+      setUnlocking(true);
+      setError('');
+      Promise.resolve(onCompletePreferenceUpdate?.(answers))
+        .then(() => {
+          onMarkOnboardingComplete();
+          setStep(10);
+        })
+        .catch((errorObject) => {
+          setError(errorObject instanceof Error ? errorObject.message : 'Unable to save your updated preferences right now.');
+        })
+        .finally(() => {
+          setUnlocking(false);
+        });
+      return;
+    }
+
     if (step === 9) {
       setError('Please complete booking first using the button above.');
       return;
@@ -198,7 +225,7 @@ export default function OnboardingFlow({
       <header className="mb-6">
         <h1 className="text-3xl font-semibold tracking-tight text-[#18251e]">{WEIGHT_LOSS_RESET_PROGRAM_NAME}</h1>
         <p className="mt-1 text-sm text-[#5f7063]">
-          Step {Math.min(step + 1, 11)} of 11 • {WEIGHT_LOSS_RESET_PRICE_COPY} • Minimum {WEIGHT_LOSS_RESET_MIN_PLAN_WEEKS}-week plan
+          {isPreferenceUpdate ? 'Update your intake preferences' : `Step ${Math.min(step + 1, 11)} of 11`} • {WEIGHT_LOSS_RESET_PRICE_COPY} • Minimum {WEIGHT_LOSS_RESET_MIN_PLAN_WEEKS}-week plan
         </p>
         <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#edf1ec]">
           <div className="h-full rounded-full bg-[#1f5f3f] transition-all duration-300" style={{ width: `${progress}%` }} />
@@ -653,9 +680,11 @@ export default function OnboardingFlow({
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[#b9c8ba] bg-[#eff4ef] text-[#1f5f3f]">
             <CheckCircle2 size={26} />
           </div>
-          <h2 className="mt-4 text-2xl font-semibold text-[#18251e]">You&apos;re all set.</h2>
+          <h2 className="mt-4 text-2xl font-semibold text-[#18251e]">{isPreferenceUpdate ? 'Preferences updated.' : 'You&apos;re all set.'}</h2>
           <p className="mt-2 text-sm text-[#5f7063]">
-            Your Weight Loss Reset dashboard is unlocked with meal planning, grocery support, progress tracking, and messaging.
+            {isPreferenceUpdate
+              ? 'Your meal plan has been refreshed using your latest intake preferences.'
+              : 'Your Weight Loss Reset dashboard is unlocked with meal planning, grocery support, progress tracking, and messaging.'}
           </p>
           <button
             type="button"
@@ -685,9 +714,10 @@ export default function OnboardingFlow({
             <button
               type="button"
               onClick={next}
-              className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#1f5f3f] px-4 text-sm font-semibold text-white hover:bg-[#174830]"
+              disabled={unlocking}
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#1f5f3f] px-4 text-sm font-semibold text-white hover:bg-[#174830] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              Next
+              {unlocking ? 'Saving...' : 'Next'}
               <ArrowRight size={15} />
             </button>
           )}

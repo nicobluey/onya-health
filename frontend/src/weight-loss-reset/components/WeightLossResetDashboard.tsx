@@ -134,6 +134,7 @@ export default function WeightLossResetDashboard({
   messages,
   groceryCheckedItems,
   onRegeneratePlan,
+  onUpdatePreferences,
   onSwapMeal,
   onAddWeightLog,
   onAddMessage,
@@ -147,6 +148,7 @@ export default function WeightLossResetDashboard({
   messages: DietitianMessage[];
   groceryCheckedItems: string[];
   onRegeneratePlan: () => void;
+  onUpdatePreferences: () => void;
   onSwapMeal: (dayIndex: number, mealType: MealType, recipeId: string) => void;
   onAddWeightLog: (payload: { date: string; weight: number; note?: string }) => void;
   onAddMessage: (payload: { role: 'user' | 'system'; text: string }) => void;
@@ -310,6 +312,13 @@ export default function WeightLossResetDashboard({
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold text-[#18251e]">Weekly meal plan</h2>
+            <button
+              type="button"
+              onClick={onUpdatePreferences}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#dbe2d9] bg-white px-3 text-xs font-semibold text-[#334155]"
+            >
+              Update intake preferences
+            </button>
             <button
               type="button"
               onClick={onRegeneratePlan}

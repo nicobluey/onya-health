@@ -979,6 +979,7 @@ export default function PatientPortalPage() {
     const weightLossStateRef = useRef(weightLossResetState);
 
     const [portalScreen, setPortalScreen] = useState<PortalScreen>('main');
+    const [weightLossOnboardingMode, setWeightLossOnboardingMode] = useState<'initial' | 'update'>('initial');
     const [programRouteHandled, setProgramRouteHandled] = useState(false);
     const [lastMainTab, setLastMainTab] = useState<MainTab>('home');
     const [selectedConsultOptionId, setSelectedConsultOptionId] = useState<ConsultOptionId | null>(null);
@@ -1388,10 +1389,19 @@ export default function PatientPortalPage() {
     };
 
     const openWeightLossOnboarding = () => {
+        setWeightLossOnboardingMode('initial');
         setLastMainTab(mainTab);
         setMainTab('home');
         setPortalScreen('weight-loss-onboarding');
     };
+
+    const openWeightLossPreferenceEditor = useCallback(() => {
+        setWeightLossOnboardingMode('update');
+        saveOnboardingStep(1);
+        setLastMainTab(mainTab);
+        setMainTab('home');
+        setPortalScreen('weight-loss-onboarding');
+    }, [mainTab, saveOnboardingStep]);
 
     const openWeightLossDashboard = () => {
         setLastMainTab(mainTab);
@@ -1491,6 +1501,15 @@ export default function PatientPortalPage() {
             markBookingComplete,
             updateOnboardingAnswers,
         ]
+    );
+
+    const handleWeightLossPreferencesUpdated = useCallback(
+        async (answers: OnboardingAnswers) => {
+            updateOnboardingAnswers(answers);
+            completeOnboarding();
+            await generateAndStoreWeightLossMealPlan(answers, { refresh: true });
+        },
+        [completeOnboarding, generateAndStoreWeightLossMealPlan, updateOnboardingAnswers]
     );
 
     const handleWeightLossSwapMeal = useCallback(
@@ -1760,9 +1779,11 @@ export default function PatientPortalPage() {
                 <OnboardingFlow
                     initialAnswers={weightLossResetState.onboardingAnswers}
                     initialStep={weightLossResetState.onboardingStep}
+                    mode={weightLossOnboardingMode}
                     onSaveProgress={handleWeightLossOnboardingProgress}
                     onMarkOnboardingComplete={completeOnboarding}
                     onBookingComplete={handleWeightLossBookingComplete}
+                    onCompletePreferenceUpdate={handleWeightLossPreferencesUpdated}
                     onOpenDashboard={openWeightLossDashboard}
                 />
             );
@@ -1794,6 +1815,7 @@ export default function PatientPortalPage() {
                         messages={weightLossResetState.messages}
                         groceryCheckedItems={weightLossResetState.groceryCheckedItems}
                         isGeneratingPlan={isGeneratingMealPlan}
+                        onUpdatePreferences={openWeightLossPreferenceEditor}
                         onRegeneratePlan={() => {
                             void generateAndStoreWeightLossMealPlan(weightLossResetState.onboardingAnswers, { refresh: true });
                         }}
