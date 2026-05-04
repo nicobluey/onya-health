@@ -574,7 +574,13 @@ const LEADING_DESCRIPTORS = new Set([
   'unsweetened',
   'unsalted',
   'salted',
+  'free',
+  'reduced-fat',
+  'low-fat',
+  'fat-free',
   'few',
+  'packed',
+  'cooked',
   'natural',
   'free-range',
   'skinless',
@@ -665,8 +671,18 @@ const QUANTITY_UNIT_ALIASES: Record<string, string> = {
   stalks: 'stalk',
   stick: 'stick',
   sticks: 'stick',
+  bag: 'bag',
+  bags: 'bag',
   head: 'head',
   heads: 'head',
+  pita: 'pita',
+  pitas: 'pita',
+  date: 'date',
+  dates: 'date',
+  peach: 'peach',
+  peaches: 'peach',
+  leek: 'leek',
+  leeks: 'leek',
   avocado: 'avocado',
   avocados: 'avocado',
   banana: 'banana',
@@ -706,7 +722,12 @@ const UNIT_DISPLAY_ORDER = [
   'fillet',
   'stalk',
   'stick',
+  'bag',
   'head',
+  'pita',
+  'date',
+  'peach',
+  'leek',
 ];
 
 function cleanIngredientLine(value: string) {
@@ -809,7 +830,11 @@ function extractAggregatedQuantity(line: string) {
     break;
   }
 
-  const unit = unitTokens[0] ? normalizeQuantityUnitToken(unitTokens[0]) : '';
+  let unit = '';
+  for (const token of unitTokens.slice(0, 4)) {
+    unit = normalizeQuantityUnitToken(token);
+    if (unit) break;
+  }
 
   return unit ? { amount, unit } : null;
 }
@@ -842,11 +867,35 @@ function formatQuantityLabels(quantityTotals: Map<string, number>, unparsedCount
       return [formatAggregatedAmount(amount), unitLabel].filter(Boolean).join(' ');
     });
 
-  const unparsed = [...unparsedCounts.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([label, count]) => (count > 1 ? `${label} x${count}` : label));
+  const looseTotals = new Map<string, number>();
+  const remainingUnparsed: Array<{ label: string; count: number }> = [];
+  for (const [label, count] of unparsedCounts.entries()) {
+    const cleanedLabel = cleanIngredientLine(label);
+    const looseMatch = cleanedLabel.match(
+      /^((?:\d+\s+\d+\/\d+|\d+\s*[¼½¾⅓⅔⅛⅜⅝⅞]|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]|(?:half|quarter|one|two|three|four|five|six|seven|eight|nine|ten|a|an)\b)(?:\s*-\s*(?:\d+\s+\d+\/\d+|\d+\s*[¼½¾⅓⅔⅛⅜⅝⅞]|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]))?)\s+(.+)$/i
+    );
+    if (!looseMatch) {
+      remainingUnparsed.push({ label: cleanedLabel, count });
+      continue;
+    }
+    const looseAmount = parseAmountExpression(looseMatch[1]);
+    const looseUnitText = cleanIngredientLine(looseMatch[2]).replace(/\s+/g, ' ').trim();
+    if (!looseAmount || !Number.isFinite(looseAmount) || looseAmount <= 0 || !looseUnitText) {
+      remainingUnparsed.push({ label: cleanedLabel, count });
+      continue;
+    }
+    looseTotals.set(looseUnitText, (looseTotals.get(looseUnitText) || 0) + looseAmount * count);
+  }
 
-  return [...totals, ...unparsed];
+  const looseLabels = [...looseTotals.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([unitText, amount]) => `${formatAggregatedAmount(amount)} ${unitText}`);
+
+  const unparsed = [...remainingUnparsed]
+    .sort((a, b) => a.label.localeCompare(b.label))
+    .map(({ label, count }) => (count > 1 ? `${label} x${count}` : label));
+
+  return [...totals, ...looseLabels, ...unparsed];
 }
 
 function shouldIgnoreIngredientLine(line: string) {
@@ -952,9 +1001,11 @@ function canonicalizeIngredientBaseName(baseName: string) {
   value = value.replace(/\b(halves|half|chunks|chunk|diced|sliced|chopped|minced|grated|crushed|washed|rinsed|trimmed)\b$/g, '').trim();
   if (value.endsWith('ies') && value.length > 4) {
     value = `${value.slice(0, -3)}y`;
+  } else if (/(ches|shes|xes|zes)$/.test(value) && value.length > 5) {
+    value = value.slice(0, -2);
   } else if (value.endsWith('oes') && value.length > 4) {
     value = `${value.slice(0, -2)}`;
-  } else if (value.endsWith('s') && !value.endsWith('ss') && value.length > 4) {
+  } else if (value.endsWith('s') && !value.endsWith('ss') && !value.endsWith('ous') && value.length > 4) {
     value = value.slice(0, -1);
   }
   return value;
@@ -969,7 +1020,7 @@ function inferGroceryCategory(baseName: string) {
   const text = normalizeText(baseName);
   if (
     containsAny(text, [
-      'salt', 'pepper', 'cumin', 'paprika', 'turmeric', 'cinnamon', 'masala', 'mustard', 'spice', 'ground coriander', 'herb',
+      'salt', 'pepper', 'cumin', 'paprika', 'turmeric', 'cinnamon', 'masala', 'mustard', 'spice', 'ground coriander', 'herb', 'clove', 'zaatar', 'anise',
     ])
   ) {
     return 'herbs & spices';
@@ -979,26 +1030,26 @@ function inferGroceryCategory(baseName: string) {
   }
   if (
     containsAny(text, [
-      'carrot', 'onion', 'tomato', 'capsicum', 'zucchini', 'spinach', 'kale', 'lettuce', 'mint', 'parsley',
-      'coriander', 'basil', 'ginger', 'pumpkin', 'beetroot', 'cucumber', 'lemon', 'lime', 'fruit', 'berries', 'kiwi',
-      'mushroom', 'snow pea', 'broccoli', 'celery', 'avocado', 'chilli', 'peach', 'date', 'banana', 'grape', 'apple',
-      'potato', 'shallot', 'sprout', 'pea', 'cabbage', 'garlic', 'mango',
-    ])
-  ) {
-    return 'produce';
-  }
-  if (
-    containsAny(text, [
       'chicken', 'beef', 'salmon', 'egg', 'tofu', 'beans', 'lentil', 'chickpea', 'steak', 'tuna',
     ])
   ) {
     return 'protein';
   }
-  if (containsAny(text, ['yoghurt', 'yogurt', 'milk', 'feta', 'ricotta', 'cheese', 'haloumi', 'bocconcini'])) {
+  if (containsAny(text, ['yoghurt', 'yogurt', 'milk', 'feta', 'ricotta', 'cheese', 'haloumi', 'bocconcini', 'chevre'])) {
     return 'dairy';
   }
-  if (containsAny(text, ['rice', 'pasta', 'noodle', 'oats', 'flour', 'farro', 'freekeh', 'quinoa', 'couscous', 'tortilla', 'spaghetti'])) {
+  if (containsAny(text, ['rice', 'pasta', 'noodle', 'oats', 'flour', 'farro', 'freekeh', 'quinoa', 'couscous', 'tortilla', 'spaghetti', 'pita', 'polenta'])) {
     return 'grains';
+  }
+  if (
+    containsAny(text, [
+      'carrot', 'onion', 'tomato', 'capsicum', 'zucchini', 'spinach', 'kale', 'lettuce', 'mint', 'parsley',
+      'coriander', 'basil', 'ginger', 'pumpkin', 'beetroot', 'cucumber', 'lemon', 'lime', 'fruit', 'berries', 'berry', 'blueberry', 'kiwi',
+      'mushroom', 'snow pea', 'green pea', 'broccoli', 'celery', 'avocado', 'chilli', 'peach', 'date', 'banana', 'grape', 'apple',
+      'potato', 'shallot', 'sprout', 'cabbage', 'garlic', 'mango', 'leek', 'orange', 'pomegranate',
+    ])
+  ) {
+    return 'produce';
   }
   return 'pantry';
 }
