@@ -1424,20 +1424,66 @@ export default function PatientPortalPage() {
                 const recipes = await ensureWeightLossRecipesLoaded();
                 if (recipes.length === 0) return;
                 const seedSalt = options.refresh ? String(Date.now()) : '';
-                const recipeMap = new Map(recipes.map((recipe) => [recipe.id, recipe]));
+                const includeSnack = Number(answers.mealsPerDay || 3) >= 4;
+                const activeToken = token || window.localStorage.getItem('onya_patient_token') || '';
+                let generatedFromApi = false;
 
-                const generated = generateMealPlan({
-                    recipes,
-                    answers,
-                    seedSalt,
-                });
-                setMealPlan(postProcessGeneratedMealPlan(generated.mealPlan, answers, recipeMap));
+                if (activeToken) {
+                    try {
+                        const { response, payload } = await fetchApiJson('/api/patient/meal-plan/generate', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                Authorization: `Bearer ${activeToken}`,
+                            },
+                            body: JSON.stringify({
+                                answers,
+                                includeSnack,
+                                seedSalt,
+                                generateRecipes: true,
+                                generationMode: 'ai_recipes',
+                            }),
+                        });
+
+                        const serverMealPlan = payload?.mealPlan;
+                        const serverRecipes = Array.isArray(payload?.recipes) ? (payload.recipes as Recipe[]) : [];
+                        if (response.ok && payload?.ok && serverMealPlan && serverRecipes.length > 0) {
+                            const validServerRecipes = serverRecipes.filter(
+                                (recipe) =>
+                                    recipe &&
+                                    typeof recipe === 'object' &&
+                                    typeof recipe.id === 'string' &&
+                                    typeof recipe.title === 'string' &&
+                                    Array.isArray(recipe.ingredients),
+                            );
+                            const nextRecipes = validServerRecipes.length > 0 ? validServerRecipes : recipes;
+                            const recipeMap = new Map(nextRecipes.map((recipe) => [recipe.id, recipe]));
+                            setWeightLossRecipes(nextRecipes);
+                            setWeightLossRecipeError('');
+                            setWeightLossRecipesReady(true);
+                            setMealPlan(postProcessGeneratedMealPlan(serverMealPlan, answers, recipeMap));
+                            generatedFromApi = true;
+                        }
+                    } catch (errorObject) {
+                        console.error('Meal generation API failed. Falling back to local meal planner.', errorObject);
+                    }
+                }
+
+                if (!generatedFromApi) {
+                    const recipeMap = new Map(recipes.map((recipe) => [recipe.id, recipe]));
+                    const generated = generateMealPlan({
+                        recipes,
+                        answers,
+                        seedSalt,
+                    });
+                    setMealPlan(postProcessGeneratedMealPlan(generated.mealPlan, answers, recipeMap));
+                }
             } finally {
                 isGeneratingMealPlanRef.current = false;
                 setIsGeneratingMealPlan(false);
             }
         },
-        [ensureWeightLossRecipesLoaded, setMealPlan]
+        [ensureWeightLossRecipesLoaded, setMealPlan, token]
     );
 
     const handleWeightLossOnboardingProgress = useCallback(

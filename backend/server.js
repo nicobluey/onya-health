@@ -31,7 +31,11 @@ import {
 } from './lib/doctor-auth.js';
 import { calculateRisk } from './lib/risk.js';
 import { buildCertificatePdf } from './lib/pdf.js';
-import { generateFallbackMealPlan, generateOpenAiMealPlan } from './lib/meal-plan-ai.js';
+import {
+  generateFallbackMealPlan,
+  generateOpenAiMealPlan,
+  generateOpenAiMealPlanWithGeneratedRecipes,
+} from './lib/meal-plan-ai.js';
 import { generateDoctorNotes, generateMoreInfoDraft } from './lib/notes.js';
 import {
   appendAudit,
@@ -2186,47 +2190,65 @@ async function handleApi(req, res, url) {
     const recipes = Array.isArray(body?.recipes) ? body.recipes.slice(0, 300) : [];
     const includeSnack = Boolean(body?.includeSnack);
     const seedSalt = String(body?.seedSalt || '').slice(0, 120);
+    const requestedMode = String(body?.generationMode || '').trim().toLowerCase();
+    const shouldGenerateRecipes = Boolean(body?.generateRecipes) || requestedMode === 'ai_recipes' || recipes.length === 0;
 
-    if (recipes.length === 0) {
-      sendJson(res, 400, { error: 'Recipe catalog is required' });
-      return;
+    if (shouldGenerateRecipes) {
+      const generatedBundle = await generateOpenAiMealPlanWithGeneratedRecipes({
+        answers,
+        includeSnack,
+        seedSalt,
+      });
+      if (generatedBundle) {
+        sendJson(res, 200, {
+          ok: true,
+          generatedBy: 'openai',
+          mealPlan: generatedBundle.mealPlan,
+          recipes: generatedBundle.recipes,
+        });
+        return;
+      }
     }
 
-    const aiMealPlan = await generateOpenAiMealPlan({
-      answers,
-      recipes,
-      includeSnack,
-      seedSalt,
-    });
-
-    if (aiMealPlan) {
-      sendJson(res, 200, {
-        ok: true,
-        generatedBy: 'openai',
-        mealPlan: aiMealPlan,
+    if (recipes.length > 0) {
+      const aiMealPlan = await generateOpenAiMealPlan({
+        answers,
+        recipes,
+        includeSnack,
+        seedSalt,
       });
-      return;
-    }
 
-    const fallbackMealPlan = generateFallbackMealPlan({
-      answers,
-      recipes,
-      includeSnack,
-      seedSalt,
-    });
-    if (fallbackMealPlan) {
-      sendJson(res, 200, {
-        ok: true,
-        generatedBy: 'rules',
-        mealPlan: fallbackMealPlan,
+      if (aiMealPlan) {
+        sendJson(res, 200, {
+          ok: true,
+          generatedBy: 'openai',
+          mealPlan: aiMealPlan,
+        });
+        return;
+      }
+
+      const fallbackMealPlan = generateFallbackMealPlan({
+        answers,
+        recipes,
+        includeSnack,
+        seedSalt,
       });
-      return;
+      if (fallbackMealPlan) {
+        sendJson(res, 200, {
+          ok: true,
+          generatedBy: 'rules',
+          mealPlan: fallbackMealPlan,
+        });
+        return;
+      }
     }
 
     sendJson(res, 200, {
       ok: false,
-      generatedBy: 'rules',
-      error: 'Unable to generate meal plan from provided recipe catalog.',
+      generatedBy: shouldGenerateRecipes ? 'openai' : 'rules',
+      error: shouldGenerateRecipes
+        ? 'Unable to generate meals from the provided onboarding preferences.'
+        : 'Unable to generate meal plan from provided recipe catalog.',
     });
     return;
   }
