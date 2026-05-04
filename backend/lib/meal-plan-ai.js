@@ -70,9 +70,28 @@ function selectMealPrepId({ baseIds, fallbackPool, dayIndex, mealType }) {
   return source[slot % source.length] || '';
 }
 
+function pickVariedId({ pool, dayIndex, seedOffset = 0, lastId = '' }) {
+  const source = Array.isArray(pool) ? pool.filter(Boolean) : [];
+  if (source.length === 0) return '';
+  const index = Math.abs(Number(seedOffset || 0) + dayIndex) % source.length;
+  let picked = source[index] || '';
+  if (source.length > 1 && lastId && picked === lastId) {
+    picked = source[(index + 1) % source.length] || picked;
+  }
+  return picked;
+}
+
+function isMainMealCandidate(recipe) {
+  const calories = Number(recipe?.calories || 0);
+  const protein = Number(recipe?.protein || 0);
+  if (calories > 0 && calories < 180 && protein < 12) return false;
+  return true;
+}
+
 export function generateFallbackMealPlan({ recipes, includeSnack = false, seedSalt = '', answers = {} }) {
   const uniqueById = new Map();
   const preferredCuisines = normalizeCuisineList(answers?.preferredCuisines);
+  const useMealPrepPattern = String(answers?.groceryPreference || '').toLowerCase() === 'meal prep friendly';
   for (const recipe of Array.isArray(recipes) ? recipes : []) {
     const id = String(recipe?.id || '').trim();
     if (!id || uniqueById.has(id)) continue;
@@ -80,6 +99,8 @@ export function generateFallbackMealPlan({ recipes, includeSnack = false, seedSa
       id,
       mealType: normalizeMealType(recipe?.mealType),
       cuisines: readRecipeCuisines(recipe),
+      calories: Number(recipe?.calories || 0),
+      protein: Number(recipe?.protein || 0),
     });
   }
 
@@ -101,9 +122,11 @@ export function generateFallbackMealPlan({ recipes, includeSnack = false, seedSa
 
   for (const recipe of uniqueById.values()) {
     if (recipe.mealType && poolByType[recipe.mealType]) {
-      poolByType[recipe.mealType].push(recipe.id);
-      if (recipeMatchesPreferredCuisines(recipe, preferredCuisines)) {
-        cuisinePoolByType[recipe.mealType].push(recipe.id);
+      if (recipe.mealType === 'snack' || isMainMealCandidate(recipe)) {
+        poolByType[recipe.mealType].push(recipe.id);
+        if (recipeMatchesPreferredCuisines(recipe, preferredCuisines)) {
+          cuisinePoolByType[recipe.mealType].push(recipe.id);
+        }
       }
     }
   }
@@ -139,34 +162,71 @@ export function generateFallbackMealPlan({ recipes, includeSnack = false, seedSa
   const lunchBase = pickBaseIds(lunchPool, MEAL_PREP_BASE_COUNTS.lunch, seed + 23);
   const dinnerBase = pickBaseIds(dinnerPool, MEAL_PREP_BASE_COUNTS.dinner, seed + 37);
   const snackBase = pickBaseIds(snackPool, MEAL_PREP_BASE_COUNTS.snack, seed + 41);
+  let lastBreakfastId = '';
+  let lastLunchId = '';
+  let lastDinnerId = '';
+  let lastSnackId = '';
 
   const days = PLAN_DAY_LABELS.map((label, dayIndex) => {
-    const breakfast = selectMealPrepId({
-      baseIds: breakfastBase,
-      fallbackPool: breakfastPool,
-      dayIndex,
-      mealType: 'breakfast',
-    });
-    const lunch = selectMealPrepId({
-      baseIds: lunchBase,
-      fallbackPool: lunchPool,
-      dayIndex,
-      mealType: 'lunch',
-    });
-    const dinner = selectMealPrepId({
-      baseIds: dinnerBase,
-      fallbackPool: dinnerPool,
-      dayIndex,
-      mealType: 'dinner',
-    });
-    const snack = includeSnack
+    const breakfast = useMealPrepPattern
       ? selectMealPrepId({
-          baseIds: snackBase,
-          fallbackPool: snackPool,
+          baseIds: breakfastBase,
+          fallbackPool: breakfastPool,
           dayIndex,
-          mealType: 'snack',
+          mealType: 'breakfast',
         })
+      : pickVariedId({
+          pool: breakfastPool,
+          dayIndex,
+          seedOffset: seed + 11,
+          lastId: lastBreakfastId,
+        });
+    const lunch = useMealPrepPattern
+      ? selectMealPrepId({
+          baseIds: lunchBase,
+          fallbackPool: lunchPool,
+          dayIndex,
+          mealType: 'lunch',
+        })
+      : pickVariedId({
+          pool: lunchPool,
+          dayIndex,
+          seedOffset: seed + 23,
+          lastId: lastLunchId,
+        });
+    const dinner = useMealPrepPattern
+      ? selectMealPrepId({
+          baseIds: dinnerBase,
+          fallbackPool: dinnerPool,
+          dayIndex,
+          mealType: 'dinner',
+        })
+      : pickVariedId({
+          pool: dinnerPool,
+          dayIndex,
+          seedOffset: seed + 37,
+          lastId: lastDinnerId,
+        });
+    const snack = includeSnack
+      ? useMealPrepPattern
+        ? selectMealPrepId({
+            baseIds: snackBase,
+            fallbackPool: snackPool,
+            dayIndex,
+            mealType: 'snack',
+          })
+        : pickVariedId({
+            pool: snackPool,
+            dayIndex,
+            seedOffset: seed + 41,
+            lastId: lastSnackId,
+          })
       : '';
+
+    lastBreakfastId = breakfast || lastBreakfastId;
+    lastLunchId = lunch || lastLunchId;
+    lastDinnerId = dinner || lastDinnerId;
+    lastSnackId = snack || lastSnackId;
 
     return {
       dayIndex,
@@ -307,6 +367,8 @@ async function callOpenAiForMealPlan({ answers, recipes, includeSnack, seedSalt 
     'Use only recipe ids from the provided catalog. Never invent ids.',
     'Prefer high-protein options when possible and match dietary requirements/allergies.',
     'If preferredCuisines is provided, prioritize those cuisines while still ensuring a complete plan.',
+    'Avoid assigning the same recipe to all 7 days unless the catalog is extremely limited.',
+    'For lunch and dinner, avoid very light snack-like options when more substantial options exist.',
     'Output schema:',
     '{"notes": string[], "days": [{"breakfast": "id","lunch":"id","dinner":"id","snacks":["id"]}]}',
   ].join('\n');

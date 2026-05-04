@@ -137,6 +137,15 @@ function recipePassesDislikes(recipe: Recipe, dislikes: string[]) {
   return !dislikes.some((term) => text.includes(term));
 }
 
+function isMainMealCandidate(recipe: Recipe, mealType: MealType) {
+  if (mealType === 'snack') return true;
+  const calories = Number(recipe.calories || 0);
+  const protein = Number(recipe.protein || 0);
+  // Guard against snack-like items being scheduled as lunch/dinner.
+  if (calories > 0 && calories < 180 && protein < 12) return false;
+  return true;
+}
+
 function seededRandom(seedInput: string) {
   let seed = 0;
   for (let index = 0; index < seedInput.length; index += 1) {
@@ -208,6 +217,7 @@ function buildCandidatePool({
 
   return withMealType
     .filter((recipe) => (stage === 1 && cuisinePreferences.length > 0 ? recipeMatchesCuisinePreferences(recipe, cuisinePreferences) : true))
+    .filter((recipe) => (stage <= 2 ? isMainMealCandidate(recipe, mealType) : true))
     .filter((recipe) => recipePassesAllergyCheck(recipe, allergyTerms))
     .filter((recipe) => recipeMatchesDietaryRequirements(recipe, strictRequirements))
     .filter((recipe) => recipePassesDislikes(recipe, dislikes))
@@ -230,6 +240,30 @@ function pickMealPrepBaseRecipes({
   const start = Math.floor(random() * pool.length);
   const rotated = [...pool.slice(start), ...pool.slice(0, start)];
   return rotated.slice(0, Math.max(1, Math.min(targetCount, rotated.length)));
+}
+
+function pickVariedRecipe({
+  candidates,
+  dayIndex,
+  random,
+  lastRecipeId,
+}: {
+  candidates: Recipe[];
+  dayIndex: number;
+  random: () => number;
+  lastRecipeId?: string;
+}) {
+  if (candidates.length === 0) return undefined;
+  const offset = Math.floor(random() * candidates.length);
+  const ranked = candidates.map((recipe, index) => ({ recipe, indexScore: (index + offset + dayIndex) % candidates.length }));
+  ranked.sort((a, b) => a.indexScore - b.indexScore);
+  if (ranked.length === 1) return ranked[0].recipe;
+  const first = ranked[0].recipe;
+  if (lastRecipeId && first.id === lastRecipeId) {
+    const alternative = ranked.find((entry) => entry.recipe.id !== lastRecipeId);
+    return alternative?.recipe || first;
+  }
+  return first;
 }
 
 function selectMealPrepRecipe({
@@ -347,34 +381,67 @@ export function generateMealPlan({
     candidatePools.snack = candidatePools.breakfast.length > 0 ? candidatePools.breakfast : fallbackCatalog;
   }
 
-  const mealPrepBases = {
-    breakfast: pickMealPrepBaseRecipes({ candidates: candidatePools.breakfast, mealType: 'breakfast', random }),
-    lunch: pickMealPrepBaseRecipes({ candidates: candidatePools.lunch, mealType: 'lunch', random }),
-    dinner: pickMealPrepBaseRecipes({ candidates: candidatePools.dinner, mealType: 'dinner', random }),
-    snack: pickMealPrepBaseRecipes({ candidates: candidatePools.snack, mealType: 'snack', random }),
-  };
+  const useMealPrepPattern = answers.groceryPreference === 'meal prep friendly';
+  const mealPrepBases = useMealPrepPattern
+    ? {
+        breakfast: pickMealPrepBaseRecipes({ candidates: candidatePools.breakfast, mealType: 'breakfast', random }),
+        lunch: pickMealPrepBaseRecipes({ candidates: candidatePools.lunch, mealType: 'lunch', random }),
+        dinner: pickMealPrepBaseRecipes({ candidates: candidatePools.dinner, mealType: 'dinner', random }),
+        snack: pickMealPrepBaseRecipes({ candidates: candidatePools.snack, mealType: 'snack', random }),
+      }
+    : {
+        breakfast: [] as Recipe[],
+        lunch: [] as Recipe[],
+        dinner: [] as Recipe[],
+        snack: [] as Recipe[],
+      };
   const days: MealPlanDay[] = [];
   const recipeMap = new Map(catalog.map((recipe) => [recipe.id, recipe]));
+  let lastBreakfastId = '';
+  let lastLunchId = '';
+  let lastDinnerId = '';
+  let lastSnackId = '';
 
   for (let dayIndex = 0; dayIndex < MEAL_PLAN_DAYS.length; dayIndex += 1) {
-    const breakfastRecipe = selectMealPrepRecipe({
-      baseRecipes: mealPrepBases.breakfast,
-      dayIndex,
-      mealType: 'breakfast',
-      fallbackPool: candidatePools.breakfast,
-    });
-    const lunchRecipe = selectMealPrepRecipe({
-      baseRecipes: mealPrepBases.lunch,
-      dayIndex,
-      mealType: 'lunch',
-      fallbackPool: candidatePools.lunch,
-    });
-    const dinnerRecipe = selectMealPrepRecipe({
-      baseRecipes: mealPrepBases.dinner,
-      dayIndex,
-      mealType: 'dinner',
-      fallbackPool: candidatePools.dinner,
-    });
+    const breakfastRecipe = useMealPrepPattern
+      ? selectMealPrepRecipe({
+          baseRecipes: mealPrepBases.breakfast,
+          dayIndex,
+          mealType: 'breakfast',
+          fallbackPool: candidatePools.breakfast,
+        })
+      : pickVariedRecipe({
+          candidates: candidatePools.breakfast,
+          dayIndex,
+          random,
+          lastRecipeId: lastBreakfastId,
+        });
+    const lunchRecipe = useMealPrepPattern
+      ? selectMealPrepRecipe({
+          baseRecipes: mealPrepBases.lunch,
+          dayIndex,
+          mealType: 'lunch',
+          fallbackPool: candidatePools.lunch,
+        })
+      : pickVariedRecipe({
+          candidates: candidatePools.lunch,
+          dayIndex,
+          random,
+          lastRecipeId: lastLunchId,
+        });
+    const dinnerRecipe = useMealPrepPattern
+      ? selectMealPrepRecipe({
+          baseRecipes: mealPrepBases.dinner,
+          dayIndex,
+          mealType: 'dinner',
+          fallbackPool: candidatePools.dinner,
+        })
+      : pickVariedRecipe({
+          candidates: candidatePools.dinner,
+          dayIndex,
+          random,
+          lastRecipeId: lastDinnerId,
+        });
 
     const breakfastId =
       breakfastRecipe?.id ||
@@ -390,12 +457,19 @@ export function generateMealPlan({
       fallbackCatalog[(dayIndex + 2) % fallbackCatalog.length]?.id;
 
     const snackRecipe = requiresSnack
-      ? selectMealPrepRecipe({
-          baseRecipes: mealPrepBases.snack,
-          dayIndex,
-          mealType: 'snack',
-          fallbackPool: candidatePools.snack.length > 0 ? candidatePools.snack : candidatePools.breakfast,
-        })
+      ? useMealPrepPattern
+        ? selectMealPrepRecipe({
+            baseRecipes: mealPrepBases.snack,
+            dayIndex,
+            mealType: 'snack',
+            fallbackPool: candidatePools.snack.length > 0 ? candidatePools.snack : candidatePools.breakfast,
+          })
+        : pickVariedRecipe({
+            candidates: candidatePools.snack.length > 0 ? candidatePools.snack : candidatePools.breakfast,
+            dayIndex,
+            random,
+            lastRecipeId: lastSnackId,
+          })
       : undefined;
     const snacks = snackRecipe?.id ? [snackRecipe.id] : [];
 
@@ -411,6 +485,10 @@ export function generateMealPlan({
     };
     day.totals = calculateDayTotals(day, recipeMap);
     days.push(day);
+    lastBreakfastId = breakfastId || lastBreakfastId;
+    lastLunchId = lunchId || lastLunchId;
+    lastDinnerId = dinnerId || lastDinnerId;
+    lastSnackId = snacks[0] || lastSnackId;
   }
 
   if (days.some((day) => !day.meals.breakfast || !day.meals.lunch || !day.meals.dinner)) {
@@ -663,8 +741,8 @@ const QUANTITY_UNIT_ALIASES: Record<string, string> = {
   cloves: 'clove',
   egg: 'egg',
   eggs: 'egg',
-  eggwhite: 'egg white',
-  eggwhites: 'egg white',
+  eggwhite: 'egg',
+  eggwhites: 'egg',
   piece: 'piece',
   pieces: 'piece',
   fillet: 'fillet',
@@ -938,6 +1016,7 @@ function shouldIgnoreIngredientLine(line: string) {
   if (isUpperHeading) return true;
   if (line.trim().endsWith(':')) return true;
   if (/\sand\s*$/i.test(line)) return true;
+  if (/\bto taste\b/i.test(line)) return true;
   if (SENTENCE_NOISE_PATTERNS.some((pattern) => pattern.test(line))) return true;
   if (normalized.length > 75 && /\b(check|choose|available|substitute|suggestion|not included)\b/i.test(normalized)) return true;
   return IGNORED_INGREDIENT_LINES.some((prefix) => normalized === prefix || normalized.startsWith(prefix));
@@ -1009,6 +1088,12 @@ function canonicalizeIngredientBaseName(baseName: string) {
     .replace(/\bbean shoots?\b/g, 'bean sprouts')
     .replace(/\bbean sprout\b/g, 'bean sprouts')
     .replace(/\bmango cheeks?\b/g, 'mango')
+    .replace(/\borange rind\b/g, 'orange')
+    .replace(/\borange zest\b/g, 'orange')
+    .replace(/\blemon rind\b/g, 'lemon')
+    .replace(/\blemon zest\b/g, 'lemon')
+    .replace(/\bpomegranate seeds?\b/g, 'pomegranate')
+    .replace(/\begg whites?\b/g, 'egg')
     .replace(/\bice[-\s]?cubes?\b/g, 'ice cube')
     .replace(/\bshallots?\b/g, 'shallot')
     .replace(/\bpepita seeds?\b/g, 'pepitas')
@@ -1209,13 +1294,9 @@ export function buildGroceryListByMealType(mealPlan: MealPlan | null, recipeMap:
 
 export function buildGroceryListFromMealPlan(mealPlan: MealPlan | null, recipeMap: Map<string, Recipe>) {
   if (!mealPlan) return [];
-  const recipeIds = [
-    ...new Set(
-      mealPlan.days.flatMap((day) =>
-        [day.meals.breakfast, day.meals.lunch, day.meals.dinner, ...(day.meals.snacks || [])].filter(Boolean),
-      ),
-    ),
-  ] as string[];
+  const recipeIds = mealPlan.days.flatMap((day) =>
+    [day.meals.breakfast, day.meals.lunch, day.meals.dinner, ...(day.meals.snacks || [])].filter(Boolean),
+  ) as string[];
   return buildGroceryListForRecipeIds(recipeIds, recipeMap);
 }
 
