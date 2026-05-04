@@ -30,6 +30,7 @@ import {
 import { calculateRisk } from '../backend/lib/risk.js';
 import { buildCertificatePdf } from '../backend/lib/pdf.js';
 import { generateDoctorNotes, generateMoreInfoDraft } from '../backend/lib/notes.js';
+import { generateOpenAiMealPlan } from '../backend/lib/meal-plan-ai.js';
 import {
   appendAudit,
   createCertificate,
@@ -3518,6 +3519,45 @@ export default async function handler(req, res) {
         queueCount: snapshot.queueCount,
         certificatesFetchDurationMs: snapshot.certificatesFetchDurationMs,
         totalDurationMs: Date.now() - patientMeStartedAt,
+      });
+      return;
+    }
+
+    if (req.method === 'POST' && routePath === 'patient/meal-plan/generate') {
+      const patient = await requirePatient(req, res);
+      if (!patient) return;
+
+      const body = await parseJsonBody(req);
+      const answers = body?.answers && typeof body.answers === 'object' ? body.answers : {};
+      const recipes = Array.isArray(body?.recipes) ? body.recipes.slice(0, 300) : [];
+      const includeSnack = Boolean(body?.includeSnack);
+      const seedSalt = String(body?.seedSalt || '').slice(0, 120);
+
+      if (recipes.length === 0) {
+        sendJson(res, 400, { error: 'Recipe catalog is required' });
+        return;
+      }
+
+      const aiMealPlan = await generateOpenAiMealPlan({
+        answers,
+        recipes,
+        includeSnack,
+        seedSalt,
+      });
+
+      if (!aiMealPlan) {
+        sendJson(res, 200, {
+          ok: false,
+          generatedBy: 'rules',
+          error: 'AI meal plan generation unavailable. Use rules fallback.',
+        });
+        return;
+      }
+
+      sendJson(res, 200, {
+        ok: true,
+        generatedBy: 'openai',
+        mealPlan: aiMealPlan,
       });
       return;
     }
