@@ -101,7 +101,7 @@ function stepValidation(step: number, answers: OnboardingAnswers) {
   if (step === 5) {
     if (!answers.cookingSkill) return 'Please choose your cooking skill level.';
     if (!answers.mealsPerDay || answers.mealsPerDay < 2 || answers.mealsPerDay > 5) return 'Meals per day should be between 2 and 5.';
-    if (!answers.daysPerWeek || answers.daysPerWeek < 3 || answers.daysPerWeek > 7) return 'Days per week should be between 3 and 7.';
+    if (!answers.daysPerWeek || answers.daysPerWeek < 2 || answers.daysPerWeek > 7) return 'Days per week should be between 2 and 7.';
   }
   if (step === 6) {
     if (!answers.primaryHealthFocus.trim()) return 'Choose the main area you want expert support with.';
@@ -562,7 +562,7 @@ export default function OnboardingFlow({
               <input
                 type="number"
                 value={answers.daysPerWeek}
-                min={3}
+                min={2}
                 max={7}
                 onChange={(event) => setAnswers((current) => ({ ...current, daysPerWeek: Number(event.target.value) || 7 }))}
                 className={inputClassName}

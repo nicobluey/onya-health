@@ -79,8 +79,20 @@ const SWEET_OR_SNACK_KEYWORDS = [
   'drink',
 ];
 
+function getPlannedMealsPerDay(mealsPerDay: number) {
+  const parsed = Math.round(Number(mealsPerDay || 3));
+  if (!Number.isFinite(parsed)) return 3;
+  return Math.max(2, Math.min(5, parsed));
+}
+
+function getPlannedDayCount(daysPerWeek: number) {
+  const parsed = Math.round(Number(daysPerWeek || 7));
+  if (!Number.isFinite(parsed)) return 7;
+  return Math.max(2, Math.min(MEAL_PLAN_DAYS.length, parsed));
+}
+
 function getCoreMealTypesForMealsPerDay(mealsPerDay: number): Array<'breakfast' | 'lunch' | 'dinner'> {
-  if (Number(mealsPerDay || 0) <= 2) return ['lunch', 'dinner'];
+  if (getPlannedMealsPerDay(mealsPerDay) <= 2) return ['lunch', 'dinner'];
   return ['breakfast', 'lunch', 'dinner'];
 }
 
@@ -913,8 +925,10 @@ export function generateMealPlan({
 
   const baseSeed = `${answers.firstName}|${answers.age || ''}|${answers.goalWeightKg || ''}|${answers.biggestChallenge}|${answers.mainGoal}|${seedSalt}`;
 
-  const coreMealTypes = getCoreMealTypesForMealsPerDay(answers.mealsPerDay);
-  const requiresSnack = answers.mealsPerDay >= 4;
+  const plannedDayCount = getPlannedDayCount(answers.daysPerWeek);
+  const plannedMealsPerDay = getPlannedMealsPerDay(answers.mealsPerDay);
+  const coreMealTypes = getCoreMealTypesForMealsPerDay(plannedMealsPerDay);
+  const requiresSnack = plannedMealsPerDay >= 4;
   const mealTypesForDay: MealType[] = requiresSnack ? [...coreMealTypes, 'snack'] : [...coreMealTypes];
 
   const candidatePools = {
@@ -994,7 +1008,7 @@ export function generateMealPlan({
     let lastDinnerId = '';
     let lastSnackId = '';
 
-    for (let dayIndex = 0; dayIndex < MEAL_PLAN_DAYS.length; dayIndex += 1) {
+    for (let dayIndex = 0; dayIndex < plannedDayCount; dayIndex += 1) {
       const breakfastRecipe = useMealPrepPattern
         ? selectMealPrepRecipe({
             baseRecipes: mealPrepBases.breakfast,
@@ -1069,7 +1083,7 @@ export function generateMealPlan({
 
       const day: MealPlanDay = {
         dayIndex,
-        label: MEAL_PLAN_DAYS[dayIndex],
+        label: MEAL_PLAN_DAYS[dayIndex] || `Day ${dayIndex + 1}`,
         meals: {
           breakfast: breakfastId,
           lunch: lunchId,
@@ -1217,8 +1231,8 @@ export function swapMealInPlan({
 }
 
 function constrainMealsPerDay(mealPlan: MealPlan, answers: OnboardingAnswers): MealPlan {
-  const coreMealTypes = getCoreMealTypesForMealsPerDay(answers.mealsPerDay);
-  const includeSnack = answers.mealsPerDay >= 4;
+  const coreMealTypes = getCoreMealTypesForMealsPerDay(getPlannedMealsPerDay(answers.mealsPerDay));
+  const includeSnack = getPlannedMealsPerDay(answers.mealsPerDay) >= 4;
   const nextDays = mealPlan.days.map((day) => ({
     ...day,
     meals: {
@@ -1234,18 +1248,62 @@ function constrainMealsPerDay(mealPlan: MealPlan, answers: OnboardingAnswers): M
   };
 }
 
-function compactMealPrepVariety(mealPlan: MealPlan, answers: OnboardingAnswers, recipeMap: Map<string, Recipe>): MealPlan {
-  if (answers.groceryPreference !== 'meal prep friendly') return mealPlan;
-  const coreMealTypes = getCoreMealTypesForMealsPerDay(answers.mealsPerDay);
-  const targetUniqueByType: Record<'breakfast' | 'lunch' | 'dinner', number> = {
-    breakfast: coreMealTypes.includes('breakfast') ? 2 : 0,
-    lunch: coreMealTypes.length <= 2 ? 2 : 3,
-    dinner: coreMealTypes.length <= 2 ? 2 : 3,
+function constrainDaysPerWeek(mealPlan: MealPlan, answers: OnboardingAnswers): MealPlan {
+  const plannedDayCount = getPlannedDayCount(answers.daysPerWeek);
+  const nextDays = mealPlan.days.slice(0, plannedDayCount).map((day, dayIndex) => ({
+    ...day,
+    dayIndex,
+    label: MEAL_PLAN_DAYS[dayIndex] || day.label || `Day ${dayIndex + 1}`,
+  }));
+  return {
+    ...mealPlan,
+    days: nextDays,
   };
+}
+
+function targetUniqueCountForMealType({
+  mealType,
+  plannedDayCount,
+  mealPrepFriendly,
+  aggressive,
+}: {
+  mealType: 'breakfast' | 'lunch' | 'dinner';
+  plannedDayCount: number;
+  mealPrepFriendly: boolean;
+  aggressive: boolean;
+}) {
+  if (plannedDayCount <= 2) return 1;
+  if (aggressive) {
+    if (mealType === 'breakfast') return 1;
+    return plannedDayCount >= 6 ? 2 : 1;
+  }
+  if (mealPrepFriendly) {
+    if (plannedDayCount <= 4) return 1;
+    return 2;
+  }
+  if (plannedDayCount <= 4) return 2;
+  if (plannedDayCount <= 6) return 2;
+  return 3;
+}
+
+function compactMealPlanVariety(
+  mealPlan: MealPlan,
+  answers: OnboardingAnswers,
+  recipeMap: Map<string, Recipe>,
+  aggressive = false,
+): MealPlan {
+  const coreMealTypes = getCoreMealTypesForMealsPerDay(getPlannedMealsPerDay(answers.mealsPerDay));
+  const plannedDayCount = getPlannedDayCount(answers.daysPerWeek);
+  const mealPrepFriendly = answers.groceryPreference === 'meal prep friendly';
 
   const nextDays = mealPlan.days.map((day) => ({ ...day, meals: { ...day.meals } }));
   for (const mealType of coreMealTypes) {
-    const targetUnique = targetUniqueByType[mealType];
+    const targetUnique = targetUniqueCountForMealType({
+      mealType,
+      plannedDayCount,
+      mealPrepFriendly,
+      aggressive,
+    });
     if (targetUnique <= 0) continue;
     const counts = new Map<string, number>();
     for (const day of nextDays) {
@@ -1279,20 +1337,40 @@ function compactMealPrepVariety(mealPlan: MealPlan, answers: OnboardingAnswers, 
   };
 }
 
+function countGroceryItemsForPlan(mealPlan: MealPlan, recipeMap: Map<string, Recipe>) {
+  const groups = buildGroceryListFromMealPlan(mealPlan, recipeMap);
+  return groups.reduce((sum, group) => sum + group.items.length, 0);
+}
+
+function groceryItemBudgetForAnswers(answers: OnboardingAnswers) {
+  const days = getPlannedDayCount(answers.daysPerWeek);
+  const coreMealTypes = getCoreMealTypesForMealsPerDay(getPlannedMealsPerDay(answers.mealsPerDay)).length;
+  const includeSnack = getPlannedMealsPerDay(answers.mealsPerDay) >= 4;
+  const mealSlots = days * (coreMealTypes + (includeSnack ? 1 : 0));
+  const baseline = Math.round(mealSlots * 4.2);
+  const cap = answers.groceryPreference === 'meal prep friendly' ? 75 : 95;
+  const floor = answers.groceryPreference === 'meal prep friendly' ? 28 : 36;
+  return Math.max(floor, Math.min(cap, baseline));
+}
+
 export function postProcessGeneratedMealPlan(mealPlan: MealPlan, answers: OnboardingAnswers, recipeMap: Map<string, Recipe>) {
-  const constrained = constrainMealsPerDay(mealPlan, answers);
+  const constrainedDays = constrainDaysPerWeek(mealPlan, answers);
+  const constrained = constrainMealsPerDay(constrainedDays, answers);
   const practical = normalizeMealAssignmentsForPracticality(constrained, answers, recipeMap);
-  const compacted = compactMealPrepVariety(practical, answers, recipeMap);
-  const prepDay = answers.prepDay || compacted.prepDayPlan?.prepDay || 'Sunday';
-  const withPrepDay = compacted.prepDayPlan
+  const compacted = compactMealPlanVariety(practical, answers, recipeMap, false);
+  const groceryItemCount = countGroceryItemsForPlan(compacted, recipeMap);
+  const groceryItemBudget = groceryItemBudgetForAnswers(answers);
+  const bounded = groceryItemCount > groceryItemBudget ? compactMealPlanVariety(compacted, answers, recipeMap, true) : compacted;
+  const prepDay = answers.prepDay || bounded.prepDayPlan?.prepDay || 'Sunday';
+  const withPrepDay = bounded.prepDayPlan
     ? {
-        ...compacted,
+        ...bounded,
         prepDayPlan: {
-          ...compacted.prepDayPlan,
+          ...bounded.prepDayPlan,
           prepDay,
         },
       }
-    : compacted;
+    : bounded;
   return withRecalculatedTotals(withPrepDay, recipeMap);
 }
 
@@ -2035,6 +2113,15 @@ function buildGroceryListForRecipeIds(recipeUsage: string[] | Map<string, number
       const quantityLabel =
         [ingredient.quantity, ingredient.unit].filter(Boolean).join(' ').trim() || extractInlineQuantity(line);
       const aggregatedQuantity = extractAggregatedQuantity(quantityLabel) || extractAggregatedQuantity(line);
+      if (aggregatedQuantity) {
+        const tinyMeasure =
+          (aggregatedQuantity.unit === 'g' || aggregatedQuantity.unit === 'ml') && aggregatedQuantity.amount * scaleFactor < 5;
+        const tinySpoon =
+          (aggregatedQuantity.unit === 'tbsp' || aggregatedQuantity.unit === 'tsp') && aggregatedQuantity.amount * scaleFactor < 0.25;
+        const tinyCount =
+          !MEASURE_UNITS.has(aggregatedQuantity.unit) && aggregatedQuantity.amount * scaleFactor < 0.2;
+        if (tinyMeasure || tinySpoon || tinyCount) continue;
+      }
       const category = inferGroceryCategory(canonicalBaseName);
       const existing = bucket.get(key);
 
