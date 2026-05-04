@@ -315,10 +315,6 @@ export function generateMealPlan({
     dinner: pickMealPrepBaseRecipes({ candidates: candidatePools.dinner, mealType: 'dinner', random }),
     snack: pickMealPrepBaseRecipes({ candidates: candidatePools.snack, mealType: 'snack', random }),
   };
-  notes.push(
-    'Meal-prep mode enabled: lunches and dinners are intentionally repeated across the week to reduce cooking sessions and simplify groceries.'
-  );
-
   const days: MealPlanDay[] = [];
   const recipeMap = new Map(catalog.map((recipe) => [recipe.id, recipe]));
 

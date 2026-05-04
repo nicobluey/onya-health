@@ -89,9 +89,7 @@ export function generateFallbackMealPlan({ recipes, includeSnack = false, seedSa
 
   const seedSource = `${seedSalt}|${JSON.stringify(answers || {})}|${allRecipeIds.length}`;
   const seed = hashSeed(seedSource);
-  const notes = [
-    'Meal-prep fallback generated: breakfasts, lunches, and dinners are intentionally repeated for faster batch cooking.',
-  ];
+  const notes = [];
 
   const breakfastBase = pickBaseIds(breakfastPool, MEAL_PREP_BASE_COUNTS.breakfast, seed + 11);
   const lunchBase = pickBaseIds(lunchPool, MEAL_PREP_BASE_COUNTS.lunch, seed + 23);

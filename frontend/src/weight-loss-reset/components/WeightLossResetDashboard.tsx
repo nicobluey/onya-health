@@ -655,10 +655,20 @@ export default function WeightLossResetDashboard({
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 {swapCandidates.map((recipe) => (
                   <article key={recipe.id} className="rounded-xl border border-[#dbe2d9] bg-[#f8faf7] p-3">
-                    <p className="text-sm font-semibold text-[#18251e]">{recipe.title}</p>
-                    <p className="mt-1 text-xs text-[#5f7063]">
-                      {recipe.calories || '—'} cal • {recipe.protein || '—'}g protein • {buildRecipeTimeMeta(recipe)}
-                    </p>
+                    <div className="flex items-start gap-3">
+                      <img
+                        src={recipe.imageUrl || '/nutrionist.webp'}
+                        alt={recipe.title}
+                        className="h-14 w-14 shrink-0 rounded-lg border border-[#dbe2d9] object-cover"
+                        loading="lazy"
+                      />
+                      <div className="min-w-0">
+                        <p className="line-clamp-2 text-sm font-semibold text-[#18251e]">{recipe.title}</p>
+                        <p className="mt-1 text-xs text-[#5f7063]">
+                          {recipe.calories || '—'} cal • {recipe.protein || '—'}g protein • {buildRecipeTimeMeta(recipe)}
+                        </p>
+                      </div>
+                    </div>
                     <button
                       type="button"
                       onClick={() => {
