@@ -186,7 +186,12 @@ function buildRecipe(recipe, index) {
   const { calories, protein, carbs, fat } = extractMacros(recipe.nutrition || {});
   const prepMinutes = parseMinutes(recipe.prepTime);
   const cookMinutes = parseMinutes(recipe.cookTime);
-  const prepTimeMinutes = prepMinutes && cookMinutes ? prepMinutes + cookMinutes : prepMinutes || cookMinutes || 30;
+  const prepTimeMinutes = prepMinutes || undefined;
+  const cookTimeMinutes = cookMinutes || undefined;
+  const totalTimeMinutes =
+    Number.isFinite(prepMinutes) && Number.isFinite(cookMinutes)
+      ? prepMinutes + cookMinutes
+      : prepMinutes || cookMinutes || 30;
   const id = slugify(recipe.slug || recipe.title || `recipe-${index + 1}`);
 
   return {
@@ -204,6 +209,8 @@ function buildRecipe(recipe, index) {
     dietaryTags,
     allergens,
     prepTimeMinutes,
+    cookTimeMinutes,
+    totalTimeMinutes,
     estimatedCost: inferEstimatedCost(recipe, dietaryTags),
     source: {
       provider: 'dietitians-australia',

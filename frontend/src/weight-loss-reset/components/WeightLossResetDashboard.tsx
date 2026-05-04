@@ -27,22 +27,27 @@ function readSourceTime(recipe: Recipe, key: 'prepTime' | 'cookTime') {
   return value;
 }
 
+function parseSourceMinutes(raw: string) {
+  const text = String(raw || '').toLowerCase();
+  if (!text) return undefined;
+  const hourMatch = text.match(/(\d+(?:\.\d+)?)\s*hour/);
+  const minuteMatch = text.match(/(\d+(?:\.\d+)?)\s*min/);
+  const numberMatch = text.match(/(\d+(?:\.\d+)?)/);
+  let minutes = 0;
+  if (hourMatch) minutes += Math.round(Number(hourMatch[1]) * 60);
+  if (minuteMatch) minutes += Math.round(Number(minuteMatch[1]));
+  if (!hourMatch && !minuteMatch && numberMatch) minutes += Math.round(Number(numberMatch[1]));
+  return minutes > 0 ? minutes : undefined;
+}
+
 function buildRecipeTimeMeta(recipe: Recipe) {
-  const segments: string[] = [];
-  if (typeof recipe.prepTimeMinutes === 'number' && Number.isFinite(recipe.prepTimeMinutes) && recipe.prepTimeMinutes > 0) {
-    segments.push(`${recipe.prepTimeMinutes} min prep`);
-  } else {
-    const prepFromSource = readSourceTime(recipe, 'prepTime');
-    if (prepFromSource) segments.push(`${prepFromSource} prep`);
-  }
-
+  const prepFromSource = readSourceTime(recipe, 'prepTime');
   const cookFromSource = readSourceTime(recipe, 'cookTime');
-  if (cookFromSource) {
-    segments.push(`${cookFromSource} cook`);
-  }
-
-  if (segments.length === 0) return 'Time unavailable';
-  return segments.join(' • ');
+  const prepMinutes = typeof recipe.prepTimeMinutes === 'number' ? recipe.prepTimeMinutes : parseSourceMinutes(prepFromSource);
+  const cookMinutes = typeof recipe.cookTimeMinutes === 'number' ? recipe.cookTimeMinutes : parseSourceMinutes(cookFromSource);
+  const prepLabel = Number.isFinite(prepMinutes) && prepMinutes && prepMinutes > 0 ? `${prepMinutes} min prep` : 'Prep time n/a';
+  const cookLabel = Number.isFinite(cookMinutes) && cookMinutes && cookMinutes > 0 ? `${cookMinutes} min cook` : 'Cook time n/a';
+  return `${prepLabel} • ${cookLabel}`;
 }
 
 function MealCard({

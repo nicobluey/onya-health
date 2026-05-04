@@ -22,6 +22,8 @@ export interface Recipe {
   dietaryTags: string[];
   allergens: string[];
   prepTimeMinutes?: number;
+  cookTimeMinutes?: number;
+  totalTimeMinutes?: number;
   estimatedCost?: string | number;
   source?: Record<string, unknown>;
 }
@@ -108,4 +110,3 @@ export interface WeightLossResetState {
 }
 
 export type WeightLossResetCardState = 'not-started' | 'onboarding' | 'ready';
-

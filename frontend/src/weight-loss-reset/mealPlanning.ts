@@ -117,18 +117,19 @@ function recipePreferenceScore(recipe: Recipe, answers: OnboardingAnswers) {
   let score = 0;
   const title = recipe.title.toLowerCase();
   const tags = recipe.dietaryTags.map((tag) => tag.toLowerCase());
+  const timeMinutes = recipe.totalTimeMinutes || recipe.prepTimeMinutes || 40;
 
   if (tags.includes('high-protein')) score += 5;
   if (tags.includes('low-carb')) score += 2;
   if ((recipe.calories || 0) > 0 && (recipe.calories || 0) <= 620) score += 2;
-  if ((recipe.prepTimeMinutes || 40) <= 25) score += 3;
+  if (timeMinutes <= 25) score += 3;
 
   if (answers.preferredMealStyle === 'high protein' && tags.includes('high-protein')) score += 4;
-  if (answers.preferredMealStyle === 'low prep' && (recipe.prepTimeMinutes || 99) <= 20) score += 3;
-  if (answers.preferredMealStyle === 'quick and easy' && (recipe.prepTimeMinutes || 99) <= 25) score += 3;
+  if (answers.preferredMealStyle === 'low prep' && timeMinutes <= 20) score += 3;
+  if (answers.preferredMealStyle === 'quick and easy' && timeMinutes <= 25) score += 3;
   if (answers.preferredMealStyle === 'vegetarian leaning' && tags.includes('vegetarian')) score += 3;
 
-  if (answers.groceryPreference === 'fastest meals possible' && (recipe.prepTimeMinutes || 99) <= 20) score += 2;
+  if (answers.groceryPreference === 'fastest meals possible' && timeMinutes <= 20) score += 2;
   if (answers.groceryPreference === 'meal prep friendly' && containsAny(title, ['bowl', 'stew', 'roast', 'salad'])) score += 2;
   if (answers.groceryPreference === 'simple supermarket ingredients' && (recipe.ingredients.length || 0) <= 10) score += 2;
   if (answers.groceryPreference === 'high variety') score += 1;
@@ -473,7 +474,7 @@ const LEADING_UNIT_WORDS = new Set([
   'cup', 'cups', 'tbsp', 'tablespoon', 'tablespoons', 'tsp', 'teaspoon', 'teaspoons', 'g', 'kg', 'ml', 'l',
   'oz', 'lb', 'clove', 'cloves', 'can', 'cans', 'tin', 'tins', 'packet', 'packets', 'bunch', 'bunches', 'sprig',
   'sprigs', 'slice', 'slices', 'fillet', 'fillets', 'piece', 'pieces', 'handful', 'handfuls', 'stalk', 'stalks',
-  'stick', 'sticks', 'x',
+  'stick', 'sticks', 'x', 'cm', 'mm',
 ]);
 const IGNORED_INGREDIENT_LINES = [
   'dressing',
@@ -481,7 +482,51 @@ const IGNORED_INGREDIENT_LINES = [
   'serve with',
   'serving suggestion',
   'optional serving suggestion',
+  'garnish',
+  'toppings',
+  'toppings for taste',
+  'laksa paste',
+  'cauliflower',
+  'spiced yoghurt dressing',
 ];
+const SENTENCE_NOISE_PATTERNS = [
+  /for those with/i,
+  /cost effective/i,
+  /from scratch/i,
+  /check the label/i,
+  /not included in nutrition/i,
+  /available in most grocery stores/i,
+  /substitute/i,
+  /time-saving option/i,
+];
+const LEADING_DESCRIPTORS = new Set([
+  'small',
+  'medium',
+  'large',
+  'mini',
+  'fresh',
+  'frozen',
+  'dried',
+  'roasted',
+  'toasted',
+  'salt-reduced',
+  'reduced-salt',
+  'reduced',
+  'low',
+  'fat',
+  'wholemeal',
+  'wholegrain',
+  'plain',
+  'unsweetened',
+  'natural',
+  'free-range',
+  'skinless',
+  'yellow',
+  'red',
+  'green',
+  'brown',
+  'white',
+]);
 
 function cleanIngredientLine(value: string) {
   return String(value || '')
@@ -493,6 +538,15 @@ function cleanIngredientLine(value: string) {
 function shouldIgnoreIngredientLine(line: string) {
   const normalized = normalizeText(line);
   if (!normalized) return true;
+  const lettersOnly = line.replace(/[^A-Za-z]/g, '');
+  const isUpperHeading =
+    lettersOnly.length >= 4 &&
+    lettersOnly === lettersOnly.toUpperCase() &&
+    line.split(/\s+/).filter(Boolean).length <= 6;
+  if (isUpperHeading) return true;
+  if (line.trim().endsWith(':')) return true;
+  if (SENTENCE_NOISE_PATTERNS.some((pattern) => pattern.test(line))) return true;
+  if (normalized.length > 75 && /\b(check|choose|available|substitute|suggestion|not included)\b/i.test(normalized)) return true;
   return IGNORED_INGREDIENT_LINES.some((prefix) => normalized === prefix || normalized.startsWith(prefix));
 }
 
@@ -505,6 +559,7 @@ function extractInlineQuantity(line: string) {
 
 function normalizeIngredientBaseName(rawLine: string) {
   let value = cleanIngredientLine(rawLine);
+  value = value.replace(/^\**\s*/, '').replace(/\**$/, '');
   value = value.replace(/\([^)]*\)/g, ' ');
   value = value.split(',')[0] || value;
   value = value.replace(/^[^a-zA-Z0-9]+/, '').trim();
@@ -520,10 +575,50 @@ function normalizeIngredientBaseName(rawLine: string) {
       tokens.shift();
       continue;
     }
+    if (LEADING_DESCRIPTORS.has(token)) {
+      tokens.shift();
+      continue;
+    }
     break;
   }
 
-  value = tokens.join(' ').replace(/^(of|fresh|dried)\s+/i, '').replace(/\s+/g, ' ').trim();
+  value = tokens
+    .join(' ')
+    .replace(/^(?:of|fresh|dried)\s+/i, '')
+    .replace(/^(?:piece|pieces|sprig|sprigs|handful|handfuls)\s+of\s+/i, '')
+    .replace(/\b(?:leaf|leaves|stem|stems|sprig|sprigs)\b$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return value;
+}
+
+function canonicalizeIngredientBaseName(baseName: string) {
+  let value = normalizeText(baseName)
+    .replace(/[*/]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  value = value
+    .replace(/extra[\s-]?virgin olive oil/g, 'olive oil')
+    .replace(/olive oil spray|spray olive oil/g, 'olive oil')
+    .replace(/\bgarlic cloves?\b/g, 'garlic')
+    .replace(/\bbasil leaves?\b/g, 'basil')
+    .replace(/\bbean shoots?\b/g, 'bean sprouts')
+    .replace(/\bshallots?\b/g, 'shallot')
+    .replace(/\bpepita seeds?\b/g, 'pepitas')
+    .replace(/\bsunflower seeds?\b/g, 'sunflower seed')
+    .replace(/\bpine nuts?\b/g, 'pine nut')
+    .replace(/\balmonds?\b/g, 'almond')
+    .replace(/\bcashews?\b/g, 'cashew')
+    .replace(/\bwalnuts?\b/g, 'walnut')
+    .replace(/\bpieces?\s+of\s+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  value = value.replace(/\b(halves|half|chunks|chunk|diced|sliced|chopped|minced|grated|crushed|washed|rinsed|trimmed)\b$/g, '').trim();
+  if (value.endsWith('s') && !value.endsWith('ss') && value.length > 4) {
+    value = value.slice(0, -1);
+  }
   return value;
 }
 
@@ -537,8 +632,8 @@ function inferGroceryCategory(baseName: string) {
   if (
     containsAny(text, [
       'carrot', 'onion', 'tomato', 'capsicum', 'zucchini', 'spinach', 'kale', 'lettuce', 'mint', 'parsley',
-      'coriander', 'pumpkin', 'beetroot', 'cucumber', 'lemon', 'lime', 'fruit', 'berries', 'kiwi', 'mushroom',
-      'snow pea', 'broccoli', 'celery', 'avocado', 'chilli',
+      'coriander', 'basil', 'ginger', 'pumpkin', 'beetroot', 'cucumber', 'lemon', 'lime', 'fruit', 'berries', 'kiwi',
+      'mushroom', 'snow pea', 'broccoli', 'celery', 'avocado', 'chilli', 'peach', 'date',
     ])
   ) {
     return 'produce';
@@ -585,14 +680,16 @@ export function buildGroceryListFromMealPlan(mealPlan: MealPlan | null, recipeMa
 
         const baseName = normalizeIngredientBaseName(line);
         if (!baseName) continue;
+        const canonicalBaseName = canonicalizeIngredientBaseName(baseName);
+        if (!canonicalBaseName) continue;
 
-        const displayName = toIngredientDisplayName(baseName);
-        const key = normalizeText(baseName);
+        const displayName = toIngredientDisplayName(canonicalBaseName);
+        const key = normalizeText(canonicalBaseName);
         const quantityLabel =
           [ingredient.quantity, ingredient.unit].filter(Boolean).join(' ').trim() || extractInlineQuantity(line);
         const preferredCategory = normalizeText(ingredient.category || '');
         const category =
-          preferredCategory && preferredCategory !== 'pantry' ? preferredCategory : inferGroceryCategory(baseName);
+          preferredCategory && preferredCategory !== 'pantry' ? preferredCategory : inferGroceryCategory(canonicalBaseName);
         const existing = bucket.get(key);
 
         if (!existing) {
