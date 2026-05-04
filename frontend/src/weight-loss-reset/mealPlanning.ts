@@ -13,6 +13,12 @@ export interface GroceryGroup {
   items: GroceryItem[];
 }
 
+export interface MealGroceryBreakdown {
+  mealType: MealType;
+  recipeTitles: string[];
+  groups: GroceryGroup[];
+}
+
 export interface MealPlanGenerationResult {
   mealPlan: MealPlan;
   notes: string[];
@@ -75,8 +81,8 @@ function recipeMatchesDietaryRequirements(recipe: Recipe, requirements: string[]
     const normalized = normalizeText(requirement);
     if (normalized === 'vegetarian' && !tags.has('vegetarian')) return false;
     if (normalized === 'vegan' && !tags.has('vegan')) return false;
-    if (normalized === 'gluten free' && (allergens.has('gluten') || !tags.has('gluten-free'))) return false;
-    if (normalized === 'dairy free' && (allergens.has('dairy') || !tags.has('dairy-free'))) return false;
+    if (normalized === 'gluten free' && allergens.has('gluten')) return false;
+    if (normalized === 'dairy free' && allergens.has('dairy')) return false;
     if (normalized === 'nut free' && allergens.has('nut')) return false;
     if (normalized === 'low carb' && !tags.has('low-carb')) return false;
     if (normalized === 'high protein' && !tags.has('high-protein')) return false;
@@ -498,6 +504,7 @@ const SENTENCE_NOISE_PATTERNS = [
   /available in most grocery stores/i,
   /substitute/i,
   /time-saving option/i,
+  /^optional[:\s]/i,
 ];
 const LEADING_DESCRIPTORS = new Set([
   'small',
@@ -526,6 +533,15 @@ const LEADING_DESCRIPTORS = new Set([
   'green',
   'brown',
   'white',
+  'chopped',
+  'diced',
+  'sliced',
+  'minced',
+  'grated',
+  'crushed',
+  'roughly',
+  'finely',
+  'halved',
 ]);
 
 function cleanIngredientLine(value: string) {
@@ -545,6 +561,7 @@ function shouldIgnoreIngredientLine(line: string) {
     line.split(/\s+/).filter(Boolean).length <= 6;
   if (isUpperHeading) return true;
   if (line.trim().endsWith(':')) return true;
+  if (/\sand\s*$/i.test(line)) return true;
   if (SENTENCE_NOISE_PATTERNS.some((pattern) => pattern.test(line))) return true;
   if (normalized.length > 75 && /\b(check|choose|available|substitute|suggestion|not included)\b/i.test(normalized)) return true;
   return IGNORED_INGREDIENT_LINES.some((prefix) => normalized === prefix || normalized.startsWith(prefix));
@@ -601,9 +618,11 @@ function canonicalizeIngredientBaseName(baseName: string) {
   value = value
     .replace(/extra[\s-]?virgin olive oil/g, 'olive oil')
     .replace(/olive oil spray|spray olive oil/g, 'olive oil')
+    .replace(/olive oil margarine spread/g, 'olive oil margarine spread')
     .replace(/\bgarlic cloves?\b/g, 'garlic')
     .replace(/\bbasil leaves?\b/g, 'basil')
     .replace(/\bbean shoots?\b/g, 'bean sprouts')
+    .replace(/\bbean sprout\b/g, 'bean sprouts')
     .replace(/\bshallots?\b/g, 'shallot')
     .replace(/\bpepita seeds?\b/g, 'pepitas')
     .replace(/\bsunflower seeds?\b/g, 'sunflower seed')
@@ -616,7 +635,11 @@ function canonicalizeIngredientBaseName(baseName: string) {
     .trim();
 
   value = value.replace(/\b(halves|half|chunks|chunk|diced|sliced|chopped|minced|grated|crushed|washed|rinsed|trimmed)\b$/g, '').trim();
-  if (value.endsWith('s') && !value.endsWith('ss') && value.length > 4) {
+  if (value.endsWith('ies') && value.length > 4) {
+    value = `${value.slice(0, -3)}y`;
+  } else if (value.endsWith('oes') && value.length > 4) {
+    value = `${value.slice(0, -2)}`;
+  } else if (value.endsWith('s') && !value.endsWith('ss') && value.length > 4) {
     value = value.slice(0, -1);
   }
   return value;
@@ -631,6 +654,16 @@ function inferGroceryCategory(baseName: string) {
   const text = normalizeText(baseName);
   if (
     containsAny(text, [
+      'salt', 'pepper', 'cumin', 'paprika', 'turmeric', 'cinnamon', 'masala', 'mustard', 'spice', 'ground coriander',
+    ])
+  ) {
+    return 'herbs & spices';
+  }
+  if (containsAny(text, ['sauce', 'paste', 'marinade', 'vinegar', 'stock', 'honey', 'oil', 'sugar', 'water'])) {
+    return 'pantry';
+  }
+  if (
+    containsAny(text, [
       'carrot', 'onion', 'tomato', 'capsicum', 'zucchini', 'spinach', 'kale', 'lettuce', 'mint', 'parsley',
       'coriander', 'basil', 'ginger', 'pumpkin', 'beetroot', 'cucumber', 'lemon', 'lime', 'fruit', 'berries', 'kiwi',
       'mushroom', 'snow pea', 'broccoli', 'celery', 'avocado', 'chilli', 'peach', 'date',
@@ -640,71 +673,57 @@ function inferGroceryCategory(baseName: string) {
   }
   if (
     containsAny(text, [
-      'chicken', 'beef', 'salmon', 'fish', 'egg', 'tofu', 'beans', 'lentil', 'chickpea', 'steak', 'tuna',
+      'chicken', 'beef', 'salmon', 'egg', 'tofu', 'beans', 'lentil', 'chickpea', 'steak', 'tuna',
     ])
   ) {
     return 'protein';
   }
-  if (containsAny(text, ['yoghurt', 'yogurt', 'milk', 'feta', 'ricotta', 'cheese'])) {
+  if (containsAny(text, ['yoghurt', 'yogurt', 'milk', 'feta', 'ricotta', 'cheese', 'haloumi', 'bocconcini'])) {
     return 'dairy';
   }
   if (containsAny(text, ['rice', 'pasta', 'noodle', 'oats', 'flour', 'farro', 'freekeh', 'quinoa', 'couscous', 'tortilla'])) {
     return 'grains';
   }
-  if (containsAny(text, ['cumin', 'paprika', 'turmeric', 'cinnamon', 'garlic powder', 'masala', 'pepper', 'salt', 'mustard seed'])) {
-    return 'herbs & spices';
-  }
   return 'pantry';
 }
 
-export function buildGroceryListFromMealPlan(mealPlan: MealPlan | null, recipeMap: Map<string, Recipe>) {
-  if (!mealPlan) return [];
-
+function buildGroceryListForRecipeIds(recipeIds: string[], recipeMap: Map<string, Recipe>) {
   const bucket = new Map<string, GroceryItem>();
 
-  for (const day of mealPlan.days) {
-    const recipeIds = [
-      day.meals.breakfast,
-      day.meals.lunch,
-      day.meals.dinner,
-      ...(day.meals.snacks || []),
-    ].filter(Boolean) as string[];
+  for (const recipeId of recipeIds) {
+    const recipe = recipeMap.get(recipeId);
+    if (!recipe) continue;
 
-    for (const recipeId of recipeIds) {
-      const recipe = recipeMap.get(recipeId);
-      if (!recipe) continue;
+    for (const ingredient of recipe.ingredients) {
+      const line = cleanIngredientLine(ingredient.name || '');
+      if (!line || shouldIgnoreIngredientLine(line)) continue;
 
-      for (const ingredient of recipe.ingredients) {
-        const line = cleanIngredientLine(ingredient.name || '');
-        if (!line || shouldIgnoreIngredientLine(line)) continue;
+      const baseName = normalizeIngredientBaseName(line);
+      if (!baseName) continue;
+      const canonicalBaseName = canonicalizeIngredientBaseName(baseName);
+      if (!canonicalBaseName) continue;
 
-        const baseName = normalizeIngredientBaseName(line);
-        if (!baseName) continue;
-        const canonicalBaseName = canonicalizeIngredientBaseName(baseName);
-        if (!canonicalBaseName) continue;
+      const displayName = toIngredientDisplayName(canonicalBaseName);
+      const key = normalizeText(canonicalBaseName);
+      const quantityLabel =
+        [ingredient.quantity, ingredient.unit].filter(Boolean).join(' ').trim() || extractInlineQuantity(line);
+      const preferredCategory = normalizeText(ingredient.category || '');
+      const category =
+        preferredCategory && preferredCategory !== 'pantry' ? preferredCategory : inferGroceryCategory(canonicalBaseName);
+      const existing = bucket.get(key);
 
-        const displayName = toIngredientDisplayName(canonicalBaseName);
-        const key = normalizeText(canonicalBaseName);
-        const quantityLabel =
-          [ingredient.quantity, ingredient.unit].filter(Boolean).join(' ').trim() || extractInlineQuantity(line);
-        const preferredCategory = normalizeText(ingredient.category || '');
-        const category =
-          preferredCategory && preferredCategory !== 'pantry' ? preferredCategory : inferGroceryCategory(canonicalBaseName);
-        const existing = bucket.get(key);
+      if (!existing) {
+        bucket.set(key, {
+          key,
+          name: displayName,
+          category,
+          quantities: quantityLabel ? [quantityLabel] : [],
+        });
+        continue;
+      }
 
-        if (!existing) {
-          bucket.set(key, {
-            key,
-            name: displayName,
-            category,
-            quantities: quantityLabel ? [quantityLabel] : [],
-          });
-          continue;
-        }
-
-        if (quantityLabel && !existing.quantities.includes(quantityLabel)) {
-          existing.quantities.push(quantityLabel);
-        }
+      if (quantityLabel && !existing.quantities.includes(quantityLabel)) {
+        existing.quantities.push(quantityLabel);
       }
     }
   }
@@ -721,6 +740,50 @@ export function buildGroceryListFromMealPlan(mealPlan: MealPlan | null, recipeMa
       items: items.sort((a, b) => a.name.localeCompare(b.name)),
     }))
     .sort((a, b) => a.category.localeCompare(b.category));
+}
+
+export function buildGroceryListByMealType(mealPlan: MealPlan | null, recipeMap: Map<string, Recipe>): MealGroceryBreakdown[] {
+  if (!mealPlan) return [];
+
+  const idsByMealType: Record<MealType, string[]> = {
+    breakfast: [],
+    lunch: [],
+    dinner: [],
+    snack: [],
+  };
+
+  for (const day of mealPlan.days) {
+    if (day.meals.breakfast) idsByMealType.breakfast.push(day.meals.breakfast);
+    if (day.meals.lunch) idsByMealType.lunch.push(day.meals.lunch);
+    if (day.meals.dinner) idsByMealType.dinner.push(day.meals.dinner);
+    for (const snackId of day.meals.snacks || []) {
+      if (snackId) idsByMealType.snack.push(snackId);
+    }
+  }
+
+  const order: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
+  return order
+    .map((mealType) => {
+      const uniqueIds = [...new Set(idsByMealType[mealType])];
+      const recipeTitles = uniqueIds
+        .map((id) => recipeMap.get(id)?.title || '')
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b));
+      return {
+        mealType,
+        recipeTitles,
+        groups: buildGroceryListForRecipeIds(uniqueIds, recipeMap),
+      };
+    })
+    .filter((entry) => entry.recipeTitles.length > 0 || entry.groups.length > 0);
+}
+
+export function buildGroceryListFromMealPlan(mealPlan: MealPlan | null, recipeMap: Map<string, Recipe>) {
+  if (!mealPlan) return [];
+  const recipeIds = mealPlan.days.flatMap((day) =>
+    [day.meals.breakfast, day.meals.lunch, day.meals.dinner, ...(day.meals.snacks || [])].filter(Boolean),
+  ) as string[];
+  return buildGroceryListForRecipeIds(recipeIds, recipeMap);
 }
 
 export function getCurrentWeight(weightLogs: WeightLogEntry[], startingWeight?: number) {

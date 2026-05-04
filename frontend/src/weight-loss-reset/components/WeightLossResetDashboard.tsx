@@ -13,7 +13,7 @@ import {
   WEIGHT_LOSS_RESET_PRICE_COPY,
   WEIGHT_LOSS_RESET_PROGRAM_NAME,
 } from '../constants';
-import { buildGroceryListFromMealPlan, calculateGoalProgress, getCurrentWeight, getSwapCandidates } from '../mealPlanning';
+import { buildGroceryListByMealType, buildGroceryListFromMealPlan, calculateGoalProgress, getCurrentWeight, getSwapCandidates } from '../mealPlanning';
 import type { DietitianMessage, MealPlan, MealType, OnboardingAnswers, Recipe, WeightLogEntry } from '../types';
 
 type DashboardTab = 'overview' | 'meal-plan' | 'grocery' | 'progress' | 'messages';
@@ -131,6 +131,13 @@ function TabButton({
   );
 }
 
+function mealTypeLabel(mealType: MealType) {
+  if (mealType === 'breakfast') return 'Breakfast';
+  if (mealType === 'lunch') return 'Lunch';
+  if (mealType === 'dinner') return 'Dinner';
+  return 'Snack';
+}
+
 export default function WeightLossResetDashboard({
   answers,
   mealPlan,
@@ -170,6 +177,7 @@ export default function WeightLossResetDashboard({
 
   const recipeMap = useMemo(() => new Map(recipes.map((recipe) => [recipe.id, recipe])), [recipes]);
   const groceryGroups = useMemo(() => buildGroceryListFromMealPlan(mealPlan, recipeMap), [mealPlan, recipeMap]);
+  const groceryByMeal = useMemo(() => buildGroceryListByMealType(mealPlan, recipeMap), [mealPlan, recipeMap]);
 
   const currentWeight = getCurrentWeight(weightLogs, answers.currentWeightKg);
   const progressPercent = calculateGoalProgress({
@@ -315,24 +323,26 @@ export default function WeightLossResetDashboard({
 
       {(activeTab === 'overview' || activeTab === 'meal-plan') && (
         <section className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-xl font-semibold text-[#18251e]">Weekly meal plan</h2>
-            <button
-              type="button"
-              onClick={onUpdatePreferences}
-              className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#dbe2d9] bg-white px-3 text-xs font-semibold text-[#334155]"
-            >
-              Update intake preferences
-            </button>
-            <button
-              type="button"
-              onClick={onRegeneratePlan}
-              disabled={isGeneratingPlan}
-              className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#dbe2d9] bg-white px-3 text-xs font-semibold text-[#334155] disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              <RefreshCcw size={14} />
-              {isGeneratingPlan ? 'Refreshing plan...' : 'Refresh weekly plan'}
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={onUpdatePreferences}
+                className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#dbe2d9] bg-white px-3 text-xs font-semibold text-[#334155]"
+              >
+                Update intake preferences
+              </button>
+              <button
+                type="button"
+                onClick={onRegeneratePlan}
+                disabled={isGeneratingPlan}
+                className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#dbe2d9] bg-white px-3 text-xs font-semibold text-[#334155] disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                <RefreshCcw size={14} />
+                {isGeneratingPlan ? 'Refreshing plan...' : 'Refresh weekly plan'}
+              </button>
+            </div>
           </div>
 
           {!mealPlan && (
@@ -415,34 +425,45 @@ export default function WeightLossResetDashboard({
       {activeTab === 'grocery' && (
         <section className="space-y-4 rounded-2xl border border-[#dbe2d9] bg-white p-4 sm:p-5">
           <h2 className="text-xl font-semibold text-[#18251e]">Weekly grocery list</h2>
-          {groceryGroups.length === 0 ? (
+          {groceryByMeal.length === 0 && groceryGroups.length === 0 ? (
             <p className="rounded-xl border border-dashed border-[#dbe2d9] bg-[#f8faf7] px-3 py-2 text-sm text-[#5f7063]">
               Grocery ingredients will appear after your weekly meal plan is generated.
             </p>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              {groceryGroups.map((group) => (
-                <article key={group.category} className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-3">
-                  <h3 className="text-sm font-semibold text-[#18251e]">{group.category}</h3>
-                  <ul className="mt-2 space-y-2">
-                    {group.items.map((item) => {
-                      const checked = groceryCheckedItems.includes(item.key);
-                      return (
-                        <li key={item.key} className="flex items-start gap-2">
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => onToggleGroceryItem(item.key)}
-                            className="mt-0.5 h-4 w-4 rounded border-[#b9c8ba]"
-                          />
-                          <div>
-                            <p className={`text-sm ${checked ? 'text-[#94a3b8] line-through' : 'text-[#334155]'}`}>{item.name}</p>
-                            {item.quantities.length > 0 && <p className="text-xs text-[#5f7063]">{item.quantities.join(' / ')}</p>}
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ul>
+            <div className="space-y-4">
+              {groceryByMeal.map((mealSection) => (
+                <article key={mealSection.mealType} className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-3">
+                  <h3 className="text-base font-semibold text-[#18251e]">{mealTypeLabel(mealSection.mealType)}</h3>
+                  {mealSection.recipeTitles.length > 0 && (
+                    <p className="mt-1 text-xs text-[#5f7063]">Meals: {mealSection.recipeTitles.join(' • ')}</p>
+                  )}
+
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    {mealSection.groups.map((group) => (
+                      <article key={`${mealSection.mealType}-${group.category}`} className="rounded-xl border border-[#dbe2d9] bg-white p-3">
+                        <h4 className="text-xs font-semibold uppercase tracking-[0.06em] text-[#475569]">{group.category}</h4>
+                        <ul className="mt-2 space-y-2">
+                          {group.items.map((item) => {
+                            const checked = groceryCheckedItems.includes(item.key);
+                            return (
+                              <li key={`${mealSection.mealType}-${item.key}`} className="flex items-start gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={() => onToggleGroceryItem(item.key)}
+                                  className="mt-0.5 h-4 w-4 rounded border-[#b9c8ba]"
+                                />
+                                <div>
+                                  <p className={`text-sm ${checked ? 'text-[#94a3b8] line-through' : 'text-[#334155]'}`}>{item.name}</p>
+                                  {item.quantities.length > 0 && <p className="text-xs text-[#5f7063]">{item.quantities.join(' / ')}</p>}
+                                </div>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </article>
+                    ))}
+                  </div>
                 </article>
               ))}
             </div>
