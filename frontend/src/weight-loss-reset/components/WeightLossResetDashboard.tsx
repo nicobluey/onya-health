@@ -13,7 +13,7 @@ import {
   WEIGHT_LOSS_RESET_PRICE_COPY,
   WEIGHT_LOSS_RESET_PROGRAM_NAME,
 } from '../constants';
-import { buildGroceryListByMealType, buildGroceryListFromMealPlan, calculateGoalProgress, getCurrentWeight, getSwapCandidates } from '../mealPlanning';
+import { buildGroceryListFromMealPlan, calculateGoalProgress, getCurrentWeight, getSwapCandidates } from '../mealPlanning';
 import type { DietitianMessage, MealPlan, MealType, OnboardingAnswers, Recipe, WeightLogEntry } from '../types';
 
 type DashboardTab = 'overview' | 'meal-plan' | 'grocery' | 'progress' | 'messages';
@@ -131,13 +131,6 @@ function TabButton({
   );
 }
 
-function mealTypeLabel(mealType: MealType) {
-  if (mealType === 'breakfast') return 'Breakfast';
-  if (mealType === 'lunch') return 'Lunch';
-  if (mealType === 'dinner') return 'Dinner';
-  return 'Snack';
-}
-
 function toDisplayList(items: string[]) {
   if (items.length === 0) return '';
   if (items.length === 1) return items[0];
@@ -212,7 +205,16 @@ export default function WeightLossResetDashboard({
 
   const recipeMap = useMemo(() => new Map(recipes.map((recipe) => [recipe.id, recipe])), [recipes]);
   const groceryGroups = useMemo(() => buildGroceryListFromMealPlan(mealPlan, recipeMap), [mealPlan, recipeMap]);
-  const groceryByMeal = useMemo(() => buildGroceryListByMealType(mealPlan, recipeMap), [mealPlan, recipeMap]);
+  const groceryRecipeIds = useMemo(() => {
+    if (!mealPlan) return [] as string[];
+    return [
+      ...new Set(
+        mealPlan.days
+          .flatMap((day) => [day.meals.breakfast, day.meals.lunch, day.meals.dinner, ...(day.meals.snacks || [])])
+          .filter((recipeId): recipeId is string => Boolean(recipeId))
+      ),
+    ];
+  }, [mealPlan]);
   const generationMessages = useMemo(() => buildGenerationMessages(answers), [answers]);
   const visiblePlanNotes = useMemo(
     () =>
@@ -511,67 +513,68 @@ export default function WeightLossResetDashboard({
       {activeTab === 'grocery' && (
         <section className="space-y-4 rounded-2xl border border-[#dbe2d9] bg-white p-4 sm:p-5">
           <h2 className="text-xl font-semibold text-[#18251e]">Weekly grocery list</h2>
-          {groceryByMeal.length === 0 && groceryGroups.length === 0 ? (
+          {groceryGroups.length === 0 ? (
             <p className="rounded-xl border border-dashed border-[#dbe2d9] bg-[#f8faf7] px-3 py-2 text-sm text-[#5f7063]">
               Grocery ingredients will appear after your weekly meal plan is generated.
             </p>
           ) : (
             <div className="space-y-4">
-              {groceryByMeal.map((mealSection) => (
-                <article key={mealSection.mealType} className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-3">
-                  <h3 className="text-base font-semibold text-[#18251e]">{mealTypeLabel(mealSection.mealType)}</h3>
-                  {mealSection.recipeIds.length > 0 && (
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {mealSection.recipeIds.map((recipeId) => {
-                        const recipe = recipeMap.get(recipeId);
-                        if (!recipe) return null;
-                        return (
-                          <div
-                            key={`${mealSection.mealType}-${recipe.id}`}
-                            className="inline-flex max-w-[280px] items-center gap-2 rounded-full border border-[#dbe2d9] bg-white px-2 py-1"
-                            title={recipe.title}
-                          >
-                            <img
-                              src={recipe.imageUrl || '/nutrionist.webp'}
-                              alt={recipe.title}
-                              className="h-6 w-6 shrink-0 rounded-full object-cover"
-                              loading="lazy"
-                            />
-                            <span className="truncate text-xs text-[#334155]">{recipe.title}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    {mealSection.groups.map((group) => (
-                      <article key={`${mealSection.mealType}-${group.category}`} className="rounded-xl border border-[#dbe2d9] bg-white p-3">
-                        <h4 className="text-xs font-semibold uppercase tracking-[0.06em] text-[#475569]">{group.category}</h4>
-                        <ul className="mt-2 space-y-2">
-                          {group.items.map((item) => {
-                            const checked = groceryCheckedItems.includes(item.key);
-                            return (
-                              <li key={`${mealSection.mealType}-${item.key}`} className="flex items-start gap-2">
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={() => onToggleGroceryItem(item.key)}
-                                  className="mt-0.5 h-4 w-4 rounded border-[#b9c8ba]"
-                                />
-                                <div>
-                                  <p className={`text-sm ${checked ? 'text-[#94a3b8] line-through' : 'text-[#334155]'}`}>{item.name}</p>
-                                  {item.quantities.length > 0 && <p className="text-xs text-[#5f7063]">{item.quantities.join(' / ')}</p>}
-                                </div>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </article>
-                    ))}
+              {groceryRecipeIds.length > 0 && (
+                <article className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-3">
+                  <h3 className="text-sm font-semibold text-[#18251e]">Meals included in this week</h3>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {groceryRecipeIds.map((recipeId) => {
+                      const recipe = recipeMap.get(recipeId);
+                      if (!recipe) return null;
+                      return (
+                        <div
+                          key={`grocery-recipe-${recipe.id}`}
+                          className="inline-flex max-w-[280px] items-center gap-2 rounded-full border border-[#dbe2d9] bg-white px-2 py-1"
+                          title={recipe.title}
+                        >
+                          <img
+                            src={recipe.imageUrl || '/nutrionist.webp'}
+                            alt={recipe.title}
+                            className="h-6 w-6 shrink-0 rounded-full object-cover"
+                            loading="lazy"
+                          />
+                          <span className="truncate text-xs text-[#334155]">{recipe.title}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </article>
-              ))}
+              )}
+
+              <article className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-3">
+                <h3 className="text-sm font-semibold text-[#18251e]">Total ingredients across all selected meals</h3>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  {groceryGroups.map((group) => (
+                    <article key={`grocery-total-${group.category}`} className="rounded-xl border border-[#dbe2d9] bg-white p-3">
+                      <h4 className="text-xs font-semibold uppercase tracking-[0.06em] text-[#475569]">{group.category}</h4>
+                      <ul className="mt-2 space-y-2">
+                        {group.items.map((item) => {
+                          const checked = groceryCheckedItems.includes(item.key);
+                          return (
+                            <li key={`grocery-total-${item.key}`} className="flex items-start gap-2">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => onToggleGroceryItem(item.key)}
+                                className="mt-0.5 h-4 w-4 rounded border-[#b9c8ba]"
+                              />
+                              <div>
+                                <p className={`text-sm ${checked ? 'text-[#94a3b8] line-through' : 'text-[#334155]'}`}>{item.name}</p>
+                                {item.quantities.length > 0 && <p className="text-xs text-[#5f7063]">{item.quantities.join(' + ')}</p>}
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </article>
+                  ))}
+                </div>
+              </article>
             </div>
           )}
           <p className="text-xs text-[#5f7063]">If ingredient details are incomplete in the source data, items may be simplified.</p>
@@ -704,7 +707,19 @@ export default function WeightLossResetDashboard({
 
             <section className="mt-4 grid gap-4 md:grid-cols-2">
               <div>
-                <h4 className="text-sm font-semibold text-[#18251e]">Ingredients</h4>
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-sm font-semibold text-[#18251e]">Ingredients</h4>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedRecipe(null);
+                      setActiveTab('grocery');
+                    }}
+                    className="rounded-lg border border-[#dbe2d9] bg-white px-2 py-1 text-xs font-semibold text-[#334155]"
+                  >
+                    View on grocery list
+                  </button>
+                </div>
                 <ul className="mt-2 space-y-1 text-sm text-[#334155]">
                   {selectedRecipe.ingredients.map((ingredient) => (
                     <li key={`${selectedRecipe.id}-${ingredient.name}`}>• {[ingredient.quantity, ingredient.unit, ingredient.name].filter(Boolean).join(' ')}</li>

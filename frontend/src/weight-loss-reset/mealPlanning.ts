@@ -556,12 +556,272 @@ const LEADING_DESCRIPTORS = new Set([
   'finely',
   'halved',
 ]);
+const NUMBER_WORD_VALUES: Record<string, number> = {
+  a: 1,
+  an: 1,
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+  half: 0.5,
+  quarter: 0.25,
+};
+const FRACTION_CHARACTER_VALUES: Record<string, number> = {
+  '¼': 0.25,
+  '½': 0.5,
+  '¾': 0.75,
+  '⅓': 1 / 3,
+  '⅔': 2 / 3,
+  '⅛': 1 / 8,
+  '⅜': 3 / 8,
+  '⅝': 5 / 8,
+  '⅞': 7 / 8,
+};
+const QUANTITY_UNIT_ALIASES: Record<string, string> = {
+  cup: 'cup',
+  cups: 'cup',
+  tbsp: 'tbsp',
+  tablespoon: 'tbsp',
+  tablespoons: 'tbsp',
+  tsp: 'tsp',
+  teaspoon: 'tsp',
+  teaspoons: 'tsp',
+  g: 'g',
+  gram: 'g',
+  grams: 'g',
+  kg: 'kg',
+  kilogram: 'kg',
+  kilograms: 'kg',
+  ml: 'ml',
+  millilitre: 'ml',
+  millilitres: 'ml',
+  l: 'l',
+  litre: 'l',
+  litres: 'l',
+  can: 'can',
+  cans: 'can',
+  tin: 'tin',
+  tins: 'tin',
+  packet: 'packet',
+  packets: 'packet',
+  bunch: 'bunch',
+  bunches: 'bunch',
+  sprig: 'sprig',
+  sprigs: 'sprig',
+  slice: 'slice',
+  slices: 'slice',
+  clove: 'clove',
+  cloves: 'clove',
+  egg: 'egg',
+  eggs: 'egg',
+  piece: 'piece',
+  pieces: 'piece',
+  fillet: 'fillet',
+  fillets: 'fillet',
+  stalk: 'stalk',
+  stalks: 'stalk',
+  stick: 'stick',
+  sticks: 'stick',
+  head: 'head',
+  heads: 'head',
+  avocado: 'avocado',
+  avocados: 'avocado',
+  banana: 'banana',
+  bananas: 'banana',
+  carrot: 'carrot',
+  carrots: 'carrot',
+  onion: 'onion',
+  onions: 'onion',
+  capsicum: 'capsicum',
+  potato: 'potato',
+  potatoes: 'potato',
+  tomato: 'tomato',
+  tomatoes: 'tomato',
+  zucchini: 'zucchini',
+  zucchinis: 'zucchini',
+  mango: 'mango',
+  mangoes: 'mango',
+};
+const MEASURE_UNITS = new Set(['cup', 'tbsp', 'tsp', 'g', 'kg', 'ml', 'l']);
+const UNIT_DISPLAY_ORDER = [
+  'kg',
+  'g',
+  'l',
+  'ml',
+  'cup',
+  'tbsp',
+  'tsp',
+  'can',
+  'tin',
+  'packet',
+  'bunch',
+  'clove',
+  'egg',
+  'piece',
+  'slice',
+  'sprig',
+  'fillet',
+  'stalk',
+  'stick',
+  'head',
+];
 
 function cleanIngredientLine(value: string) {
   return String(value || '')
     .replace(/[•]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function normalizeFractionCharacters(value: string) {
+  return String(value || '').replace(
+    /(\d)\s*([¼½¾⅓⅔⅛⅜⅝⅞])/g,
+    (_, whole: string, fraction: string) => `${whole} ${fraction}`,
+  );
+}
+
+function parseAmountToken(rawToken: string) {
+  const token = normalizeText(rawToken);
+  if (!token) return undefined;
+  if (NUMBER_WORD_VALUES[token] !== undefined) return NUMBER_WORD_VALUES[token];
+  if (FRACTION_CHARACTER_VALUES[token] !== undefined) return FRACTION_CHARACTER_VALUES[token];
+  if (/^\d+\s+\d+\/\d+$/.test(token)) {
+    const [whole, fraction] = token.split(/\s+/);
+    const [numerator, denominator] = fraction.split('/').map(Number);
+    if (!denominator) return undefined;
+    return Number(whole) + numerator / denominator;
+  }
+  if (/^\d+\/\d+$/.test(token)) {
+    const [numerator, denominator] = token.split('/').map(Number);
+    if (!denominator) return undefined;
+    return numerator / denominator;
+  }
+  const numeric = Number(token);
+  return Number.isFinite(numeric) ? numeric : undefined;
+}
+
+function parseAmountExpression(rawExpression: string) {
+  const expression = normalizeFractionCharacters(rawExpression).replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!expression) return undefined;
+  const rangeParts = expression.split(/\s*-\s*/).map((part) => parseAmountToken(part)).filter((value): value is number => Number.isFinite(value));
+  if (rangeParts.length > 1) return Math.max(...rangeParts);
+  return parseAmountToken(expression);
+}
+
+function normalizeQuantityUnitToken(token: string) {
+  const cleaned = normalizeText(token).replace(/[^a-z]/g, '');
+  if (!cleaned) return '';
+  return QUANTITY_UNIT_ALIASES[cleaned] || '';
+}
+
+function extractAggregatedQuantity(line: string, canonicalBaseName: string) {
+  const source = normalizeFractionCharacters(cleanIngredientLine(line).toLowerCase())
+    .replace(/^(?:about|approx(?:\.|imately)?)\s+/i, '')
+    .trim();
+  if (!source) return null;
+
+  const compactUnitMatch = source.match(/^(\d+(?:\.\d+)?)(g|kg|ml|l)\b/i);
+  if (compactUnitMatch) {
+    return {
+      amount: Number(compactUnitMatch[1]),
+      unit: normalizeQuantityUnitToken(compactUnitMatch[2]) || compactUnitMatch[2].toLowerCase(),
+    };
+  }
+
+  const amountMatch = source.match(
+    /^((?:\d+\s+\d+\/\d+|\d+\s*[¼½¾⅓⅔⅛⅜⅝⅞]|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]|(?:half|quarter|one|two|three|four|five|six|seven|eight|nine|ten|a|an)\b)(?:\s*-\s*(?:\d+\s+\d+\/\d+|\d+\s*[¼½¾⅓⅔⅛⅜⅝⅞]|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]))?)/i
+  );
+  if (!amountMatch) return null;
+
+  let amount = parseAmountExpression(amountMatch[1]);
+  if (!amount || !Number.isFinite(amount) || amount <= 0) return null;
+
+  let rest = source.slice(amountMatch[0].length).trim();
+  if (/^x\b/i.test(rest)) {
+    rest = rest.replace(/^x\b\s*/i, '');
+    const multipliedMatch = rest.match(/^(\d+(?:\.\d+)?)(g|kg|ml|l)\b/i);
+    if (multipliedMatch) {
+      const multiplier = Number(multipliedMatch[1]);
+      if (Number.isFinite(multiplier) && multiplier > 0) {
+        amount *= multiplier;
+      }
+      return {
+        amount,
+        unit: normalizeQuantityUnitToken(multipliedMatch[2]) || multipliedMatch[2].toLowerCase(),
+      };
+    }
+  }
+
+  const unitTokens = rest.replace(/^[^a-z0-9]+/i, '').split(/\s+/).filter(Boolean);
+  while (unitTokens.length > 0) {
+    const token = normalizeText(unitTokens[0]).replace(/[^a-z]/g, '');
+    if (!token || token === 'of' || token === 'and' || token === 'or' || token === 'x') {
+      unitTokens.shift();
+      continue;
+    }
+    if (LEADING_DESCRIPTORS.has(token)) {
+      unitTokens.shift();
+      continue;
+    }
+    break;
+  }
+
+  let unit = unitTokens[0] ? normalizeQuantityUnitToken(unitTokens[0]) : '';
+  if (!unit) {
+    const canonicalTokens = canonicalBaseName
+      .split(/\s+/)
+      .map((token) => normalizeText(token).replace(/[^a-z]/g, ''))
+      .filter(Boolean);
+    const candidate = unitTokens[0] ? normalizeText(unitTokens[0]).replace(/[^a-z]/g, '') : '';
+    if (candidate && canonicalTokens.some((token) => token === candidate || token.startsWith(candidate) || candidate.startsWith(token))) {
+      unit = canonicalTokens[0] || candidate;
+    } else if (canonicalTokens[0]) {
+      unit = canonicalTokens[0];
+    }
+  }
+
+  return unit ? { amount, unit } : null;
+}
+
+function formatAggregatedAmount(amount: number) {
+  const rounded = Math.round(amount * 100) / 100;
+  if (Number.isInteger(rounded)) return String(rounded);
+  return rounded.toFixed(2).replace(/\.?0+$/, '');
+}
+
+function formatQuantityUnit(unit: string, amount: number) {
+  if (!unit) return '';
+  if (MEASURE_UNITS.has(unit)) return unit;
+  if (Math.abs(amount - 1) < 0.000001) return unit;
+  return unit.endsWith('s') ? unit : `${unit}s`;
+}
+
+function formatQuantityLabels(quantityTotals: Map<string, number>, unparsedCounts: Map<string, number>) {
+  const totals = [...quantityTotals.entries()]
+    .sort((a, b) => {
+      const firstOrder = UNIT_DISPLAY_ORDER.indexOf(a[0]);
+      const secondOrder = UNIT_DISPLAY_ORDER.indexOf(b[0]);
+      const firstRank = firstOrder === -1 ? 999 : firstOrder;
+      const secondRank = secondOrder === -1 ? 999 : secondOrder;
+      if (firstRank !== secondRank) return firstRank - secondRank;
+      return a[0].localeCompare(b[0]);
+    })
+    .map(([unit, amount]) => {
+      const unitLabel = formatQuantityUnit(unit, amount);
+      return [formatAggregatedAmount(amount), unitLabel].filter(Boolean).join(' ');
+    });
+
+  const unparsed = [...unparsedCounts.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([label, count]) => (count > 1 ? `${label} x${count}` : label));
+
+  return [...totals, ...unparsed];
 }
 
 function shouldIgnoreIngredientLine(line: string) {
@@ -727,7 +987,7 @@ function shouldIgnoreCanonicalIngredient(baseName: string) {
 }
 
 function buildGroceryListForRecipeIds(recipeIds: string[], recipeMap: Map<string, Recipe>) {
-  const bucket = new Map<string, GroceryItem>();
+  const bucket = new Map<string, GroceryItem & { quantityTotals: Map<string, number>; unparsedCounts: Map<string, number> }>();
 
   for (const recipeId of recipeIds) {
     const recipe = recipeMap.get(recipeId);
@@ -747,31 +1007,52 @@ function buildGroceryListForRecipeIds(recipeIds: string[], recipeMap: Map<string
       const key = normalizeText(canonicalBaseName);
       const quantityLabel =
         [ingredient.quantity, ingredient.unit].filter(Boolean).join(' ').trim() || extractInlineQuantity(line);
+      const aggregatedQuantity = extractAggregatedQuantity(quantityLabel || line, canonicalBaseName);
       const preferredCategory = normalizeText(ingredient.category || '');
       const category =
         preferredCategory && preferredCategory !== 'pantry' ? preferredCategory : inferGroceryCategory(canonicalBaseName);
       const existing = bucket.get(key);
 
       if (!existing) {
+        const quantityTotals = new Map<string, number>();
+        const unparsedCounts = new Map<string, number>();
+        if (aggregatedQuantity) {
+          quantityTotals.set(aggregatedQuantity.unit, aggregatedQuantity.amount);
+        } else if (quantityLabel) {
+          unparsedCounts.set(quantityLabel, 1);
+        }
         bucket.set(key, {
           key,
           name: displayName,
           category,
-          quantities: quantityLabel ? [quantityLabel] : [],
+          quantities: [],
+          quantityTotals,
+          unparsedCounts,
         });
         continue;
       }
 
-      if (quantityLabel && !existing.quantities.includes(quantityLabel)) {
-        existing.quantities.push(quantityLabel);
+      if (aggregatedQuantity) {
+        existing.quantityTotals.set(
+          aggregatedQuantity.unit,
+          (existing.quantityTotals.get(aggregatedQuantity.unit) || 0) + aggregatedQuantity.amount
+        );
+      } else if (quantityLabel) {
+        existing.unparsedCounts.set(quantityLabel, (existing.unparsedCounts.get(quantityLabel) || 0) + 1);
       }
     }
   }
 
   const byCategory = new Map<string, GroceryItem[]>();
   for (const item of bucket.values()) {
-    if (!byCategory.has(item.category)) byCategory.set(item.category, []);
-    byCategory.get(item.category)?.push(item);
+    const normalizedItem: GroceryItem = {
+      key: item.key,
+      name: item.name,
+      category: item.category,
+      quantities: formatQuantityLabels(item.quantityTotals, item.unparsedCounts),
+    };
+    if (!byCategory.has(normalizedItem.category)) byCategory.set(normalizedItem.category, []);
+    byCategory.get(normalizedItem.category)?.push(normalizedItem);
   }
 
   return [...byCategory.entries()]
