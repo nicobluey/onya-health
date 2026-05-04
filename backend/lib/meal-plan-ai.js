@@ -354,6 +354,68 @@ function validateAndNormalizePlan(payload, validIds, includeSnack) {
   };
 }
 
+function buildRecipeMetaMap(recipes) {
+  const map = new Map();
+  for (const recipe of Array.isArray(recipes) ? recipes : []) {
+    const id = String(recipe?.id || '').trim();
+    if (!id) continue;
+    map.set(id, {
+      mealType: normalizeMealType(recipe?.mealType),
+      calories: Number(recipe?.calories || 0),
+      protein: Number(recipe?.protein || 0),
+      title: String(recipe?.title || ''),
+      dietaryTags: Array.isArray(recipe?.dietaryTags) ? recipe.dietaryTags : [],
+    });
+  }
+  return map;
+}
+
+function isBreakfastSlotAllowed(meta) {
+  if (!meta) return false;
+  return meta.mealType === 'breakfast' || meta.mealType === 'snack';
+}
+
+function isMainSlotAllowed(meta) {
+  if (!meta) return false;
+  if (meta.mealType !== 'lunch' && meta.mealType !== 'dinner') return false;
+  return isMainMealCandidate(meta);
+}
+
+function planPassesQualityChecks(plan, recipeMetaMap, answers = {}) {
+  if (!plan || !Array.isArray(plan.days) || plan.days.length !== 7) return false;
+
+  const breakfastCounts = new Map();
+  const lunchCounts = new Map();
+  const dinnerCounts = new Map();
+  for (const day of plan.days) {
+    const breakfast = String(day?.meals?.breakfast || '');
+    const lunch = String(day?.meals?.lunch || '');
+    const dinner = String(day?.meals?.dinner || '');
+    const breakfastMeta = recipeMetaMap.get(breakfast);
+    const lunchMeta = recipeMetaMap.get(lunch);
+    const dinnerMeta = recipeMetaMap.get(dinner);
+
+    if (!isBreakfastSlotAllowed(breakfastMeta)) return false;
+    if (!isMainSlotAllowed(lunchMeta)) return false;
+    if (!isMainSlotAllowed(dinnerMeta)) return false;
+
+    breakfastCounts.set(breakfast, (breakfastCounts.get(breakfast) || 0) + 1);
+    lunchCounts.set(lunch, (lunchCounts.get(lunch) || 0) + 1);
+    dinnerCounts.set(dinner, (dinnerCounts.get(dinner) || 0) + 1);
+  }
+
+  const useMealPrepPattern = String(answers?.groceryPreference || '').toLowerCase() === 'meal prep friendly';
+  const breakfastMax = useMealPrepPattern ? 5 : 4;
+  const lunchMax = useMealPrepPattern ? 4 : 3;
+  const dinnerMax = useMealPrepPattern ? 4 : 3;
+
+  if ([...breakfastCounts.values()].some((count) => count > breakfastMax)) return false;
+  if ([...lunchCounts.values()].some((count) => count > lunchMax)) return false;
+  if ([...dinnerCounts.values()].some((count) => count > dinnerMax)) return false;
+
+  return true;
+}
+
 async function callOpenAiForMealPlan({ answers, recipes, includeSnack, seedSalt }) {
   const apiKey = process.env.OPENAI_API_KEY || '';
   if (!apiKey) return null;
@@ -432,12 +494,16 @@ async function callOpenAiForMealPlan({ answers, recipes, includeSnack, seedSalt 
 
 export async function generateOpenAiMealPlan({ answers, recipes, includeSnack = false, seedSalt = '' }) {
   const validIds = new Set(recipes.map((recipe) => String(recipe?.id || '').trim()).filter(Boolean));
+  const recipeMetaMap = buildRecipeMetaMap(recipes);
   if (validIds.size === 0) return null;
 
   try {
     const outputText = await callOpenAiForMealPlan({ answers, recipes, includeSnack, seedSalt });
     const parsed = parseJsonFromText(outputText);
-    return validateAndNormalizePlan(parsed, validIds, includeSnack);
+    const plan = validateAndNormalizePlan(parsed, validIds, includeSnack);
+    if (!plan) return null;
+    if (!planPassesQualityChecks(plan, recipeMetaMap, answers)) return null;
+    return plan;
   } catch (error) {
     console.error('Meal plan AI generation failed:', error?.message || String(error));
     return null;

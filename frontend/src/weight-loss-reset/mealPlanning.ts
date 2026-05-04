@@ -732,6 +732,7 @@ const IGNORED_CANONICAL_INGREDIENTS = new Set([
   'ice cube',
 ]);
 const LEADING_DESCRIPTORS = new Set([
+  'and',
   'small',
   'medium',
   'large',
@@ -1219,6 +1220,11 @@ function canonicalizeIngredientBaseName(baseName: string) {
     .replace(/\bsriracha or chilli\b/g, 'chilli')
     .replace(/\bcoconut\b$/g, '')
     .replace(/\bextra chia seed\b/g, '')
+    .replace(/\bfor cooking\b/g, '')
+    .replace(/\bcut in half(?: and toasted)?\b/g, '')
+    .replace(/\bfinely sliced\b/g, '')
+    .replace(/\bthinly sliced\b/g, '')
+    .replace(/\bwholegrain noodles?\b/g, 'wholegrain noodle')
     .replace(/^or\s+\d+\s+/g, '')
     .replace(/\bpieces?\s+of\s+/g, '')
     .replace(/[()]/g, ' ')
