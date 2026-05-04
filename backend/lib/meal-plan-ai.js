@@ -10,8 +10,8 @@ const MEAL_PREP_PATTERNS = {
 };
 const MEAL_PREP_BASE_COUNTS = {
   breakfast: 2,
-  lunch: 3,
-  dinner: 3,
+  lunch: 2,
+  dinner: 2,
   snack: 2,
 };
 
@@ -84,8 +84,23 @@ function pickVariedId({ pool, dayIndex, seedOffset = 0, lastId = '' }) {
 function isMainMealCandidate(recipe) {
   const calories = Number(recipe?.calories || 0);
   const protein = Number(recipe?.protein || 0);
-  if (calories > 0 && calories < 180 && protein < 12) return false;
+  const descriptor = `${String(recipe?.title || '')} ${(Array.isArray(recipe?.dietaryTags) ? recipe.dietaryTags.join(' ') : '')}`.toLowerCase();
+  if (
+    /(mousse|smoothie|bircher|muesli|dessert|cake|cheesecake|tartlet|snack|beverage)/.test(descriptor)
+  ) {
+    return false;
+  }
+  if (calories > 0 && calories < 260 && protein < 16) return false;
   return true;
+}
+
+function prioritizeByCuisine(pool, cuisinePool) {
+  const preferred = Array.isArray(cuisinePool) ? cuisinePool.filter(Boolean) : [];
+  const base = Array.isArray(pool) ? pool.filter(Boolean) : [];
+  if (preferred.length === 0) return [...new Set(base)];
+  const preferredSet = new Set(preferred);
+  const remaining = base.filter((id) => !preferredSet.has(id));
+  return [...new Set([...preferred, ...remaining])];
 }
 
 export function generateFallbackMealPlan({ recipes, includeSnack = false, seedSalt = '', answers = {} }) {
@@ -131,25 +146,12 @@ export function generateFallbackMealPlan({ recipes, includeSnack = false, seedSa
     }
   }
 
-  const breakfastPool =
-    cuisinePoolByType.breakfast.length > 0
-      ? cuisinePoolByType.breakfast
-      : poolByType.breakfast.length > 0
-        ? poolByType.breakfast
-        : allRecipeIds;
-  const lunchPool =
-    cuisinePoolByType.lunch.length > 0 ? cuisinePoolByType.lunch : poolByType.lunch.length > 0 ? poolByType.lunch : allRecipeIds;
-  const dinnerPool =
-    cuisinePoolByType.dinner.length > 0
-      ? cuisinePoolByType.dinner
-      : poolByType.dinner.length > 0
-        ? poolByType.dinner
-        : allRecipeIds;
+  const breakfastPool = poolByType.breakfast.length > 0 ? prioritizeByCuisine(poolByType.breakfast, cuisinePoolByType.breakfast) : allRecipeIds;
+  const lunchPool = poolByType.lunch.length > 0 ? prioritizeByCuisine(poolByType.lunch, cuisinePoolByType.lunch) : allRecipeIds;
+  const dinnerPool = poolByType.dinner.length > 0 ? prioritizeByCuisine(poolByType.dinner, cuisinePoolByType.dinner) : allRecipeIds;
   const snackPool =
-    cuisinePoolByType.snack.length > 0
-      ? cuisinePoolByType.snack
-      : poolByType.snack.length > 0
-        ? poolByType.snack
+    poolByType.snack.length > 0
+      ? prioritizeByCuisine(poolByType.snack, cuisinePoolByType.snack)
       : poolByType.breakfast.length > 0
         ? poolByType.breakfast
         : allRecipeIds;

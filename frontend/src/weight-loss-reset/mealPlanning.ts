@@ -34,8 +34,8 @@ const MEAL_PREP_PATTERNS: Record<MealType, number[]> = {
 };
 const MEAL_PREP_BASE_COUNTS: Record<MealType, number> = {
   breakfast: 2,
-  lunch: 3,
-  dinner: 3,
+  lunch: 2,
+  dinner: 2,
   snack: 2,
 };
 
@@ -137,12 +137,41 @@ function recipePassesDislikes(recipe: Recipe, dislikes: string[]) {
   return !dislikes.some((term) => text.includes(term));
 }
 
+function recipeDescriptorText(recipe: Recipe) {
+  const source = recipe.source && typeof recipe.source === 'object' ? (recipe.source as Record<string, unknown>) : {};
+  const collections = readUnknownStringArray(source.collections);
+  const cardTags = readUnknownStringArray(source.cardTags);
+  const cuisines = readUnknownStringArray(source.cuisines);
+  return normalizeText(
+    [recipe.title, recipe.description || '', ...(recipe.dietaryTags || []), ...collections, ...cardTags, ...cuisines].join(' ')
+  );
+}
+
 function isMainMealCandidate(recipe: Recipe, mealType: MealType) {
   if (mealType === 'snack') return true;
   const calories = Number(recipe.calories || 0);
   const protein = Number(recipe.protein || 0);
+  const descriptor = recipeDescriptorText(recipe);
+
+  if (
+    containsAny(descriptor, [
+      'mousse',
+      'smoothie',
+      'bircher',
+      'muesli',
+      'dessert',
+      'cake',
+      'cheesecake',
+      'tartlet',
+      'snack',
+      'beverage',
+    ])
+  ) {
+    return false;
+  }
+
   // Guard against snack-like items being scheduled as lunch/dinner.
-  if (calories > 0 && calories < 180 && protein < 12) return false;
+  if (calories > 0 && calories < 260 && protein < 16) return false;
   return true;
 }
 
@@ -181,7 +210,11 @@ function recipePreferenceScore(recipe: Recipe, answers: OnboardingAnswers) {
   if (cuisinePreferences.length > 0 && recipeMatchesCuisinePreferences(recipe, cuisinePreferences)) score += 6;
 
   if (answers.groceryPreference === 'fastest meals possible' && timeMinutes <= 20) score += 2;
-  if (answers.groceryPreference === 'meal prep friendly' && containsAny(title, ['bowl', 'stew', 'roast', 'salad'])) score += 2;
+  if (answers.groceryPreference === 'meal prep friendly') {
+    if (containsAny(title, ['bowl', 'stew', 'roast', 'salad', 'curry', 'stir fry'])) score += 3;
+    if ((recipe.ingredients.length || 0) <= 11) score += 4;
+    if ((recipe.ingredients.length || 0) >= 16) score -= 3;
+  }
   if (answers.groceryPreference === 'simple supermarket ingredients' && (recipe.ingredients.length || 0) <= 10) score += 2;
   if (answers.groceryPreference === 'high variety') score += 1;
 
@@ -208,7 +241,6 @@ function buildCandidatePool({
       ? requirements
       : requirements.filter((requirement) => CRITICAL_REQUIREMENTS.has(normalizeText(requirement)));
   const allergyTerms = extractAllergyTerms(answers);
-  const cuisinePreferences = normalizeCuisinePreferences(answers.preferredCuisines || []);
   const dislikes = stage === 3 ? [] : extractDislikes(answers);
 
   const withMealType = stage === 3
@@ -216,12 +248,53 @@ function buildCandidatePool({
     : recipes.filter((recipe) => recipe.mealType === mealType);
 
   return withMealType
-    .filter((recipe) => (stage === 1 && cuisinePreferences.length > 0 ? recipeMatchesCuisinePreferences(recipe, cuisinePreferences) : true))
     .filter((recipe) => (stage <= 2 ? isMainMealCandidate(recipe, mealType) : true))
     .filter((recipe) => recipePassesAllergyCheck(recipe, allergyTerms))
     .filter((recipe) => recipeMatchesDietaryRequirements(recipe, strictRequirements))
     .filter((recipe) => recipePassesDislikes(recipe, dislikes))
     .sort((a, b) => recipePreferenceScore(b, answers) - recipePreferenceScore(a, answers) || a.title.localeCompare(b.title));
+}
+
+function ingredientTokenSet(recipe: Recipe) {
+  const stop = new Set([
+    'and',
+    'with',
+    'from',
+    'fresh',
+    'dried',
+    'extra',
+    'virgin',
+    'olive',
+    'oil',
+    'salt',
+    'pepper',
+    'ground',
+    'cup',
+    'cups',
+    'tbsp',
+    'tsp',
+  ]);
+  const tokens = new Set<string>();
+  for (const ingredient of recipe.ingredients || []) {
+    const parts = normalizeText(ingredient.name || '')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(Boolean);
+    for (const part of parts) {
+      if (part.length < 3) continue;
+      if (stop.has(part)) continue;
+      tokens.add(part);
+    }
+  }
+  return tokens;
+}
+
+function tokenOverlapCount(left: Set<string>, right: Set<string>) {
+  let count = 0;
+  for (const token of left) {
+    if (right.has(token)) count += 1;
+  }
+  return count;
 }
 
 function pickMealPrepBaseRecipes({
@@ -239,7 +312,35 @@ function pickMealPrepBaseRecipes({
   const pool = candidates.slice(0, sliceSize);
   const start = Math.floor(random() * pool.length);
   const rotated = [...pool.slice(start), ...pool.slice(0, start)];
-  return rotated.slice(0, Math.max(1, Math.min(targetCount, rotated.length)));
+  const desiredCount = Math.max(1, Math.min(targetCount, rotated.length));
+  const selected: Recipe[] = [rotated[0]];
+  const tokenCache = new Map<string, Set<string>>();
+  for (const recipe of rotated) {
+    tokenCache.set(recipe.id, ingredientTokenSet(recipe));
+  }
+
+  while (selected.length < desiredCount) {
+    let best: Recipe | undefined;
+    let bestScore = Number.NEGATIVE_INFINITY;
+    for (const candidate of rotated) {
+      if (selected.some((entry) => entry.id === candidate.id)) continue;
+      const candidateTokens = tokenCache.get(candidate.id) || new Set<string>();
+      const overlap = selected.reduce((acc, entry) => {
+        const selectedTokens = tokenCache.get(entry.id) || new Set<string>();
+        return acc + tokenOverlapCount(selectedTokens, candidateTokens);
+      }, 0);
+      const rankBias = Math.max(0, rotated.length - rotated.indexOf(candidate));
+      const score = overlap * 3 + rankBias;
+      if (score > bestScore) {
+        bestScore = score;
+        best = candidate;
+      }
+    }
+    if (!best) break;
+    selected.push(best);
+  }
+
+  return selected;
 }
 
 function pickVariedRecipe({
@@ -856,7 +957,7 @@ function parseAmountExpression(rawExpression: string) {
   const expression = normalizeFractionCharacters(rawExpression).replace(/\s+/g, ' ').trim().toLowerCase();
   if (!expression) return undefined;
   const rangeParts = expression.split(/\s*-\s*/).map((part) => parseAmountToken(part)).filter((value): value is number => Number.isFinite(value));
-  if (rangeParts.length > 1) return Math.max(...rangeParts);
+  if (rangeParts.length > 1) return rangeParts.reduce((acc, value) => acc + value, 0) / rangeParts.length;
   return parseAmountToken(expression);
 }
 
@@ -1084,6 +1185,7 @@ function canonicalizeIngredientBaseName(baseName: string) {
     .replace(/\breduced[\s-]?salt\b/g, '')
     .replace(/\bunsalted\b/g, '')
     .replace(/\bgarlic cloves?\b/g, 'garlic')
+    .replace(/\beschallots?\b/g, 'shallot')
     .replace(/\bbasil leaves?\b/g, 'basil')
     .replace(/\bbean shoots?\b/g, 'bean sprouts')
     .replace(/\bbean sprout\b/g, 'bean sprouts')
@@ -1108,13 +1210,22 @@ function canonicalizeIngredientBaseName(baseName: string) {
     .replace(/\bto garnish\b/g, '')
     .replace(/\bto sprinkle on top\b/g, '')
     .replace(/\bskin removed\b/g, '')
+    .replace(/\bserves?\s+of\s+/g, '')
+    .replace(/\blow sodium\b/g, '')
+    .replace(/\bsoy sauce bok\b/g, 'soy sauce')
+    .replace(/\balmond(?:s)?\s+cut\s+in\s+half(?:\s+and\s+toasted)?\b/g, 'almond')
+    .replace(/\bthai basil\b/g, 'basil')
+    .replace(/\blemon or lime\b/g, 'lemon')
+    .replace(/\bsriracha or chilli\b/g, 'chilli')
+    .replace(/\bcoconut\b$/g, '')
+    .replace(/\bextra chia seed\b/g, '')
     .replace(/^or\s+\d+\s+/g, '')
     .replace(/\bpieces?\s+of\s+/g, '')
     .replace(/[()]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
-  value = value.replace(/\b(halves|half|chunks|chunk|diced|sliced|chopped|minced|grated|crushed|washed|rinsed|trimmed)\b$/g, '').trim();
+  value = value.replace(/\b(halves|half|chunks|chunk|diced|sliced|chopped|minced|grated|crushed|washed|rinsed|trimmed|finely|roughly|thinly)\b$/g, '').trim();
   if (value.endsWith('ies') && value.length > 4) {
     value = `${value.slice(0, -3)}y`;
   } else if (/(ches|shes|xes|zes)$/.test(value) && value.length > 5) {
@@ -1146,7 +1257,7 @@ function inferGroceryCategory(baseName: string) {
   }
   if (
     containsAny(text, [
-      'chicken', 'beef', 'salmon', 'egg', 'tofu', 'beans', 'lentil', 'chickpea', 'steak', 'tuna',
+      'chicken', 'beef', 'salmon', 'egg', 'tofu', 'beans', 'lentil', 'chickpea', 'steak', 'tuna', 'fillet', 'broth',
     ])
   ) {
     return 'protein';

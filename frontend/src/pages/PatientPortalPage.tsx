@@ -1539,9 +1539,12 @@ export default function PatientPortalPage() {
 
         const hasUnknownRecipes = plannedIds.some((id) => !recipeIdSet.has(id));
         if (!hasUnknownRecipes) {
-            const hasMissingTotals = weightLossResetState.mealPlan.days.some((day) => !day.totals);
-            if (!hasMissingTotals) return;
-            replaceMealPlan(withRecalculatedTotals(weightLossResetState.mealPlan, new Map(weightLossRecipes.map((recipe) => [recipe.id, recipe]))));
+            const recipeMap = new Map(weightLossRecipes.map((recipe) => [recipe.id, recipe]));
+            const recalculated = withRecalculatedTotals(weightLossResetState.mealPlan, recipeMap);
+            const currentTotals = JSON.stringify(weightLossResetState.mealPlan.days.map((day) => day.totals || {}));
+            const nextTotals = JSON.stringify(recalculated.days.map((day) => day.totals || {}));
+            if (currentTotals === nextTotals) return;
+            replaceMealPlan(recalculated);
             return;
         }
 

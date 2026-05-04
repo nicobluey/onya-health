@@ -35,7 +35,104 @@ const FALLBACK_RECIPES: Recipe[] = [
   },
 ];
 
+function normalizeText(value: string) {
+  return String(value || '').toLowerCase().trim();
+}
+
+function extractNumberFromText(raw: unknown) {
+  const text = String(raw || '').replace(/,/g, '').trim();
+  const match = text.match(/(\d+(?:\.\d+)?)/);
+  if (!match) return undefined;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+function safeSourceRecord(recipe: Recipe) {
+  if (!recipe.source || typeof recipe.source !== 'object') return {} as Record<string, unknown>;
+  return recipe.source as Record<string, unknown>;
+}
+
+function parseNutritionRaw(recipe: Recipe) {
+  const source = safeSourceRecord(recipe);
+  const nutritionRaw = source.nutritionRaw;
+  if (!nutritionRaw || typeof nutritionRaw !== 'object') return {} as Record<string, unknown>;
+  return nutritionRaw as Record<string, unknown>;
+}
+
+function normalizeCalories(recipe: Recipe) {
+  const nutritionRaw = parseNutritionRaw(recipe);
+  const energyRaw = String(nutritionRaw.Energy || nutritionRaw.Engery || nutritionRaw.energy || '').trim();
+  if (energyRaw) {
+    const caloriesMatch = energyRaw.match(/(\d+(?:\.\d+)?)\s*calories?/i);
+    if (caloriesMatch) {
+      const value = Number(caloriesMatch[1]);
+      if (Number.isFinite(value) && value > 0) return Math.round(value);
+    }
+
+    const kjMatch = energyRaw.match(/(\d+(?:\.\d+)?)\s*kj/i);
+    if (kjMatch) {
+      const kjValue = Number(kjMatch[1]);
+      if (Number.isFinite(kjValue) && kjValue > 0) {
+        return Math.round(kjValue / 4.184);
+      }
+    }
+  }
+
+  const directCalories = Number(recipe.calories || 0);
+  if (!Number.isFinite(directCalories) || directCalories <= 0) return undefined;
+  if (directCalories > 1000) return Math.round(directCalories / 4.184);
+  return Math.round(directCalories);
+}
+
+function normalizeMacroValue(rawValue: unknown, fallback?: number) {
+  const parsed = extractNumberFromText(rawValue);
+  if (typeof parsed === 'number' && Number.isFinite(parsed) && parsed > 0) return Math.round(parsed * 10) / 10;
+  if (!Number.isFinite(Number(fallback || 0)) || Number(fallback || 0) <= 0) return undefined;
+  return Math.round(Number(fallback) * 10) / 10;
+}
+
+function normalizeMealType(recipe: Recipe): Recipe['mealType'] {
+  const current = normalizeText(String(recipe.mealType || ''));
+  const baseMealType = current === 'breakfast' || current === 'lunch' || current === 'dinner' || current === 'snack' ? current : '';
+  const source = safeSourceRecord(recipe);
+  const collections = Array.isArray(source.collections) ? source.collections : [];
+  const cardTags = Array.isArray(source.cardTags) ? source.cardTags : [];
+  const descriptor = normalizeText(
+    [
+      recipe.title,
+      recipe.description,
+      ...(recipe.dietaryTags || []),
+      ...collections.map((value) => String(value || '')),
+      ...cardTags.map((value) => String(value || '')),
+    ].join(' '),
+  );
+
+  const hasBreakfastHint = /(breakfast|bircher|muesli|porridge|smoothie)/.test(descriptor);
+  const hasDessertHint = /(dessert|mousse|cake|cheesecake|tartlet|slice|sweet)/.test(descriptor);
+  const hasSnackHint = /\bsnack/.test(descriptor);
+
+  if (hasBreakfastHint) return 'breakfast';
+  if (hasDessertHint || hasSnackHint) return 'snack';
+
+  if (baseMealType === 'dinner' || baseMealType === 'lunch') {
+    const calories = normalizeCalories(recipe) || 0;
+    const protein = Number(recipe.protein || 0);
+    if (calories > 0 && calories < 220 && protein < 12) {
+      return 'snack';
+    }
+  }
+
+  if (baseMealType) return baseMealType as Recipe['mealType'];
+  return 'lunch';
+}
+
 function normalizeRecipe(recipe: Recipe, fallbackImageUrl: string): Recipe {
+  const nutritionRaw = parseNutritionRaw(recipe);
+  const calories = normalizeCalories(recipe);
+  const protein = normalizeMacroValue(nutritionRaw.Protein || nutritionRaw.protein, recipe.protein);
+  const carbs = normalizeMacroValue(nutritionRaw.Carbohydrates || nutritionRaw.carbohydrates, recipe.carbs);
+  const fat = normalizeMacroValue(nutritionRaw['Total Fat'] || nutritionRaw.totalFat || nutritionRaw.fat, recipe.fat);
+
   return {
     ...recipe,
     imageUrl: recipe.imageUrl || fallbackImageUrl || FALLBACK_RECIPE_IMAGE_URL,
@@ -43,6 +140,11 @@ function normalizeRecipe(recipe: Recipe, fallbackImageUrl: string): Recipe {
     allergens: Array.isArray(recipe.allergens) ? recipe.allergens : [],
     ingredients: Array.isArray(recipe.ingredients) ? recipe.ingredients : [],
     instructions: Array.isArray(recipe.instructions) ? recipe.instructions : [],
+    calories,
+    protein,
+    carbs,
+    fat,
+    mealType: normalizeMealType(recipe),
   };
 }
 
@@ -72,4 +174,3 @@ export function loadWeightLossRecipes() {
 export function recipesById(recipes: Recipe[]) {
   return new Map(recipes.map((recipe) => [recipe.id, recipe]));
 }
-
