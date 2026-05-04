@@ -503,6 +503,18 @@ const SENTENCE_NOISE_PATTERNS = [
   /time-saving option/i,
   /^optional[:\s]/i,
 ];
+const IGNORED_CANONICAL_INGREDIENTS = new Set([
+  'water',
+  'cold water',
+  'boiling water',
+  'lukewarm water',
+  'additional water',
+  'poaching water',
+  'cooking water',
+  'ice',
+  'ice-cube',
+  'ice cube',
+]);
 const LEADING_DESCRIPTORS = new Set([
   'small',
   'medium',
@@ -523,6 +535,9 @@ const LEADING_DESCRIPTORS = new Set([
   'wholegrain',
   'plain',
   'unsweetened',
+  'unsalted',
+  'salted',
+  'few',
   'natural',
   'free-range',
   'skinless',
@@ -567,9 +582,13 @@ function shouldIgnoreIngredientLine(line: string) {
 
 function extractInlineQuantity(line: string) {
   const match = line.match(
-    /^((?:about|approx(?:\.|imately)?)?\s*(?:\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]|half|quarter|one|two|three|four|five|six|seven|eight|nine|ten|a|an)(?:\s*-\s*(?:\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]))?(?:\s+[a-zA-Z%]+){0,2})/i
+    /^((?:about|approx(?:\.|imately)?)?\s*(?:\d+\s+\d+\/\d+|\d+\s*[¼½¾⅓⅔⅛⅜⅝⅞]|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]|(?:half|quarter|one|two|three|four|five|six|seven|eight|nine|ten|a|an)\b)(?:\s*-\s*(?:\d+\s+\d+\/\d+|\d+\s*[¼½¾⅓⅔⅛⅜⅝⅞]|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]))?(?:\s+[a-zA-Z%]+){0,2})/i
   );
-  return match ? match[1].trim() : '';
+  if (!match) return '';
+  return match[1]
+    .trim()
+    .replace(/\s+of$/i, '')
+    .replace(/\s+(?:ground|fresh|dried|chopped|minced|grated|crushed|sliced|diced|finely|roughly)$/i, '');
 }
 
 function normalizeIngredientBaseName(rawLine: string) {
@@ -577,9 +596,10 @@ function normalizeIngredientBaseName(rawLine: string) {
   value = value.replace(/^\**\s*/, '').replace(/\**$/, '');
   value = value.replace(/\([^)]*\)/g, ' ');
   value = value.split(',')[0] || value;
+  value = value.split(/\s[-–—]\s/)[0] || value;
   value = value.replace(/^[^a-zA-Z0-9]+/, '').trim();
   value = value.replace(
-    /^(?:about|approx(?:\.|imately)?)?\s*(?:\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]|half|quarter|one|two|three|four|five|six|seven|eight|nine|ten|a|an)(?:\s*-\s*(?:\d+\s+\d+\/\d+|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]))?\s*/i,
+    /^(?:about|approx(?:\.|imately)?)?\s*(?:\d+\s+\d+\/\d+|\d+\s*[¼½¾⅓⅔⅛⅜⅝⅞]|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]|(?:half|quarter|one|two|three|four|five|six|seven|eight|nine|ten|a|an)\b)(?:\s*-\s*(?:\d+\s+\d+\/\d+|\d+\s*[¼½¾⅓⅔⅛⅜⅝⅞]|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]))?\s*/i,
     '',
   );
 
@@ -617,10 +637,15 @@ function canonicalizeIngredientBaseName(baseName: string) {
     .replace(/extra[\s-]?virgin olive oil/g, 'olive oil')
     .replace(/olive oil spray|spray olive oil/g, 'olive oil')
     .replace(/olive oil margarine spread/g, 'olive oil margarine spread')
+    .replace(/\bno added salt\b/g, '')
+    .replace(/\breduced[\s-]?salt\b/g, '')
+    .replace(/\bunsalted\b/g, '')
     .replace(/\bgarlic cloves?\b/g, 'garlic')
     .replace(/\bbasil leaves?\b/g, 'basil')
     .replace(/\bbean shoots?\b/g, 'bean sprouts')
     .replace(/\bbean sprout\b/g, 'bean sprouts')
+    .replace(/\bmango cheeks?\b/g, 'mango')
+    .replace(/\bice[-\s]?cubes?\b/g, 'ice cube')
     .replace(/\bshallots?\b/g, 'shallot')
     .replace(/\bpepita seeds?\b/g, 'pepitas')
     .replace(/\bsunflower seeds?\b/g, 'sunflower seed')
@@ -628,7 +653,14 @@ function canonicalizeIngredientBaseName(baseName: string) {
     .replace(/\balmonds?\b/g, 'almond')
     .replace(/\bcashews?\b/g, 'cashew')
     .replace(/\bwalnuts?\b/g, 'walnut')
+    .replace(/\bto serve\b/g, '')
+    .replace(/\bfor garnish(?:ing)?\b/g, '')
+    .replace(/\bto garnish\b/g, '')
+    .replace(/\bto sprinkle on top\b/g, '')
+    .replace(/\bskin removed\b/g, '')
+    .replace(/^or\s+\d+\s+/g, '')
     .replace(/\bpieces?\s+of\s+/g, '')
+    .replace(/[()]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
@@ -652,7 +684,7 @@ function inferGroceryCategory(baseName: string) {
   const text = normalizeText(baseName);
   if (
     containsAny(text, [
-      'salt', 'pepper', 'cumin', 'paprika', 'turmeric', 'cinnamon', 'masala', 'mustard', 'spice', 'ground coriander',
+      'salt', 'pepper', 'cumin', 'paprika', 'turmeric', 'cinnamon', 'masala', 'mustard', 'spice', 'ground coriander', 'herb',
     ])
   ) {
     return 'herbs & spices';
@@ -665,7 +697,7 @@ function inferGroceryCategory(baseName: string) {
       'carrot', 'onion', 'tomato', 'capsicum', 'zucchini', 'spinach', 'kale', 'lettuce', 'mint', 'parsley',
       'coriander', 'basil', 'ginger', 'pumpkin', 'beetroot', 'cucumber', 'lemon', 'lime', 'fruit', 'berries', 'kiwi',
       'mushroom', 'snow pea', 'broccoli', 'celery', 'avocado', 'chilli', 'peach', 'date', 'banana', 'grape', 'apple',
-      'potato', 'shallot', 'sprout', 'pea',
+      'potato', 'shallot', 'sprout', 'pea', 'cabbage', 'garlic', 'mango',
     ])
   ) {
     return 'produce';
@@ -680,10 +712,18 @@ function inferGroceryCategory(baseName: string) {
   if (containsAny(text, ['yoghurt', 'yogurt', 'milk', 'feta', 'ricotta', 'cheese', 'haloumi', 'bocconcini'])) {
     return 'dairy';
   }
-  if (containsAny(text, ['rice', 'pasta', 'noodle', 'oats', 'flour', 'farro', 'freekeh', 'quinoa', 'couscous', 'tortilla'])) {
+  if (containsAny(text, ['rice', 'pasta', 'noodle', 'oats', 'flour', 'farro', 'freekeh', 'quinoa', 'couscous', 'tortilla', 'spaghetti'])) {
     return 'grains';
   }
   return 'pantry';
+}
+
+function shouldIgnoreCanonicalIngredient(baseName: string) {
+  const normalized = normalizeText(baseName);
+  if (!normalized) return true;
+  if (IGNORED_CANONICAL_INGREDIENTS.has(normalized)) return true;
+  if (/^water\s+as\s+needed\b/.test(normalized)) return true;
+  return false;
 }
 
 function buildGroceryListForRecipeIds(recipeIds: string[], recipeMap: Map<string, Recipe>) {
@@ -701,6 +741,7 @@ function buildGroceryListForRecipeIds(recipeIds: string[], recipeMap: Map<string
       if (!baseName) continue;
       const canonicalBaseName = canonicalizeIngredientBaseName(baseName);
       if (!canonicalBaseName) continue;
+      if (shouldIgnoreCanonicalIngredient(canonicalBaseName)) continue;
 
       const displayName = toIngredientDisplayName(canonicalBaseName);
       const key = normalizeText(canonicalBaseName);
