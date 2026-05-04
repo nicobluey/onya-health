@@ -38,6 +38,46 @@ const MEAL_PREP_BASE_COUNTS: Record<MealType, number> = {
   dinner: 2,
   snack: 2,
 };
+const BREAKFAST_MAX_CALORIES_STRICT = 620;
+const BREAKFAST_MAX_CALORIES_RELAXED = 760;
+const BREAKFAST_MAX_TOTAL_MINUTES_STRICT = 45;
+const BREAKFAST_MAX_TOTAL_MINUTES_RELAXED = 60;
+const BREAKFAST_MAX_INGREDIENTS_STRICT = 14;
+const MAIN_MEAL_MAX_TOTAL_MINUTES_STRICT = 90;
+const MAIN_MEAL_MAX_TOTAL_MINUTES_RELAXED = 110;
+const LUNCH_MIN_CALORIES_STRICT = 280;
+const LUNCH_MIN_PROTEIN_STRICT = 14;
+const DINNER_MIN_CALORIES_STRICT = 320;
+const DINNER_MIN_PROTEIN_STRICT = 16;
+const BREAKFAST_HEAVY_KEYWORDS = [
+  'main course',
+  'dinner',
+  'lunch',
+  'curry',
+  'risotto',
+  'roast',
+  'stew',
+  'pho',
+  'laksa',
+  'noodle soup',
+  'stir fry',
+];
+const SWEET_OR_SNACK_KEYWORDS = [
+  'mousse',
+  'smoothie',
+  'bircher',
+  'muesli',
+  'dessert',
+  'cake',
+  'cheesecake',
+  'tart',
+  'slice',
+  'cookie',
+  'biscuit',
+  'snack',
+  'beverage',
+  'drink',
+];
 
 function normalizeText(value: string) {
   return value.toLowerCase().trim();
@@ -151,31 +191,85 @@ function recipeDescriptorText(recipe: Recipe) {
   );
 }
 
+function recipeEstimatedTotalMinutes(recipe: Recipe) {
+  const total = Number(recipe.totalTimeMinutes || 0);
+  if (Number.isFinite(total) && total > 0) return total;
+  const prep = Number(recipe.prepTimeMinutes || 0);
+  const cook = Number(recipe.cookTimeMinutes || 0);
+  if (Number.isFinite(prep) && Number.isFinite(cook) && prep > 0 && cook > 0) return prep + cook;
+  if (Number.isFinite(prep) && prep > 0) return prep;
+  if (Number.isFinite(cook) && cook > 0) return cook;
+  return 0;
+}
+
 function isMainMealCandidate(recipe: Recipe, mealType: MealType) {
   if (mealType === 'snack') return true;
   const calories = Number(recipe.calories || 0);
   const protein = Number(recipe.protein || 0);
   const descriptor = recipeDescriptorText(recipe);
 
-  if (
-    containsAny(descriptor, [
-      'mousse',
-      'smoothie',
-      'bircher',
-      'muesli',
-      'dessert',
-      'cake',
-      'cheesecake',
-      'tartlet',
-      'snack',
-      'beverage',
-    ])
-  ) {
+  if (containsAny(descriptor, SWEET_OR_SNACK_KEYWORDS)) {
     return false;
   }
 
   // Guard against snack-like items being scheduled as lunch/dinner.
   if (calories > 0 && calories < 260 && protein < 16) return false;
+  return true;
+}
+
+function isBreakfastMealCandidate(recipe: Recipe, stage: 1 | 2 | 3) {
+  const descriptor = recipeDescriptorText(recipe);
+  const calories = Number(recipe.calories || 0);
+  const totalMinutes = recipeEstimatedTotalMinutes(recipe);
+  const ingredientCount = recipe.ingredients.length || 0;
+
+  if (containsAny(descriptor, SWEET_OR_SNACK_KEYWORDS.filter((entry) => !['bircher', 'muesli', 'smoothie'].includes(entry)))) {
+    return false;
+  }
+
+  if (stage === 1 && containsAny(descriptor, BREAKFAST_HEAVY_KEYWORDS)) return false;
+  if (stage <= 2 && calories > (stage === 1 ? BREAKFAST_MAX_CALORIES_STRICT : BREAKFAST_MAX_CALORIES_RELAXED)) return false;
+  if (stage <= 2 && totalMinutes > (stage === 1 ? BREAKFAST_MAX_TOTAL_MINUTES_STRICT : BREAKFAST_MAX_TOTAL_MINUTES_RELAXED)) return false;
+  if (stage === 1 && ingredientCount > BREAKFAST_MAX_INGREDIENTS_STRICT) return false;
+
+  return true;
+}
+
+function isMainMealPlanningCandidate(recipe: Recipe, mealType: MealType, stage: 1 | 2 | 3) {
+  if (!isMainMealCandidate(recipe, mealType)) return false;
+
+  const descriptor = recipeDescriptorText(recipe);
+  const calories = Number(recipe.calories || 0);
+  const protein = Number(recipe.protein || 0);
+  const totalMinutes = recipeEstimatedTotalMinutes(recipe);
+  const stageStrict = stage === 1;
+
+  if (containsAny(descriptor, SWEET_OR_SNACK_KEYWORDS)) return false;
+  if (stage <= 2 && totalMinutes > (stageStrict ? MAIN_MEAL_MAX_TOTAL_MINUTES_STRICT : MAIN_MEAL_MAX_TOTAL_MINUTES_RELAXED)) return false;
+
+  if (stageStrict) {
+    const minCalories = mealType === 'dinner' ? DINNER_MIN_CALORIES_STRICT : LUNCH_MIN_CALORIES_STRICT;
+    const minProtein = mealType === 'dinner' ? DINNER_MIN_PROTEIN_STRICT : LUNCH_MIN_PROTEIN_STRICT;
+    if (calories > 0 && calories < minCalories && protein < minProtein) return false;
+  }
+
+  if (stage <= 2 && calories > 1200) return false;
+  return true;
+}
+
+function recipePassesMealPlanningHeuristics(recipe: Recipe, mealType: MealType, stage: 1 | 2 | 3) {
+  if (mealType === 'breakfast') return isBreakfastMealCandidate(recipe, stage);
+  if (mealType === 'lunch' || mealType === 'dinner') return isMainMealPlanningCandidate(recipe, mealType, stage);
+
+  if (mealType === 'snack') {
+    const descriptor = recipeDescriptorText(recipe);
+    const calories = Number(recipe.calories || 0);
+    const totalMinutes = recipeEstimatedTotalMinutes(recipe);
+    if (containsAny(descriptor, BREAKFAST_HEAVY_KEYWORDS)) return false;
+    if (stage <= 2 && calories > 550) return false;
+    if (stage <= 2 && totalMinutes > 45) return false;
+  }
+
   return true;
 }
 
@@ -262,7 +356,7 @@ function buildCandidatePool({
     : recipes.filter((recipe) => recipe.mealType === mealType);
 
   return withMealType
-    .filter((recipe) => (stage <= 2 ? isMainMealCandidate(recipe, mealType) : true))
+    .filter((recipe) => recipePassesMealPlanningHeuristics(recipe, mealType, stage))
     .filter((recipe) => recipePassesAllergyCheck(recipe, allergyTerms))
     .filter((recipe) => recipeMatchesDietaryRequirements(recipe, strictRequirements))
     .filter((recipe) => recipePassesDislikes(recipe, dislikes))
@@ -428,6 +522,118 @@ function calculateDayTotals(day: MealPlanDay, recipeMap: Map<string, Recipe>) {
   };
 }
 
+interface PlanQualityCheckResult {
+  valid: boolean;
+  score: number;
+  issues: string[];
+}
+
+function evaluateGeneratedPlanQuality({
+  days,
+  recipeMap,
+  useMealPrepPattern,
+  poolSizes,
+}: {
+  days: MealPlanDay[];
+  recipeMap: Map<string, Recipe>;
+  useMealPrepPattern: boolean;
+  poolSizes: Record<'breakfast' | 'lunch' | 'dinner', number>;
+}): PlanQualityCheckResult {
+  let score = 100;
+  const issues: string[] = [];
+  const criticalIssues: string[] = [];
+
+  const breakfastCounts = new Map<string, number>();
+  const lunchCounts = new Map<string, number>();
+  const dinnerCounts = new Map<string, number>();
+
+  for (const day of days) {
+    const breakfastId = String(day.meals.breakfast || '').trim();
+    const lunchId = String(day.meals.lunch || '').trim();
+    const dinnerId = String(day.meals.dinner || '').trim();
+    if (!breakfastId || !lunchId || !dinnerId) {
+      criticalIssues.push(`Missing core meal on ${day.label}.`);
+      continue;
+    }
+
+    const breakfastRecipe = recipeMap.get(breakfastId);
+    const lunchRecipe = recipeMap.get(lunchId);
+    const dinnerRecipe = recipeMap.get(dinnerId);
+    if (!breakfastRecipe || !lunchRecipe || !dinnerRecipe) {
+      criticalIssues.push(`Recipe metadata missing for ${day.label}.`);
+      continue;
+    }
+
+    if (!recipePassesMealPlanningHeuristics(breakfastRecipe, 'breakfast', 1)) {
+      criticalIssues.push(`Breakfast on ${day.label} is too heavy or impractical.`);
+    }
+    if (!recipePassesMealPlanningHeuristics(lunchRecipe, 'lunch', 1)) {
+      criticalIssues.push(`Lunch on ${day.label} is too light, too sweet, or impractical.`);
+    }
+    if (!recipePassesMealPlanningHeuristics(dinnerRecipe, 'dinner', 1)) {
+      criticalIssues.push(`Dinner on ${day.label} is too light, too sweet, or impractical.`);
+    }
+
+    if (breakfastId === lunchId || breakfastId === dinnerId || lunchId === dinnerId) {
+      score -= 8;
+      issues.push(`Repeated core meal in the same day (${day.label}).`);
+    }
+
+    breakfastCounts.set(breakfastId, (breakfastCounts.get(breakfastId) || 0) + 1);
+    lunchCounts.set(lunchId, (lunchCounts.get(lunchId) || 0) + 1);
+    dinnerCounts.set(dinnerId, (dinnerCounts.get(dinnerId) || 0) + 1);
+
+    const totals = calculateDayTotals(day, recipeMap);
+    if ((totals.calories || 0) > 2400) {
+      score -= 6;
+      issues.push(`Daily energy looks high on ${day.label}.`);
+    }
+  }
+
+  const breakfastRepeatMax = useMealPrepPattern ? 5 : 4;
+  const lunchRepeatMax = useMealPrepPattern ? 4 : 3;
+  const dinnerRepeatMax = useMealPrepPattern ? 4 : 3;
+  if ([...breakfastCounts.values()].some((count) => count > breakfastRepeatMax)) {
+    score -= 10;
+    issues.push('Breakfast variety is too low for the week.');
+  }
+  if ([...lunchCounts.values()].some((count) => count > lunchRepeatMax)) {
+    score -= 8;
+    issues.push('Lunch variety is too low for the week.');
+  }
+  if ([...dinnerCounts.values()].some((count) => count > dinnerRepeatMax)) {
+    score -= 8;
+    issues.push('Dinner variety is too low for the week.');
+  }
+
+  if (poolSizes.breakfast >= 3 && breakfastCounts.size < 2) {
+    score -= 12;
+    issues.push('Breakfast choices are over-repeated.');
+  }
+  if (poolSizes.lunch >= 4 && lunchCounts.size < 2) {
+    score -= 10;
+    issues.push('Lunch choices are over-repeated.');
+  }
+  if (poolSizes.dinner >= 4 && dinnerCounts.size < 2) {
+    score -= 10;
+    issues.push('Dinner choices are over-repeated.');
+  }
+
+  if (criticalIssues.length > 0) {
+    return {
+      valid: false,
+      score: Math.max(0, score - 30 - criticalIssues.length * 8),
+      issues: [...criticalIssues, ...issues].slice(0, 6),
+    };
+  }
+
+  return {
+    valid: score >= 70,
+    score: Math.max(0, score),
+    issues: issues.slice(0, 6),
+  };
+}
+
 export function generateMealPlan({
   recipes,
   answers,
@@ -452,9 +658,7 @@ export function generateMealPlan({
     };
   }
 
-  const random = seededRandom(
-    `${answers.firstName}|${answers.age || ''}|${answers.goalWeightKg || ''}|${answers.biggestChallenge}|${answers.mainGoal}|${seedSalt}`
-  );
+  const baseSeed = `${answers.firstName}|${answers.age || ''}|${answers.goalWeightKg || ''}|${answers.biggestChallenge}|${answers.mainGoal}|${seedSalt}`;
 
   const requiresSnack = answers.mealsPerDay >= 4;
   const mealTypesForDay: MealType[] = requiresSnack ? ['breakfast', 'lunch', 'dinner', 'snack'] : ['breakfast', 'lunch', 'dinner'];
@@ -489,125 +693,181 @@ export function generateMealPlan({
   }
 
   const fallbackCatalog = catalog;
-  if (candidatePools.breakfast.length === 0) candidatePools.breakfast = fallbackCatalog;
-  if (candidatePools.lunch.length === 0) candidatePools.lunch = fallbackCatalog;
-  if (candidatePools.dinner.length === 0) candidatePools.dinner = fallbackCatalog;
+  const relaxedPoolForMealType = (mealType: MealType) => {
+    const base = fallbackCatalog.filter((recipe) =>
+      mealType === 'snack' ? recipe.mealType === 'snack' || recipe.mealType === 'breakfast' : recipe.mealType === mealType
+    );
+    const relaxedMatches = base.filter((recipe) => recipePassesMealPlanningHeuristics(recipe, mealType, 2));
+    if (relaxedMatches.length > 0) return relaxedMatches;
+    if (base.length > 0) return base;
+    return fallbackCatalog;
+  };
+
+  if (candidatePools.breakfast.length === 0) candidatePools.breakfast = relaxedPoolForMealType('breakfast');
+  if (candidatePools.lunch.length === 0) candidatePools.lunch = relaxedPoolForMealType('lunch');
+  if (candidatePools.dinner.length === 0) candidatePools.dinner = relaxedPoolForMealType('dinner');
   if (candidatePools.snack.length === 0) {
-    candidatePools.snack = candidatePools.breakfast.length > 0 ? candidatePools.breakfast : fallbackCatalog;
+    candidatePools.snack = relaxedPoolForMealType('snack');
   }
 
   const useMealPrepPattern = answers.groceryPreference === 'meal prep friendly';
-  const mealPrepBases = useMealPrepPattern
-    ? {
-        breakfast: pickMealPrepBaseRecipes({ candidates: candidatePools.breakfast, mealType: 'breakfast', random }),
-        lunch: pickMealPrepBaseRecipes({ candidates: candidatePools.lunch, mealType: 'lunch', random }),
-        dinner: pickMealPrepBaseRecipes({ candidates: candidatePools.dinner, mealType: 'dinner', random }),
-        snack: pickMealPrepBaseRecipes({ candidates: candidatePools.snack, mealType: 'snack', random }),
-      }
-    : {
-        breakfast: [] as Recipe[],
-        lunch: [] as Recipe[],
-        dinner: [] as Recipe[],
-        snack: [] as Recipe[],
-      };
-  const days: MealPlanDay[] = [];
   const recipeMap = new Map(catalog.map((recipe) => [recipe.id, recipe]));
-  let lastBreakfastId = '';
-  let lastLunchId = '';
-  let lastDinnerId = '';
-  let lastSnackId = '';
+  const poolSizes = {
+    breakfast: candidatePools.breakfast.length,
+    lunch: candidatePools.lunch.length,
+    dinner: candidatePools.dinner.length,
+  };
 
-  for (let dayIndex = 0; dayIndex < MEAL_PLAN_DAYS.length; dayIndex += 1) {
-    const breakfastRecipe = useMealPrepPattern
-      ? selectMealPrepRecipe({
-          baseRecipes: mealPrepBases.breakfast,
-          dayIndex,
-          mealType: 'breakfast',
-          fallbackPool: candidatePools.breakfast,
-        })
-      : pickVariedRecipe({
-          candidates: candidatePools.breakfast,
-          dayIndex,
-          random,
-          lastRecipeId: lastBreakfastId,
-        });
-    const lunchRecipe = useMealPrepPattern
-      ? selectMealPrepRecipe({
-          baseRecipes: mealPrepBases.lunch,
-          dayIndex,
-          mealType: 'lunch',
-          fallbackPool: candidatePools.lunch,
-        })
-      : pickVariedRecipe({
-          candidates: candidatePools.lunch,
-          dayIndex,
-          random,
-          lastRecipeId: lastLunchId,
-        });
-    const dinnerRecipe = useMealPrepPattern
-      ? selectMealPrepRecipe({
-          baseRecipes: mealPrepBases.dinner,
-          dayIndex,
-          mealType: 'dinner',
-          fallbackPool: candidatePools.dinner,
-        })
-      : pickVariedRecipe({
-          candidates: candidatePools.dinner,
-          dayIndex,
-          random,
-          lastRecipeId: lastDinnerId,
-        });
+  const buildDaysForAttempt = (attemptIndex: number) => {
+    const random = seededRandom(`${baseSeed}|attempt:${attemptIndex}`);
+    const mealPrepBases = useMealPrepPattern
+      ? {
+          breakfast: pickMealPrepBaseRecipes({ candidates: candidatePools.breakfast, mealType: 'breakfast', random }),
+          lunch: pickMealPrepBaseRecipes({ candidates: candidatePools.lunch, mealType: 'lunch', random }),
+          dinner: pickMealPrepBaseRecipes({ candidates: candidatePools.dinner, mealType: 'dinner', random }),
+          snack: pickMealPrepBaseRecipes({ candidates: candidatePools.snack, mealType: 'snack', random }),
+        }
+      : {
+          breakfast: [] as Recipe[],
+          lunch: [] as Recipe[],
+          dinner: [] as Recipe[],
+          snack: [] as Recipe[],
+        };
 
-    const breakfastId =
-      breakfastRecipe?.id ||
-      candidatePools.breakfast[dayIndex % candidatePools.breakfast.length]?.id ||
-      fallbackCatalog[dayIndex % fallbackCatalog.length]?.id;
-    const lunchId =
-      lunchRecipe?.id ||
-      candidatePools.lunch[dayIndex % candidatePools.lunch.length]?.id ||
-      fallbackCatalog[(dayIndex + 1) % fallbackCatalog.length]?.id;
-    const dinnerId =
-      dinnerRecipe?.id ||
-      candidatePools.dinner[dayIndex % candidatePools.dinner.length]?.id ||
-      fallbackCatalog[(dayIndex + 2) % fallbackCatalog.length]?.id;
+    const days: MealPlanDay[] = [];
+    let lastBreakfastId = '';
+    let lastLunchId = '';
+    let lastDinnerId = '';
+    let lastSnackId = '';
 
-    const snackRecipe = requiresSnack
-      ? useMealPrepPattern
+    for (let dayIndex = 0; dayIndex < MEAL_PLAN_DAYS.length; dayIndex += 1) {
+      const breakfastRecipe = useMealPrepPattern
         ? selectMealPrepRecipe({
-            baseRecipes: mealPrepBases.snack,
+            baseRecipes: mealPrepBases.breakfast,
             dayIndex,
-            mealType: 'snack',
-            fallbackPool: candidatePools.snack.length > 0 ? candidatePools.snack : candidatePools.breakfast,
+            mealType: 'breakfast',
+            fallbackPool: candidatePools.breakfast,
           })
         : pickVariedRecipe({
-            candidates: candidatePools.snack.length > 0 ? candidatePools.snack : candidatePools.breakfast,
+            candidates: candidatePools.breakfast,
             dayIndex,
             random,
-            lastRecipeId: lastSnackId,
+            lastRecipeId: lastBreakfastId,
+          });
+      const lunchRecipe = useMealPrepPattern
+        ? selectMealPrepRecipe({
+            baseRecipes: mealPrepBases.lunch,
+            dayIndex,
+            mealType: 'lunch',
+            fallbackPool: candidatePools.lunch,
           })
-      : undefined;
-    const snacks = snackRecipe?.id ? [snackRecipe.id] : [];
+        : pickVariedRecipe({
+            candidates: candidatePools.lunch,
+            dayIndex,
+            random,
+            lastRecipeId: lastLunchId,
+          });
+      const dinnerRecipe = useMealPrepPattern
+        ? selectMealPrepRecipe({
+            baseRecipes: mealPrepBases.dinner,
+            dayIndex,
+            mealType: 'dinner',
+            fallbackPool: candidatePools.dinner,
+          })
+        : pickVariedRecipe({
+            candidates: candidatePools.dinner,
+            dayIndex,
+            random,
+            lastRecipeId: lastDinnerId,
+          });
 
-    const day: MealPlanDay = {
-      dayIndex,
-      label: MEAL_PLAN_DAYS[dayIndex],
-      meals: {
-        breakfast: breakfastId,
-        lunch: lunchId,
-        dinner: dinnerId,
-        snacks: snacks.length > 0 ? snacks : undefined,
-      },
-    };
-    day.totals = calculateDayTotals(day, recipeMap);
-    days.push(day);
-    lastBreakfastId = breakfastId || lastBreakfastId;
-    lastLunchId = lunchId || lastLunchId;
-    lastDinnerId = dinnerId || lastDinnerId;
-    lastSnackId = snacks[0] || lastSnackId;
+      const breakfastId =
+        breakfastRecipe?.id ||
+        candidatePools.breakfast[dayIndex % candidatePools.breakfast.length]?.id ||
+        fallbackCatalog[dayIndex % fallbackCatalog.length]?.id;
+      const lunchId =
+        lunchRecipe?.id ||
+        candidatePools.lunch[dayIndex % candidatePools.lunch.length]?.id ||
+        fallbackCatalog[(dayIndex + 1) % fallbackCatalog.length]?.id;
+      const dinnerId =
+        dinnerRecipe?.id ||
+        candidatePools.dinner[dayIndex % candidatePools.dinner.length]?.id ||
+        fallbackCatalog[(dayIndex + 2) % fallbackCatalog.length]?.id;
+
+      const snackRecipe = requiresSnack
+        ? useMealPrepPattern
+          ? selectMealPrepRecipe({
+              baseRecipes: mealPrepBases.snack,
+              dayIndex,
+              mealType: 'snack',
+              fallbackPool: candidatePools.snack.length > 0 ? candidatePools.snack : candidatePools.breakfast,
+            })
+          : pickVariedRecipe({
+              candidates: candidatePools.snack.length > 0 ? candidatePools.snack : candidatePools.breakfast,
+              dayIndex,
+              random,
+              lastRecipeId: lastSnackId,
+            })
+        : undefined;
+      const snacks = snackRecipe?.id ? [snackRecipe.id] : [];
+
+      const day: MealPlanDay = {
+        dayIndex,
+        label: MEAL_PLAN_DAYS[dayIndex],
+        meals: {
+          breakfast: breakfastId,
+          lunch: lunchId,
+          dinner: dinnerId,
+          snacks: snacks.length > 0 ? snacks : undefined,
+        },
+      };
+      day.totals = calculateDayTotals(day, recipeMap);
+      days.push(day);
+      lastBreakfastId = breakfastId || lastBreakfastId;
+      lastLunchId = lunchId || lastLunchId;
+      lastDinnerId = dinnerId || lastDinnerId;
+      lastSnackId = snacks[0] || lastSnackId;
+    }
+
+    return days;
+  };
+
+  let selectedDays: MealPlanDay[] = [];
+  let selectedQuality: PlanQualityCheckResult | null = null;
+  let bestScore = Number.NEGATIVE_INFINITY;
+
+  for (let attemptIndex = 0; attemptIndex < 8; attemptIndex += 1) {
+    const candidateDays = buildDaysForAttempt(attemptIndex);
+    const quality = evaluateGeneratedPlanQuality({
+      days: candidateDays,
+      recipeMap,
+      useMealPrepPattern,
+      poolSizes,
+    });
+
+    if (quality.score > bestScore) {
+      bestScore = quality.score;
+      selectedDays = candidateDays;
+      selectedQuality = quality;
+    }
+
+    if (quality.valid) {
+      selectedDays = candidateDays;
+      selectedQuality = quality;
+      if (attemptIndex > 0) {
+        notes.push('Plan quality check reranked your weekly meals for better practicality and variety.');
+      }
+      break;
+    }
   }
+
+  const days = selectedDays;
 
   if (days.some((day) => !day.meals.breakfast || !day.meals.lunch || !day.meals.dinner)) {
     notes.push('Some meals use fallback matching because available recipes were limited for your profile.');
+  }
+  if (selectedQuality && !selectedQuality.valid && selectedQuality.issues.length > 0) {
+    notes.push(`Plan quality fallback used: ${selectedQuality.issues[0]}`);
   }
 
   return {

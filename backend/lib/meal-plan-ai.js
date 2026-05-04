@@ -14,6 +14,46 @@ const MEAL_PREP_BASE_COUNTS = {
   dinner: 2,
   snack: 2,
 };
+const BREAKFAST_MAX_CALORIES_STRICT = 620;
+const BREAKFAST_MAX_CALORIES_RELAXED = 760;
+const BREAKFAST_MAX_TOTAL_MINUTES_STRICT = 45;
+const BREAKFAST_MAX_TOTAL_MINUTES_RELAXED = 60;
+const BREAKFAST_MAX_INGREDIENTS_STRICT = 14;
+const MAIN_MEAL_MAX_TOTAL_MINUTES_STRICT = 90;
+const MAIN_MEAL_MAX_TOTAL_MINUTES_RELAXED = 110;
+const LUNCH_MIN_CALORIES_STRICT = 280;
+const LUNCH_MIN_PROTEIN_STRICT = 14;
+const DINNER_MIN_CALORIES_STRICT = 320;
+const DINNER_MIN_PROTEIN_STRICT = 16;
+const BREAKFAST_HEAVY_KEYWORDS = [
+  'main course',
+  'dinner',
+  'lunch',
+  'curry',
+  'risotto',
+  'roast',
+  'stew',
+  'pho',
+  'laksa',
+  'noodle soup',
+  'stir fry',
+];
+const SWEET_OR_SNACK_KEYWORDS = [
+  'mousse',
+  'smoothie',
+  'bircher',
+  'muesli',
+  'dessert',
+  'cake',
+  'cheesecake',
+  'tart',
+  'slice',
+  'cookie',
+  'biscuit',
+  'snack',
+  'beverage',
+  'drink',
+];
 
 function hashSeed(input) {
   const text = String(input || '');
@@ -81,16 +121,85 @@ function pickVariedId({ pool, dayIndex, seedOffset = 0, lastId = '' }) {
   return picked;
 }
 
+function normalizeText(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function containsAny(haystack, needles) {
+  const source = normalizeText(haystack);
+  return needles.some((needle) => source.includes(needle));
+}
+
+function recipeDescriptor(recipe) {
+  const cardTags = Array.isArray(recipe?.source?.cardTags) ? recipe.source.cardTags : [];
+  const collections = Array.isArray(recipe?.source?.collections) ? recipe.source.collections : [];
+  const cuisines = Array.isArray(recipe?.source?.cuisines) ? recipe.source.cuisines : [];
+  const dietaryTags = Array.isArray(recipe?.dietaryTags) ? recipe.dietaryTags : [];
+  return normalizeText([
+    recipe?.title || '',
+    recipe?.description || '',
+    ...dietaryTags,
+    ...cardTags,
+    ...collections,
+    ...cuisines,
+  ].join(' '));
+}
+
+function estimateTotalMinutes(recipe) {
+  const total = Number(recipe?.totalTimeMinutes || 0);
+  if (Number.isFinite(total) && total > 0) return total;
+  const prep = Number(recipe?.prepTimeMinutes || 0);
+  const cook = Number(recipe?.cookTimeMinutes || 0);
+  if (Number.isFinite(prep) && Number.isFinite(cook) && prep > 0 && cook > 0) return prep + cook;
+  if (Number.isFinite(prep) && prep > 0) return prep;
+  if (Number.isFinite(cook) && cook > 0) return cook;
+  return 0;
+}
+
 function isMainMealCandidate(recipe) {
   const calories = Number(recipe?.calories || 0);
   const protein = Number(recipe?.protein || 0);
-  const descriptor = `${String(recipe?.title || '')} ${(Array.isArray(recipe?.dietaryTags) ? recipe.dietaryTags.join(' ') : '')}`.toLowerCase();
-  if (
-    /(mousse|smoothie|bircher|muesli|dessert|cake|cheesecake|tartlet|snack|beverage)/.test(descriptor)
-  ) {
+  const descriptor = recipeDescriptor(recipe);
+  if (containsAny(descriptor, SWEET_OR_SNACK_KEYWORDS)) return false;
+  if (calories > 0 && calories < 260 && protein < 16) return false;
+  return true;
+}
+
+function isBreakfastMealCandidate(recipe, stage = 1) {
+  const descriptor = recipeDescriptor(recipe);
+  const calories = Number(recipe?.calories || 0);
+  const totalMinutes = estimateTotalMinutes(recipe);
+  const ingredientCount = Array.isArray(recipe?.ingredients) ? recipe.ingredients.length : 0;
+
+  if (containsAny(
+    descriptor,
+    SWEET_OR_SNACK_KEYWORDS.filter((entry) => !['bircher', 'muesli', 'smoothie'].includes(entry)),
+  )) {
     return false;
   }
-  if (calories > 0 && calories < 260 && protein < 16) return false;
+  if (stage === 1 && containsAny(descriptor, BREAKFAST_HEAVY_KEYWORDS)) return false;
+  if (stage <= 2 && calories > (stage === 1 ? BREAKFAST_MAX_CALORIES_STRICT : BREAKFAST_MAX_CALORIES_RELAXED)) return false;
+  if (stage <= 2 && totalMinutes > (stage === 1 ? BREAKFAST_MAX_TOTAL_MINUTES_STRICT : BREAKFAST_MAX_TOTAL_MINUTES_RELAXED)) return false;
+  if (stage === 1 && ingredientCount > BREAKFAST_MAX_INGREDIENTS_STRICT) return false;
+  return true;
+}
+
+function isMainMealPlanningCandidate(recipe, mealType, stage = 1) {
+  if (!isMainMealCandidate(recipe)) return false;
+  const descriptor = recipeDescriptor(recipe);
+  const calories = Number(recipe?.calories || 0);
+  const protein = Number(recipe?.protein || 0);
+  const totalMinutes = estimateTotalMinutes(recipe);
+  const isStrict = stage === 1;
+
+  if (containsAny(descriptor, SWEET_OR_SNACK_KEYWORDS)) return false;
+  if (stage <= 2 && totalMinutes > (isStrict ? MAIN_MEAL_MAX_TOTAL_MINUTES_STRICT : MAIN_MEAL_MAX_TOTAL_MINUTES_RELAXED)) return false;
+  if (isStrict) {
+    const minCalories = mealType === 'dinner' ? DINNER_MIN_CALORIES_STRICT : LUNCH_MIN_CALORIES_STRICT;
+    const minProtein = mealType === 'dinner' ? DINNER_MIN_PROTEIN_STRICT : LUNCH_MIN_PROTEIN_STRICT;
+    if (calories > 0 && calories < minCalories && protein < minProtein) return false;
+  }
+  if (stage <= 2 && calories > 1200) return false;
   return true;
 }
 
@@ -103,6 +212,17 @@ function prioritizeByCuisine(pool, cuisinePool) {
   return [...new Set([...preferred, ...remaining])];
 }
 
+function buildRelaxedPoolByMealType(recipesById, mealType) {
+  const source = [...recipesById.values()].filter((recipe) => recipe.mealType === mealType);
+  if (mealType === 'breakfast') {
+    return source.filter((recipe) => isBreakfastMealCandidate(recipe, 2)).map((recipe) => recipe.id);
+  }
+  if (mealType === 'lunch' || mealType === 'dinner') {
+    return source.filter((recipe) => isMainMealPlanningCandidate(recipe, mealType, 2)).map((recipe) => recipe.id);
+  }
+  return source.map((recipe) => recipe.id);
+}
+
 export function generateFallbackMealPlan({ recipes, includeSnack = false, seedSalt = '', answers = {} }) {
   const uniqueById = new Map();
   const preferredCuisines = normalizeCuisineList(answers?.preferredCuisines);
@@ -112,10 +232,18 @@ export function generateFallbackMealPlan({ recipes, includeSnack = false, seedSa
     if (!id || uniqueById.has(id)) continue;
     uniqueById.set(id, {
       id,
+      title: String(recipe?.title || ''),
+      description: String(recipe?.description || ''),
       mealType: normalizeMealType(recipe?.mealType),
       cuisines: readRecipeCuisines(recipe),
       calories: Number(recipe?.calories || 0),
       protein: Number(recipe?.protein || 0),
+      prepTimeMinutes: Number(recipe?.prepTimeMinutes || 0),
+      cookTimeMinutes: Number(recipe?.cookTimeMinutes || 0),
+      totalTimeMinutes: Number(recipe?.totalTimeMinutes || 0),
+      dietaryTags: Array.isArray(recipe?.dietaryTags) ? recipe.dietaryTags : [],
+      ingredients: Array.isArray(recipe?.ingredients) ? recipe.ingredients : [],
+      source: recipe?.source && typeof recipe.source === 'object' ? recipe.source : {},
     });
   }
 
@@ -137,7 +265,19 @@ export function generateFallbackMealPlan({ recipes, includeSnack = false, seedSa
 
   for (const recipe of uniqueById.values()) {
     if (recipe.mealType && poolByType[recipe.mealType]) {
-      if (recipe.mealType === 'snack' || isMainMealCandidate(recipe)) {
+      let allowed = false;
+      if (recipe.mealType === 'breakfast') {
+        allowed = isBreakfastMealCandidate(recipe, 1);
+      } else if (recipe.mealType === 'lunch' || recipe.mealType === 'dinner') {
+        allowed = isMainMealPlanningCandidate(recipe, recipe.mealType, 1);
+      } else if (recipe.mealType === 'snack') {
+        const descriptor = recipeDescriptor(recipe);
+        const calories = Number(recipe?.calories || 0);
+        const totalMinutes = estimateTotalMinutes(recipe);
+        allowed = !containsAny(descriptor, BREAKFAST_HEAVY_KEYWORDS) && calories <= 550 && totalMinutes <= 45;
+      }
+
+      if (allowed) {
         poolByType[recipe.mealType].push(recipe.id);
         if (recipeMatchesPreferredCuisines(recipe, preferredCuisines)) {
           cuisinePoolByType[recipe.mealType].push(recipe.id);
@@ -146,106 +286,150 @@ export function generateFallbackMealPlan({ recipes, includeSnack = false, seedSa
     }
   }
 
-  const breakfastPool = poolByType.breakfast.length > 0 ? prioritizeByCuisine(poolByType.breakfast, cuisinePoolByType.breakfast) : allRecipeIds;
-  const lunchPool = poolByType.lunch.length > 0 ? prioritizeByCuisine(poolByType.lunch, cuisinePoolByType.lunch) : allRecipeIds;
-  const dinnerPool = poolByType.dinner.length > 0 ? prioritizeByCuisine(poolByType.dinner, cuisinePoolByType.dinner) : allRecipeIds;
+  const relaxedBreakfastPool = buildRelaxedPoolByMealType(uniqueById, 'breakfast');
+  const relaxedLunchPool = buildRelaxedPoolByMealType(uniqueById, 'lunch');
+  const relaxedDinnerPool = buildRelaxedPoolByMealType(uniqueById, 'dinner');
+  const relaxedSnackPool = buildRelaxedPoolByMealType(uniqueById, 'snack');
+
+  const breakfastPool = poolByType.breakfast.length > 0
+    ? prioritizeByCuisine(poolByType.breakfast, cuisinePoolByType.breakfast)
+    : (relaxedBreakfastPool.length > 0 ? relaxedBreakfastPool : allRecipeIds);
+  const lunchPool = poolByType.lunch.length > 0
+    ? prioritizeByCuisine(poolByType.lunch, cuisinePoolByType.lunch)
+    : (relaxedLunchPool.length > 0 ? relaxedLunchPool : allRecipeIds);
+  const dinnerPool = poolByType.dinner.length > 0
+    ? prioritizeByCuisine(poolByType.dinner, cuisinePoolByType.dinner)
+    : (relaxedDinnerPool.length > 0 ? relaxedDinnerPool : allRecipeIds);
   const snackPool =
     poolByType.snack.length > 0
       ? prioritizeByCuisine(poolByType.snack, cuisinePoolByType.snack)
-      : poolByType.breakfast.length > 0
-        ? poolByType.breakfast
+      : relaxedSnackPool.length > 0
+        ? relaxedSnackPool
+        : poolByType.breakfast.length > 0
+          ? poolByType.breakfast
         : allRecipeIds;
 
   const seedSource = `${seedSalt}|${JSON.stringify(answers || {})}|${allRecipeIds.length}`;
-  const seed = hashSeed(seedSource);
   const notes = [];
+  const recipeMetaMap = buildRecipeMetaMap(recipes);
 
-  const breakfastBase = pickBaseIds(breakfastPool, MEAL_PREP_BASE_COUNTS.breakfast, seed + 11);
-  const lunchBase = pickBaseIds(lunchPool, MEAL_PREP_BASE_COUNTS.lunch, seed + 23);
-  const dinnerBase = pickBaseIds(dinnerPool, MEAL_PREP_BASE_COUNTS.dinner, seed + 37);
-  const snackBase = pickBaseIds(snackPool, MEAL_PREP_BASE_COUNTS.snack, seed + 41);
-  let lastBreakfastId = '';
-  let lastLunchId = '';
-  let lastDinnerId = '';
-  let lastSnackId = '';
+  const buildDays = (attemptIndex) => {
+    const seed = hashSeed(`${seedSource}|attempt:${attemptIndex}`);
+    const breakfastBase = pickBaseIds(breakfastPool, MEAL_PREP_BASE_COUNTS.breakfast, seed + 11);
+    const lunchBase = pickBaseIds(lunchPool, MEAL_PREP_BASE_COUNTS.lunch, seed + 23);
+    const dinnerBase = pickBaseIds(dinnerPool, MEAL_PREP_BASE_COUNTS.dinner, seed + 37);
+    const snackBase = pickBaseIds(snackPool, MEAL_PREP_BASE_COUNTS.snack, seed + 41);
 
-  const days = PLAN_DAY_LABELS.map((label, dayIndex) => {
-    const breakfast = useMealPrepPattern
-      ? selectMealPrepId({
-          baseIds: breakfastBase,
-          fallbackPool: breakfastPool,
-          dayIndex,
-          mealType: 'breakfast',
-        })
-      : pickVariedId({
-          pool: breakfastPool,
-          dayIndex,
-          seedOffset: seed + 11,
-          lastId: lastBreakfastId,
-        });
-    const lunch = useMealPrepPattern
-      ? selectMealPrepId({
-          baseIds: lunchBase,
-          fallbackPool: lunchPool,
-          dayIndex,
-          mealType: 'lunch',
-        })
-      : pickVariedId({
-          pool: lunchPool,
-          dayIndex,
-          seedOffset: seed + 23,
-          lastId: lastLunchId,
-        });
-    const dinner = useMealPrepPattern
-      ? selectMealPrepId({
-          baseIds: dinnerBase,
-          fallbackPool: dinnerPool,
-          dayIndex,
-          mealType: 'dinner',
-        })
-      : pickVariedId({
-          pool: dinnerPool,
-          dayIndex,
-          seedOffset: seed + 37,
-          lastId: lastDinnerId,
-        });
-    const snack = includeSnack
-      ? useMealPrepPattern
+    let lastBreakfastId = '';
+    let lastLunchId = '';
+    let lastDinnerId = '';
+    let lastSnackId = '';
+
+    return PLAN_DAY_LABELS.map((label, dayIndex) => {
+      const breakfast = useMealPrepPattern
         ? selectMealPrepId({
-            baseIds: snackBase,
-            fallbackPool: snackPool,
+            baseIds: breakfastBase,
+            fallbackPool: breakfastPool,
             dayIndex,
-            mealType: 'snack',
+            mealType: 'breakfast',
           })
         : pickVariedId({
-            pool: snackPool,
+            pool: breakfastPool,
             dayIndex,
-            seedOffset: seed + 41,
-            lastId: lastSnackId,
+            seedOffset: seed + 11,
+            lastId: lastBreakfastId,
+          });
+      const lunch = useMealPrepPattern
+        ? selectMealPrepId({
+            baseIds: lunchBase,
+            fallbackPool: lunchPool,
+            dayIndex,
+            mealType: 'lunch',
           })
-      : '';
+        : pickVariedId({
+            pool: lunchPool,
+            dayIndex,
+            seedOffset: seed + 23,
+            lastId: lastLunchId,
+          });
+      const dinner = useMealPrepPattern
+        ? selectMealPrepId({
+            baseIds: dinnerBase,
+            fallbackPool: dinnerPool,
+            dayIndex,
+            mealType: 'dinner',
+          })
+        : pickVariedId({
+            pool: dinnerPool,
+            dayIndex,
+            seedOffset: seed + 37,
+            lastId: lastDinnerId,
+          });
+      const snack = includeSnack
+        ? useMealPrepPattern
+          ? selectMealPrepId({
+              baseIds: snackBase,
+              fallbackPool: snackPool,
+              dayIndex,
+              mealType: 'snack',
+            })
+          : pickVariedId({
+              pool: snackPool,
+              dayIndex,
+              seedOffset: seed + 41,
+              lastId: lastSnackId,
+            })
+        : '';
 
-    lastBreakfastId = breakfast || lastBreakfastId;
-    lastLunchId = lunch || lastLunchId;
-    lastDinnerId = dinner || lastDinnerId;
-    lastSnackId = snack || lastSnackId;
+      lastBreakfastId = breakfast || lastBreakfastId;
+      lastLunchId = lunch || lastLunchId;
+      lastDinnerId = dinner || lastDinnerId;
+      lastSnackId = snack || lastSnackId;
 
-    return {
-      dayIndex,
-      label,
-      meals: {
-        breakfast: breakfast || allRecipeIds[(seed + dayIndex) % allRecipeIds.length],
-        lunch: lunch || allRecipeIds[(seed + dayIndex + 1) % allRecipeIds.length],
-        dinner: dinner || allRecipeIds[(seed + dayIndex + 2) % allRecipeIds.length],
-        snacks: includeSnack && snack ? [snack] : undefined,
-      },
-    };
-  });
+      return {
+        dayIndex,
+        label,
+        meals: {
+          breakfast: breakfast || allRecipeIds[(seed + dayIndex) % allRecipeIds.length],
+          lunch: lunch || allRecipeIds[(seed + dayIndex + 1) % allRecipeIds.length],
+          dinner: dinner || allRecipeIds[(seed + dayIndex + 2) % allRecipeIds.length],
+          snacks: includeSnack && snack ? [snack] : undefined,
+        },
+      };
+    });
+  };
+
+  let selectedDays = [];
+  let selectedQuality = null;
+  let bestScore = Number.NEGATIVE_INFINITY;
+
+  for (let attemptIndex = 0; attemptIndex < 8; attemptIndex += 1) {
+    const attemptDays = buildDays(attemptIndex);
+    const quality = calculatePlanQuality({ days: attemptDays }, recipeMetaMap, answers);
+    if (quality.score > bestScore) {
+      bestScore = quality.score;
+      selectedDays = attemptDays;
+      selectedQuality = quality;
+    }
+    if (quality.valid) {
+      selectedDays = attemptDays;
+      selectedQuality = quality;
+      if (attemptIndex > 0) {
+        notes.push('Fallback planner reranked meals for better practicality and variety.');
+      }
+      break;
+    }
+  }
+
+  const days = selectedDays;
 
   const hasMissingCoreMeals = days.some((day) =>
     CORE_MEAL_TYPES.some((mealType) => !String(day?.meals?.[mealType] || '').trim()),
   );
   if (hasMissingCoreMeals) return null;
+  if (selectedQuality && !selectedQuality.valid && selectedQuality.issues.length > 0) {
+    notes.push(`Fallback quality warning: ${selectedQuality.issues[0]}`);
+  }
 
   return {
     days,
@@ -299,13 +483,21 @@ function compactRecipe(recipe) {
   return {
     id: String(recipe?.id || ''),
     title: String(recipe?.title || ''),
+    description: String(recipe?.description || ''),
     mealType: String(recipe?.mealType || ''),
     calories: Number.isFinite(Number(recipe?.calories)) ? Number(recipe.calories) : null,
     protein: Number.isFinite(Number(recipe?.protein)) ? Number(recipe.protein) : null,
+    carbs: Number.isFinite(Number(recipe?.carbs)) ? Number(recipe.carbs) : null,
+    fat: Number.isFinite(Number(recipe?.fat)) ? Number(recipe.fat) : null,
     prepTimeMinutes: Number.isFinite(Number(recipe?.prepTimeMinutes)) ? Number(recipe.prepTimeMinutes) : null,
+    cookTimeMinutes: Number.isFinite(Number(recipe?.cookTimeMinutes)) ? Number(recipe.cookTimeMinutes) : null,
+    totalTimeMinutes: Number.isFinite(Number(recipe?.totalTimeMinutes)) ? Number(recipe.totalTimeMinutes) : null,
     dietaryTags: Array.isArray(recipe?.dietaryTags) ? recipe.dietaryTags.slice(0, 8) : [],
     allergens: Array.isArray(recipe?.allergens) ? recipe.allergens.slice(0, 8) : [],
     cuisines: Array.isArray(recipe?.source?.cuisines) ? recipe.source.cuisines.slice(0, 6) : [],
+    cardTags: Array.isArray(recipe?.source?.cardTags) ? recipe.source.cardTags.slice(0, 12) : [],
+    collections: Array.isArray(recipe?.source?.collections) ? recipe.source.collections.slice(0, 10) : [],
+    ingredients: Array.isArray(recipe?.ingredients) ? recipe.ingredients.map((entry) => String(entry?.name || '').trim()).filter(Boolean).slice(0, 18) : [],
     estimatedCost: recipe?.estimatedCost ? String(recipe.estimatedCost) : '',
     dietitian: String(recipe?.source?.dietitian || ''),
   };
@@ -360,60 +552,104 @@ function buildRecipeMetaMap(recipes) {
     const id = String(recipe?.id || '').trim();
     if (!id) continue;
     map.set(id, {
+      id,
       mealType: normalizeMealType(recipe?.mealType),
       calories: Number(recipe?.calories || 0),
       protein: Number(recipe?.protein || 0),
       title: String(recipe?.title || ''),
+      description: String(recipe?.description || ''),
+      prepTimeMinutes: Number(recipe?.prepTimeMinutes || 0),
+      cookTimeMinutes: Number(recipe?.cookTimeMinutes || 0),
+      totalTimeMinutes: Number(recipe?.totalTimeMinutes || 0),
+      ingredients: Array.isArray(recipe?.ingredients) ? recipe.ingredients : [],
       dietaryTags: Array.isArray(recipe?.dietaryTags) ? recipe.dietaryTags : [],
+      source: recipe?.source && typeof recipe.source === 'object' ? recipe.source : {},
     });
   }
   return map;
 }
 
-function isBreakfastSlotAllowed(meta) {
-  if (!meta) return false;
-  return meta.mealType === 'breakfast' || meta.mealType === 'snack';
-}
+function calculatePlanQuality(plan, recipeMetaMap, answers = {}) {
+  if (!plan || !Array.isArray(plan.days) || plan.days.length !== 7) {
+    return { valid: false, score: 0, issues: ['Plan must include 7 days.'] };
+  }
 
-function isMainSlotAllowed(meta) {
-  if (!meta) return false;
-  if (meta.mealType !== 'lunch' && meta.mealType !== 'dinner') return false;
-  return isMainMealCandidate(meta);
-}
-
-function planPassesQualityChecks(plan, recipeMetaMap, answers = {}) {
-  if (!plan || !Array.isArray(plan.days) || plan.days.length !== 7) return false;
-
+  let score = 100;
+  const issues = [];
+  const criticalIssues = [];
   const breakfastCounts = new Map();
   const lunchCounts = new Map();
   const dinnerCounts = new Map();
+
   for (const day of plan.days) {
-    const breakfast = String(day?.meals?.breakfast || '');
-    const lunch = String(day?.meals?.lunch || '');
-    const dinner = String(day?.meals?.dinner || '');
+    const breakfast = String(day?.meals?.breakfast || '').trim();
+    const lunch = String(day?.meals?.lunch || '').trim();
+    const dinner = String(day?.meals?.dinner || '').trim();
+
     const breakfastMeta = recipeMetaMap.get(breakfast);
     const lunchMeta = recipeMetaMap.get(lunch);
     const dinnerMeta = recipeMetaMap.get(dinner);
+    if (!breakfastMeta || !lunchMeta || !dinnerMeta) {
+      criticalIssues.push(`Missing recipe metadata for ${day?.label || 'a day'}.`);
+      continue;
+    }
 
-    if (!isBreakfastSlotAllowed(breakfastMeta)) return false;
-    if (!isMainSlotAllowed(lunchMeta)) return false;
-    if (!isMainSlotAllowed(dinnerMeta)) return false;
+    if (!isBreakfastMealCandidate(breakfastMeta, 1)) {
+      criticalIssues.push(`Breakfast is too heavy or impractical on ${day?.label || 'a day'}.`);
+    }
+    if (!isMainMealPlanningCandidate(lunchMeta, 'lunch', 1)) {
+      criticalIssues.push(`Lunch is too light, too sweet, or impractical on ${day?.label || 'a day'}.`);
+    }
+    if (!isMainMealPlanningCandidate(dinnerMeta, 'dinner', 1)) {
+      criticalIssues.push(`Dinner is too light, too sweet, or impractical on ${day?.label || 'a day'}.`);
+    }
+
+    if (breakfast === lunch || breakfast === dinner || lunch === dinner) {
+      score -= 8;
+      issues.push(`Repeated core meal in the same day (${day?.label || 'day'}).`);
+    }
 
     breakfastCounts.set(breakfast, (breakfastCounts.get(breakfast) || 0) + 1);
     lunchCounts.set(lunch, (lunchCounts.get(lunch) || 0) + 1);
     dinnerCounts.set(dinner, (dinnerCounts.get(dinner) || 0) + 1);
+
+    const dailyCalories = Number(breakfastMeta.calories || 0) + Number(lunchMeta.calories || 0) + Number(dinnerMeta.calories || 0);
+    if (dailyCalories > 2400) {
+      score -= 6;
+      issues.push(`Daily energy is too high on ${day?.label || 'a day'}.`);
+    }
   }
 
   const useMealPrepPattern = String(answers?.groceryPreference || '').toLowerCase() === 'meal prep friendly';
   const breakfastMax = useMealPrepPattern ? 5 : 4;
   const lunchMax = useMealPrepPattern ? 4 : 3;
   const dinnerMax = useMealPrepPattern ? 4 : 3;
+  if ([...breakfastCounts.values()].some((count) => count > breakfastMax)) {
+    score -= 10;
+    issues.push('Breakfast variety is too low for the week.');
+  }
+  if ([...lunchCounts.values()].some((count) => count > lunchMax)) {
+    score -= 8;
+    issues.push('Lunch variety is too low for the week.');
+  }
+  if ([...dinnerCounts.values()].some((count) => count > dinnerMax)) {
+    score -= 8;
+    issues.push('Dinner variety is too low for the week.');
+  }
 
-  if ([...breakfastCounts.values()].some((count) => count > breakfastMax)) return false;
-  if ([...lunchCounts.values()].some((count) => count > lunchMax)) return false;
-  if ([...dinnerCounts.values()].some((count) => count > dinnerMax)) return false;
+  if (criticalIssues.length > 0) {
+    return {
+      valid: false,
+      score: Math.max(0, score - 30 - criticalIssues.length * 8),
+      issues: [...criticalIssues, ...issues].slice(0, 8),
+    };
+  }
 
-  return true;
+  return {
+    valid: score >= 70,
+    score: Math.max(0, score),
+    issues: issues.slice(0, 8),
+  };
 }
 
 async function callOpenAiForMealPlan({ answers, recipes, includeSnack, seedSalt }) {
@@ -424,15 +660,18 @@ async function callOpenAiForMealPlan({ answers, recipes, includeSnack, seedSalt 
   const compactRecipes = recipes.map(compactRecipe).filter((recipe) => recipe.id && recipe.title);
 
   const systemPrompt = [
-    'You are a clinical nutrition meal planner.',
+    'You are an Accredited Practising Dietitian (APD) creating practical weekly meal plans.',
     'Return valid JSON only. Do not include markdown.',
     'Build a 7-day plan with exactly one breakfast, lunch, and dinner each day.',
     includeSnack ? 'Include one snack id per day in snacks array.' : 'Do not include snacks unless explicitly requested.',
     'Use only recipe ids from the provided catalog. Never invent ids.',
+    'Use the full recipe catalog JSON and the onboarding requirements JSON to plan meals that are realistic for normal weekdays.',
     'Prefer high-protein options when possible and match dietary requirements/allergies.',
     'If preferredCuisines is provided, prioritize those cuisines while still ensuring a complete plan.',
+    'Avoid heavy or long-prep breakfasts unless no practical alternatives exist.',
+    'For lunch and dinner, avoid very light snack-like options and avoid dessert-style meals when substantial options exist.',
     'Avoid assigning the same recipe to all 7 days unless the catalog is extremely limited.',
-    'For lunch and dinner, avoid very light snack-like options when more substantial options exist.',
+    'Treat cuisine and meal-style preferences as soft preferences, not hard exclusions.',
     'Output schema:',
     '{"notes": string[], "days": [{"breakfast": "id","lunch":"id","dinner":"id","snacks":["id"]}]}',
   ].join('\n');
@@ -470,7 +709,7 @@ async function callOpenAiForMealPlan({ answers, recipes, includeSnack, seedSalt 
             content: [{ type: 'input_text', text: userPrompt }],
           },
         ],
-        max_output_tokens: 2200,
+        max_output_tokens: 2600,
       }),
       signal: controller.signal,
     });
@@ -492,6 +731,84 @@ async function callOpenAiForMealPlan({ answers, recipes, includeSnack, seedSalt 
   return extractResponseText(payload);
 }
 
+async function callOpenAiForPlanRepair({ answers, recipes, includeSnack, seedSalt, invalidPlan, qualityIssues }) {
+  const apiKey = process.env.OPENAI_API_KEY || '';
+  if (!apiKey) return null;
+
+  const model = process.env.OPENAI_MEAL_PLAN_MODEL || process.env.OPENAI_NOTES_MODEL || 'gpt-5-nano';
+  const compactRecipes = recipes.map(compactRecipe).filter((recipe) => recipe.id && recipe.title);
+  const issueList = Array.isArray(qualityIssues) ? qualityIssues.map((entry) => String(entry || '').trim()).filter(Boolean).slice(0, 8) : [];
+
+  const systemPrompt = [
+    'You are an Accredited Practising Dietitian (APD) reviewing and repairing a weekly meal plan.',
+    'Return valid JSON only. Do not include markdown.',
+    'Repair the weekly plan so it is practical, not repetitive, and aligned to user needs.',
+    'Use only recipe ids from the provided catalog. Never invent ids.',
+    'Keep breakfasts practical and avoid heavy long-prep breakfast picks when alternatives exist.',
+    'Keep lunch and dinner substantial (not dessert/snack-like) when alternatives exist.',
+    includeSnack ? 'Include one snack id per day in snacks array.' : 'Do not include snacks unless requested.',
+    'Output schema:',
+    '{"notes": string[], "days": [{"breakfast":"id","lunch":"id","dinner":"id","snacks":["id"]}]}',
+  ].join('\n');
+
+  const userPrompt = JSON.stringify(
+    {
+      mode: 'repair',
+      seedSalt,
+      includeSnack,
+      onboardingAnswers: answers,
+      qualityIssues: issueList,
+      invalidPlan,
+      recipeCatalog: compactRecipes,
+    },
+    null,
+    2,
+  );
+
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), OPENAI_MEAL_PLAN_TIMEOUT_MS);
+  let response;
+  try {
+    response = await fetch(OPENAI_RESPONSES_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        input: [
+          {
+            role: 'system',
+            content: [{ type: 'input_text', text: systemPrompt }],
+          },
+          {
+            role: 'user',
+            content: [{ type: 'input_text', text: userPrompt }],
+          },
+        ],
+        max_output_tokens: 2600,
+      }),
+      signal: controller.signal,
+    });
+  } catch (errorObject) {
+    if (errorObject?.name === 'AbortError') {
+      throw new Error(`OpenAI meal plan repair request timed out after ${OPENAI_MEAL_PLAN_TIMEOUT_MS}ms`);
+    }
+    throw errorObject;
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`OpenAI meal plan repair request failed (${response.status}): ${text}`);
+  }
+
+  const payload = await response.json();
+  return extractResponseText(payload);
+}
+
 export async function generateOpenAiMealPlan({ answers, recipes, includeSnack = false, seedSalt = '' }) {
   const validIds = new Set(recipes.map((recipe) => String(recipe?.id || '').trim()).filter(Boolean));
   const recipeMetaMap = buildRecipeMetaMap(recipes);
@@ -502,8 +819,24 @@ export async function generateOpenAiMealPlan({ answers, recipes, includeSnack = 
     const parsed = parseJsonFromText(outputText);
     const plan = validateAndNormalizePlan(parsed, validIds, includeSnack);
     if (!plan) return null;
-    if (!planPassesQualityChecks(plan, recipeMetaMap, answers)) return null;
-    return plan;
+    const quality = calculatePlanQuality(plan, recipeMetaMap, answers);
+    if (quality.valid) return plan;
+
+    const repairedOutputText = await callOpenAiForPlanRepair({
+      answers,
+      recipes,
+      includeSnack,
+      seedSalt,
+      invalidPlan: plan,
+      qualityIssues: quality.issues,
+    });
+    const repairedParsed = parseJsonFromText(repairedOutputText);
+    const repairedPlan = validateAndNormalizePlan(repairedParsed, validIds, includeSnack);
+    if (!repairedPlan) return null;
+    const repairedQuality = calculatePlanQuality(repairedPlan, recipeMetaMap, answers);
+    if (!repairedQuality.valid) return null;
+    repairedPlan.notes = [...(repairedPlan.notes || []), 'Dietitian quality review pass applied before finalising this plan.'].slice(0, 6);
+    return repairedPlan;
   } catch (error) {
     console.error('Meal plan AI generation failed:', error?.message || String(error));
     return null;
