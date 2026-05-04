@@ -33,6 +33,26 @@ function normalizeMealType(value) {
   return '';
 }
 
+function normalizeCuisineList(input) {
+  if (!Array.isArray(input)) return [];
+  return [...new Set(input.map((entry) => String(entry || '').trim().toLowerCase()).filter((entry) => entry && entry !== 'not specified' && entry !== 'no preference'))];
+}
+
+function readRecipeCuisines(recipe) {
+  const fromSource = Array.isArray(recipe?.source?.cuisines) ? recipe.source.cuisines : [];
+  const fromDirect = Array.isArray(recipe?.cuisines) ? recipe.cuisines : [];
+  return normalizeCuisineList([...fromSource, ...fromDirect]);
+}
+
+function recipeMatchesPreferredCuisines(recipe, preferredCuisines) {
+  if (!Array.isArray(preferredCuisines) || preferredCuisines.length === 0) return true;
+  const recipeCuisines = readRecipeCuisines(recipe);
+  if (recipeCuisines.length === 0) return false;
+  return preferredCuisines.some((preference) =>
+    recipeCuisines.some((cuisine) => cuisine === preference || cuisine.includes(preference) || preference.includes(cuisine)),
+  );
+}
+
 function pickBaseIds(pool, target, seedOffset) {
   const unique = [...new Set(Array.isArray(pool) ? pool.filter(Boolean) : [])];
   if (unique.length === 0) return [];
@@ -52,12 +72,14 @@ function selectMealPrepId({ baseIds, fallbackPool, dayIndex, mealType }) {
 
 export function generateFallbackMealPlan({ recipes, includeSnack = false, seedSalt = '', answers = {} }) {
   const uniqueById = new Map();
+  const preferredCuisines = normalizeCuisineList(answers?.preferredCuisines);
   for (const recipe of Array.isArray(recipes) ? recipes : []) {
     const id = String(recipe?.id || '').trim();
     if (!id || uniqueById.has(id)) continue;
     uniqueById.set(id, {
       id,
       mealType: normalizeMealType(recipe?.mealType),
+      cuisines: readRecipeCuisines(recipe),
     });
   }
 
@@ -70,19 +92,41 @@ export function generateFallbackMealPlan({ recipes, includeSnack = false, seedSa
     dinner: [],
     snack: [],
   };
+  const cuisinePoolByType = {
+    breakfast: [],
+    lunch: [],
+    dinner: [],
+    snack: [],
+  };
 
   for (const recipe of uniqueById.values()) {
     if (recipe.mealType && poolByType[recipe.mealType]) {
       poolByType[recipe.mealType].push(recipe.id);
+      if (recipeMatchesPreferredCuisines(recipe, preferredCuisines)) {
+        cuisinePoolByType[recipe.mealType].push(recipe.id);
+      }
     }
   }
 
-  const breakfastPool = poolByType.breakfast.length > 0 ? poolByType.breakfast : allRecipeIds;
-  const lunchPool = poolByType.lunch.length > 0 ? poolByType.lunch : allRecipeIds;
-  const dinnerPool = poolByType.dinner.length > 0 ? poolByType.dinner : allRecipeIds;
+  const breakfastPool =
+    cuisinePoolByType.breakfast.length > 0
+      ? cuisinePoolByType.breakfast
+      : poolByType.breakfast.length > 0
+        ? poolByType.breakfast
+        : allRecipeIds;
+  const lunchPool =
+    cuisinePoolByType.lunch.length > 0 ? cuisinePoolByType.lunch : poolByType.lunch.length > 0 ? poolByType.lunch : allRecipeIds;
+  const dinnerPool =
+    cuisinePoolByType.dinner.length > 0
+      ? cuisinePoolByType.dinner
+      : poolByType.dinner.length > 0
+        ? poolByType.dinner
+        : allRecipeIds;
   const snackPool =
-    poolByType.snack.length > 0
-      ? poolByType.snack
+    cuisinePoolByType.snack.length > 0
+      ? cuisinePoolByType.snack
+      : poolByType.snack.length > 0
+        ? poolByType.snack
       : poolByType.breakfast.length > 0
         ? poolByType.breakfast
         : allRecipeIds;
@@ -199,6 +243,7 @@ function compactRecipe(recipe) {
     prepTimeMinutes: Number.isFinite(Number(recipe?.prepTimeMinutes)) ? Number(recipe.prepTimeMinutes) : null,
     dietaryTags: Array.isArray(recipe?.dietaryTags) ? recipe.dietaryTags.slice(0, 8) : [],
     allergens: Array.isArray(recipe?.allergens) ? recipe.allergens.slice(0, 8) : [],
+    cuisines: Array.isArray(recipe?.source?.cuisines) ? recipe.source.cuisines.slice(0, 6) : [],
     estimatedCost: recipe?.estimatedCost ? String(recipe.estimatedCost) : '',
     dietitian: String(recipe?.source?.dietitian || ''),
   };
@@ -261,6 +306,7 @@ async function callOpenAiForMealPlan({ answers, recipes, includeSnack, seedSalt 
     includeSnack ? 'Include one snack id per day in snacks array.' : 'Do not include snacks unless explicitly requested.',
     'Use only recipe ids from the provided catalog. Never invent ids.',
     'Prefer high-protein options when possible and match dietary requirements/allergies.',
+    'If preferredCuisines is provided, prioritize those cuisines while still ensuring a complete plan.',
     'Output schema:',
     '{"notes": string[], "days": [{"breakfast": "id","lunch":"id","dinner":"id","snacks":["id"]}]}',
   ].join('\n');

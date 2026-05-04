@@ -48,6 +48,7 @@ function readInitialState(): WeightLossResetState {
       ? onboardingRaw?.answers?.dietaryRequirements || DEFAULT_ONBOARDING_ANSWERS.dietaryRequirements
       : DEFAULT_ONBOARDING_ANSWERS.dietaryRequirements,
     allergyChips: Array.isArray(onboardingRaw?.answers?.allergyChips) ? onboardingRaw?.answers?.allergyChips || [] : [],
+    preferredCuisines: Array.isArray(onboardingRaw?.answers?.preferredCuisines) ? onboardingRaw?.answers?.preferredCuisines || [] : [],
     supportAreas: Array.isArray(onboardingRaw?.answers?.supportAreas)
       ? onboardingRaw?.answers?.supportAreas || []
       : DEFAULT_ONBOARDING_ANSWERS.supportAreas,
@@ -248,4 +249,3 @@ export function useWeightLossResetState() {
     resetFlow,
   };
 }
-

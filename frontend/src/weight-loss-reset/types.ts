@@ -93,6 +93,7 @@ export interface OnboardingAnswers {
     | 'low prep'
     | 'vegetarian leaning'
     | 'no preference';
+  preferredCuisines: string[];
   supportWanted: 'yes' | 'not sure' | 'no';
   supportAreas: string[];
 }

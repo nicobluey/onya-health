@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, ArrowRight, CalendarDays, CheckCircle2 } from 'lucide-react';
 import {
   BIGGEST_CHALLENGE_OPTIONS,
+  CUISINE_PREFERENCE_OPTIONS,
   DIETARY_REQUIREMENT_OPTIONS,
   FELICITY_CALENDLY_URL,
   GROCERY_PREFERENCE_OPTIONS,
@@ -203,6 +204,20 @@ export default function OnboardingFlow({
       return {
         ...current,
         supportAreas: [...existing],
+      };
+    });
+  };
+
+  const togglePreferredCuisine = (value: string) => {
+    setAnswers((current) => {
+      const existing = new Set((current.preferredCuisines || []).map((entry) => entry.toLowerCase()));
+      const normalized = value.toLowerCase();
+      if (existing.has(normalized)) existing.delete(normalized);
+      else existing.add(normalized);
+
+      return {
+        ...current,
+        preferredCuisines: CUISINE_PREFERENCE_OPTIONS.filter((entry) => existing.has(entry.toLowerCase())),
       };
     });
   };
@@ -537,6 +552,21 @@ export default function OnboardingFlow({
               ))}
             </div>
           </div>
+
+          <div>
+            <p className="mb-2 text-sm font-semibold text-[#334155]">Cuisine preferences (optional)</p>
+            <div className="flex flex-wrap gap-2">
+              {CUISINE_PREFERENCE_OPTIONS.map((option) => (
+                <ChoiceButton
+                  key={option}
+                  active={(answers.preferredCuisines || []).map((entry) => entry.toLowerCase()).includes(option.toLowerCase())}
+                  onClick={() => togglePreferredCuisine(option)}
+                >
+                  {option}
+                </ChoiceButton>
+              ))}
+            </div>
+          </div>
         </div>
       )}
 
@@ -603,6 +633,7 @@ export default function OnboardingFlow({
               <p className="text-sm font-semibold text-[#18251e]">Food and support preferences</p>
               <p className="mt-1 text-sm text-[#5f7063]">Dietary: {answers.dietaryRequirements.join(', ')}</p>
               <p className="text-sm text-[#5f7063]">Meal style: {answers.preferredMealStyle}</p>
+              <p className="text-sm text-[#5f7063]">Cuisines: {answers.preferredCuisines.join(', ') || 'No cuisine preference selected'}</p>
               <p className="text-sm text-[#5f7063]">Support areas: {answers.supportAreas.join(', ') || 'Not selected yet'}</p>
             </div>
           </div>

@@ -41,6 +41,7 @@ export const DEFAULT_ONBOARDING_ANSWERS: OnboardingAnswers = {
   budgetPreference: 'balanced',
   groceryPreference: 'simple supermarket ingredients',
   preferredMealStyle: 'no preference',
+  preferredCuisines: [],
   supportWanted: 'yes',
   supportAreas: ['meal planning', 'accountability'],
 };
@@ -95,6 +96,23 @@ export const PREFERRED_MEAL_STYLE_OPTIONS = [
   'low prep',
   'vegetarian leaning',
   'no preference',
+] as const;
+
+export const CUISINE_PREFERENCE_OPTIONS = [
+  'Modern Australian',
+  'Asian',
+  'Indian',
+  'Mediterranean',
+  'Thai',
+  'Italian',
+  'Mexican',
+  'Turkish',
+  'Middle Eastern',
+  'Vietnamese',
+  'Chinese',
+  'American',
+  'Japanese',
+  'Malaysian',
 ] as const;
 
 export const FALLBACK_RECIPE_IMAGE_URL = '/nutrionist.webp';

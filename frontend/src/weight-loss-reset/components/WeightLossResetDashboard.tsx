@@ -154,10 +154,13 @@ function buildGenerationMessages(answers: OnboardingAnswers) {
       .filter(Boolean),
   ].slice(0, 4);
   const allergyLabel = allergyTerms.length > 0 ? toDisplayList(allergyTerms) : 'no listed allergy triggers';
+  const preferredCuisines = (answers.preferredCuisines || []).map((entry) => String(entry || '').trim()).filter(Boolean).slice(0, 4);
+  const cuisineLabel = preferredCuisines.length > 0 ? toDisplayList(preferredCuisines) : 'all cuisine styles';
 
   return [
     `Reviewing your intake preferences: ${dietaryLabel}.`,
     `Filtering recipes for ${allergyLabel}.`,
+    `Prioritising ${cuisineLabel} meals for your plan.`,
     `Matching ${answers.preferredMealStyle} meals across ${answers.mealsPerDay} meals per day.`,
     `Balancing calories and protein toward your goal: ${answers.mainGoal || 'sustainable progress'}.`,
     'Crafting your weekly plan and syncing groceries to each selected meal.',

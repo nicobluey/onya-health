@@ -60,6 +60,39 @@ function normalizeRequirements(requirements: string[]) {
   return withoutDefault.length > 0 ? withoutDefault : [];
 }
 
+function normalizeCuisinePreferences(preferences: string[]) {
+  const lowered = (preferences || []).map((item) => normalizeText(item)).filter(Boolean);
+  return [...new Set(lowered.filter((item) => item !== 'no preference' && item !== 'not specified'))];
+}
+
+function readUnknownStringArray(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => String(entry || '').trim()).filter(Boolean);
+  }
+  if (typeof value === 'string') {
+    return tokenizeCsvLike(value).map((entry) => entry.trim()).filter(Boolean);
+  }
+  return [] as string[];
+}
+
+function recipeCuisineTags(recipe: Recipe) {
+  const source = recipe.source && typeof recipe.source === 'object' ? (recipe.source as Record<string, unknown>) : {};
+  const cuisines = [
+    ...readUnknownStringArray(source.cuisines),
+    ...readUnknownStringArray(source.cardTags),
+  ].map((entry) => normalizeText(entry));
+  return [...new Set(cuisines.filter((entry) => entry && entry !== 'not specified'))];
+}
+
+function recipeMatchesCuisinePreferences(recipe: Recipe, preferences: string[]) {
+  if (preferences.length === 0) return true;
+  const cuisines = recipeCuisineTags(recipe);
+  if (cuisines.length === 0) return false;
+  return preferences.some((preference) =>
+    cuisines.some((cuisine) => cuisine === preference || cuisine.includes(preference) || preference.includes(cuisine))
+  );
+}
+
 function extractAllergyTerms(answers: OnboardingAnswers) {
   const fromChips = answers.allergyChips.map((chip) => chip.toLowerCase());
   const fromText = tokenizeCsvLike(answers.allergiesText);
@@ -124,6 +157,7 @@ function recipePreferenceScore(recipe: Recipe, answers: OnboardingAnswers) {
   let score = 0;
   const title = recipe.title.toLowerCase();
   const tags = recipe.dietaryTags.map((tag) => tag.toLowerCase());
+  const cuisinePreferences = normalizeCuisinePreferences(answers.preferredCuisines || []);
   const timeMinutes = recipe.totalTimeMinutes || recipe.prepTimeMinutes || 40;
 
   if (tags.includes('high-protein')) score += 5;
@@ -135,6 +169,7 @@ function recipePreferenceScore(recipe: Recipe, answers: OnboardingAnswers) {
   if (answers.preferredMealStyle === 'low prep' && timeMinutes <= 20) score += 3;
   if (answers.preferredMealStyle === 'quick and easy' && timeMinutes <= 25) score += 3;
   if (answers.preferredMealStyle === 'vegetarian leaning' && tags.includes('vegetarian')) score += 3;
+  if (cuisinePreferences.length > 0 && recipeMatchesCuisinePreferences(recipe, cuisinePreferences)) score += 6;
 
   if (answers.groceryPreference === 'fastest meals possible' && timeMinutes <= 20) score += 2;
   if (answers.groceryPreference === 'meal prep friendly' && containsAny(title, ['bowl', 'stew', 'roast', 'salad'])) score += 2;
@@ -164,6 +199,7 @@ function buildCandidatePool({
       ? requirements
       : requirements.filter((requirement) => CRITICAL_REQUIREMENTS.has(normalizeText(requirement)));
   const allergyTerms = extractAllergyTerms(answers);
+  const cuisinePreferences = normalizeCuisinePreferences(answers.preferredCuisines || []);
   const dislikes = stage === 3 ? [] : extractDislikes(answers);
 
   const withMealType = stage === 3
@@ -171,6 +207,7 @@ function buildCandidatePool({
     : recipes.filter((recipe) => recipe.mealType === mealType);
 
   return withMealType
+    .filter((recipe) => (stage === 1 && cuisinePreferences.length > 0 ? recipeMatchesCuisinePreferences(recipe, cuisinePreferences) : true))
     .filter((recipe) => recipePassesAllergyCheck(recipe, allergyTerms))
     .filter((recipe) => recipeMatchesDietaryRequirements(recipe, strictRequirements))
     .filter((recipe) => recipePassesDislikes(recipe, dislikes))
@@ -720,7 +757,7 @@ function normalizeQuantityUnitToken(token: string) {
   return QUANTITY_UNIT_ALIASES[cleaned] || '';
 }
 
-function extractAggregatedQuantity(line: string, canonicalBaseName: string) {
+function extractAggregatedQuantity(line: string) {
   const source = normalizeFractionCharacters(cleanIngredientLine(line).toLowerCase())
     .replace(/^(?:about|approx(?:\.|imately)?)\s+/i, '')
     .trim();
@@ -772,19 +809,7 @@ function extractAggregatedQuantity(line: string, canonicalBaseName: string) {
     break;
   }
 
-  let unit = unitTokens[0] ? normalizeQuantityUnitToken(unitTokens[0]) : '';
-  if (!unit) {
-    const canonicalTokens = canonicalBaseName
-      .split(/\s+/)
-      .map((token) => normalizeText(token).replace(/[^a-z]/g, ''))
-      .filter(Boolean);
-    const candidate = unitTokens[0] ? normalizeText(unitTokens[0]).replace(/[^a-z]/g, '') : '';
-    if (candidate && canonicalTokens.some((token) => token === candidate || token.startsWith(candidate) || candidate.startsWith(token))) {
-      unit = canonicalTokens[0] || candidate;
-    } else if (canonicalTokens[0]) {
-      unit = canonicalTokens[0];
-    }
-  }
+  const unit = unitTokens[0] ? normalizeQuantityUnitToken(unitTokens[0]) : '';
 
   return unit ? { amount, unit } : null;
 }
@@ -1007,7 +1032,7 @@ function buildGroceryListForRecipeIds(recipeIds: string[], recipeMap: Map<string
       const key = normalizeText(canonicalBaseName);
       const quantityLabel =
         [ingredient.quantity, ingredient.unit].filter(Boolean).join(' ').trim() || extractInlineQuantity(line);
-      const aggregatedQuantity = extractAggregatedQuantity(quantityLabel || line, canonicalBaseName);
+      const aggregatedQuantity = extractAggregatedQuantity(quantityLabel) || extractAggregatedQuantity(line);
       const preferredCategory = normalizeText(ingredient.category || '');
       const category =
         preferredCategory && preferredCategory !== 'pantry' ? preferredCategory : inferGroceryCategory(canonicalBaseName);
