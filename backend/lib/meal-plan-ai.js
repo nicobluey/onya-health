@@ -1,6 +1,7 @@
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
 const PLAN_DAY_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const CORE_MEAL_TYPES = ['breakfast', 'lunch', 'dinner'];
+const OPENAI_MEAL_PLAN_TIMEOUT_MS = Math.max(3000, Number(process.env.OPENAI_MEAL_PLAN_TIMEOUT_MS || 9000));
 
 function hashSeed(input) {
   const text = String(input || '');
@@ -238,27 +239,40 @@ async function callOpenAiForMealPlan({ answers, recipes, includeSnack, seedSalt 
     2,
   );
 
-  const response = await fetch(OPENAI_RESPONSES_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      input: [
-        {
-          role: 'system',
-          content: [{ type: 'input_text', text: systemPrompt }],
-        },
-        {
-          role: 'user',
-          content: [{ type: 'input_text', text: userPrompt }],
-        },
-      ],
-      max_output_tokens: 2200,
-    }),
-  });
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), OPENAI_MEAL_PLAN_TIMEOUT_MS);
+  let response;
+  try {
+    response = await fetch(OPENAI_RESPONSES_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        input: [
+          {
+            role: 'system',
+            content: [{ type: 'input_text', text: systemPrompt }],
+          },
+          {
+            role: 'user',
+            content: [{ type: 'input_text', text: userPrompt }],
+          },
+        ],
+        max_output_tokens: 2200,
+      }),
+      signal: controller.signal,
+    });
+  } catch (errorObject) {
+    if (errorObject?.name === 'AbortError') {
+      throw new Error(`OpenAI meal plan request timed out after ${OPENAI_MEAL_PLAN_TIMEOUT_MS}ms`);
+    }
+    throw errorObject;
+  } finally {
+    clearTimeout(timeoutHandle);
+  }
 
   if (!response.ok) {
     const text = await response.text();

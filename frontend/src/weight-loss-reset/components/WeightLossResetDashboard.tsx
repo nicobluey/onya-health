@@ -112,6 +112,7 @@ export default function WeightLossResetDashboard({
   onAddWeightLog,
   onAddMessage,
   onToggleGroceryItem,
+  isGeneratingPlan = false,
 }: {
   answers: OnboardingAnswers;
   mealPlan: MealPlan | null;
@@ -124,6 +125,7 @@ export default function WeightLossResetDashboard({
   onAddWeightLog: (payload: { date: string; weight: number; note?: string }) => void;
   onAddMessage: (payload: { role: 'user' | 'system'; text: string }) => void;
   onToggleGroceryItem: (itemKey: string) => void;
+  isGeneratingPlan?: boolean;
 }) {
   const [activeTab, setActiveTab] = useState<DashboardTab>('overview');
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
@@ -285,10 +287,11 @@ export default function WeightLossResetDashboard({
             <button
               type="button"
               onClick={onRegeneratePlan}
-              className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#dbe2d9] bg-white px-3 text-xs font-semibold text-[#334155]"
+              disabled={isGeneratingPlan}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#dbe2d9] bg-white px-3 text-xs font-semibold text-[#334155] disabled:cursor-not-allowed disabled:opacity-70"
             >
               <RefreshCcw size={14} />
-              Refresh weekly plan
+              {isGeneratingPlan ? 'Refreshing plan...' : 'Refresh weekly plan'}
             </button>
           </div>
 
@@ -298,9 +301,10 @@ export default function WeightLossResetDashboard({
               <button
                 type="button"
                 onClick={onRegeneratePlan}
-                className="mt-3 inline-flex h-10 items-center gap-2 rounded-xl bg-[#1f5f3f] px-4 text-sm font-semibold text-white"
+                disabled={isGeneratingPlan}
+                className="mt-3 inline-flex h-10 items-center gap-2 rounded-xl bg-[#1f5f3f] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
               >
-                Generate weekly meals
+                {isGeneratingPlan ? 'Generating weekly meals...' : 'Generate weekly meals'}
                 <ArrowRight size={15} />
               </button>
             </article>

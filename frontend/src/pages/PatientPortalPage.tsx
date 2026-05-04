@@ -973,7 +973,9 @@ export default function PatientPortalPage() {
     const [weightLossRecipeError, setWeightLossRecipeError] = useState('');
     const [weightLossRecipesReady, setWeightLossRecipesReady] = useState(false);
     const [weightLossRecipesLoading, setWeightLossRecipesLoading] = useState(false);
+    const [isGeneratingMealPlan, setIsGeneratingMealPlan] = useState(false);
     const weightLossRecipesPromiseRef = useRef<Promise<Recipe[]> | null>(null);
+    const isGeneratingMealPlanRef = useRef(false);
     const weightLossStateRef = useRef(weightLossResetState);
 
     const [portalScreen, setPortalScreen] = useState<PortalScreen>('main');
@@ -1405,56 +1407,65 @@ export default function PatientPortalPage() {
             answers = weightLossStateRef.current.onboardingAnswers,
             options: { refresh?: boolean } = {},
         ) => {
-            const recipes = await ensureWeightLossRecipesLoaded();
-            if (recipes.length === 0) return;
-            const seedSalt = options.refresh ? String(Date.now()) : '';
-            const includeSnack = (answers?.mealsPerDay || 3) >= 4;
+            if (isGeneratingMealPlanRef.current) return;
+            isGeneratingMealPlanRef.current = true;
+            setIsGeneratingMealPlan(true);
+            try {
+                const recipes = await ensureWeightLossRecipesLoaded();
+                if (recipes.length === 0) return;
+                const seedSalt = options.refresh ? String(Date.now()) : '';
+                const includeSnack = (answers?.mealsPerDay || 3) >= 4;
+                const recipeMap = new Map(recipes.map((recipe) => [recipe.id, recipe]));
 
-            const activeToken = token || window.localStorage.getItem('onya_patient_token') || '';
-            if (activeToken) {
-                try {
-                    const { response, payload } = await fetchApiJson('/api/patient/meal-plan/generate', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            Authorization: `Bearer ${activeToken}`,
-                        },
-                        body: JSON.stringify({
-                            answers,
-                            includeSnack,
-                            seedSalt,
-                            recipes: recipes.map((recipe) => ({
-                                id: recipe.id,
-                                title: recipe.title,
-                                mealType: recipe.mealType,
-                                calories: recipe.calories,
-                                protein: recipe.protein,
-                                carbs: recipe.carbs,
-                                fat: recipe.fat,
-                                prepTimeMinutes: recipe.prepTimeMinutes,
-                                dietaryTags: recipe.dietaryTags,
-                                allergens: recipe.allergens,
-                                estimatedCost: recipe.estimatedCost,
-                                source: recipe.source,
-                            })),
-                        }),
-                    });
+                const activeToken = token || window.localStorage.getItem('onya_patient_token') || '';
+                if (activeToken) {
+                    try {
+                        const { response, payload } = await fetchApiJson('/api/patient/meal-plan/generate', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                Authorization: `Bearer ${activeToken}`,
+                            },
+                            body: JSON.stringify({
+                                answers,
+                                includeSnack,
+                                seedSalt,
+                                recipes: recipes.map((recipe) => ({
+                                    id: recipe.id,
+                                    title: recipe.title,
+                                    mealType: recipe.mealType,
+                                    calories: recipe.calories,
+                                    protein: recipe.protein,
+                                    carbs: recipe.carbs,
+                                    fat: recipe.fat,
+                                    prepTimeMinutes: recipe.prepTimeMinutes,
+                                    dietaryTags: recipe.dietaryTags,
+                                    allergens: recipe.allergens,
+                                    estimatedCost: recipe.estimatedCost,
+                                    source: recipe.source,
+                                })),
+                            }),
+                        });
 
-                    if (response.ok && payload?.mealPlan?.days?.length === 7) {
-                        setMealPlan(payload.mealPlan);
-                        return;
+                        if (response.ok && payload?.mealPlan?.days?.length === 7) {
+                            setMealPlan(withRecalculatedTotals(payload.mealPlan, recipeMap));
+                            return;
+                        }
+                    } catch {
+                        // Fall back to deterministic rules engine below.
                     }
-                } catch {
-                    // Fall back to deterministic rules engine below.
                 }
-            }
 
-            const generated = generateMealPlan({
-                recipes,
-                answers,
-                seedSalt,
-            });
-            setMealPlan(generated.mealPlan);
+                const generated = generateMealPlan({
+                    recipes,
+                    answers,
+                    seedSalt,
+                });
+                setMealPlan(withRecalculatedTotals(generated.mealPlan, recipeMap));
+            } finally {
+                isGeneratingMealPlanRef.current = false;
+                setIsGeneratingMealPlan(false);
+            }
         },
         [ensureWeightLossRecipesLoaded, setMealPlan, token]
     );
@@ -1506,11 +1517,17 @@ export default function PatientPortalPage() {
         ) as string[];
 
         const hasUnknownRecipes = plannedIds.some((id) => !recipeIdSet.has(id));
-        if (!hasUnknownRecipes) return;
+        if (!hasUnknownRecipes) {
+            const hasMissingTotals = weightLossResetState.mealPlan.days.some((day) => !day.totals);
+            if (!hasMissingTotals) return;
+            replaceMealPlan(withRecalculatedTotals(weightLossResetState.mealPlan, new Map(weightLossRecipes.map((recipe) => [recipe.id, recipe]))));
+            return;
+        }
 
         void generateAndStoreWeightLossMealPlan(weightLossResetState.onboardingAnswers, { refresh: true });
     }, [
         generateAndStoreWeightLossMealPlan,
+        replaceMealPlan,
         weightLossRecipes,
         weightLossRecipesReady,
         weightLossResetState.mealPlan,
@@ -1759,6 +1776,11 @@ export default function PatientPortalPage() {
                             Loading meal images and recipes...
                         </p>
                     )}
+                    {isGeneratingMealPlan && (
+                        <p className="rounded-xl border border-[#dbe2d9] bg-[#f8faf7] px-3 py-2 text-sm text-[#5f7063]">
+                            Generating your weekly meals...
+                        </p>
+                    )}
                     {weightLossRecipeError && (
                         <p className="rounded-xl border border-[#dbeeff] bg-[#f8fbff] px-3 py-2 text-xs text-[#475569]">
                             {weightLossRecipeError}
@@ -1771,6 +1793,7 @@ export default function PatientPortalPage() {
                         weightLogs={weightLossResetState.weightLogs}
                         messages={weightLossResetState.messages}
                         groceryCheckedItems={weightLossResetState.groceryCheckedItems}
+                        isGeneratingPlan={isGeneratingMealPlan}
                         onRegeneratePlan={() => {
                             void generateAndStoreWeightLossMealPlan(weightLossResetState.onboardingAnswers, { refresh: true });
                         }}
