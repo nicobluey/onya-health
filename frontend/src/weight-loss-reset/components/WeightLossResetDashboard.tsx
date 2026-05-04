@@ -520,8 +520,28 @@ export default function WeightLossResetDashboard({
               {groceryByMeal.map((mealSection) => (
                 <article key={mealSection.mealType} className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-3">
                   <h3 className="text-base font-semibold text-[#18251e]">{mealTypeLabel(mealSection.mealType)}</h3>
-                  {mealSection.recipeTitles.length > 0 && (
-                    <p className="mt-1 text-xs text-[#5f7063]">Meals: {mealSection.recipeTitles.join(' • ')}</p>
+                  {mealSection.recipeIds.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {mealSection.recipeIds.map((recipeId) => {
+                        const recipe = recipeMap.get(recipeId);
+                        if (!recipe) return null;
+                        return (
+                          <div
+                            key={`${mealSection.mealType}-${recipe.id}`}
+                            className="inline-flex max-w-[280px] items-center gap-2 rounded-full border border-[#dbe2d9] bg-white px-2 py-1"
+                            title={recipe.title}
+                          >
+                            <img
+                              src={recipe.imageUrl || '/nutrionist.webp'}
+                              alt={recipe.title}
+                              className="h-6 w-6 shrink-0 rounded-full object-cover"
+                              loading="lazy"
+                            />
+                            <span className="truncate text-xs text-[#334155]">{recipe.title}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
 
                   <div className="mt-3 grid gap-3 md:grid-cols-2">

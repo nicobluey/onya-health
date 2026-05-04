@@ -15,6 +15,7 @@ export interface GroceryGroup {
 
 export interface MealGroceryBreakdown {
   mealType: MealType;
+  recipeIds: string[];
   recipeTitles: string[];
   groups: GroceryGroup[];
 }
@@ -512,6 +513,7 @@ const LEADING_DESCRIPTORS = new Set([
   'dried',
   'roasted',
   'toasted',
+  'fried',
   'salt-reduced',
   'reduced-salt',
   'reduced',
@@ -663,6 +665,7 @@ function inferGroceryCategory(baseName: string) {
       'carrot', 'onion', 'tomato', 'capsicum', 'zucchini', 'spinach', 'kale', 'lettuce', 'mint', 'parsley',
       'coriander', 'basil', 'ginger', 'pumpkin', 'beetroot', 'cucumber', 'lemon', 'lime', 'fruit', 'berries', 'kiwi',
       'mushroom', 'snow pea', 'broccoli', 'celery', 'avocado', 'chilli', 'peach', 'date', 'banana', 'grape', 'apple',
+      'potato', 'shallot', 'sprout', 'pea',
     ])
   ) {
     return 'produce';
@@ -767,6 +770,7 @@ export function buildGroceryListByMealType(mealPlan: MealPlan | null, recipeMap:
         .sort((a, b) => a.localeCompare(b));
       return {
         mealType,
+        recipeIds: uniqueIds,
         recipeTitles,
         groups: buildGroceryListForRecipeIds(uniqueIds, recipeMap),
       };
