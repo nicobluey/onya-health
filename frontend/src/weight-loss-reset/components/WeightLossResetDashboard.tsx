@@ -269,6 +269,7 @@ export default function WeightLossResetDashboard({
     () => (Number(answers.mealsPerDay || 3) <= 2 ? ['lunch', 'dinner'] : ['breakfast', 'lunch', 'dinner']),
     [answers.mealsPerDay]
   );
+  const showSnackMeals = Number(answers.mealsPerDay || 3) >= 4;
   const visiblePlanNotes = useMemo(
     () =>
       (mealPlan?.notes || []).filter((note) => {
@@ -590,7 +591,7 @@ export default function WeightLossResetDashboard({
                   );
                 })}
 
-                {day.meals.snacks?.[0] && (
+                {showSnackMeals && day.meals.snacks?.[0] && (
                   <div>
                     <p className="mb-2 text-sm font-semibold text-[#334155]">snack</p>
                     {recipeMap.get(day.meals.snacks[0]) ? (

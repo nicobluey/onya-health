@@ -112,6 +112,12 @@ function stepValidation(step: number, answers: OnboardingAnswers) {
   return '';
 }
 
+function clampInteger(value: string, min: number, max: number, fallback: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(parsed)));
+}
+
 export default function OnboardingFlow({
   initialAnswers,
   initialStep,
@@ -552,7 +558,12 @@ export default function OnboardingFlow({
                 value={answers.mealsPerDay}
                 min={2}
                 max={5}
-                onChange={(event) => setAnswers((current) => ({ ...current, mealsPerDay: Number(event.target.value) || 3 }))}
+                onChange={(event) =>
+                  setAnswers((current) => ({
+                    ...current,
+                    mealsPerDay: clampInteger(event.target.value, 2, 5, current.mealsPerDay || 3),
+                  }))
+                }
                 className={inputClassName}
               />
             </label>
@@ -564,7 +575,12 @@ export default function OnboardingFlow({
                 value={answers.daysPerWeek}
                 min={2}
                 max={7}
-                onChange={(event) => setAnswers((current) => ({ ...current, daysPerWeek: Number(event.target.value) || 7 }))}
+                onChange={(event) =>
+                  setAnswers((current) => ({
+                    ...current,
+                    daysPerWeek: clampInteger(event.target.value, 2, 7, current.daysPerWeek || 7),
+                  }))
+                }
                 className={inputClassName}
               />
             </label>

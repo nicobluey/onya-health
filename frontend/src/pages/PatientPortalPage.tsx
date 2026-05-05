@@ -1427,6 +1427,7 @@ export default function PatientPortalPage() {
                 const includeSnack = Number(answers.mealsPerDay || 3) >= 4;
                 const activeToken = token || window.localStorage.getItem('onya_patient_token') || '';
                 let generatedFromApi = false;
+                let apiFallbackReason = '';
 
                 if (activeToken) {
                     try {
@@ -1459,14 +1460,27 @@ export default function PatientPortalPage() {
                             const nextRecipes = validServerRecipes.length > 0 ? validServerRecipes : recipes;
                             const recipeMap = new Map(nextRecipes.map((recipe) => [recipe.id, recipe]));
                             setWeightLossRecipes(nextRecipes);
-                            setWeightLossRecipeError('');
+                            const generatedImageCount = nextRecipes.filter((recipe) => {
+                                const url = String(recipe?.imageUrl || '');
+                                return url.startsWith('data:image/') || url.startsWith('http://') || url.startsWith('https://');
+                            }).length;
+                            setWeightLossRecipeError(
+                                generatedImageCount > 0
+                                    ? ''
+                                    : 'Your plan was generated from preferences, but photo generation is currently unavailable so standard graphics may appear.'
+                            );
                             setWeightLossRecipesReady(true);
                             setMealPlan(postProcessGeneratedMealPlan(serverMealPlan, answers, recipeMap));
                             generatedFromApi = true;
+                        } else {
+                            apiFallbackReason = String(payload?.error || '').trim() || `API response was not usable (${response.status}).`;
                         }
                     } catch (errorObject) {
                         console.error('Meal generation API failed. Falling back to local meal planner.', errorObject);
+                        apiFallbackReason = errorObject instanceof Error ? errorObject.message : 'Meal generation API request failed.';
                     }
+                } else {
+                    apiFallbackReason = 'No authenticated patient session found for API meal generation.';
                 }
 
                 if (!generatedFromApi) {
@@ -1476,6 +1490,11 @@ export default function PatientPortalPage() {
                         answers,
                         seedSalt,
                     });
+                    setWeightLossRecipeError(
+                        `Using standard meal visuals right now. ${
+                            apiFallbackReason || 'AI-generated recipes/images were unavailable for this request.'
+                        }`
+                    );
                     setMealPlan(postProcessGeneratedMealPlan(generated.mealPlan, answers, recipeMap));
                 }
             } finally {
@@ -1959,7 +1978,7 @@ export default function PatientPortalPage() {
 
     return (
         <>
-            <div className="relative hidden min-h-screen overflow-hidden bg-[#f8fbff] text-[#020617] md:flex">
+            <div data-disable-magnetic-scope="true" className="relative hidden min-h-screen overflow-hidden bg-[#f8fbff] text-[#020617] md:flex">
                 <PortalBackdropArt />
                 <DesktopSidebar activeTab={mainTab} onTabChange={setTab} patient={patient} />
                 <main className="relative z-10 flex-1">
@@ -1975,7 +1994,10 @@ export default function PatientPortalPage() {
                 </main>
             </div>
 
-            <div className={`relative min-h-screen overflow-hidden bg-[#f8fbff] text-[#020617] md:hidden ${portalScreen === 'main' ? 'pb-28' : 'pb-6'}`}>
+            <div
+                data-disable-magnetic-scope="true"
+                className={`relative min-h-screen overflow-hidden bg-[#f8fbff] text-[#020617] md:hidden ${portalScreen === 'main' ? 'pb-28' : 'pb-6'}`}
+            >
                 <PortalBackdropArt />
                 <MobileTopBar activeTab={mainTab} />
                 <main className="relative z-10 px-4 py-5">{renderPortalContent('mobile')}</main>

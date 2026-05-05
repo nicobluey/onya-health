@@ -23,6 +23,7 @@ function resetMagneticOffset(element: HTMLElement) {
 }
 
 function isMagneticTargetEnabled(element: HTMLElement) {
+    if (element.closest('[data-disable-magnetic-scope="true"]')) return false;
     if (element.dataset.noMagnetic === 'true') return false;
     if (element.dataset.lightswindMagnetic === 'true') return false;
     if (element.getAttribute('aria-disabled') === 'true') return false;
@@ -88,6 +89,7 @@ export function useGlobalMagneticButtons() {
 
         const registerTarget = (element: HTMLElement) => {
             if (registeredTargets.has(element)) return;
+            if (element.closest('[data-disable-magnetic-scope="true"]')) return;
             if (element.dataset.noMagnetic === 'true') return;
             if (element.dataset.lightswindMagnetic === 'true') return;
 

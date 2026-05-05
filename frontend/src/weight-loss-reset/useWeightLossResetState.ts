@@ -33,6 +33,56 @@ function uniqueById<T extends { id: string }>(entries: T[]) {
   });
 }
 
+function clampNumber(value: unknown, min: number, max: number, fallback: number) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, Math.round(parsed)));
+}
+
+function sanitizeStringArray(value: unknown, fallback: string[] = []) {
+  if (!Array.isArray(value)) return fallback;
+  return value.map((entry) => String(entry || '').trim()).filter(Boolean);
+}
+
+function sanitizeOnboardingAnswers(input: Partial<OnboardingAnswers> | null | undefined): OnboardingAnswers {
+  const source = input && typeof input === 'object' ? input : {};
+  return {
+    ...DEFAULT_ONBOARDING_ANSWERS,
+    ...source,
+    firstName: String(source.firstName || DEFAULT_ONBOARDING_ANSWERS.firstName).trim(),
+    age:
+      source.age === undefined || source.age === null
+        ? DEFAULT_ONBOARDING_ANSWERS.age
+        : clampNumber(source.age, 16, 120, DEFAULT_ONBOARDING_ANSWERS.age || 25),
+    heightCm:
+      source.heightCm === undefined || source.heightCm === null
+        ? DEFAULT_ONBOARDING_ANSWERS.heightCm
+        : clampNumber(source.heightCm, 100, 260, DEFAULT_ONBOARDING_ANSWERS.heightCm || 170),
+    currentWeightKg:
+      source.currentWeightKg === undefined || source.currentWeightKg === null
+        ? DEFAULT_ONBOARDING_ANSWERS.currentWeightKg
+        : clampNumber(source.currentWeightKg, 35, 350, DEFAULT_ONBOARDING_ANSWERS.currentWeightKg || 80),
+    goalWeightKg:
+      source.goalWeightKg === undefined || source.goalWeightKg === null
+        ? DEFAULT_ONBOARDING_ANSWERS.goalWeightKg
+        : clampNumber(source.goalWeightKg, 35, 350, DEFAULT_ONBOARDING_ANSWERS.goalWeightKg || 70),
+    timeframeWeeks:
+      source.timeframeWeeks === undefined || source.timeframeWeeks === null
+        ? DEFAULT_ONBOARDING_ANSWERS.timeframeWeeks
+        : clampNumber(source.timeframeWeeks, 1, 104, DEFAULT_ONBOARDING_ANSWERS.timeframeWeeks || 12),
+    mealsPerDay: clampNumber(source.mealsPerDay, 2, 5, DEFAULT_ONBOARDING_ANSWERS.mealsPerDay),
+    daysPerWeek: clampNumber(source.daysPerWeek, 2, 7, DEFAULT_ONBOARDING_ANSWERS.daysPerWeek),
+    prepDay: String(source.prepDay || DEFAULT_ONBOARDING_ANSWERS.prepDay || 'Sunday').trim() || 'Sunday',
+    dietaryRequirements: sanitizeStringArray(source.dietaryRequirements, DEFAULT_ONBOARDING_ANSWERS.dietaryRequirements),
+    favoriteFoods: sanitizeStringArray(source.favoriteFoods, []),
+    allergyChips: sanitizeStringArray(source.allergyChips, []),
+    preferredCuisines: sanitizeStringArray(source.preferredCuisines, []),
+    supportAreas: sanitizeStringArray(source.supportAreas, DEFAULT_ONBOARDING_ANSWERS.supportAreas),
+    allergiesText: String(source.allergiesText || '').trim(),
+    dislikes: String(source.dislikes || '').trim(),
+  };
+}
+
 function readInitialState(): WeightLossResetState {
   const onboardingRaw = safeParseJson<{
     answers?: Partial<OnboardingAnswers>;
@@ -41,23 +91,7 @@ function readInitialState(): WeightLossResetState {
     matchedDietitianId?: 'felicity' | null;
   } | null>(window.localStorage.getItem(STORAGE_KEYS.onboarding), null);
 
-  const onboardingAnswers: OnboardingAnswers = {
-    ...DEFAULT_ONBOARDING_ANSWERS,
-    ...(onboardingRaw?.answers || {}),
-    primaryHealthFocus:
-      typeof onboardingRaw?.answers?.primaryHealthFocus === 'string' && onboardingRaw?.answers?.primaryHealthFocus.trim()
-        ? onboardingRaw.answers.primaryHealthFocus
-        : DEFAULT_ONBOARDING_ANSWERS.primaryHealthFocus,
-    dietaryRequirements: Array.isArray(onboardingRaw?.answers?.dietaryRequirements)
-      ? onboardingRaw?.answers?.dietaryRequirements || DEFAULT_ONBOARDING_ANSWERS.dietaryRequirements
-      : DEFAULT_ONBOARDING_ANSWERS.dietaryRequirements,
-    favoriteFoods: Array.isArray(onboardingRaw?.answers?.favoriteFoods) ? onboardingRaw?.answers?.favoriteFoods || [] : [],
-    allergyChips: Array.isArray(onboardingRaw?.answers?.allergyChips) ? onboardingRaw?.answers?.allergyChips || [] : [],
-    preferredCuisines: Array.isArray(onboardingRaw?.answers?.preferredCuisines) ? onboardingRaw?.answers?.preferredCuisines || [] : [],
-    supportAreas: Array.isArray(onboardingRaw?.answers?.supportAreas)
-      ? onboardingRaw?.answers?.supportAreas || []
-      : DEFAULT_ONBOARDING_ANSWERS.supportAreas,
-  };
+  const onboardingAnswers = sanitizeOnboardingAnswers(onboardingRaw?.answers);
 
   const weightLogs = safeParseJson<WeightLogEntry[]>(window.localStorage.getItem(STORAGE_KEYS.weightLogs), [])
     .filter((entry) => Number.isFinite(Number(entry.weight)))
@@ -135,10 +169,10 @@ export function useWeightLossResetState() {
   const updateOnboardingAnswers = (updates: Partial<OnboardingAnswers>) => {
     setState((current) => ({
       ...current,
-      onboardingAnswers: {
+      onboardingAnswers: sanitizeOnboardingAnswers({
         ...current.onboardingAnswers,
         ...updates,
-      },
+      }),
     }));
   };
 
