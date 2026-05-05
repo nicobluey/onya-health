@@ -4,6 +4,12 @@ import { warn } from './logger.js';
 
 const DATA_DIR = path.resolve(process.cwd(), 'backend', 'data');
 const DB_PATH = path.join(DATA_DIR, 'db.json');
+const LOCAL_MEAL_PLANNER_RECIPES_PATH = path.resolve(
+  process.cwd(),
+  'frontend',
+  'public',
+  'weight-loss-reset-recipes.json'
+);
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
@@ -31,6 +37,7 @@ const EMPTY_DB = {
 
 let writeQueue = Promise.resolve();
 const patientIdCache = new Map();
+let cachedLocalMealPlannerRecipes = null;
 const PATIENT_ID_CACHE_TTL_MS = Math.max(
   60_000,
   Number(process.env.PATIENT_ID_CACHE_TTL_MS || 15 * 60 * 1000)
@@ -214,6 +221,63 @@ function mapSupabaseRowToPatientBilling(row) {
     currentPeriodEnd: row.current_period_end ? String(row.current_period_end) : null,
     source: String(row.source || ''),
     updatedAt: row.updated_at ? String(row.updated_at) : null,
+  };
+}
+
+function normalizeMealType(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'breakfast' || normalized === 'lunch' || normalized === 'dinner' || normalized === 'snack') {
+    return normalized;
+  }
+  return 'lunch';
+}
+
+function normalizeStringArray(value) {
+  if (!Array.isArray(value)) return [];
+  return value.map((entry) => String(entry || '').trim()).filter(Boolean);
+}
+
+function toFiniteNumberOrUndefined(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function normalizeRecipeSource(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  return value;
+}
+
+function mapRecipeRecordToMealPlannerRecipe(row = {}) {
+  const calories = toFiniteNumberOrUndefined(row.calories);
+  const protein = toFiniteNumberOrUndefined(row.protein);
+  const carbs = toFiniteNumberOrUndefined(row.carbs);
+  const fat = toFiniteNumberOrUndefined(row.fat);
+  const prepTimeMinutes = toFiniteNumberOrUndefined(row.prep_time_minutes ?? row.prepTimeMinutes);
+  const cookTimeMinutes = toFiniteNumberOrUndefined(row.cook_time_minutes ?? row.cookTimeMinutes);
+  const totalTimeMinutes = toFiniteNumberOrUndefined(row.total_time_minutes ?? row.totalTimeMinutes);
+  const serves = toFiniteNumberOrUndefined(row.serves ?? row?.source?.serves);
+  const source = normalizeRecipeSource(row.source);
+
+  return {
+    id: String(row.id || '').trim(),
+    title: String(row.title || '').trim(),
+    description: String(row.description || '').trim() || undefined,
+    imageUrl: String(row.image_url || row.imageUrl || '').trim() || undefined,
+    ingredients: Array.isArray(row.ingredients) ? row.ingredients : [],
+    instructions: Array.isArray(row.instructions) ? row.instructions : [],
+    calories: calories !== undefined ? Math.round(calories) : undefined,
+    protein: protein !== undefined ? Math.round(protein * 10) / 10 : undefined,
+    carbs: carbs !== undefined ? Math.round(carbs * 10) / 10 : undefined,
+    fat: fat !== undefined ? Math.round(fat * 10) / 10 : undefined,
+    mealType: normalizeMealType(row.meal_type || row.mealType),
+    dietaryTags: normalizeStringArray(row.dietary_tags ?? row.dietaryTags),
+    allergens: normalizeStringArray(row.allergens),
+    prepTimeMinutes: prepTimeMinutes !== undefined ? Math.round(prepTimeMinutes) : undefined,
+    cookTimeMinutes: cookTimeMinutes !== undefined ? Math.round(cookTimeMinutes) : undefined,
+    totalTimeMinutes: totalTimeMinutes !== undefined ? Math.round(totalTimeMinutes) : undefined,
+    serves: serves !== undefined && serves > 0 ? Math.round(serves * 100) / 100 : undefined,
+    estimatedCost: String((row.estimated_cost ?? row.estimatedCost) || '').trim() || undefined,
+    source,
   };
 }
 
@@ -754,6 +818,42 @@ async function upsertPatientBillingSupabase(patientEmail, patch = {}) {
   return mapSupabaseRowToPatientBilling(row || body);
 }
 
+async function listMealPlannerRecipesSupabase() {
+  const rows = await supabaseRequest(
+    'meal_planner_recipes?select=id,title,description,image_url,ingredients,instructions,calories,protein,carbs,fat,meal_type,dietary_tags,allergens,prep_time_minutes,estimated_cost,source&order=title.asc&limit=400',
+    {
+      method: 'GET',
+      prefer: 'return=representation',
+    }
+  );
+  const recipes = Array.isArray(rows) ? rows.map(mapRecipeRecordToMealPlannerRecipe) : [];
+  return recipes.filter((recipe) => recipe.id && recipe.title && Array.isArray(recipe.ingredients));
+}
+
+async function listMealPlannerRecipesLocal() {
+  if (Array.isArray(cachedLocalMealPlannerRecipes) && cachedLocalMealPlannerRecipes.length > 0) {
+    return cachedLocalMealPlannerRecipes;
+  }
+
+  try {
+    const raw = await fs.readFile(LOCAL_MEAL_PLANNER_RECIPES_PATH, 'utf8');
+    const payload = JSON.parse(raw || '{}');
+    const recipesRaw = Array.isArray(payload?.recipes) ? payload.recipes : [];
+    const recipes = recipesRaw
+      .map((row) => mapRecipeRecordToMealPlannerRecipe(row))
+      .filter((recipe) => recipe.id && recipe.title && Array.isArray(recipe.ingredients));
+    cachedLocalMealPlannerRecipes = recipes;
+    return recipes;
+  } catch (error) {
+    warn('meal_planner_recipes.local_read_failed', {
+      path: LOCAL_MEAL_PLANNER_RECIPES_PATH,
+      message: error?.message || String(error),
+    });
+    cachedLocalMealPlannerRecipes = [];
+    return [];
+  }
+}
+
 export async function listCertificates() {
   if (getSupabaseConfig().enabled) {
     return listCertificatesSupabase();
@@ -808,6 +908,13 @@ export async function upsertPatientBillingByEmail(email, patch = {}) {
     return upsertPatientBillingSupabase(email, patch);
   }
   return upsertPatientBillingLocal(email, patch);
+}
+
+export async function listMealPlannerRecipes() {
+  if (getSupabaseConfig().enabled) {
+    return listMealPlannerRecipesSupabase();
+  }
+  return listMealPlannerRecipesLocal();
 }
 
 export function isSupabaseStorageEnabled() {

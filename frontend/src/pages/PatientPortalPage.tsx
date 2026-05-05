@@ -1029,26 +1029,52 @@ export default function PatientPortalPage() {
         }
 
         setWeightLossRecipesLoading(true);
-        const promise = loadWeightLossRecipes()
-            .then((recipes) => {
-                setWeightLossRecipes(recipes);
-                setWeightLossRecipeError('');
-                setWeightLossRecipesReady(true);
-                return recipes;
-            })
-            .catch(() => {
-                setWeightLossRecipeError('Recipe dataset could not be loaded. A fallback plan will still be available.');
-                setWeightLossRecipesReady(true);
-                return [] as Recipe[];
-            })
-            .finally(() => {
-                setWeightLossRecipesLoading(false);
-                weightLossRecipesPromiseRef.current = null;
-            });
+        const promise = (async () => {
+            const activeToken = token || window.localStorage.getItem('onya_patient_token') || '';
+            if (activeToken) {
+                try {
+                    const { response, payload } = await fetchApiJson('/api/patient/meal-plan/catalog', {
+                        method: 'GET',
+                        headers: {
+                            Authorization: `Bearer ${activeToken}`,
+                        },
+                    });
+                    if (response.ok && payload?.ok && Array.isArray(payload?.recipes) && payload.recipes.length > 0) {
+                        const recipes = (payload.recipes as Recipe[]).filter(
+                            (recipe) => recipe && typeof recipe.id === 'string' && typeof recipe.title === 'string' && Array.isArray(recipe.ingredients),
+                        );
+                        if (recipes.length > 0) {
+                            setWeightLossRecipes(recipes);
+                            setWeightLossRecipeError('');
+                            setWeightLossRecipesReady(true);
+                            return recipes;
+                        }
+                    }
+                } catch (errorObject) {
+                    console.error('Meal catalog API load failed. Falling back to local recipe file.', errorObject);
+                }
+            }
+
+            return loadWeightLossRecipes()
+                .then((recipes) => {
+                    setWeightLossRecipes(recipes);
+                    setWeightLossRecipeError('');
+                    setWeightLossRecipesReady(true);
+                    return recipes;
+                })
+                .catch(() => {
+                    setWeightLossRecipeError('Recipe dataset could not be loaded. A fallback plan will still be available.');
+                    setWeightLossRecipesReady(true);
+                    return [] as Recipe[];
+                });
+        })().finally(() => {
+            setWeightLossRecipesLoading(false);
+            weightLossRecipesPromiseRef.current = null;
+        });
 
         weightLossRecipesPromiseRef.current = promise;
         return promise;
-    }, [weightLossRecipes, weightLossRecipesReady]);
+    }, [token, weightLossRecipes, weightLossRecipesReady]);
 
     useEffect(() => {
         if (weightLossRecipesReady || weightLossRecipesLoading) return;
@@ -1421,8 +1447,6 @@ export default function PatientPortalPage() {
             isGeneratingMealPlanRef.current = true;
             setIsGeneratingMealPlan(true);
             try {
-                const recipes = await ensureWeightLossRecipesLoaded();
-                if (recipes.length === 0) return;
                 const seedSalt = options.refresh ? String(Date.now()) : '';
                 const includeSnack = Number(answers.mealsPerDay || 3) >= 4;
                 const activeToken = token || window.localStorage.getItem('onya_patient_token') || '';
@@ -1441,8 +1465,7 @@ export default function PatientPortalPage() {
                                 answers,
                                 includeSnack,
                                 seedSalt,
-                                generateRecipes: true,
-                                generationMode: 'ai_recipes',
+                                generationMode: 'database_catalog',
                             }),
                         });
 
@@ -1457,21 +1480,25 @@ export default function PatientPortalPage() {
                                     typeof recipe.title === 'string' &&
                                     Array.isArray(recipe.ingredients),
                             );
-                            const nextRecipes = validServerRecipes.length > 0 ? validServerRecipes : recipes;
-                            const recipeMap = new Map(nextRecipes.map((recipe) => [recipe.id, recipe]));
-                            setWeightLossRecipes(nextRecipes);
-                            const generatedImageCount = nextRecipes.filter((recipe) => {
-                                const url = String(recipe?.imageUrl || '');
-                                return url.startsWith('data:image/') || url.startsWith('http://') || url.startsWith('https://');
-                            }).length;
-                            setWeightLossRecipeError(
-                                generatedImageCount > 0
-                                    ? ''
-                                    : 'Your plan was generated from preferences, but photo generation is currently unavailable so standard graphics may appear.'
-                            );
-                            setWeightLossRecipesReady(true);
-                            setMealPlan(postProcessGeneratedMealPlan(serverMealPlan, answers, recipeMap));
-                            generatedFromApi = true;
+                            if (validServerRecipes.length === 0) {
+                                apiFallbackReason = 'API returned a meal plan without a valid recipe catalog.';
+                            } else {
+                                const nextRecipes = validServerRecipes;
+                                const recipeMap = new Map(nextRecipes.map((recipe) => [recipe.id, recipe]));
+                                setWeightLossRecipes(nextRecipes);
+                                const withRealImageCount = nextRecipes.filter((recipe) => {
+                                    const url = String(recipe?.imageUrl || '');
+                                    return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:image/');
+                                }).length;
+                                setWeightLossRecipeError(
+                                    withRealImageCount > 0
+                                        ? ''
+                                        : 'Plan generated from database recipes, but image links are unavailable for some items right now.'
+                                );
+                                setWeightLossRecipesReady(true);
+                                setMealPlan(postProcessGeneratedMealPlan(serverMealPlan, answers, recipeMap));
+                                generatedFromApi = true;
+                            }
                         } else {
                             apiFallbackReason = String(payload?.error || '').trim() || `API response was not usable (${response.status}).`;
                         }
@@ -1484,6 +1511,8 @@ export default function PatientPortalPage() {
                 }
 
                 if (!generatedFromApi) {
+                    const recipes = await ensureWeightLossRecipesLoaded();
+                    if (recipes.length === 0) return;
                     const recipeMap = new Map(recipes.map((recipe) => [recipe.id, recipe]));
                     const generated = generateMealPlan({
                         recipes,

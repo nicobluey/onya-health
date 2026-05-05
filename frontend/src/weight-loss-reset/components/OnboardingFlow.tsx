@@ -566,6 +566,7 @@ export default function OnboardingFlow({
                 }
                 className={inputClassName}
               />
+              <p className="text-xs text-[#5f7063]">2 meals/day uses lunch + dinner. 3+ meals/day includes breakfast.</p>
             </label>
 
             <label className="space-y-1">

@@ -73,6 +73,16 @@ function readRecipeServes(recipe: Recipe) {
   return Math.round(average * 10) / 10;
 }
 
+function buildServesExplanation(recipe: Recipe) {
+  const serves = readRecipeServes(recipe);
+  if (!serves) return 'Serving size was not provided in the source recipe.';
+  const sourceServes = String(recipe.source?.serves || '').trim();
+  if (sourceServes) {
+    return `Serves ${serves}. Source reference: "${sourceServes}".`;
+  }
+  return `Serves ${serves}. Derived from available recipe metadata.`;
+}
+
 function MealCard({
   recipe,
   onViewDetails,
@@ -624,6 +634,14 @@ export default function WeightLossResetDashboard({
             </p>
           ) : (
             <div className="space-y-4">
+              <article className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-3">
+                <h3 className="text-sm font-semibold text-[#18251e]">How quantities are calculated</h3>
+                <p className="mt-1 text-xs text-[#5f7063]">
+                  Weekly quantities are estimated by recipe usage count and serving size. Example: if a recipe serves 4 and is used in 2 meals,
+                  ingredients are scaled to roughly 0.5x that recipe for the week.
+                </p>
+              </article>
+
               {groceryRecipeSummaries.length > 0 && (
                 <article className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-3">
                   <h3 className="text-sm font-semibold text-[#18251e]">Meals included in this week</h3>
@@ -673,7 +691,9 @@ export default function WeightLossResetDashboard({
                               />
                               <div>
                                 <p className={`text-sm ${checked ? 'text-[#94a3b8] line-through' : 'text-[#334155]'}`}>{item.name}</p>
-                                {item.quantities.length > 0 && <p className="text-xs text-[#5f7063]">{item.quantities.join(' + ')}</p>}
+                                {item.quantities.length > 0 && (
+                                  <p className="text-xs text-[#5f7063]">Approx total: {item.quantities.join(' · ')}</p>
+                                )}
                               </div>
                             </li>
                           );
@@ -813,7 +833,7 @@ export default function WeightLossResetDashboard({
             </p>
             <p className="mt-1 text-sm text-[#5f7063]">{buildRecipeTimeMeta(selectedRecipe)}</p>
             {selectedRecipeServes ? (
-              <p className="mt-1 text-sm text-[#5f7063]">Serves: {selectedRecipeServes}</p>
+              <p className="mt-1 text-sm text-[#5f7063]">{buildServesExplanation(selectedRecipe)}</p>
             ) : null}
 
             <section className="mt-4 grid gap-4 md:grid-cols-2">

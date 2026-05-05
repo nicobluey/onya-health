@@ -41,6 +41,7 @@ import {
   appendAudit,
   createCertificate,
   getCertificateById,
+  listMealPlannerRecipes,
   getPatientBillingByEmail,
   isSupabaseStorageEnabled,
   listCertificates,
@@ -2187,11 +2188,29 @@ async function handleApi(req, res, url) {
 
     const body = await parseJsonBody(req);
     const answers = body?.answers && typeof body.answers === 'object' ? body.answers : {};
-    const recipes = Array.isArray(body?.recipes) ? body.recipes.slice(0, 300) : [];
+    const clientRecipes = Array.isArray(body?.recipes) ? body.recipes.slice(0, 300) : [];
     const includeSnack = Boolean(body?.includeSnack);
     const seedSalt = String(body?.seedSalt || '').slice(0, 120);
     const requestedMode = String(body?.generationMode || '').trim().toLowerCase();
-    const shouldGenerateRecipes = Boolean(body?.generateRecipes) || requestedMode === 'ai_recipes' || recipes.length === 0;
+    const shouldGenerateRecipes = Boolean(body?.generateRecipes) || requestedMode === 'ai_recipes';
+    const useClientCatalog = requestedMode === 'client_catalog' && clientRecipes.length > 0;
+
+    let recipes = [];
+    let catalogSource = useClientCatalog ? 'client' : 'database';
+    if (useClientCatalog) {
+      recipes = clientRecipes;
+    } else {
+      try {
+        recipes = await listMealPlannerRecipes();
+      } catch (errorObject) {
+        console.error('Failed to load meal planner recipes from database:', errorObject?.message || String(errorObject));
+        recipes = [];
+      }
+      if (recipes.length === 0 && clientRecipes.length > 0) {
+        recipes = clientRecipes;
+        catalogSource = 'client';
+      }
+    }
 
     if (shouldGenerateRecipes) {
       const generatedBundle = await generateOpenAiMealPlanWithGeneratedRecipes({
@@ -2205,6 +2224,7 @@ async function handleApi(req, res, url) {
           generatedBy: 'openai',
           mealPlan: generatedBundle.mealPlan,
           recipes: generatedBundle.recipes,
+          catalogSource: 'generated',
         });
         return;
       }
@@ -2223,6 +2243,8 @@ async function handleApi(req, res, url) {
           ok: true,
           generatedBy: 'openai',
           mealPlan: aiMealPlan,
+          recipes,
+          catalogSource,
         });
         return;
       }
@@ -2238,6 +2260,8 @@ async function handleApi(req, res, url) {
           ok: true,
           generatedBy: 'rules',
           mealPlan: fallbackMealPlan,
+          recipes,
+          catalogSource,
         });
         return;
       }
@@ -2245,11 +2269,34 @@ async function handleApi(req, res, url) {
 
     sendJson(res, 200, {
       ok: false,
-      generatedBy: shouldGenerateRecipes ? 'openai' : 'rules',
+      generatedBy: shouldGenerateRecipes ? 'openai' : recipes.length > 0 ? 'rules' : 'database',
       error: shouldGenerateRecipes
         ? 'Unable to generate meals from the provided onboarding preferences.'
-        : 'Unable to generate meal plan from provided recipe catalog.',
+        : recipes.length === 0
+          ? 'No recipe catalog available from database right now.'
+          : 'Unable to generate meal plan from provided recipe catalog.',
     });
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/patient/meal-plan/catalog') {
+    const patient = await requirePatient(req, res);
+    if (!patient) return;
+
+    try {
+      const recipes = await listMealPlannerRecipes();
+      sendJson(res, 200, {
+        ok: true,
+        catalogSource: isSupabaseStorageEnabled() ? 'database' : 'local',
+        recipes,
+      });
+    } catch (errorObject) {
+      console.error('Meal planner catalog fetch failed:', errorObject?.message || String(errorObject));
+      sendJson(res, 500, {
+        ok: false,
+        error: 'Unable to load meal planner catalog right now.',
+      });
+    }
     return;
   }
 
