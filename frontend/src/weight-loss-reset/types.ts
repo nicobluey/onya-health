@@ -1,4 +1,5 @@
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+export type CoreMealType = 'breakfast' | 'lunch' | 'dinner';
 
 export interface Ingredient {
   name: string;
@@ -100,6 +101,7 @@ export interface OnboardingAnswers {
   allergyChips: string[];
   dislikes: string;
   cookingSkill: 'beginner' | 'comfortable' | 'advanced';
+  selectedMealTypes: CoreMealType[];
   mealsPerDay: number;
   daysPerWeek: number;
   budgetPreference: 'low cost' | 'balanced' | 'premium';

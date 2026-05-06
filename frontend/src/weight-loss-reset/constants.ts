@@ -38,6 +38,7 @@ export const DEFAULT_ONBOARDING_ANSWERS: OnboardingAnswers = {
   allergyChips: [],
   dislikes: '',
   cookingSkill: 'comfortable',
+  selectedMealTypes: ['breakfast', 'lunch', 'dinner'],
   mealsPerDay: 3,
   daysPerWeek: 7,
   budgetPreference: 'balanced',
