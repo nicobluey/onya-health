@@ -12,6 +12,8 @@
     "dcup": "docker compose up --build",
     "dcdown": "docker compose down",
     "supabase:test-record": "node scripts/supabase-test-record.mjs",
+    "supabase:sql": "node scripts/supabase-run-sql.mjs",
+    "supabase:migrate:meal-cache": "node scripts/supabase-apply-meal-cache-migration.mjs",
     "billing:backfill": "node scripts/backfill-patient-billing.mjs",
     "images:landing": "node scripts/generate-landing-images.mjs",
     "images:landing:dry": "node scripts/generate-landing-images.mjs --dry-run",
