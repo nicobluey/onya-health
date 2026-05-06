@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { DEFAULT_ONBOARDING_ANSWERS, FELICITY_ID, STORAGE_KEYS } from './constants';
 import type {
+  CoreMealType,
   DietitianMessage,
   MealPlan,
   OnboardingAnswers,
@@ -24,6 +25,25 @@ function safeReadBoolean(raw: string | null, fallback = false) {
   return fallback;
 }
 
+function isStorageQuotaExceeded(error: unknown) {
+  if (!error || typeof error !== 'object') return false;
+  const value = error as { name?: string; code?: number; message?: string };
+  if (value.name === 'QuotaExceededError' || value.code === 22 || value.code === 1014) return true;
+  return String(value.message || '').toLowerCase().includes('quota');
+}
+
+function safeLocalStorageSetItem(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch (errorObject) {
+    if (isStorageQuotaExceeded(errorObject)) {
+      console.warn(`Storage quota reached for key "${key}". Skipping cache write.`);
+      return;
+    }
+    console.error(`Failed to write localStorage key "${key}".`, errorObject);
+  }
+}
+
 function uniqueById<T extends { id: string }>(entries: T[]) {
   const seen = new Set<string>();
   return entries.filter((entry) => {
@@ -44,8 +64,31 @@ function sanitizeStringArray(value: unknown, fallback: string[] = []) {
   return value.map((entry) => String(entry || '').trim()).filter(Boolean);
 }
 
+function sanitizeSelectedMealTypes(value: unknown): CoreMealType[] {
+  const fallback = [...DEFAULT_ONBOARDING_ANSWERS.selectedMealTypes];
+  if (!Array.isArray(value)) return fallback;
+  const normalized = [...new Set(
+    value
+      .map((entry) => String(entry || '').trim().toLowerCase())
+      .filter((entry): entry is CoreMealType => entry === 'breakfast' || entry === 'lunch' || entry === 'dinner')
+  )] as CoreMealType[];
+  if (normalized.length === 0) return fallback;
+  if (normalized.length === 1) {
+    const first = normalized[0];
+    const second = first === 'dinner' ? 'lunch' : 'dinner';
+    return [first, second];
+  }
+  if (normalized.length > 3) return normalized.slice(0, 3);
+  return normalized;
+}
+
 function sanitizeOnboardingAnswers(input: Partial<OnboardingAnswers> | null | undefined): OnboardingAnswers {
   const source = input && typeof input === 'object' ? input : {};
+  const selectedMealTypes: CoreMealType[] = Array.isArray(source.selectedMealTypes)
+    ? sanitizeSelectedMealTypes(source.selectedMealTypes)
+    : clampNumber(source.mealsPerDay, 2, 3, DEFAULT_ONBOARDING_ANSWERS.mealsPerDay) <= 2
+    ? ['lunch', 'dinner']
+    : [...DEFAULT_ONBOARDING_ANSWERS.selectedMealTypes];
   return {
     ...DEFAULT_ONBOARDING_ANSWERS,
     ...source,
@@ -70,7 +113,8 @@ function sanitizeOnboardingAnswers(input: Partial<OnboardingAnswers> | null | un
       source.timeframeWeeks === undefined || source.timeframeWeeks === null
         ? DEFAULT_ONBOARDING_ANSWERS.timeframeWeeks
         : clampNumber(source.timeframeWeeks, 1, 104, DEFAULT_ONBOARDING_ANSWERS.timeframeWeeks || 12),
-    mealsPerDay: clampNumber(source.mealsPerDay, 2, 5, DEFAULT_ONBOARDING_ANSWERS.mealsPerDay),
+    selectedMealTypes,
+    mealsPerDay: selectedMealTypes.length,
     daysPerWeek: clampNumber(source.daysPerWeek, 2, 7, DEFAULT_ONBOARDING_ANSWERS.daysPerWeek),
     prepDay: String(source.prepDay || DEFAULT_ONBOARDING_ANSWERS.prepDay || 'Sunday').trim() || 'Sunday',
     dietaryRequirements: sanitizeStringArray(source.dietaryRequirements, DEFAULT_ONBOARDING_ANSWERS.dietaryRequirements),
@@ -113,7 +157,7 @@ function readInitialState(): WeightLossResetState {
       : 0,
     matchedDietitianId: onboardingRaw?.matchedDietitianId || null,
     dietitianBookingComplete: safeReadBoolean(window.localStorage.getItem(STORAGE_KEYS.bookingComplete), false),
-    mealPlan: safeParseJson<MealPlan | null>(window.localStorage.getItem(STORAGE_KEYS.mealPlan), null),
+    mealPlan: null,
     weightLogs,
     messages,
     groceryCheckedItems: safeParseJson<string[]>(window.localStorage.getItem(STORAGE_KEYS.groceryList), []).filter(Boolean),
@@ -135,12 +179,11 @@ export function useWeightLossResetState() {
       matchedDietitianId: state.matchedDietitianId,
     };
 
-    window.localStorage.setItem(STORAGE_KEYS.onboarding, JSON.stringify(onboardingPayload));
-    window.localStorage.setItem(STORAGE_KEYS.bookingComplete, String(state.dietitianBookingComplete));
-    window.localStorage.setItem(STORAGE_KEYS.mealPlan, JSON.stringify(state.mealPlan));
-    window.localStorage.setItem(STORAGE_KEYS.weightLogs, JSON.stringify(state.weightLogs));
-    window.localStorage.setItem(STORAGE_KEYS.messages, JSON.stringify(state.messages));
-    window.localStorage.setItem(STORAGE_KEYS.groceryList, JSON.stringify(state.groceryCheckedItems));
+    safeLocalStorageSetItem(STORAGE_KEYS.onboarding, JSON.stringify(onboardingPayload));
+    safeLocalStorageSetItem(STORAGE_KEYS.bookingComplete, String(state.dietitianBookingComplete));
+    safeLocalStorageSetItem(STORAGE_KEYS.weightLogs, JSON.stringify(state.weightLogs));
+    safeLocalStorageSetItem(STORAGE_KEYS.messages, JSON.stringify(state.messages));
+    safeLocalStorageSetItem(STORAGE_KEYS.groceryList, JSON.stringify(state.groceryCheckedItems));
   }, [state]);
 
   const cardState: WeightLossResetCardState = useMemo(() => {
