@@ -49,6 +49,46 @@ const LOCAL_MEAL_PLAN_CACHE_MAX_ENTRIES = Math.max(
 );
 const MEAL_PLAN_CACHE_EVENT_TYPE = 'MEAL_PLAN_CACHE_V1';
 const SHARED_MEAL_PLAN_TEMPLATE_EMAIL = 'mealplan-template@onyahealth.local';
+const SUPABASE_REQUEST_TIMEOUT_MS = Math.max(
+  3_000,
+  Number(process.env.SUPABASE_REQUEST_TIMEOUT_MS || 10_000)
+);
+const MEAL_PLAN_CACHE_EVENT_FALLBACK_ENABLED =
+  String(process.env.MEAL_PLAN_CACHE_EVENT_FALLBACK_ENABLED || '').trim().toLowerCase() === 'true';
+const MEAL_PLAN_EVENT_FALLBACK_SCAN_LIMIT = Math.max(
+  24,
+  Math.min(200, Number(process.env.MEAL_PLAN_EVENT_FALLBACK_SCAN_LIMIT || 120))
+);
+const MEAL_PLANNER_RECIPE_SELECT_COLUMNS = [
+  'id',
+  'title',
+  'description',
+  'image_url',
+  'ingredients',
+  'instructions',
+  'calories',
+  'protein',
+  'carbs',
+  'fat',
+  'meal_type',
+  'dietary_tags',
+  'allergens',
+  'prep_time_minutes',
+  'cook_time_minutes',
+  'total_time_minutes',
+  'serves',
+  'estimated_cost',
+  'source',
+];
+
+function createAbortSignalWithTimeout(timeoutMs = SUPABASE_REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), Math.max(1_000, Number(timeoutMs) || SUPABASE_REQUEST_TIMEOUT_MS));
+  return {
+    signal: controller.signal,
+    clear: () => clearTimeout(timeoutHandle),
+  };
+}
 
 function getCachedPatientId(email) {
   const normalized = normalizeEmail(email);
@@ -245,6 +285,15 @@ function normalizeStringArray(value) {
   return value.map((entry) => String(entry || '').trim()).filter(Boolean);
 }
 
+function sanitizePersistedRecipeImageUrl(value) {
+  const candidate = String(value || '').trim();
+  if (!candidate) return '';
+  if (/^https?:\/\//i.test(candidate)) return candidate;
+  if (candidate.startsWith('/')) return candidate;
+  if (/^[a-z0-9][a-z0-9/_-]*\.webp(?:\?.*)?$/i.test(candidate)) return candidate;
+  return '';
+}
+
 function toFiniteNumberOrUndefined(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
@@ -367,12 +416,13 @@ function mapRecipeRecordToMealPlannerRecipe(row = {}) {
     parseServesFromUnknown(source.serves) ??
     parseServesFromUnknown(source.servings) ??
     defaultServesForMealType(mealType);
+  const normalizedImageUrl = sanitizePersistedRecipeImageUrl(row.image_url || row.imageUrl);
 
   return {
     id: String(row.id || '').trim(),
     title: String(row.title || '').trim(),
     description: String(row.description || '').trim() || undefined,
-    imageUrl: String(row.image_url || row.imageUrl || '').trim() || undefined,
+    imageUrl: normalizedImageUrl || undefined,
     ingredients: Array.isArray(row.ingredients) ? row.ingredients : [],
     instructions: Array.isArray(row.instructions) ? row.instructions : [],
     calories: calories !== undefined ? Math.round(calories) : undefined,
@@ -404,6 +454,7 @@ function mapMealPlannerRecipeToSupabaseRecord(recipe = {}) {
   const carbs = toFiniteNumberOrUndefined(normalized.carbs);
   const fat = toFiniteNumberOrUndefined(normalized.fat);
   const source = normalizeRecipeSource(normalized.source);
+  const persistedImageUrl = sanitizePersistedRecipeImageUrl(normalized.imageUrl);
   const sourceWithFallbacks = {
     ...source,
     serves: source.serves ?? source.servings ?? (serves !== undefined ? Math.round(serves * 100) / 100 : undefined),
@@ -420,12 +471,19 @@ function mapMealPlannerRecipeToSupabaseRecord(recipe = {}) {
       source.totalTime ??
       (totalTimeMinutes !== undefined && totalTimeMinutes > 0 ? `${Math.round(totalTimeMinutes)} min` : undefined),
   };
+  // Prevent large image blobs/prompts from being persisted in Postgres rows.
+  delete sourceWithFallbacks.imagePrompt;
+  delete sourceWithFallbacks.image_base64;
+  delete sourceWithFallbacks.imageBase64;
+  delete sourceWithFallbacks.imageData;
+  delete sourceWithFallbacks.imageDataUri;
+  delete sourceWithFallbacks.image_data_uri;
 
   return {
     id: normalized.id,
     title: normalized.title,
     description: normalized.description || null,
-    image_url: normalized.imageUrl || null,
+    image_url: persistedImageUrl || null,
     ingredients: Array.isArray(normalized.ingredients) ? normalized.ingredients : [],
     instructions: Array.isArray(normalized.instructions) ? normalized.instructions : [],
     calories: calories === undefined ? null : Math.round(calories),
@@ -544,6 +602,9 @@ function mapMealPlanGenerationCacheRow(row = {}) {
 }
 
 function shouldFallbackMealPlanCacheToRequestEvents(errorObject) {
+  if (!MEAL_PLAN_CACHE_EVENT_FALLBACK_ENABLED) {
+    return false;
+  }
   const status = Number(errorObject?.status || 0);
   const code = String(errorObject?.data?.code || '').trim();
   const message = String(errorObject?.data?.message || errorObject?.message || '').toLowerCase();
@@ -605,17 +666,32 @@ async function supabaseRequest(endpoint, options = {}) {
     throw new Error('Supabase config missing (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY)');
   }
 
-  const response = await fetch(`${config.url}/rest/v1/${endpoint}`, {
-    method: options.method || 'GET',
-    headers: {
-      apikey: config.key,
-      Authorization: `Bearer ${config.key}`,
-      'Content-Type': 'application/json',
-      Prefer: options.prefer || 'return=representation',
-      ...(options.headers || {}),
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
+  const abort = createAbortSignalWithTimeout();
+  let response;
+  try {
+    response = await fetch(`${config.url}/rest/v1/${endpoint}`, {
+      method: options.method || 'GET',
+      headers: {
+        apikey: config.key,
+        Authorization: `Bearer ${config.key}`,
+        'Content-Type': 'application/json',
+        Prefer: options.prefer || 'return=representation',
+        ...(options.headers || {}),
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined,
+      signal: abort.signal,
+    });
+  } catch (errorObject) {
+    if (errorObject?.name === 'AbortError') {
+      const timeoutError = new Error(`Supabase request timed out after ${SUPABASE_REQUEST_TIMEOUT_MS}ms`);
+      timeoutError.status = 504;
+      timeoutError.data = { code: 'SUPABASE_TIMEOUT', endpoint };
+      throw timeoutError;
+    }
+    throw errorObject;
+  } finally {
+    abort.clear();
+  }
 
   const text = await response.text();
   let data = null;
@@ -641,16 +717,31 @@ async function supabaseAuthAdminRequest(endpoint, options = {}) {
     throw new Error('Supabase config missing (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY)');
   }
 
-  const response = await fetch(`${config.url}/auth/v1/admin/${endpoint}`, {
-    method: options.method || 'GET',
-    headers: {
-      apikey: config.key,
-      Authorization: `Bearer ${config.key}`,
-      'Content-Type': 'application/json',
-      ...(options.headers || {}),
-    },
-    body: options.body ? JSON.stringify(options.body) : undefined,
-  });
+  const abort = createAbortSignalWithTimeout();
+  let response;
+  try {
+    response = await fetch(`${config.url}/auth/v1/admin/${endpoint}`, {
+      method: options.method || 'GET',
+      headers: {
+        apikey: config.key,
+        Authorization: `Bearer ${config.key}`,
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      },
+      body: options.body ? JSON.stringify(options.body) : undefined,
+      signal: abort.signal,
+    });
+  } catch (errorObject) {
+    if (errorObject?.name === 'AbortError') {
+      const timeoutError = new Error(`Supabase auth admin request timed out after ${SUPABASE_REQUEST_TIMEOUT_MS}ms`);
+      timeoutError.status = 504;
+      timeoutError.data = { code: 'SUPABASE_AUTH_TIMEOUT', endpoint };
+      throw timeoutError;
+    }
+    throw errorObject;
+  } finally {
+    abort.clear();
+  }
 
   const text = await response.text();
   let data = null;
@@ -1093,34 +1184,13 @@ async function upsertPatientBillingSupabase(patientEmail, patch = {}) {
 }
 
 async function listMealPlannerRecipesSupabase() {
-  const baseColumns = [
-    'id',
-    'title',
-    'description',
-    'image_url',
-    'ingredients',
-    'instructions',
-    'calories',
-    'protein',
-    'carbs',
-    'fat',
-    'meal_type',
-    'dietary_tags',
-    'allergens',
-    'prep_time_minutes',
-    'cook_time_minutes',
-    'total_time_minutes',
-    'serves',
-    'estimated_cost',
-    'source',
-  ];
-  let columns = [...baseColumns];
+  let columns = [...MEAL_PLANNER_RECIPE_SELECT_COLUMNS];
   let rows = [];
 
   for (let attempt = 0; attempt < 8; attempt += 1) {
     try {
       rows = await supabaseRequest(
-        `meal_planner_recipes?select=${columns.join(',')}&order=title.asc&limit=600`,
+        `meal_planner_recipes?select=${columns.join(',')}&is_active=eq.true&order=title.asc&limit=600`,
         {
           method: 'GET',
           prefer: 'return=representation',
@@ -1141,10 +1211,13 @@ async function listMealPlannerRecipesSupabase() {
 
   if (!Array.isArray(rows) || rows.length === 0) {
     try {
-      rows = await supabaseRequest('meal_planner_recipes?select=*&limit=800', {
-        method: 'GET',
-        prefer: 'return=representation',
-      });
+      rows = await supabaseRequest(
+        `meal_planner_recipes?select=${columns.join(',')}&is_active=eq.true&order=title.asc&limit=600`,
+        {
+          method: 'GET',
+          prefer: 'return=representation',
+        }
+      );
     } catch {
       // Ignore and keep previous rows value for downstream filtering.
     }
@@ -1160,7 +1233,9 @@ async function listMealPlannerRecipesByIdsSupabase(recipeIds = []) {
   const escaped = normalizedIds.map((id) => `"${id.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`);
   const inFilter = `(${escaped.join(',')})`;
   const rows = await supabaseRequest(
-    `meal_planner_recipes?select=*&id=in.${encodeURIComponent(inFilter)}&limit=${Math.max(normalizedIds.length, 1)}`,
+    `meal_planner_recipes?select=${MEAL_PLANNER_RECIPE_SELECT_COLUMNS.join(',')}&id=in.${encodeURIComponent(
+      inFilter
+    )}&is_active=eq.true&limit=${Math.max(normalizedIds.length, 1)}`,
     {
       method: 'GET',
       prefer: 'return=representation',
@@ -1291,7 +1366,7 @@ async function getMealPlanGenerationCacheFromRequestEventsSupabase(cacheKey) {
   const rows = await supabaseRequest(
     `request_events?select=payload,created_at&event_type=eq.${encodeURIComponent(
       MEAL_PLAN_CACHE_EVENT_TYPE
-    )}&order=created_at.desc&limit=400`,
+    )}&order=created_at.desc&limit=${MEAL_PLAN_EVENT_FALLBACK_SCAN_LIMIT}`,
     {
       method: 'GET',
       prefer: 'return=representation',
@@ -1349,7 +1424,7 @@ async function getMealPlanTemplateCacheByIntakeHashFromRequestEventsSupabase(int
   const rows = await supabaseRequest(
     `request_events?select=payload,created_at&event_type=eq.${encodeURIComponent(
       MEAL_PLAN_CACHE_EVENT_TYPE
-    )}&order=created_at.desc&limit=600`,
+    )}&order=created_at.desc&limit=${MEAL_PLAN_EVENT_FALLBACK_SCAN_LIMIT}`,
     {
       method: 'GET',
       prefer: 'return=representation',
@@ -1649,7 +1724,7 @@ async function getLatestMealPlanGenerationCacheByPatientEmailFromRequestEventsSu
   const rows = await supabaseRequest(
     `request_events?select=payload,created_at&event_type=eq.${encodeURIComponent(
       MEAL_PLAN_CACHE_EVENT_TYPE
-    )}&order=created_at.desc&limit=900`,
+    )}&order=created_at.desc&limit=${MEAL_PLAN_EVENT_FALLBACK_SCAN_LIMIT}`,
     {
       method: 'GET',
       prefer: 'return=representation',
@@ -1768,7 +1843,7 @@ async function listMealPlanGenerationCacheByPatientEmailSupabase(patientEmail, l
   const rows = await supabaseRequest(
     `request_events?select=payload,created_at&event_type=eq.${encodeURIComponent(
       MEAL_PLAN_CACHE_EVENT_TYPE
-    )}&order=created_at.desc&limit=900`,
+    )}&order=created_at.desc&limit=${MEAL_PLAN_EVENT_FALLBACK_SCAN_LIMIT}`,
     {
       method: 'GET',
       prefer: 'return=representation',
