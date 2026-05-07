@@ -619,7 +619,7 @@ export default function WeightLossResetDashboard({
   useEffect(() => {
     let disposed = false;
     const TARGET_DURATION_MS = 120_000;
-    const MIN_PROGRESS = 4;
+    const MIN_PROGRESS = 8;
     const MAX_IN_PROGRESS = 98;
 
     if (!isGeneratingPlan) {
@@ -668,7 +668,7 @@ export default function WeightLossResetDashboard({
       window.clearInterval(progressTimer);
       window.clearInterval(messageTimer);
     };
-  }, [generationMessages.length, generationProgress, isGeneratingPlan]);
+  }, [generationMessages.length, isGeneratingPlan]);
 
   const submitWeight = (event: FormEvent) => {
     event.preventDefault();

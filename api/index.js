@@ -479,8 +479,9 @@ function buildMealPlanGenerationHistoryCacheKey({ patientEmail, intakeHash, seed
   return `mealplan:${normalizedEmail}:${normalizedHash}:run:${runId}`;
 }
 
-function normalizeRecipeIdList(value) {
+function normalizeRecipeIdList(value, limit = 1200) {
   const source = Array.isArray(value) ? value : [];
+  const max = Math.max(1, Math.min(2000, Number(limit || 1200)));
   const output = [];
   const seen = new Set();
   for (const entry of source) {
@@ -488,7 +489,7 @@ function normalizeRecipeIdList(value) {
     if (!id || seen.has(id)) continue;
     seen.add(id);
     output.push(id);
-    if (output.length >= 180) break;
+    if (output.length >= max) break;
   }
   return output;
 }
@@ -668,10 +669,18 @@ function normalizeRecipeForProduct(recipe, { generatedBy = '' } = {}) {
   }
 
   const normalizedGeneratedBy = String(generatedBy || '').trim().toLowerCase();
-  if (normalizedGeneratedBy === 'openai' || normalizedGeneratedBy === 'rules') {
-    source.generatedBy = normalizedGeneratedBy;
+  if (normalizedGeneratedBy === 'openai') {
+    source.generatedBy = 'openai';
     if (!String(source.provider || '').trim()) {
-      source.provider = normalizedGeneratedBy === 'openai' ? 'openai' : 'rules-generated';
+      source.provider = 'openai';
+    }
+  }
+  if (normalizedGeneratedBy === 'rules') {
+    if (!String(source.generatedBy || '').trim()) {
+      source.generatedBy = 'rules';
+    }
+    if (!String(source.provider || '').trim()) {
+      source.provider = 'rules-generated';
     }
   }
 
@@ -747,14 +756,18 @@ function isLikelyGeneratedRecipe(recipe) {
   )
     .trim()
     .toLowerCase();
+  const sourceUrl = String(source.url || '').trim().toLowerCase();
+  if (provider.includes('dietitians-australia') || sourceUrl.includes('dietitiansaustralia.org.au')) return false;
   if (provider.includes('openai') || provider.includes('rules-generated') || provider.includes('ai-generated')) {
     return true;
   }
+  if (provider === 'rules') return true;
+  if (String(source.generatedBy || '').trim().toLowerCase() === 'openai') return true;
+  if (String(source.generatedBy || '').trim().toLowerCase() === 'rules') return true;
   if (provider.includes('generated')) return true;
   if (String(source.stage || '').toLowerCase().includes('ai_recipes')) return true;
   if (String(source.model || '').trim().toLowerCase().startsWith('gpt')) return true;
-  if (String(source.url || '').trim().toLowerCase().includes('dietitiansaustralia.org.au')) return false;
-  return Boolean(String(source.imagePrompt || '').trim());
+  return false;
 }
 
 function buildMealPlanCacheBundle({ mealPlan, recipes, onboardingAnswers = null }) {
@@ -914,7 +927,9 @@ async function hydrateMealPlanBundleFromCacheEntry(entry) {
   const hydratedRecipes = recipeIds
     .map((id) => persistedById.get(id) || legacyById.get(id))
     .filter((recipe) => recipe && typeof recipe === 'object');
-  const normalizedHydratedRecipes = normalizeRecipeListForProduct(hydratedRecipes);
+  const normalizedHydratedRecipes = normalizeRecipeListForProduct(hydratedRecipes).filter((recipe) =>
+    isLikelyGeneratedRecipe(recipe)
+  );
   if (normalizedHydratedRecipes.length === 0) return null;
 
   const hydratedById = new Set(normalizedHydratedRecipes.map((recipe) => String(recipe.id || '').trim()).filter(Boolean));
@@ -933,9 +948,9 @@ async function hydrateMealPlanBundleFromCacheEntry(entry) {
 function collectRecipeIdsFromCacheEntries(entries) {
   return normalizeRecipeIdList(
     (Array.isArray(entries) ? entries : []).flatMap((entry) =>
-      normalizeRecipeIdList(entry?.bundle?.recipeIds ?? entry?.bundle?.recipe_ids)
+      normalizeRecipeIdList(entry?.bundle?.recipeIds ?? entry?.bundle?.recipe_ids, 1200)
     )
-  );
+  , 1200);
 }
 
 async function loadPatientGeneratedRecipeCatalog({
@@ -970,20 +985,24 @@ async function loadPatientGeneratedRecipeCatalog({
         return [];
       })
     : [];
-  const persistedRecipes = normalizeRecipeListForProduct(persistedByCacheIds);
+  const persistedRecipes = normalizeRecipeListForProduct(persistedByCacheIds).filter((recipe) =>
+    isLikelyGeneratedRecipe(recipe)
+  );
   const persistedById = new Map(persistedRecipes.map((recipe) => [recipe.id, recipe]));
   const missingLegacyById = new Map();
 
   for (const entry of Array.isArray(cacheEntries) ? cacheEntries : []) {
     const bundle = entry?.bundle && typeof entry.bundle === 'object' && !Array.isArray(entry.bundle) ? entry.bundle : null;
     if (!bundle) continue;
-    const legacyRecipes = normalizeRecipeListForProduct(Array.isArray(bundle.recipes) ? bundle.recipes : []);
+    const legacyRecipes = normalizeRecipeListForProduct(Array.isArray(bundle.recipes) ? bundle.recipes : []).filter(
+      (recipe) => isLikelyGeneratedRecipe(recipe)
+    );
     for (const recipe of legacyRecipes) {
       if (persistedById.has(recipe.id) || missingLegacyById.has(recipe.id)) continue;
       missingLegacyById.set(recipe.id, recipe);
-      if (missingLegacyById.size >= 240) break;
+      if (missingLegacyById.size >= 1200) break;
     }
-    if (missingLegacyById.size >= 240) break;
+    if (missingLegacyById.size >= 1200) break;
   }
 
   if (missingLegacyById.size > 0) {
@@ -1006,16 +1025,18 @@ async function loadPatientGeneratedRecipeCatalog({
     const bundle = entry?.bundle && typeof entry.bundle === 'object' && !Array.isArray(entry.bundle) ? entry.bundle : null;
     if (!bundle) continue;
     const candidateIds = normalizeRecipeIdList([
-      ...normalizeRecipeIdList(bundle.recipeIds ?? bundle.recipe_ids),
+      ...normalizeRecipeIdList(bundle.recipeIds ?? bundle.recipe_ids, 1200),
       ...extractRecipeIdsFromMealPlan(bundle.mealPlan),
-    ]);
+    ], 1200);
     if (candidateIds.length === 0) continue;
 
-    const legacyRecipes = normalizeRecipeListForProduct(Array.isArray(bundle.recipes) ? bundle.recipes : []);
+    const legacyRecipes = normalizeRecipeListForProduct(Array.isArray(bundle.recipes) ? bundle.recipes : []).filter(
+      (recipe) => isLikelyGeneratedRecipe(recipe)
+    );
     const legacyById = new Map(legacyRecipes.map((recipe) => [recipe.id, recipe]));
     for (const recipeId of candidateIds) {
       const recipe = persistedById.get(recipeId) || legacyById.get(recipeId);
-      if (!recipe || merged.has(recipe.id)) continue;
+      if (!recipe || !isLikelyGeneratedRecipe(recipe) || merged.has(recipe.id)) continue;
       merged.set(recipe.id, recipe);
       hydratedRecipeCount += 1;
     }
@@ -1038,7 +1059,7 @@ async function loadPatientGeneratedRecipeCatalog({
     );
     for (const recipe of generatedFallbackRecipes) {
       if (!merged.has(recipe.id)) merged.set(recipe.id, recipe);
-      if (merged.size >= 420) break;
+      if (merged.size >= 1200) break;
     }
   }
 
@@ -4337,8 +4358,8 @@ export default async function handler(req, res) {
       try {
         const generatedCatalog = await loadPatientGeneratedRecipeCatalog({
           patientEmail: patient.email,
-          cacheLimit: 84,
-          includeGlobalGeneratedFallback: false,
+          cacheLimit: 320,
+          includeGlobalGeneratedFallback: true,
         });
 
         const recipes = mapRecipeListForClient(normalizeRecipeListForProduct(generatedCatalog.recipes), req).slice(0, limit);

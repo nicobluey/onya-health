@@ -58,6 +58,7 @@ const LOCAL_MEAL_PLAN_CACHE_MAX_ENTRIES = Math.max(
 );
 const MEAL_PLAN_CACHE_EVENT_TYPE = 'MEAL_PLAN_CACHE_V1';
 const SHARED_MEAL_PLAN_TEMPLATE_EMAIL = 'mealplan-template@onyahealth.local';
+const ALLOWED_MEAL_RECIPE_GENERATED_BY = new Set(['openai', 'rules']);
 
 function pruneSupabaseMealPlannerRecipeByIdCache() {
   const now = Date.now();
@@ -365,12 +366,70 @@ function normalizeRecipeSource(value) {
   return value;
 }
 
+function normalizeSourceProviderValue(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-');
+}
+
+function normalizeGeneratedByFromRecipeSource(row = {}, source = {}) {
+  const directGeneratedBy = String(row.generatedBy || row.generated_by || '').trim().toLowerCase();
+  const sourceGeneratedBy = String(source.generatedBy || source.generated_by || '').trim().toLowerCase();
+  const provider = normalizeSourceProviderValue(
+    row.sourceProvider ||
+      row.source_provider ||
+      source.provider ||
+      source.origin ||
+      source.generator ||
+      source.label ||
+      sourceGeneratedBy ||
+      directGeneratedBy
+  );
+  const model = String(row.model || source.model || '').trim().toLowerCase();
+  const sourceUrl = String(source.url || '').trim().toLowerCase();
+
+  if (
+    directGeneratedBy === 'openai' ||
+    sourceGeneratedBy === 'openai' ||
+    provider.includes('openai') ||
+    model.startsWith('gpt')
+  ) {
+    return 'openai';
+  }
+  if (
+    directGeneratedBy === 'rules' ||
+    sourceGeneratedBy === 'rules' ||
+    provider.includes('rules-generated') ||
+    provider === 'rules' ||
+    provider === 'ai-generated'
+  ) {
+    return 'rules';
+  }
+  if (provider.includes('dietitians-australia') || sourceUrl.includes('dietitiansaustralia.org.au')) {
+    return 'legacy';
+  }
+  return 'legacy';
+}
+
+function isMealPlannerRecipeEligible(recipe) {
+  if (!recipe || typeof recipe !== 'object' || Array.isArray(recipe)) return false;
+  const source = normalizeRecipeSource(recipe.source);
+  const generatedBy = normalizeGeneratedByFromRecipeSource(recipe, source);
+  const isActive = recipe.isActive !== false;
+  return isActive && ALLOWED_MEAL_RECIPE_GENERATED_BY.has(generatedBy);
+}
+
 function mapRecipeRecordToMealPlannerRecipe(row = {}) {
   const calories = toFiniteNumberOrUndefined(row.calories);
   const protein = toFiniteNumberOrUndefined(row.protein);
   const carbs = toFiniteNumberOrUndefined(row.carbs);
   const fat = toFiniteNumberOrUndefined(row.fat);
   const source = normalizeRecipeSource(row.source);
+  const sourceProvider = normalizeSourceProviderValue(
+    row.source_provider || row.sourceProvider || source.provider || source.origin || source.generator || source.label || ''
+  );
+  const generatedBy = normalizeGeneratedByFromRecipeSource(row, source);
   const mealType = normalizeMealType(row.meal_type || row.mealType);
   const prepTimeColumn = toFiniteNumberOrUndefined(row.prep_time_minutes ?? row.prepTimeMinutes);
   const cookTimeColumn = toFiniteNumberOrUndefined(row.cook_time_minutes ?? row.cookTimeMinutes);
@@ -438,6 +497,14 @@ function mapRecipeRecordToMealPlannerRecipe(row = {}) {
     serves: serves !== undefined && serves > 0 ? Math.round(serves * 100) / 100 : undefined,
     estimatedCost: String((row.estimated_cost ?? row.estimatedCost) || '').trim() || undefined,
     source,
+    isActive:
+      typeof row.is_active === 'boolean'
+        ? row.is_active
+        : typeof row.isActive === 'boolean'
+          ? row.isActive
+          : true,
+    generatedBy,
+    sourceProvider: sourceProvider || undefined,
   };
 }
 
@@ -454,6 +521,14 @@ function mapMealPlannerRecipeToSupabaseRecord(recipe = {}) {
   const carbs = toFiniteNumberOrUndefined(normalized.carbs);
   const fat = toFiniteNumberOrUndefined(normalized.fat);
   const source = normalizeRecipeSource(normalized.source);
+  const sourceProvider = normalizeSourceProviderValue(
+    normalized.sourceProvider || source.provider || source.origin || source.generator || source.label || ''
+  );
+  const generatedBy = normalizeGeneratedByFromRecipeSource(normalized, source);
+  const isActive =
+    typeof normalized.isActive === 'boolean'
+      ? normalized.isActive
+      : ALLOWED_MEAL_RECIPE_GENERATED_BY.has(generatedBy);
   const sourceWithFallbacks = {
     ...source,
     serves: source.serves ?? source.servings ?? (serves !== undefined ? Math.round(serves * 100) / 100 : undefined),
@@ -469,6 +544,8 @@ function mapMealPlannerRecipeToSupabaseRecord(recipe = {}) {
     totalTime:
       source.totalTime ??
       (totalTimeMinutes !== undefined && totalTimeMinutes > 0 ? `${Math.round(totalTimeMinutes)} min` : undefined),
+    generatedBy: source.generatedBy || generatedBy || undefined,
+    provider: source.provider || sourceProvider || (generatedBy === 'openai' ? 'openai' : generatedBy === 'rules' ? 'rules-generated' : undefined),
   };
 
   return {
@@ -491,6 +568,9 @@ function mapMealPlannerRecipeToSupabaseRecord(recipe = {}) {
     serves: serves === undefined ? null : Math.round(serves * 100) / 100,
     estimated_cost: normalized.estimatedCost ? String(normalized.estimatedCost) : null,
     source: sourceWithFallbacks,
+    is_active: Boolean(isActive),
+    generated_by: generatedBy || 'legacy',
+    source_provider: sourceProvider || null,
     updated_at: new Date().toISOString(),
   };
 }
@@ -511,8 +591,9 @@ function sanitizeMealPlanIntakeHash(value) {
     .slice(0, 120);
 }
 
-function normalizeRecipeIdList(value) {
+function normalizeRecipeIdList(value, limit = 1200) {
   const source = Array.isArray(value) ? value : [];
+  const max = Math.max(1, Math.min(2000, Number(limit || 1200)));
   const output = [];
   const seen = new Set();
   for (const entry of source) {
@@ -521,7 +602,7 @@ function normalizeRecipeIdList(value) {
     if (seen.has(id)) continue;
     seen.add(id);
     output.push(id);
-    if (output.length >= 180) break;
+    if (output.length >= max) break;
   }
   return output;
 }
@@ -1226,14 +1307,26 @@ async function listMealPlannerRecipesSupabase() {
     'serves',
     'estimated_cost',
     'source',
+    'is_active',
+    'generated_by',
+    'source_provider',
   ];
   let columns = [...baseColumns];
   let rows = [];
+  let useIsActiveFilter = true;
+  let useGeneratedByFilter = true;
 
   for (let attempt = 0; attempt < 8; attempt += 1) {
     try {
+      const queryFilters = [
+        useIsActiveFilter ? 'is_active=eq.true' : '',
+        useGeneratedByFilter ? 'generated_by=in.(openai,rules)' : '',
+      ]
+        .filter(Boolean)
+        .join('&');
+      const querySuffix = queryFilters ? `&${queryFilters}` : '';
       rows = await supabaseRequest(
-        `meal_planner_recipes?select=${columns.join(',')}&order=title.asc&limit=600`,
+        `meal_planner_recipes?select=${columns.join(',')}${querySuffix}&order=updated_at.desc&limit=1200`,
         {
           method: 'GET',
           prefer: 'return=representation',
@@ -1244,8 +1337,16 @@ async function listMealPlannerRecipesSupabase() {
       const status = errorObject?.status;
       const code = errorObject?.data?.code;
       const missingColumn = extractMissingColumnName(errorObject?.data?.message || errorObject?.message);
-      if (status === 400 && code === 'PGRST204' && missingColumn && columns.includes(missingColumn)) {
-        columns = columns.filter((entry) => entry !== missingColumn);
+      if (status === 400 && code === 'PGRST204' && missingColumn) {
+        if (missingColumn === 'generated_by') {
+          useGeneratedByFilter = false;
+        }
+        if (missingColumn === 'is_active') {
+          useIsActiveFilter = false;
+        }
+        if (columns.includes(missingColumn)) {
+          columns = columns.filter((entry) => entry !== missingColumn);
+        }
         continue;
       }
       throw errorObject;
@@ -1254,7 +1355,7 @@ async function listMealPlannerRecipesSupabase() {
 
   if (!Array.isArray(rows) || rows.length === 0) {
     try {
-      rows = await supabaseRequest('meal_planner_recipes?select=*&limit=800', {
+      rows = await supabaseRequest('meal_planner_recipes?select=*&order=updated_at.desc&limit=1400', {
         method: 'GET',
         prefer: 'return=representation',
       });
@@ -1264,7 +1365,9 @@ async function listMealPlannerRecipesSupabase() {
   }
 
   const recipes = Array.isArray(rows) ? rows.map(mapRecipeRecordToMealPlannerRecipe) : [];
-  const normalizedRecipes = recipes.filter((recipe) => recipe.id && recipe.title && Array.isArray(recipe.ingredients));
+  const normalizedRecipes = recipes
+    .filter((recipe) => recipe.id && recipe.title && Array.isArray(recipe.ingredients))
+    .filter((recipe) => isMealPlannerRecipeEligible(recipe));
   for (const recipe of normalizedRecipes) {
     setCachedSupabaseMealPlannerRecipeById(recipe);
   }
@@ -1272,34 +1375,66 @@ async function listMealPlannerRecipesSupabase() {
 }
 
 async function listMealPlannerRecipesByIdsSupabase(recipeIds = []) {
-  const normalizedIds = normalizeRecipeIdList(recipeIds);
+  const normalizedIds = normalizeRecipeIdList(recipeIds, 1200);
   if (normalizedIds.length === 0) return [];
   const byId = new Map();
   const missingIds = [];
   for (const recipeId of normalizedIds) {
     const cachedRecipe = getCachedSupabaseMealPlannerRecipeById(recipeId);
-    if (cachedRecipe) {
+    if (cachedRecipe && isMealPlannerRecipeEligible(cachedRecipe)) {
       byId.set(recipeId, cachedRecipe);
+    } else if (cachedRecipe && !isMealPlannerRecipeEligible(cachedRecipe)) {
+      supabaseMealPlannerRecipeByIdCache.delete(recipeId);
     } else {
       missingIds.push(recipeId);
     }
   }
 
   if (missingIds.length > 0) {
-    const escaped = missingIds.map((id) => `"${id.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`);
-    const inFilter = `(${escaped.join(',')})`;
-    const rows = await supabaseRequest(
-      `meal_planner_recipes?select=*&id=in.${encodeURIComponent(inFilter)}&limit=${Math.max(missingIds.length, 1)}`,
-      {
-        method: 'GET',
-        prefer: 'return=representation',
+    const chunkSize = 120;
+    for (let index = 0; index < missingIds.length; index += chunkSize) {
+      const chunk = missingIds.slice(index, index + chunkSize);
+      if (chunk.length === 0) continue;
+      const escaped = chunk.map((id) => `"${id.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`);
+      const inFilter = `(${escaped.join(',')})`;
+      let useIsActiveFilter = true;
+      let useGeneratedByFilter = true;
+      let rows = [];
+
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        try {
+          const queryFilters = [
+            `id=in.${encodeURIComponent(inFilter)}`,
+            useIsActiveFilter ? 'is_active=eq.true' : '',
+            useGeneratedByFilter ? 'generated_by=in.(openai,rules)' : '',
+            `limit=${Math.max(chunk.length, 1)}`,
+          ]
+            .filter(Boolean)
+            .join('&');
+          rows = await supabaseRequest(`meal_planner_recipes?select=*&${queryFilters}`, {
+            method: 'GET',
+            prefer: 'return=representation',
+          });
+          break;
+        } catch (errorObject) {
+          const status = errorObject?.status;
+          const code = errorObject?.data?.code;
+          const missingColumn = extractMissingColumnName(errorObject?.data?.message || errorObject?.message);
+          if (status === 400 && code === 'PGRST204' && missingColumn) {
+            if (missingColumn === 'generated_by') useGeneratedByFilter = false;
+            if (missingColumn === 'is_active') useIsActiveFilter = false;
+            continue;
+          }
+          throw errorObject;
+        }
       }
-    );
-    const fetchedRecipes = Array.isArray(rows) ? rows.map(mapRecipeRecordToMealPlannerRecipe) : [];
-    for (const recipe of fetchedRecipes) {
-      if (!recipe?.id) continue;
-      byId.set(recipe.id, recipe);
-      setCachedSupabaseMealPlannerRecipeById(recipe);
+
+      const fetchedRecipes = Array.isArray(rows) ? rows.map(mapRecipeRecordToMealPlannerRecipe) : [];
+      for (const recipe of fetchedRecipes) {
+        if (!recipe?.id || !isMealPlannerRecipeEligible(recipe)) continue;
+        byId.set(recipe.id, recipe);
+        setCachedSupabaseMealPlannerRecipeById(recipe);
+      }
     }
   }
 
@@ -1832,7 +1967,7 @@ async function getLatestMealPlanGenerationCacheByPatientEmailSupabase(patientEma
 async function listMealPlanGenerationCacheByPatientEmailSupabase(patientEmail, limit = 24) {
   const normalizedEmail = normalizeEmail(patientEmail);
   if (!normalizedEmail) return [];
-  const boundedLimit = Math.max(1, Math.min(240, Number(limit || 24)));
+  const boundedLimit = Math.max(1, Math.min(720, Number(limit || 24)));
 
   const mapRows = (rows) =>
     (Array.isArray(rows) ? rows : [])
@@ -1944,7 +2079,7 @@ async function getLatestMealPlanGenerationCacheByPatientEmailLocal(patientEmail)
 async function listMealPlanGenerationCacheByPatientEmailLocal(patientEmail, limit = 24) {
   const normalizedEmail = normalizeEmail(patientEmail);
   if (!normalizedEmail) return [];
-  const boundedLimit = Math.max(1, Math.min(240, Number(limit || 24)));
+  const boundedLimit = Math.max(1, Math.min(720, Number(limit || 24)));
 
   const db = await readDbRaw();
   const entries = Array.isArray(db.mealPlanGenerationCache) ? db.mealPlanGenerationCache : [];

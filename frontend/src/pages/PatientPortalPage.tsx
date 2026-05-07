@@ -1164,7 +1164,7 @@ export default function PatientPortalPage() {
             catalogHydrationRequestedAtRef.current = now;
             isHydratingCatalogRef.current = true;
             try {
-                const { response, payload } = await fetchApiJson('/api/patient/meal-plan/catalog?limit=72&includeDataImages=1', {
+                const { response, payload } = await fetchApiJson('/api/patient/meal-plan/catalog?limit=420&includeDataImages=1', {
                     method: 'GET',
                     headers: {
                         Authorization: `Bearer ${activeToken}`,
