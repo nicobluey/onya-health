@@ -16,77 +16,40 @@ type FloatingScienceCard = {
 const SCIENCE_FLOATING_CARDS: FloatingScienceCard[] = [
     {
         src: '/Blue%20Cells.webp',
-        className: '-left-20 top-16 h-36 w-36 md:-left-24 md:top-20 md:h-56 md:w-56',
+        className: '-left-14 top-16 h-32 w-32 md:-left-20 md:top-20 md:h-48 md:w-48',
         tilt: '-8deg',
         duration: '18s',
         delay: '0s',
     },
     {
-        src: '/Green%20Cells.webp',
-        className: 'right-[-2.9rem] top-24 h-28 w-28 md:right-[5%] md:top-14 md:h-36 md:w-36',
+        src: '/Blue%20Bubbles.webp',
+        className: 'right-[-2.4rem] top-24 h-28 w-28 md:right-[8%] md:top-16 md:h-36 md:w-36',
         tilt: '8deg',
         duration: '17s',
         delay: '1.2s',
         reverse: true,
     },
     {
-        src: '/Blue%20Bubbles.webp',
-        className: 'left-[6%] -bottom-10 h-28 w-28 md:left-[8%] md:bottom-10 md:h-36 md:w-36',
+        src: '/Microscope.webp',
+        className: 'left-[2%] bottom-[12%] h-24 w-24 md:left-[4%] md:bottom-[18%] md:h-32 md:w-32',
         tilt: '-6deg',
         duration: '20s',
         delay: '0.8s',
     },
     {
-        src: '/Orange%20Cells.webp',
-        className: 'right-[18%] -bottom-8 h-24 w-24 md:right-[28%] md:bottom-6 md:h-32 md:w-32',
+        src: '/Lab%20Equipment.webp',
+        className: 'right-[22%] -bottom-7 h-24 w-24 md:right-[30%] md:bottom-8 md:h-28 md:w-28',
         tilt: '9deg',
         duration: '15s',
         delay: '0.5s',
         reverse: true,
     },
     {
-        src: '/Red%20Cells.webp',
-        className: '-left-9 top-[54%] h-24 w-24 md:left-[1%] md:top-[50%] md:h-32 md:w-32',
-        tilt: '-10deg',
-        duration: '16s',
-        delay: '1.6s',
-    },
-    {
-        src: '/Red%20Chemicals.webp',
-        className: '-right-8 top-[62%] h-28 w-28 md:right-[1%] md:top-[58%] md:h-36 md:w-36',
-        tilt: '10deg',
-        duration: '19s',
-        delay: '0.7s',
-        reverse: true,
-    },
-    {
-        src: '/Red%20Veins.webp',
-        className: 'left-[34%] -top-9 h-20 w-20 md:left-[42%] md:-top-8 md:h-28 md:w-28',
-        tilt: '-5deg',
-        duration: '14s',
-        delay: '0.2s',
-    },
-    {
-        src: '/Lab%20Equipment.webp',
-        className: 'right-[34%] -top-7 h-20 w-20 md:right-[36%] md:-top-7 md:h-28 md:w-28',
-        tilt: '7deg',
-        duration: '15s',
-        delay: '1.4s',
-        reverse: true,
-    },
-    {
-        src: '/Microscope.webp',
-        className: 'left-[2%] bottom-[12%] h-24 w-24 md:left-[2%] md:bottom-[18%] md:h-36 md:w-36',
-        tilt: '-7deg',
-        duration: '17s',
-        delay: '2s',
-    },
-    {
         src: '/Pipette.webp',
-        className: 'right-3 bottom-[8%] h-28 w-28 md:-right-12 md:bottom-[8%] md:h-[260px] md:w-[260px]',
-        tilt: '8deg',
-        duration: '20s',
-        delay: '1s',
+        className: 'right-2 bottom-[8%] h-24 w-24 md:-right-10 md:bottom-[10%] md:h-[220px] md:w-[220px]',
+        tilt: '7deg',
+        duration: '17s',
+        delay: '1.5s',
         reverse: true,
     },
 ];
@@ -276,7 +239,7 @@ export default function PatientLoginPage() {
                             </label>
 
                             {error && <p className="text-sm font-medium text-red-600">{error}</p>}
-                            {resetStatus && <p className="text-sm font-medium text-emerald-600">{resetStatus}</p>}
+                            {resetStatus && <p className="text-sm font-medium text-forest-800">{resetStatus}</p>}
 
                             <button
                                 type="submit"

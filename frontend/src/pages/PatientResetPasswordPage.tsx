@@ -111,7 +111,7 @@ export default function PatientResetPasswordPage() {
           </label>
 
           {error && <p className="text-sm font-medium text-red-600">{error}</p>}
-          {success && <p className="text-sm font-medium text-emerald-600">{success}</p>}
+          {success && <p className="text-sm font-medium text-forest-800">{success}</p>}
 
           <button
             type="submit"

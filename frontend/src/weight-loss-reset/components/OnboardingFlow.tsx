@@ -11,8 +11,10 @@ import {
   CookingPot,
   Fish,
   Leaf,
+  LoaderCircle,
   Salad,
   Sandwich,
+  ShieldCheck,
   UtensilsCrossed,
   Wheat,
   type LucideIcon,
@@ -35,12 +37,13 @@ import {
   WEIGHT_LOSS_RESET_PRICE_COPY,
   WEIGHT_LOSS_RESET_PROGRAM_NAME,
 } from '../constants';
-import type { OnboardingAnswers } from '../types';
+import type { CoreMealType, OnboardingAnswers } from '../types';
 
 const inputClassName =
-  'h-11 w-full rounded-xl border border-[#dbe2d9] bg-white px-3 text-sm text-[#18251e] outline-none transition focus:border-[#1f5f3f]';
+  'h-11 w-full rounded-xl border border-[#cbd5e1] bg-white px-3 text-sm text-[#020617] outline-none transition focus:border-[#2e8cff]';
 const textareaClassName =
-  'min-h-20 w-full rounded-xl border border-[#dbe2d9] bg-white px-3 py-2 text-sm text-[#18251e] outline-none transition focus:border-[#1f5f3f]';
+  'min-h-20 w-full rounded-xl border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#020617] outline-none transition focus:border-[#2e8cff]';
+const CORE_MEAL_TYPE_ORDER: CoreMealType[] = ['breakfast', 'lunch', 'dinner'];
 
 const foodOptionIcons: Record<(typeof FAVORITE_FOOD_OPTIONS)[number]['value'], LucideIcon> = {
   apple: Apple,
@@ -71,7 +74,7 @@ function ChoiceButton({
       type="button"
       onClick={onClick}
       className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${
-        active ? 'border-[#1f5f3f] bg-[#eff4ef] text-[#1f5f3f]' : 'border-[#dbe2d9] bg-white text-[#334155] hover:border-[#b9c8ba]'
+        active ? 'border-[#2e8cff] bg-[#f1f8ff] text-[#2e8cff]' : 'border-[#cbd5e1] bg-white text-[#334155] hover:border-[#b7dcff]'
       }`}
     >
       {children}
@@ -100,7 +103,9 @@ function stepValidation(step: number, answers: OnboardingAnswers) {
   }
   if (step === 5) {
     if (!answers.cookingSkill) return 'Please choose your cooking skill level.';
-    if (!answers.mealsPerDay || answers.mealsPerDay < 2 || answers.mealsPerDay > 5) return 'Meals per day should be between 2 and 5.';
+    if (!Array.isArray(answers.selectedMealTypes) || answers.selectedMealTypes.length < 2 || answers.selectedMealTypes.length > 3) {
+      return 'Choose at least 2 meal types (up to 3): breakfast, lunch, and/or dinner.';
+    }
     if (!answers.daysPerWeek || answers.daysPerWeek < 2 || answers.daysPerWeek > 7) return 'Days per week should be between 2 and 7.';
   }
   if (step === 6) {
@@ -116,6 +121,37 @@ function clampInteger(value: string, min: number, max: number, fallback: number)
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.max(min, Math.min(max, Math.round(parsed)));
+}
+
+function toDisplayList(items: string[]) {
+  if (items.length === 0) return '';
+  if (items.length === 1) return items[0];
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
+}
+
+function buildUnlockMessages(answers: OnboardingAnswers) {
+  const dietary = (answers.dietaryRequirements || [])
+    .map((item) => String(item || '').trim().toLowerCase())
+    .filter((item) => item && item !== 'no specific requirements')
+    .slice(0, 3);
+  const dietaryLabel = dietary.length > 0 ? toDisplayList(dietary) : 'your intake preferences';
+  const allergies = [
+    ...(answers.allergyChips || []),
+    ...String(answers.allergiesText || '')
+      .split(/[,\n;]/g)
+      .map((item) => item.trim())
+      .filter(Boolean),
+  ].slice(0, 4);
+  const allergyLabel = allergies.length > 0 ? toDisplayList(allergies) : 'your listed allergy profile';
+  const cuisines = (answers.preferredCuisines || []).map((item) => String(item || '').trim()).filter(Boolean).slice(0, 3);
+  const cuisineLabel = cuisines.length > 0 ? toDisplayList(cuisines) : 'your preferred cuisine profile';
+  return [
+    `Saving your updated intake profile and preferences for ${dietaryLabel}.`,
+    `Running dietitian quality checks and filtering for ${allergyLabel}.`,
+    `Aligning meals with ${cuisineLabel} flavours and your selected meal schedule.`,
+    'Preparing swap options and syncing your weekly plan across your account.',
+  ];
 }
 
 export default function OnboardingFlow({
@@ -141,8 +177,11 @@ export default function OnboardingFlow({
   const [step, setStep] = useState(Math.min(Math.max(initialStep, 0), 10));
   const [error, setError] = useState('');
   const [unlocking, setUnlocking] = useState(false);
+  const [unlockProgress, setUnlockProgress] = useState(0);
+  const [unlockMessageIndex, setUnlockMessageIndex] = useState(0);
   const saveProgressRef = useRef(onSaveProgress);
   const isPreferenceUpdate = mode === 'update';
+  const unlockMessages = useMemo(() => buildUnlockMessages(answers), [answers]);
 
   useEffect(() => {
     saveProgressRef.current = onSaveProgress;
@@ -151,6 +190,39 @@ export default function OnboardingFlow({
   useEffect(() => {
     saveProgressRef.current(answers, step);
   }, [answers, step]);
+
+  useEffect(() => {
+    if (!unlocking) {
+      setUnlockProgress(0);
+      setUnlockMessageIndex(0);
+      return;
+    }
+
+    const TARGET_DURATION_MS = 110_000;
+    const MIN_PROGRESS = 6;
+    const MAX_IN_PROGRESS = 97;
+    const startedAt = Date.now();
+
+    setUnlockProgress(MIN_PROGRESS);
+    setUnlockMessageIndex(0);
+
+    const progressTimer = window.setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      const completion = Math.max(0, Math.min(1, elapsed / TARGET_DURATION_MS));
+      const eased = 1 - (1 - completion) * (1 - completion);
+      const next = MIN_PROGRESS + eased * (MAX_IN_PROGRESS - MIN_PROGRESS);
+      setUnlockProgress((current) => Math.max(current, next));
+    }, 450);
+
+    const messageTimer = window.setInterval(() => {
+      setUnlockMessageIndex((current) => (current + 1) % unlockMessages.length);
+    }, 2300);
+
+    return () => {
+      window.clearInterval(progressTimer);
+      window.clearInterval(messageTimer);
+    };
+  }, [unlocking, unlockMessages.length]);
 
   const progress = useMemo(() => {
     const activeIndex = Math.min(step, 9);
@@ -281,6 +353,30 @@ export default function OnboardingFlow({
     });
   };
 
+  const toggleSelectedMealType = (mealType: CoreMealType) => {
+    setAnswers((current) => {
+      const selected = new Set((current.selectedMealTypes || []).map((entry) => String(entry || '').toLowerCase()));
+      if (selected.has(mealType)) {
+        selected.delete(mealType);
+      } else {
+        selected.add(mealType);
+      }
+
+      let ordered = CORE_MEAL_TYPE_ORDER.filter((entry) => selected.has(entry));
+      if (ordered.length < 2) {
+        const fallback = mealType === 'dinner' ? 'lunch' : 'dinner';
+        if (!ordered.includes(fallback)) ordered = [...ordered, fallback];
+      }
+      if (ordered.length > 3) ordered = ordered.slice(0, 3);
+
+      return {
+        ...current,
+        selectedMealTypes: ordered,
+        mealsPerDay: ordered.length,
+      };
+    });
+  };
+
   const activeFocus = HEALTH_FOCUS_OPTIONS.find((entry) => entry.value === answers.primaryHealthFocus);
   const felicityExpertLabel = getFelicityExpertLabel(answers.primaryHealthFocus);
   const focusLabel = getHealthFocusDisplayLabel(answers.primaryHealthFocus);
@@ -302,29 +398,29 @@ export default function OnboardingFlow({
   };
 
   return (
-    <section className="mx-auto w-full max-w-[920px] rounded-3xl border border-[#dbe2d9] bg-white p-5 shadow-[0_24px_42px_-34px_rgba(15,23,42,0.24)] sm:p-7">
+    <section className="mx-auto w-full max-w-[920px] rounded-3xl border border-[#cbd5e1] bg-white p-5 shadow-[0_24px_42px_-34px_rgba(15,23,42,0.24)] sm:p-7">
       <header className="mb-6">
-        <h1 className="text-3xl font-semibold tracking-tight text-[#18251e]">{WEIGHT_LOSS_RESET_PROGRAM_NAME}</h1>
-        <p className="mt-1 text-sm text-[#5f7063]">
+        <h1 className="text-3xl font-semibold tracking-tight text-[#020617]">{WEIGHT_LOSS_RESET_PROGRAM_NAME}</h1>
+        <p className="mt-1 text-sm text-[#475569]">
           {isPreferenceUpdate
             ? 'Update your intake preferences'
             : `Step ${Math.min(step + 1, 11)} of 11 • ${focusLabel} support with Felicity`} • {WEIGHT_LOSS_RESET_PRICE_COPY}
         </p>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#edf1ec]">
-          <div className="h-full rounded-full bg-[#1f5f3f] transition-all duration-300" style={{ width: `${progress}%` }} />
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#eef5ff]">
+          <div className="h-full rounded-full bg-[#2e8cff] transition-all duration-300" style={{ width: `${progress}%` }} />
         </div>
       </header>
 
       {step === 0 && (
         <div>
-          <h2 className="text-3xl font-semibold tracking-tight text-[#18251e]">Let&apos;s build your personalised nutrition plan.</h2>
-          <p className="mt-2 max-w-[700px] text-sm leading-relaxed text-[#5f7063]">
+          <h2 className="text-3xl font-semibold tracking-tight text-[#020617]">Let&apos;s build your personalised nutrition plan.</h2>
+          <p className="mt-2 max-w-[700px] text-sm leading-relaxed text-[#475569]">
             Small changes, consistent support. We&apos;ll build this around your preferences, budget, and routine.
           </p>
-          <p className="mt-2 max-w-[700px] text-sm leading-relaxed text-[#5f7063]">
+          <p className="mt-2 max-w-[700px] text-sm leading-relaxed text-[#475569]">
             Estimated time: 3 minutes.
           </p>
-          <div className="mt-5 rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-4 text-xs leading-relaxed text-[#5f7063]">
+          <div className="mt-5 rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-4 text-xs leading-relaxed text-[#475569]">
             This is general nutrition support, not medical advice. If you have medical conditions, eating disorders, pregnancy, or complex
             allergies, consult a qualified healthcare professional.
           </div>
@@ -334,8 +430,8 @@ export default function OnboardingFlow({
       {step === 1 && (
         <div className="grid gap-4 md:grid-cols-2">
           <div className="md:col-span-2">
-            <h2 className="text-2xl font-semibold text-[#18251e]">Tell us about you</h2>
-            <p className="mt-1 text-sm text-[#5f7063]">We use this to personalise your meals and support style.</p>
+            <h2 className="text-2xl font-semibold text-[#020617]">Tell us about you</h2>
+            <p className="mt-1 text-sm text-[#475569]">We use this to personalise your meals and support style.</p>
           </div>
 
           <label className="space-y-1">
@@ -412,8 +508,8 @@ export default function OnboardingFlow({
       {step === 2 && (
         <div className="space-y-4">
           <div>
-            <h2 className="text-2xl font-semibold text-[#18251e]">Your goals</h2>
-            <p className="mt-1 text-sm text-[#5f7063]">No judgement. This helps Felicity understand what support matters most.</p>
+            <h2 className="text-2xl font-semibold text-[#020617]">Your goals</h2>
+            <p className="mt-1 text-sm text-[#475569]">No judgement. This helps Felicity understand what support matters most.</p>
           </div>
 
           <label className="space-y-1">
@@ -445,7 +541,7 @@ export default function OnboardingFlow({
                 onChange={(event) => setAnswers((current) => ({ ...current, timeframeWeeks: Number(event.target.value) || undefined }))}
                 className={inputClassName}
               />
-              <p className="text-xs text-[#5f7063]">Minimum plan length is {WEIGHT_LOSS_RESET_MIN_PLAN_WEEKS} weeks.</p>
+              <p className="text-xs text-[#475569]">Minimum plan length is {WEIGHT_LOSS_RESET_MIN_PLAN_WEEKS} weeks.</p>
             </label>
 
             <label className="space-y-1">
@@ -465,7 +561,7 @@ export default function OnboardingFlow({
             </label>
           </div>
 
-          <p className="rounded-xl border border-[#dbe2d9] bg-[#f8faf7] px-3 py-2 text-sm text-[#5f7063]">
+          <p className="rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3 py-2 text-sm text-[#475569]">
             Your dietitian can help adjust this anytime as your week changes.
           </p>
         </div>
@@ -474,8 +570,8 @@ export default function OnboardingFlow({
       {step === 3 && (
         <div className="space-y-4">
           <div>
-            <h2 className="text-2xl font-semibold text-[#18251e]">Dietary requirements</h2>
-            <p className="mt-1 text-sm text-[#5f7063]">Choose all that apply.</p>
+            <h2 className="text-2xl font-semibold text-[#020617]">Dietary requirements</h2>
+            <p className="mt-1 text-sm text-[#475569]">Choose all that apply.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             {DIETARY_REQUIREMENT_OPTIONS.map((item) => (
@@ -494,8 +590,8 @@ export default function OnboardingFlow({
       {step === 4 && (
         <div className="space-y-4">
           <div>
-            <h2 className="text-2xl font-semibold text-[#18251e]">Allergies and dislikes</h2>
-            <p className="mt-1 text-sm text-[#5f7063]">
+            <h2 className="text-2xl font-semibold text-[#020617]">Allergies and dislikes</h2>
+            <p className="mt-1 text-sm text-[#475569]">
               For severe or complex allergies, please discuss directly with your healthcare professional and dietitian.
             </p>
           </div>
@@ -531,8 +627,8 @@ export default function OnboardingFlow({
       {step === 5 && (
         <div className="space-y-4">
           <div>
-            <h2 className="text-2xl font-semibold text-[#18251e]">Lifestyle and cooking preferences</h2>
-            <p className="mt-1 text-sm text-[#5f7063]">Built around your preferences, budget, and routine.</p>
+            <h2 className="text-2xl font-semibold text-[#020617]">Lifestyle and cooking preferences</h2>
+            <p className="mt-1 text-sm text-[#475569]">Built around your preferences, budget, and routine.</p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
@@ -551,23 +647,20 @@ export default function OnboardingFlow({
               </select>
             </label>
 
-            <label className="space-y-1">
-              <span className="text-sm font-semibold text-[#334155]">Meals per day planned</span>
-              <input
-                type="number"
-                value={answers.mealsPerDay}
-                min={2}
-                max={5}
-                onChange={(event) =>
-                  setAnswers((current) => ({
-                    ...current,
-                    mealsPerDay: clampInteger(event.target.value, 2, 5, current.mealsPerDay || 3),
-                  }))
-                }
-                className={inputClassName}
-              />
-              <p className="text-xs text-[#5f7063]">2 meals/day uses lunch + dinner. 3+ meals/day includes breakfast.</p>
-            </label>
+            <div className="space-y-1">
+              <span className="text-sm font-semibold text-[#334155]">Meals you want to cook</span>
+              <div className="flex flex-wrap gap-2">
+                {CORE_MEAL_TYPE_ORDER.map((mealType) => {
+                  const active = (answers.selectedMealTypes || []).includes(mealType);
+                  return (
+                    <ChoiceButton key={mealType} active={active} onClick={() => toggleSelectedMealType(mealType)}>
+                      {mealType}
+                    </ChoiceButton>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-[#475569]">Pick 2 or 3: breakfast, lunch, and/or dinner.</p>
+            </div>
 
             <label className="space-y-1">
               <span className="text-sm font-semibold text-[#334155]">Days per week planned</span>
@@ -667,8 +760,8 @@ export default function OnboardingFlow({
       {step === 6 && (
         <div className="space-y-4">
           <div>
-            <h2 className="text-2xl font-semibold text-[#18251e]">Focus and support preferences</h2>
-            <p className="mt-1 text-sm text-[#5f7063]">Tell us what you want help with and what foods you enjoy most.</p>
+            <h2 className="text-2xl font-semibold text-[#020617]">Focus and support preferences</h2>
+            <p className="mt-1 text-sm text-[#475569]">Tell us what you want help with and what foods you enjoy most.</p>
           </div>
 
           <div>
@@ -681,12 +774,12 @@ export default function OnboardingFlow({
                   onClick={() => setAnswers((current) => ({ ...current, primaryHealthFocus: option.value }))}
                   className={`rounded-xl border p-3 text-left transition ${
                     answers.primaryHealthFocus === option.value
-                      ? 'border-[#1f5f3f] bg-[#eff4ef]'
-                      : 'border-[#dbe2d9] bg-white hover:border-[#b9c8ba]'
+                      ? 'border-[#2e8cff] bg-[#f1f8ff]'
+                      : 'border-[#cbd5e1] bg-white hover:border-[#b7dcff]'
                   }`}
                 >
-                  <p className="text-sm font-semibold text-[#18251e]">{option.label}</p>
-                  <p className="mt-1 text-xs text-[#5f7063]">{option.supportingCopy}</p>
+                  <p className="text-sm font-semibold text-[#020617]">{option.label}</p>
+                  <p className="mt-1 text-xs text-[#475569]">{option.supportingCopy}</p>
                 </button>
               ))}
             </div>
@@ -704,7 +797,7 @@ export default function OnboardingFlow({
                     key={option.value}
                     onClick={() => toggleFavoriteFood(option.value)}
                     className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition ${
-                      active ? 'border-[#1f5f3f] bg-[#eff4ef] text-[#1f5f3f]' : 'border-[#dbe2d9] bg-white text-[#334155] hover:border-[#b9c8ba]'
+                      active ? 'border-[#2e8cff] bg-[#f1f8ff] text-[#2e8cff]' : 'border-[#cbd5e1] bg-white text-[#334155] hover:border-[#b7dcff]'
                     }`}
                   >
                     <Icon size={16} />
@@ -742,8 +835,8 @@ export default function OnboardingFlow({
             </div>
           </div>
 
-          <p className="rounded-xl border border-[#dbe2d9] bg-[#f8faf7] px-3 py-2 text-sm text-[#5f7063]">
-            Current match preview: Felicity, your <span className="font-semibold text-[#1f5f3f]">{felicityExpertLabel}</span>.
+          <p className="rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3 py-2 text-sm text-[#475569]">
+            Current match preview: Felicity, your <span className="font-semibold text-[#2e8cff]">{felicityExpertLabel}</span>.
           </p>
         </div>
       )}
@@ -751,42 +844,42 @@ export default function OnboardingFlow({
       {step === 7 && (
         <div className="space-y-4">
           <div>
-            <h2 className="text-2xl font-semibold text-[#18251e]">Your summary</h2>
-            <p className="mt-1 text-sm text-[#5f7063]">Review this before we generate your plan.</p>
+            <h2 className="text-2xl font-semibold text-[#020617]">Your summary</h2>
+            <p className="mt-1 text-sm text-[#475569]">Review this before we generate your plan.</p>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
-            <div className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-3">
-              <p className="text-sm font-semibold text-[#18251e]">Personal details</p>
-              <p className="mt-1 text-sm text-[#5f7063]">
+            <div className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3">
+              <p className="text-sm font-semibold text-[#020617]">Personal details</p>
+              <p className="mt-1 text-sm text-[#475569]">
                 {answers.firstName || 'You'} • {answers.age || '—'} years • {answers.heightCm || '—'} cm
               </p>
-              <p className="text-sm text-[#5f7063]">
+              <p className="text-sm text-[#475569]">
                 Current {answers.currentWeightKg || '—'} kg • Goal {answers.goalWeightKg || '—'} kg
               </p>
             </div>
 
-            <div className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-3">
-              <p className="text-sm font-semibold text-[#18251e]">Goal focus</p>
-              <p className="mt-1 text-sm text-[#5f7063]">{answers.mainGoal}</p>
-              <p className="text-sm text-[#5f7063]">Challenge: {answers.biggestChallenge || '—'}</p>
+            <div className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3">
+              <p className="text-sm font-semibold text-[#020617]">Goal focus</p>
+              <p className="mt-1 text-sm text-[#475569]">{answers.mainGoal}</p>
+              <p className="text-sm text-[#475569]">Challenge: {answers.biggestChallenge || '—'}</p>
             </div>
 
-            <div className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-3 md:col-span-2">
-              <p className="text-sm font-semibold text-[#18251e]">Food and support preferences</p>
-              <p className="mt-1 text-sm text-[#5f7063]">
+            <div className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3 md:col-span-2">
+              <p className="text-sm font-semibold text-[#020617]">Food and support preferences</p>
+              <p className="mt-1 text-sm text-[#475569]">
                 Focus match: {activeFocus?.label || 'General healthy eating'} with Felicity ({felicityExpertLabel})
               </p>
-              <p className="mt-1 text-sm text-[#5f7063]">Dietary: {answers.dietaryRequirements.join(', ')}</p>
-              <p className="text-sm text-[#5f7063]">Meal style: {answers.preferredMealStyle}</p>
-              <p className="text-sm text-[#5f7063]">Prep day: {answers.prepDay || 'Sunday'}</p>
-              <p className="text-sm text-[#5f7063]">
+              <p className="mt-1 text-sm text-[#475569]">Dietary: {answers.dietaryRequirements.join(', ')}</p>
+              <p className="text-sm text-[#475569]">Meal style: {answers.preferredMealStyle}</p>
+              <p className="text-sm text-[#475569]">Prep day: {answers.prepDay || 'Sunday'}</p>
+              <p className="text-sm text-[#475569]">
                 Favourite foods: {selectedFavoriteFoodLabels.join(', ') || 'No favourite foods selected'}
               </p>
-              <p className="text-sm text-[#5f7063]">Cuisines: {answers.preferredCuisines.join(', ') || 'No cuisine preference selected'}</p>
-              <p className="text-sm text-[#5f7063]">Support areas: {answers.supportAreas.join(', ') || 'Not selected yet'}</p>
+              <p className="text-sm text-[#475569]">Cuisines: {answers.preferredCuisines.join(', ') || 'No cuisine preference selected'}</p>
+              <p className="text-sm text-[#475569]">Support areas: {answers.supportAreas.join(', ') || 'Not selected yet'}</p>
             </div>
           </div>
-          <p className="rounded-xl border border-[#dbe2d9] bg-[#f8faf7] px-3 py-2 text-sm text-[#5f7063]">
+          <p className="rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3 py-2 text-sm text-[#475569]">
             This service provides general nutrition support only. No guaranteed outcomes are promised.
           </p>
         </div>
@@ -794,17 +887,17 @@ export default function OnboardingFlow({
 
       {step === 8 && (
         <div className="space-y-4">
-          <h2 className="text-2xl font-semibold text-[#18251e]">
+          <h2 className="text-2xl font-semibold text-[#020617]">
             You&apos;re matched with Felicity, your {felicityExpertLabel}.
           </h2>
-          <p className="text-sm leading-relaxed text-[#5f7063]">
+          <p className="text-sm leading-relaxed text-[#475569]">
             Based on your focus area ({activeFocus?.label || 'General healthy eating'}), Felicity will tailor your plan around your lifestyle,
             food preferences, budget, and routine.
           </p>
-          <div className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-4">
-            <p className="text-sm font-semibold text-[#18251e]">Felicity • {felicityExpertLabel}</p>
-            <p className="text-sm text-[#5f7063]">Accredited Dietitian</p>
-            <p className="mt-2 text-sm text-[#5f7063]">
+          <div className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-4">
+            <p className="text-sm font-semibold text-[#020617]">Felicity • {felicityExpertLabel}</p>
+            <p className="text-sm text-[#475569]">Accredited Dietitian</p>
+            <p className="mt-2 text-sm text-[#475569]">
               Support style: practical, kind, realistic, non-judgemental. {WEIGHT_LOSS_RESET_PRICE_COPY}.
             </p>
           </div>
@@ -813,12 +906,12 @@ export default function OnboardingFlow({
 
       {step === 9 && (
         <div className="space-y-4">
-          <div className="inline-flex items-center gap-2 text-sm font-medium text-[#1f5f3f]">
+          <div className="inline-flex items-center gap-2 text-sm font-medium text-[#2e8cff]">
             <CalendarDays size={14} />
             Booking step
           </div>
-          <h2 className="text-2xl font-semibold text-[#18251e]">Your next step is to book your intro consult.</h2>
-          <p className="text-sm text-[#5f7063]">
+          <h2 className="text-2xl font-semibold text-[#020617]">Your next step is to book your intro consult.</h2>
+          <p className="text-sm text-[#475569]">
             Open Felicity&apos;s booking link, then confirm below to unlock your dashboard.
           </p>
           <div className="grid gap-3 md:grid-cols-2">
@@ -827,7 +920,7 @@ export default function OnboardingFlow({
               target="_blank"
               rel="noreferrer"
               className={`inline-flex h-11 items-center justify-center rounded-xl text-sm font-semibold ${
-                HAS_REAL_CALENDLY_URL ? 'bg-[#1f5f3f] text-white hover:bg-[#174830]' : 'border border-[#dbe2d9] bg-[#f8faf7] text-[#5f7063]'
+                HAS_REAL_CALENDLY_URL ? 'bg-[#2e8cff] text-white hover:bg-[#1f7be6]' : 'border border-[#cbd5e1] bg-[#f8fbff] text-[#475569]'
               }`}
               onClick={(event) => {
                 if (!HAS_REAL_CALENDLY_URL) event.preventDefault();
@@ -841,17 +934,17 @@ export default function OnboardingFlow({
                 void completeBooking();
               }}
               disabled={unlocking}
-              className="inline-flex h-11 items-center justify-center rounded-xl border border-[#1f5f3f] bg-white text-sm font-semibold text-[#1f5f3f] transition hover:bg-[#eff4ef] disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-[#2e8cff] bg-white text-sm font-semibold text-[#2e8cff] transition hover:bg-[#f1f8ff] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {unlocking ? 'Unlocking dashboard...' : 'I’ve booked my consult'}
+              {unlocking ? 'Generating your plan...' : 'I’ve booked my consult'}
             </button>
           </div>
           {!HAS_REAL_CALENDLY_URL && (
-            <p className="rounded-xl border border-[#dbe2d9] bg-[#f8faf7] px-3 py-2 text-sm text-[#5f7063]">
+            <p className="rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3 py-2 text-sm text-[#475569]">
               Calendly URL is not configured yet. Set `VITE_FELICITY_CALENDLY_URL` to your real booking link.
             </p>
           )}
-          <p className="text-xs text-[#5f7063]">
+          <p className="text-xs text-[#475569]">
             In this MVP, booking confirmation is local/dev friendly and can later be replaced by webhook confirmation.
           </p>
         </div>
@@ -859,11 +952,11 @@ export default function OnboardingFlow({
 
       {step === 10 && (
         <div className="text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[#b9c8ba] bg-[#eff4ef] text-[#1f5f3f]">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[#b7dcff] bg-[#f1f8ff] text-[#2e8cff]">
             <CheckCircle2 size={26} />
           </div>
-          <h2 className="mt-4 text-2xl font-semibold text-[#18251e]">{isPreferenceUpdate ? 'Preferences updated.' : 'You&apos;re all set.'}</h2>
-          <p className="mt-2 text-sm text-[#5f7063]">
+          <h2 className="mt-4 text-2xl font-semibold text-[#020617]">{isPreferenceUpdate ? 'Preferences updated.' : 'You&apos;re all set.'}</h2>
+          <p className="mt-2 text-sm text-[#475569]">
             {isPreferenceUpdate
               ? 'Your meal plan has been refreshed using your latest intake preferences.'
               : 'Your nutrition dashboard is unlocked with meal planning, grocery support, progress tracking, and messaging.'}
@@ -871,7 +964,7 @@ export default function OnboardingFlow({
           <button
             type="button"
             onClick={onOpenDashboard}
-            className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#1f5f3f] px-5 text-sm font-semibold text-white transition hover:bg-[#174830]"
+            className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#2e8cff] px-5 text-sm font-semibold text-white transition hover:bg-[#1f7be6]"
           >
             Open nutrition dashboard
             <ArrowRight size={16} />
@@ -881,13 +974,55 @@ export default function OnboardingFlow({
 
       {error && <p className="mt-5 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
 
+      {unlocking && (
+        <article className="mt-5 rounded-2xl border border-[#b7dcff] bg-gradient-to-br from-[#f8fbff] via-[#f1f8ff] to-white p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="inline-flex items-center gap-2 text-sm font-semibold text-[#020617]">
+                <LoaderCircle size={15} className="animate-spin text-[#2e8cff]" />
+                {isPreferenceUpdate ? 'Refreshing your weekly plan' : 'Preparing your nutrition dashboard'}
+              </p>
+              <p className="mt-1 text-sm text-[#475569]">{unlockMessages[unlockMessageIndex]}</p>
+            </div>
+            <p className="rounded-full border border-[#b7dcff] bg-white px-3 py-1 text-xs font-semibold text-[#1f7be6]">
+              {Math.round(Math.max(6, Math.min(100, unlockProgress)))}%
+            </p>
+          </div>
+          <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#cbd5e1]">
+            <div
+              className="h-full rounded-full bg-[#2e8cff] transition-[width] duration-300"
+              style={{ width: `${Math.round(Math.max(6, Math.min(100, unlockProgress)))}%` }}
+            />
+          </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            {['Preferences saved', 'Dietitian quality checks', 'Plan and swaps built', 'Synced across devices'].map((item, index) => {
+              const completedThreshold = (index + 1) * 24;
+              const completed = unlockProgress >= completedThreshold;
+              return (
+                <p
+                  key={item}
+                  className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold ${
+                    completed ? 'border-[#b7dcff] bg-white text-[#1f7be6]' : 'border-[#dbeeff] bg-[#f8fbff] text-[#64748b]'
+                  }`}
+                >
+                  <span className="inline-flex items-center gap-1.5">
+                    <ShieldCheck size={12} />
+                    {item}
+                  </span>
+                </p>
+              );
+            })}
+          </div>
+        </article>
+      )}
+
       {step < 10 && (
         <div className="mt-6 flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={back}
             disabled={step === 0}
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#dbe2d9] bg-white px-4 text-sm font-semibold text-[#334155] disabled:cursor-not-allowed disabled:opacity-45"
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#cbd5e1] bg-white px-4 text-sm font-semibold text-[#334155] disabled:cursor-not-allowed disabled:opacity-45"
           >
             <ArrowLeft size={15} />
             Back
@@ -897,9 +1032,9 @@ export default function OnboardingFlow({
               type="button"
               onClick={next}
               disabled={unlocking}
-              className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#1f5f3f] px-4 text-sm font-semibold text-white hover:bg-[#174830] disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#2e8cff] px-4 text-sm font-semibold text-white hover:bg-[#1f7be6] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {unlocking ? 'Saving...' : 'Next'}
+              {unlocking ? 'Building your plan...' : 'Next'}
               <ArrowRight size={15} />
             </button>
           )}

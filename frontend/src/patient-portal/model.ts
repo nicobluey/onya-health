@@ -180,7 +180,7 @@ export const PORTAL_BACKGROUND_CARDS: PortalBackgroundCard[] = [
     delay: '0s',
   },
   {
-    src: '/Green%20Cells.webp',
+    src: '/Blue%20Bubbles.webp',
     className: 'right-[-2rem] top-24 h-24 w-24 md:right-[2%] md:top-24 md:h-32 md:w-32',
     tilt: '8deg',
     duration: '20s',

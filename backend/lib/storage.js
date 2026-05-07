@@ -39,9 +39,18 @@ const EMPTY_DB = {
 let writeQueue = Promise.resolve();
 const patientIdCache = new Map();
 let cachedLocalMealPlannerRecipes = null;
+const supabaseMealPlannerRecipeByIdCache = new Map();
 const PATIENT_ID_CACHE_TTL_MS = Math.max(
   60_000,
   Number(process.env.PATIENT_ID_CACHE_TTL_MS || 15 * 60 * 1000)
+);
+const SUPABASE_MEAL_PLANNER_RECIPE_CACHE_TTL_MS = Math.max(
+  60_000,
+  Number(process.env.SUPABASE_MEAL_PLANNER_RECIPE_CACHE_TTL_MS || 30 * 60 * 1000)
+);
+const SUPABASE_MEAL_PLANNER_RECIPE_CACHE_MAX_ENTRIES = Math.max(
+  200,
+  Number(process.env.SUPABASE_MEAL_PLANNER_RECIPE_CACHE_MAX_ENTRIES || 5000)
 );
 const LOCAL_MEAL_PLAN_CACHE_MAX_ENTRIES = Math.max(
   25,
@@ -49,45 +58,46 @@ const LOCAL_MEAL_PLAN_CACHE_MAX_ENTRIES = Math.max(
 );
 const MEAL_PLAN_CACHE_EVENT_TYPE = 'MEAL_PLAN_CACHE_V1';
 const SHARED_MEAL_PLAN_TEMPLATE_EMAIL = 'mealplan-template@onyahealth.local';
-const SUPABASE_REQUEST_TIMEOUT_MS = Math.max(
-  3_000,
-  Number(process.env.SUPABASE_REQUEST_TIMEOUT_MS || 10_000)
-);
-const MEAL_PLAN_CACHE_EVENT_FALLBACK_ENABLED =
-  String(process.env.MEAL_PLAN_CACHE_EVENT_FALLBACK_ENABLED || '').trim().toLowerCase() === 'true';
-const MEAL_PLAN_EVENT_FALLBACK_SCAN_LIMIT = Math.max(
-  24,
-  Math.min(200, Number(process.env.MEAL_PLAN_EVENT_FALLBACK_SCAN_LIMIT || 120))
-);
-const MEAL_PLANNER_RECIPE_SELECT_COLUMNS = [
-  'id',
-  'title',
-  'description',
-  'image_url',
-  'ingredients',
-  'instructions',
-  'calories',
-  'protein',
-  'carbs',
-  'fat',
-  'meal_type',
-  'dietary_tags',
-  'allergens',
-  'prep_time_minutes',
-  'cook_time_minutes',
-  'total_time_minutes',
-  'serves',
-  'estimated_cost',
-  'source',
-];
 
-function createAbortSignalWithTimeout(timeoutMs = SUPABASE_REQUEST_TIMEOUT_MS) {
-  const controller = new AbortController();
-  const timeoutHandle = setTimeout(() => controller.abort(), Math.max(1_000, Number(timeoutMs) || SUPABASE_REQUEST_TIMEOUT_MS));
-  return {
-    signal: controller.signal,
-    clear: () => clearTimeout(timeoutHandle),
-  };
+function pruneSupabaseMealPlannerRecipeByIdCache() {
+  const now = Date.now();
+  for (const [recipeId, entry] of supabaseMealPlannerRecipeByIdCache.entries()) {
+    if (!entry || entry.expiresAt <= now) {
+      supabaseMealPlannerRecipeByIdCache.delete(recipeId);
+    }
+  }
+
+  if (supabaseMealPlannerRecipeByIdCache.size <= SUPABASE_MEAL_PLANNER_RECIPE_CACHE_MAX_ENTRIES) return;
+  const entries = [...supabaseMealPlannerRecipeByIdCache.entries()];
+  entries.sort((left, right) => Number(left[1]?.expiresAt || 0) - Number(right[1]?.expiresAt || 0));
+  while (entries.length > SUPABASE_MEAL_PLANNER_RECIPE_CACHE_MAX_ENTRIES) {
+    const next = entries.shift();
+    if (!next) break;
+    supabaseMealPlannerRecipeByIdCache.delete(next[0]);
+  }
+}
+
+function getCachedSupabaseMealPlannerRecipeById(recipeId) {
+  const normalizedId = String(recipeId || '').trim();
+  if (!normalizedId) return null;
+  const entry = supabaseMealPlannerRecipeByIdCache.get(normalizedId);
+  if (!entry) return null;
+  if (Number(entry.expiresAt || 0) <= Date.now()) {
+    supabaseMealPlannerRecipeByIdCache.delete(normalizedId);
+    return null;
+  }
+  return entry.recipe || null;
+}
+
+function setCachedSupabaseMealPlannerRecipeById(recipe) {
+  if (!recipe || typeof recipe !== 'object') return;
+  const normalizedId = String(recipe.id || '').trim();
+  if (!normalizedId) return;
+  supabaseMealPlannerRecipeByIdCache.set(normalizedId, {
+    recipe,
+    expiresAt: Date.now() + SUPABASE_MEAL_PLANNER_RECIPE_CACHE_TTL_MS,
+  });
+  pruneSupabaseMealPlannerRecipeByIdCache();
 }
 
 function getCachedPatientId(email) {
@@ -285,15 +295,6 @@ function normalizeStringArray(value) {
   return value.map((entry) => String(entry || '').trim()).filter(Boolean);
 }
 
-function sanitizePersistedRecipeImageUrl(value) {
-  const candidate = String(value || '').trim();
-  if (!candidate) return '';
-  if (/^https?:\/\//i.test(candidate)) return candidate;
-  if (candidate.startsWith('/')) return candidate;
-  if (/^[a-z0-9][a-z0-9/_-]*\.webp(?:\?.*)?$/i.test(candidate)) return candidate;
-  return '';
-}
-
 function toFiniteNumberOrUndefined(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
@@ -416,13 +417,12 @@ function mapRecipeRecordToMealPlannerRecipe(row = {}) {
     parseServesFromUnknown(source.serves) ??
     parseServesFromUnknown(source.servings) ??
     defaultServesForMealType(mealType);
-  const normalizedImageUrl = sanitizePersistedRecipeImageUrl(row.image_url || row.imageUrl);
 
   return {
     id: String(row.id || '').trim(),
     title: String(row.title || '').trim(),
     description: String(row.description || '').trim() || undefined,
-    imageUrl: normalizedImageUrl || undefined,
+    imageUrl: String(row.image_url || row.imageUrl || '').trim() || undefined,
     ingredients: Array.isArray(row.ingredients) ? row.ingredients : [],
     instructions: Array.isArray(row.instructions) ? row.instructions : [],
     calories: calories !== undefined ? Math.round(calories) : undefined,
@@ -454,7 +454,6 @@ function mapMealPlannerRecipeToSupabaseRecord(recipe = {}) {
   const carbs = toFiniteNumberOrUndefined(normalized.carbs);
   const fat = toFiniteNumberOrUndefined(normalized.fat);
   const source = normalizeRecipeSource(normalized.source);
-  const persistedImageUrl = sanitizePersistedRecipeImageUrl(normalized.imageUrl);
   const sourceWithFallbacks = {
     ...source,
     serves: source.serves ?? source.servings ?? (serves !== undefined ? Math.round(serves * 100) / 100 : undefined),
@@ -471,19 +470,12 @@ function mapMealPlannerRecipeToSupabaseRecord(recipe = {}) {
       source.totalTime ??
       (totalTimeMinutes !== undefined && totalTimeMinutes > 0 ? `${Math.round(totalTimeMinutes)} min` : undefined),
   };
-  // Prevent large image blobs/prompts from being persisted in Postgres rows.
-  delete sourceWithFallbacks.imagePrompt;
-  delete sourceWithFallbacks.image_base64;
-  delete sourceWithFallbacks.imageBase64;
-  delete sourceWithFallbacks.imageData;
-  delete sourceWithFallbacks.imageDataUri;
-  delete sourceWithFallbacks.image_data_uri;
 
   return {
     id: normalized.id,
     title: normalized.title,
     description: normalized.description || null,
-    image_url: persistedImageUrl || null,
+    image_url: normalized.imageUrl || null,
     ingredients: Array.isArray(normalized.ingredients) ? normalized.ingredients : [],
     instructions: Array.isArray(normalized.instructions) ? normalized.instructions : [],
     calories: calories === undefined ? null : Math.round(calories),
@@ -556,6 +548,65 @@ function extractRecipeIdsFromMealPlan(mealPlan) {
   return normalizeRecipeIdList(collected);
 }
 
+function normalizeCoreMealTypesForCache(value) {
+  if (!Array.isArray(value)) return [];
+  const normalized = [...new Set(
+    value
+      .map((entry) => String(entry || '').trim().toLowerCase())
+      .filter((entry) => entry === 'breakfast' || entry === 'lunch' || entry === 'dinner')
+  )];
+  const order = ['breakfast', 'lunch', 'dinner'];
+  return order.filter((entry) => normalized.includes(entry));
+}
+
+function normalizeStringArrayForCache(value, limit = 24) {
+  if (!Array.isArray(value)) return [];
+  return value.map((entry) => String(entry || '').trim()).filter(Boolean).slice(0, limit);
+}
+
+function normalizeOnboardingAnswersForCache(answers) {
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers)) return undefined;
+  const payload = answers;
+  const selectedMealTypes = normalizeCoreMealTypesForCache(payload.selectedMealTypes);
+  const numericMealsPerDay = Math.round(Number(payload.mealsPerDay || selectedMealTypes.length || 0));
+  const mealsPerDay = Number.isFinite(numericMealsPerDay)
+    ? Math.max(2, Math.min(3, numericMealsPerDay || selectedMealTypes.length || 3))
+    : selectedMealTypes.length || 3;
+  return {
+    firstName: String(payload.firstName || '').trim().slice(0, 64) || undefined,
+    age: Number.isFinite(Number(payload.age)) ? Math.round(Number(payload.age)) : undefined,
+    gender: String(payload.gender || '').trim().slice(0, 24) || undefined,
+    heightCm: Number.isFinite(Number(payload.heightCm)) ? Math.round(Number(payload.heightCm)) : undefined,
+    currentWeightKg: Number.isFinite(Number(payload.currentWeightKg))
+      ? Math.round(Number(payload.currentWeightKg) * 10) / 10
+      : undefined,
+    goalWeightKg: Number.isFinite(Number(payload.goalWeightKg))
+      ? Math.round(Number(payload.goalWeightKg) * 10) / 10
+      : undefined,
+    mainGoal: String(payload.mainGoal || '').trim().slice(0, 220) || undefined,
+    motivation: String(payload.motivation || '').trim().slice(0, 260) || undefined,
+    timeframeWeeks: Number.isFinite(Number(payload.timeframeWeeks)) ? Math.round(Number(payload.timeframeWeeks)) : undefined,
+    biggestChallenge: String(payload.biggestChallenge || '').trim().slice(0, 120) || undefined,
+    primaryHealthFocus: String(payload.primaryHealthFocus || '').trim().slice(0, 120) || undefined,
+    dietaryRequirements: normalizeStringArrayForCache(payload.dietaryRequirements, 16),
+    favoriteFoods: normalizeStringArrayForCache(payload.favoriteFoods, 20),
+    allergiesText: String(payload.allergiesText || '').trim().slice(0, 320) || undefined,
+    allergyChips: normalizeStringArrayForCache(payload.allergyChips, 20),
+    dislikes: String(payload.dislikes || '').trim().slice(0, 320) || undefined,
+    cookingSkill: String(payload.cookingSkill || '').trim().slice(0, 80) || undefined,
+    selectedMealTypes,
+    mealsPerDay,
+    daysPerWeek: Number.isFinite(Number(payload.daysPerWeek)) ? Math.max(2, Math.min(7, Math.round(Number(payload.daysPerWeek)))) : undefined,
+    budgetPreference: String(payload.budgetPreference || '').trim().slice(0, 80) || undefined,
+    groceryPreference: String(payload.groceryPreference || '').trim().slice(0, 120) || undefined,
+    prepDay: String(payload.prepDay || '').trim().slice(0, 32) || undefined,
+    preferredMealStyle: String(payload.preferredMealStyle || '').trim().slice(0, 120) || undefined,
+    preferredCuisines: normalizeStringArrayForCache(payload.preferredCuisines, 16),
+    supportWanted: String(payload.supportWanted || '').trim().slice(0, 24) || undefined,
+    supportAreas: normalizeStringArrayForCache(payload.supportAreas, 20),
+  };
+}
+
 function normalizeMealPlanGenerationBundle(bundle) {
   if (!bundle || typeof bundle !== 'object' || Array.isArray(bundle)) return null;
   const mealPlan = bundle.mealPlan && typeof bundle.mealPlan === 'object' && !Array.isArray(bundle.mealPlan) ? bundle.mealPlan : null;
@@ -568,11 +619,15 @@ function normalizeMealPlanGenerationBundle(bundle) {
   const recipeIdsFromRecipes = normalizeRecipeIdList(recipes.map((recipe) => recipe.id));
   const recipeIdsFromPlan = extractRecipeIdsFromMealPlan(mealPlan);
   const recipeIds = normalizeRecipeIdList([...recipeIdsFromBundle, ...recipeIdsFromRecipes, ...recipeIdsFromPlan]);
+  const onboardingAnswers = normalizeOnboardingAnswersForCache(
+    bundle.onboardingAnswers || bundle.onboarding_answers || bundle.answers || null
+  );
   if (!mealPlan || recipeIds.length === 0) return null;
   return {
     mealPlan,
     recipeIds,
     recipes,
+    onboardingAnswers,
   };
 }
 
@@ -602,9 +657,6 @@ function mapMealPlanGenerationCacheRow(row = {}) {
 }
 
 function shouldFallbackMealPlanCacheToRequestEvents(errorObject) {
-  if (!MEAL_PLAN_CACHE_EVENT_FALLBACK_ENABLED) {
-    return false;
-  }
   const status = Number(errorObject?.status || 0);
   const code = String(errorObject?.data?.code || '').trim();
   const message = String(errorObject?.data?.message || errorObject?.message || '').toLowerCase();
@@ -666,32 +718,17 @@ async function supabaseRequest(endpoint, options = {}) {
     throw new Error('Supabase config missing (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY)');
   }
 
-  const abort = createAbortSignalWithTimeout();
-  let response;
-  try {
-    response = await fetch(`${config.url}/rest/v1/${endpoint}`, {
-      method: options.method || 'GET',
-      headers: {
-        apikey: config.key,
-        Authorization: `Bearer ${config.key}`,
-        'Content-Type': 'application/json',
-        Prefer: options.prefer || 'return=representation',
-        ...(options.headers || {}),
-      },
-      body: options.body ? JSON.stringify(options.body) : undefined,
-      signal: abort.signal,
-    });
-  } catch (errorObject) {
-    if (errorObject?.name === 'AbortError') {
-      const timeoutError = new Error(`Supabase request timed out after ${SUPABASE_REQUEST_TIMEOUT_MS}ms`);
-      timeoutError.status = 504;
-      timeoutError.data = { code: 'SUPABASE_TIMEOUT', endpoint };
-      throw timeoutError;
-    }
-    throw errorObject;
-  } finally {
-    abort.clear();
-  }
+  const response = await fetch(`${config.url}/rest/v1/${endpoint}`, {
+    method: options.method || 'GET',
+    headers: {
+      apikey: config.key,
+      Authorization: `Bearer ${config.key}`,
+      'Content-Type': 'application/json',
+      Prefer: options.prefer || 'return=representation',
+      ...(options.headers || {}),
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
 
   const text = await response.text();
   let data = null;
@@ -717,31 +754,16 @@ async function supabaseAuthAdminRequest(endpoint, options = {}) {
     throw new Error('Supabase config missing (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY)');
   }
 
-  const abort = createAbortSignalWithTimeout();
-  let response;
-  try {
-    response = await fetch(`${config.url}/auth/v1/admin/${endpoint}`, {
-      method: options.method || 'GET',
-      headers: {
-        apikey: config.key,
-        Authorization: `Bearer ${config.key}`,
-        'Content-Type': 'application/json',
-        ...(options.headers || {}),
-      },
-      body: options.body ? JSON.stringify(options.body) : undefined,
-      signal: abort.signal,
-    });
-  } catch (errorObject) {
-    if (errorObject?.name === 'AbortError') {
-      const timeoutError = new Error(`Supabase auth admin request timed out after ${SUPABASE_REQUEST_TIMEOUT_MS}ms`);
-      timeoutError.status = 504;
-      timeoutError.data = { code: 'SUPABASE_AUTH_TIMEOUT', endpoint };
-      throw timeoutError;
-    }
-    throw errorObject;
-  } finally {
-    abort.clear();
-  }
+  const response = await fetch(`${config.url}/auth/v1/admin/${endpoint}`, {
+    method: options.method || 'GET',
+    headers: {
+      apikey: config.key,
+      Authorization: `Bearer ${config.key}`,
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
 
   const text = await response.text();
   let data = null;
@@ -1184,13 +1206,34 @@ async function upsertPatientBillingSupabase(patientEmail, patch = {}) {
 }
 
 async function listMealPlannerRecipesSupabase() {
-  let columns = [...MEAL_PLANNER_RECIPE_SELECT_COLUMNS];
+  const baseColumns = [
+    'id',
+    'title',
+    'description',
+    'image_url',
+    'ingredients',
+    'instructions',
+    'calories',
+    'protein',
+    'carbs',
+    'fat',
+    'meal_type',
+    'dietary_tags',
+    'allergens',
+    'prep_time_minutes',
+    'cook_time_minutes',
+    'total_time_minutes',
+    'serves',
+    'estimated_cost',
+    'source',
+  ];
+  let columns = [...baseColumns];
   let rows = [];
 
   for (let attempt = 0; attempt < 8; attempt += 1) {
     try {
       rows = await supabaseRequest(
-        `meal_planner_recipes?select=${columns.join(',')}&is_active=eq.true&order=title.asc&limit=600`,
+        `meal_planner_recipes?select=${columns.join(',')}&order=title.asc&limit=600`,
         {
           method: 'GET',
           prefer: 'return=representation',
@@ -1211,38 +1254,55 @@ async function listMealPlannerRecipesSupabase() {
 
   if (!Array.isArray(rows) || rows.length === 0) {
     try {
-      rows = await supabaseRequest(
-        `meal_planner_recipes?select=${columns.join(',')}&is_active=eq.true&order=title.asc&limit=600`,
-        {
-          method: 'GET',
-          prefer: 'return=representation',
-        }
-      );
+      rows = await supabaseRequest('meal_planner_recipes?select=*&limit=800', {
+        method: 'GET',
+        prefer: 'return=representation',
+      });
     } catch {
       // Ignore and keep previous rows value for downstream filtering.
     }
   }
 
   const recipes = Array.isArray(rows) ? rows.map(mapRecipeRecordToMealPlannerRecipe) : [];
-  return recipes.filter((recipe) => recipe.id && recipe.title && Array.isArray(recipe.ingredients));
+  const normalizedRecipes = recipes.filter((recipe) => recipe.id && recipe.title && Array.isArray(recipe.ingredients));
+  for (const recipe of normalizedRecipes) {
+    setCachedSupabaseMealPlannerRecipeById(recipe);
+  }
+  return normalizedRecipes;
 }
 
 async function listMealPlannerRecipesByIdsSupabase(recipeIds = []) {
   const normalizedIds = normalizeRecipeIdList(recipeIds);
   if (normalizedIds.length === 0) return [];
-  const escaped = normalizedIds.map((id) => `"${id.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`);
-  const inFilter = `(${escaped.join(',')})`;
-  const rows = await supabaseRequest(
-    `meal_planner_recipes?select=${MEAL_PLANNER_RECIPE_SELECT_COLUMNS.join(',')}&id=in.${encodeURIComponent(
-      inFilter
-    )}&is_active=eq.true&limit=${Math.max(normalizedIds.length, 1)}`,
-    {
-      method: 'GET',
-      prefer: 'return=representation',
+  const byId = new Map();
+  const missingIds = [];
+  for (const recipeId of normalizedIds) {
+    const cachedRecipe = getCachedSupabaseMealPlannerRecipeById(recipeId);
+    if (cachedRecipe) {
+      byId.set(recipeId, cachedRecipe);
+    } else {
+      missingIds.push(recipeId);
     }
-  );
-  const recipes = Array.isArray(rows) ? rows.map(mapRecipeRecordToMealPlannerRecipe) : [];
-  const byId = new Map(recipes.filter((recipe) => recipe.id).map((recipe) => [recipe.id, recipe]));
+  }
+
+  if (missingIds.length > 0) {
+    const escaped = missingIds.map((id) => `"${id.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`);
+    const inFilter = `(${escaped.join(',')})`;
+    const rows = await supabaseRequest(
+      `meal_planner_recipes?select=*&id=in.${encodeURIComponent(inFilter)}&limit=${Math.max(missingIds.length, 1)}`,
+      {
+        method: 'GET',
+        prefer: 'return=representation',
+      }
+    );
+    const fetchedRecipes = Array.isArray(rows) ? rows.map(mapRecipeRecordToMealPlannerRecipe) : [];
+    for (const recipe of fetchedRecipes) {
+      if (!recipe?.id) continue;
+      byId.set(recipe.id, recipe);
+      setCachedSupabaseMealPlannerRecipeById(recipe);
+    }
+  }
+
   return normalizedIds.map((id) => byId.get(id)).filter(Boolean);
 }
 
@@ -1293,6 +1353,12 @@ async function upsertMealPlannerRecipesSupabase(recipes = []) {
         prefer: 'resolution=merge-duplicates,return=minimal',
         body: rows,
       });
+      const cachedRecipes = rows
+        .map((row) => mapRecipeRecordToMealPlannerRecipe(row))
+        .filter((recipe) => recipe?.id && recipe?.title && Array.isArray(recipe?.ingredients));
+      for (const recipe of cachedRecipes) {
+        setCachedSupabaseMealPlannerRecipeById(recipe);
+      }
       return rows.length;
     } catch (errorObject) {
       const status = errorObject?.status;
@@ -1366,7 +1432,7 @@ async function getMealPlanGenerationCacheFromRequestEventsSupabase(cacheKey) {
   const rows = await supabaseRequest(
     `request_events?select=payload,created_at&event_type=eq.${encodeURIComponent(
       MEAL_PLAN_CACHE_EVENT_TYPE
-    )}&order=created_at.desc&limit=${MEAL_PLAN_EVENT_FALLBACK_SCAN_LIMIT}`,
+    )}&order=created_at.desc&limit=400`,
     {
       method: 'GET',
       prefer: 'return=representation',
@@ -1424,7 +1490,7 @@ async function getMealPlanTemplateCacheByIntakeHashFromRequestEventsSupabase(int
   const rows = await supabaseRequest(
     `request_events?select=payload,created_at&event_type=eq.${encodeURIComponent(
       MEAL_PLAN_CACHE_EVENT_TYPE
-    )}&order=created_at.desc&limit=${MEAL_PLAN_EVENT_FALLBACK_SCAN_LIMIT}`,
+    )}&order=created_at.desc&limit=600`,
     {
       method: 'GET',
       prefer: 'return=representation',
@@ -1724,7 +1790,7 @@ async function getLatestMealPlanGenerationCacheByPatientEmailFromRequestEventsSu
   const rows = await supabaseRequest(
     `request_events?select=payload,created_at&event_type=eq.${encodeURIComponent(
       MEAL_PLAN_CACHE_EVENT_TYPE
-    )}&order=created_at.desc&limit=${MEAL_PLAN_EVENT_FALLBACK_SCAN_LIMIT}`,
+    )}&order=created_at.desc&limit=900`,
     {
       method: 'GET',
       prefer: 'return=representation',
@@ -1766,7 +1832,7 @@ async function getLatestMealPlanGenerationCacheByPatientEmailSupabase(patientEma
 async function listMealPlanGenerationCacheByPatientEmailSupabase(patientEmail, limit = 24) {
   const normalizedEmail = normalizeEmail(patientEmail);
   if (!normalizedEmail) return [];
-  const boundedLimit = Math.max(1, Math.min(80, Number(limit || 24)));
+  const boundedLimit = Math.max(1, Math.min(240, Number(limit || 24)));
 
   const mapRows = (rows) =>
     (Array.isArray(rows) ? rows : [])
@@ -1843,7 +1909,7 @@ async function listMealPlanGenerationCacheByPatientEmailSupabase(patientEmail, l
   const rows = await supabaseRequest(
     `request_events?select=payload,created_at&event_type=eq.${encodeURIComponent(
       MEAL_PLAN_CACHE_EVENT_TYPE
-    )}&order=created_at.desc&limit=${MEAL_PLAN_EVENT_FALLBACK_SCAN_LIMIT}`,
+    )}&order=created_at.desc&limit=900`,
     {
       method: 'GET',
       prefer: 'return=representation',
@@ -1878,7 +1944,7 @@ async function getLatestMealPlanGenerationCacheByPatientEmailLocal(patientEmail)
 async function listMealPlanGenerationCacheByPatientEmailLocal(patientEmail, limit = 24) {
   const normalizedEmail = normalizeEmail(patientEmail);
   if (!normalizedEmail) return [];
-  const boundedLimit = Math.max(1, Math.min(80, Number(limit || 24)));
+  const boundedLimit = Math.max(1, Math.min(240, Number(limit || 24)));
 
   const db = await readDbRaw();
   const entries = Array.isArray(db.mealPlanGenerationCache) ? db.mealPlanGenerationCache : [];

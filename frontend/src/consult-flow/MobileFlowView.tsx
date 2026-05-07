@@ -76,7 +76,7 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
                 <main className="flex-1">
                     {isDoctorPage ? (
                         <>
-                            <section className="border-b border-border bg-[linear-gradient(135deg,#fff8ef_0%,#fffaf5_45%,#ffffff_100%)] px-4 py-11">
+                            <section className="border-b border-border bg-[linear-gradient(135deg,#f8fbff_0%,#f1f8ff_45%,#ffffff_100%)] px-4 py-11">
                                 <div className="mx-auto max-w-xl">
                                     <p className="inline-flex rounded-full border border-sunlight-200 bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-bark-600">
                                         Australian doctor-reviewed service

@@ -135,10 +135,10 @@ export default function CertificateVerifyPage() {
           )}
 
           {result && (
-            <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
+            <div className="mt-6 rounded-2xl border border-sunlight-300 bg-sunlight-100 p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">
+                  <p className="inline-flex items-center gap-2 rounded-full border border-sunlight-300 bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-forest-900">
                     <BadgeCheck size={14} /> Verified
                   </p>
                   <h2 className="mt-3 text-2xl">Certificate is valid</h2>
@@ -150,37 +150,37 @@ export default function CertificateVerifyPage() {
               </div>
 
               <div className="mt-5 grid gap-3 md:grid-cols-2">
-                <div className="rounded-xl border border-emerald-100 bg-white p-3">
+                <div className="rounded-xl border border-sunlight-200 bg-white p-3">
                   <p className="text-xs uppercase tracking-[0.08em] text-bark-500">Verification code</p>
                   <p className="mt-1 text-sm font-semibold text-bark-900">{result.code}</p>
                 </div>
-                <div className="rounded-xl border border-emerald-100 bg-white p-3">
+                <div className="rounded-xl border border-sunlight-200 bg-white p-3">
                   <p className="text-xs uppercase tracking-[0.08em] text-bark-500">Certificate ID</p>
                   <p className="mt-1 text-sm font-semibold text-bark-900">{result.certificateId}</p>
                 </div>
-                <div className="rounded-xl border border-emerald-100 bg-white p-3">
+                <div className="rounded-xl border border-sunlight-200 bg-white p-3">
                   <p className="text-xs uppercase tracking-[0.08em] text-bark-500">Issued</p>
                   <p className="mt-1 text-sm font-semibold text-bark-900">{new Date(result.issuedAt).toLocaleString()}</p>
                 </div>
-                <div className="rounded-xl border border-emerald-100 bg-white p-3">
+                <div className="rounded-xl border border-sunlight-200 bg-white p-3">
                   <p className="text-xs uppercase tracking-[0.08em] text-bark-500">Patient</p>
                   <p className="mt-1 text-sm font-semibold text-bark-900">{result.patient}</p>
                 </div>
-                <div className="rounded-xl border border-emerald-100 bg-white p-3">
+                <div className="rounded-xl border border-sunlight-200 bg-white p-3">
                   <p className="text-xs uppercase tracking-[0.08em] text-bark-500">Doctor</p>
                   <p className="mt-1 text-sm font-semibold text-bark-900">{result.doctorName || '-'}</p>
                 </div>
-                <div className="rounded-xl border border-emerald-100 bg-white p-3">
+                <div className="rounded-xl border border-sunlight-200 bg-white p-3">
                   <p className="text-xs uppercase tracking-[0.08em] text-bark-500">Provider / Registration</p>
                   <p className="mt-1 text-sm font-semibold text-bark-900">
                     {result.providerType || '-'} {result.registrationNumber ? `· ${result.registrationNumber}` : ''}
                   </p>
                 </div>
-                <div className="rounded-xl border border-emerald-100 bg-white p-3">
+                <div className="rounded-xl border border-sunlight-200 bg-white p-3">
                   <p className="text-xs uppercase tracking-[0.08em] text-bark-500">Start date</p>
                   <p className="mt-1 text-sm font-semibold text-bark-900">{result.startDate || '-'}</p>
                 </div>
-                <div className="rounded-xl border border-emerald-100 bg-white p-3">
+                <div className="rounded-xl border border-sunlight-200 bg-white p-3">
                   <p className="text-xs uppercase tracking-[0.08em] text-bark-500">Duration</p>
                   <p className="mt-1 text-sm font-semibold text-bark-900">{result.durationDays} day(s)</p>
                 </div>

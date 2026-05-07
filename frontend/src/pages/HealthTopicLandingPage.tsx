@@ -143,8 +143,8 @@ const BUCKET_GUIDES: Record<TopicBucket, BucketGuide> = {
     },
     gastro: {
         label: 'Gastrointestinal health',
-        banner: '/Green Cells.webp',
-        bannerAlt: 'Green health texture',
+        banner: '/Blue Bubbles.webp',
+        bannerAlt: 'Blue bubbles clinical texture',
         whyItMatters:
             'Gastro symptoms often improve with rest and fluid replacement, but dehydration risk can rise quickly when intake is poor or vomiting persists.',
         immediateSteps: [
@@ -180,8 +180,8 @@ const BUCKET_GUIDES: Record<TopicBucket, BucketGuide> = {
     },
     pain: {
         label: 'Pain and mobility',
-        banner: '/Red Cells.webp',
-        bannerAlt: 'Red cells texture',
+        banner: '/Pipette.webp',
+        bannerAlt: 'Clinical pipette image',
         whyItMatters:
             'Pain symptoms are easier to manage when you track patterns, triggers, and functional limits early. This reduces avoidable delays in effective review.',
         immediateSteps: [
@@ -254,8 +254,8 @@ const BUCKET_GUIDES: Record<TopicBucket, BucketGuide> = {
     },
     womens: {
         label: 'Women’s health',
-        banner: '/Orange Cells.webp',
-        bannerAlt: 'Orange cells texture',
+        banner: '/Blue Cells.webp',
+        bannerAlt: 'Blue cellular health texture',
         whyItMatters:
             'Hormonal and reproductive symptoms can vary across cycles and life stages. Pattern tracking improves assessment quality and treatment planning.',
         immediateSteps: [
@@ -291,8 +291,8 @@ const BUCKET_GUIDES: Record<TopicBucket, BucketGuide> = {
     },
     skin: {
         label: 'Skin and allergy concerns',
-        banner: '/Red Chemicals.webp',
-        bannerAlt: 'Red chemistry texture',
+        banner: '/Lab Equipment.webp',
+        bannerAlt: 'Lab equipment clinical image',
         whyItMatters:
             'Skin symptoms can appear similar across causes, so progression speed and associated symptoms are key. Consistent tracking helps avoid treatment delays.',
         immediateSteps: [

@@ -50,7 +50,7 @@ export const BLOG_POSTS: BlogPost[] = [
         excerpt: 'What patients should expect from affordable telehealth in Australia, including quality standards, access, and clinician review.',
         author: 'Onya Clinical Team',
         publishedAt: '2026-02-28',
-        imageSrc: '/blogs/images/green-cells.webp',
+        imageSrc: '/blogs/images/blue-cells.webp',
         markdown: articleAffordableQualityTelehealth,
     }),
     buildPost({

@@ -2,16 +2,94 @@ const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
 const OPENAI_IMAGES_URL = 'https://api.openai.com/v1/images/generations';
 const PLAN_DAY_LABELS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const CORE_MEAL_TYPES = ['breakfast', 'lunch', 'dinner'];
-const OPENAI_MEAL_PLAN_TIMEOUT_MS = Math.max(3000, Number(process.env.OPENAI_MEAL_PLAN_TIMEOUT_MS || 9000));
+const OPENAI_MEAL_PLAN_TIMEOUT_MS = Math.max(6000, Number(process.env.OPENAI_MEAL_PLAN_TIMEOUT_MS || 25000));
 const OPENAI_GENERATED_RECIPES_TIMEOUT_MS = Math.max(
-  5000,
-  Number(process.env.OPENAI_GENERATED_RECIPES_TIMEOUT_MS || 17000),
+  15000,
+  Number(process.env.OPENAI_GENERATED_RECIPES_TIMEOUT_MS || 30000),
 );
-const OPENAI_MEAL_IMAGE_TIMEOUT_MS = Math.max(2500, Number(process.env.OPENAI_MEAL_IMAGE_TIMEOUT_MS || 10000));
+const OPENAI_MEAL_IMAGE_TIMEOUT_MS = Math.max(3000, Number(process.env.OPENAI_MEAL_IMAGE_TIMEOUT_MS || 15000));
 const OPENAI_MAX_GENERATED_RECIPE_IMAGES = Math.max(
   0,
-  Math.min(24, Number(process.env.OPENAI_MAX_GENERATED_RECIPE_IMAGES || 14)),
+  Math.min(12, Number(process.env.OPENAI_MAX_GENERATED_RECIPE_IMAGES || 8)),
 );
+const OPENAI_MEAL_PLAN_MAX_OUTPUT_TOKENS = Math.max(
+  1600,
+  Math.min(6500, Number(process.env.OPENAI_MEAL_PLAN_MAX_OUTPUT_TOKENS || 3400)),
+);
+const OPENAI_GENERATED_RECIPES_MAX_OUTPUT_TOKENS = Math.max(
+  5200,
+  Math.min(18000, Number(process.env.OPENAI_GENERATED_RECIPES_MAX_OUTPUT_TOKENS || 11200)),
+);
+const OPENAI_TEXT_VERBOSITY = String(process.env.OPENAI_TEXT_VERBOSITY || 'low')
+  .trim()
+  .toLowerCase();
+const OPENAI_REASONING_EFFORT = String(process.env.OPENAI_REASONING_EFFORT || 'minimal')
+  .trim()
+  .toLowerCase();
+
+function isWebpDataUri(value) {
+  return /^data:image\/webp;base64,/i.test(String(value || '').trim());
+}
+
+function isWebpHttpImage(value) {
+  const candidate = String(value || '').trim();
+  if (!/^https?:\/\//i.test(candidate)) return false;
+  try {
+    const parsed = new URL(candidate);
+    const path = parsed.pathname.toLowerCase();
+    if (path.endsWith('.webp')) return true;
+    return /(?:^|[?&])(fm|format)=webp(?:&|$)/i.test(candidate);
+  } catch {
+    return false;
+  }
+}
+
+function normalizeRecipeImageToWebp(value) {
+  const candidate = String(value || '').trim();
+  if (!candidate) return '';
+  if (isWebpDataUri(candidate)) return candidate;
+  if (isWebpHttpImage(candidate)) return candidate;
+  return '';
+}
+const QUANTITY_UNIT_ALIASES = {
+  cup: 'cup',
+  cups: 'cup',
+  tbsp: 'tbsp',
+  tablespoon: 'tbsp',
+  tablespoons: 'tbsp',
+  tsp: 'tsp',
+  teaspoon: 'tsp',
+  teaspoons: 'tsp',
+  ml: 'ml',
+  millilitre: 'ml',
+  millilitres: 'ml',
+  milliliter: 'ml',
+  milliliters: 'ml',
+  l: 'l',
+  litre: 'l',
+  litres: 'l',
+  liter: 'l',
+  liters: 'l',
+  g: 'g',
+  gram: 'g',
+  grams: 'g',
+  kg: 'kg',
+  kilogram: 'kg',
+  kilograms: 'kg',
+  can: 'can',
+  cans: 'can',
+  tin: 'tin',
+  tins: 'tin',
+  clove: 'clove',
+  cloves: 'clove',
+  bunch: 'bunch',
+  bunches: 'bunch',
+  slice: 'slice',
+  slices: 'slice',
+  piece: 'piece',
+  pieces: 'piece',
+  whole: 'whole',
+};
 const MEAL_PREP_PATTERNS = {
   breakfast: [0, 0, 1, 1, 0, 1, 0],
   lunch: [0, 0, 1, 1, 2, 2, 1],
@@ -160,6 +238,58 @@ function normalizeText(value) {
 function containsAny(haystack, needles) {
   const source = normalizeText(haystack);
   return needles.some((needle) => source.includes(needle));
+}
+
+function modelSupportsReasoningControls(model) {
+  const normalized = normalizeText(model);
+  return (
+    normalized.startsWith('gpt-5') ||
+    normalized.startsWith('o1') ||
+    normalized.startsWith('o3') ||
+    normalized.startsWith('o4')
+  );
+}
+
+function resolveReasoningEffort() {
+  const allowed = new Set(['none', 'minimal', 'low', 'medium', 'high', 'xhigh']);
+  if (allowed.has(OPENAI_REASONING_EFFORT)) return OPENAI_REASONING_EFFORT;
+  return 'minimal';
+}
+
+function resolveTextVerbosity() {
+  const allowed = new Set(['low', 'medium', 'high']);
+  if (allowed.has(OPENAI_TEXT_VERBOSITY)) return OPENAI_TEXT_VERBOSITY;
+  return 'low';
+}
+
+function buildReasoningOptions(model) {
+  if (!modelSupportsReasoningControls(model)) return undefined;
+  return { effort: resolveReasoningEffort() };
+}
+
+function summarizeResponseIssue(payload) {
+  const status = String(payload?.status || '').trim().toLowerCase();
+  const errorMessage = String(payload?.error?.message || '').trim();
+  const incompleteReason = String(payload?.incomplete_details?.reason || '').trim();
+  if (status === 'completed') return '';
+  if (status === 'incomplete' && incompleteReason) return `incomplete: ${incompleteReason}`;
+  if (status && errorMessage) return `${status}: ${errorMessage}`;
+  if (status) return status;
+  if (errorMessage) return errorMessage;
+  return 'no response text';
+}
+
+function debugMealPlanAi(message, payload) {
+  if (process.env.DEBUG_MEAL_PLAN_AI !== '1') return;
+  if (typeof payload === 'undefined') {
+    console.log(`[meal-plan-ai] ${message}`);
+    return;
+  }
+  try {
+    console.log(`[meal-plan-ai] ${message}`, JSON.stringify(payload));
+  } catch {
+    console.log(`[meal-plan-ai] ${message}`);
+  }
 }
 
 function recipeDescriptor(recipe) {
@@ -525,6 +655,13 @@ function extractResponseText(payload) {
   return chunks.join('\n').trim();
 }
 
+function extractResponseTextOrThrow(payload, label) {
+  const text = extractResponseText(payload);
+  if (text) return text;
+  const summary = summarizeResponseIssue(payload);
+  throw new Error(`${label} returned no usable text (${summary}).`);
+}
+
 function parseJsonFromText(text) {
   const trimmed = String(text || '').trim();
   if (!trimmed) return null;
@@ -602,17 +739,149 @@ function slugifyRecipeId(value, fallback) {
   return String(fallback || `recipe-${Date.now()}`);
 }
 
+function stableHashToken(value) {
+  const text = String(value || '');
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36).slice(0, 8);
+}
+
+function buildGeneratedRecipeStableId({
+  baseId,
+  title,
+  mealType,
+  ingredients,
+  instructions,
+}) {
+  const fingerprintSource = JSON.stringify({
+    title: String(title || '').trim().toLowerCase(),
+    mealType: String(mealType || '').trim().toLowerCase(),
+    ingredients: (Array.isArray(ingredients) ? ingredients : [])
+      .map((entry) =>
+        [
+          String(entry?.name || '').trim().toLowerCase(),
+          String(entry?.quantity || '').trim().toLowerCase(),
+          String(entry?.unit || '').trim().toLowerCase(),
+        ].join(':')
+      )
+      .filter(Boolean)
+      .slice(0, 18),
+    instructions: (Array.isArray(instructions) ? instructions : [])
+      .map((entry) => String(entry || '').trim().toLowerCase())
+      .filter(Boolean)
+      .slice(0, 6),
+  });
+  const token = stableHashToken(fingerprintSource);
+  const usableBase = String(baseId || 'meal')
+    .replace(/-+$/g, '')
+    .slice(0, Math.max(8, 56 - (token.length + 1)));
+  return `${usableBase}-${token}`;
+}
+
+function normalizeQuantityUnit(value) {
+  const normalized = normalizeText(value).replace(/[^a-z]/g, '');
+  if (!normalized) return '';
+  return QUANTITY_UNIT_ALIASES[normalized] || '';
+}
+
+function parseQuantityFromIngredientName(rawName) {
+  const source = String(rawName || '')
+    .replace(/[•]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!source) return null;
+
+  const match = source.match(
+    /^(\d+(?:\.\d+)?|\d+\/\d+)\s+([a-zA-Z]+)\s+(.+)$/,
+  );
+  if (!match) return null;
+
+  const quantity = match[1];
+  const unit = normalizeQuantityUnit(match[2]);
+  const name = match[3].trim();
+  if (!unit || !name) return null;
+  return {
+    quantity,
+    unit,
+    name,
+  };
+}
+
+function inferIngredientCategory(name) {
+  const value = normalizeText(name);
+  if (!value) return 'pantry';
+  if (/\b(chicken|beef|turkey|lamb|fish|tuna|salmon|egg|tofu|tempeh|yogurt|yoghurt|cottage cheese)\b/.test(value)) {
+    return 'protein';
+  }
+  if (/\b(spinach|kale|lettuce|tomato|cucumber|capsicum|pepper|onion|garlic|zucchini|broccoli|carrot|herb|parsley|basil|mint|lemon|lime|banana|apple|berries)\b/.test(value)) {
+    return 'produce';
+  }
+  if (/\b(rice|quinoa|oats|bread|wrap|pasta|noodle|flour)\b/.test(value)) {
+    return 'grains';
+  }
+  if (/\b(milk|cheese|feta|ricotta|cream|butter)\b/.test(value)) {
+    return 'dairy';
+  }
+  if (/\b(cumin|paprika|oregano|thyme|pepper|salt|spice|chilli|cinnamon)\b/.test(value)) {
+    return 'herbs & spices';
+  }
+  return 'pantry';
+}
+
+function inferAllergensFromIngredients(ingredients) {
+  const text = Array.isArray(ingredients)
+    ? ingredients.map((entry) => String(entry?.name || '')).join(' ').toLowerCase()
+    : '';
+  if (!text) return [];
+  const allergens = new Set();
+  if (/\b(wheat|flour|bread|pasta|barley|rye|crumb|gluten)\b/.test(text)) allergens.add('gluten');
+  if (/\b(milk|yoghurt|yogurt|cheese|feta|ricotta|cream|butter)\b/.test(text)) allergens.add('dairy');
+  if (/\begg(s)?\b/.test(text)) allergens.add('egg');
+  if (/\b(nut|almond|cashew|walnut|pecan|hazelnut|pistachio|peanut)\b/.test(text)) allergens.add('nut');
+  if (/\b(soy|tofu|tempeh)\b/.test(text)) allergens.add('soy');
+  if (/\b(salmon|tuna|fish)\b/.test(text)) allergens.add('fish');
+  if (/\b(prawn|shrimp|shellfish|mussel|oyster|crab)\b/.test(text)) allergens.add('shellfish');
+  if (/\b(sesame)\b/.test(text)) allergens.add('sesame');
+  return [...allergens];
+}
+
+function deriveGeneratedDietaryTags({ dietaryTags, protein, calories, totalTimeMinutes }) {
+  const merged = normalizeList(dietaryTags, { limit: 12, lowercase: true });
+  const tagSet = new Set(merged);
+  const proteinValue = Number(protein || 0);
+  const caloriesValue = Number(calories || 0);
+  const totalMinutesValue = Number(totalTimeMinutes || 0);
+  if (proteinValue >= 24) tagSet.add('high-protein');
+  if (totalMinutesValue > 0 && totalMinutesValue <= 25) tagSet.add('quick-and-easy');
+  if (caloriesValue > 0 && caloriesValue <= 420) tagSet.add('light-meal');
+  return [...tagSet].slice(0, 10);
+}
+
+function defaultServesForMealType(mealType) {
+  if (mealType === 'snack') return 4;
+  if (mealType === 'breakfast') return 2;
+  return 3;
+}
+
 function normalizeGeneratedIngredient(entry, index = 0) {
   const source = entry && typeof entry === 'object' ? entry : {};
-  const name =
+  const rawName =
     typeof entry === 'string'
       ? entry
       : source?.name || source?.ingredient || source?.item || source?.label || source?.food || '';
+  const parsedInline = parseQuantityFromIngredientName(rawName);
+  const name = parsedInline?.name || rawName;
   const quantity =
-    typeof source?.quantity === 'string' || typeof source?.quantity === 'number' ? String(source.quantity).trim() : '';
-  const unit = typeof source?.unit === 'string' ? source.unit.trim() : '';
+    typeof source?.quantity === 'string' || typeof source?.quantity === 'number'
+      ? String(source.quantity).trim()
+      : parsedInline?.quantity || '';
+  const rawUnit = typeof source?.unit === 'string' ? source.unit.trim() : parsedInline?.unit || '';
+  const unit = normalizeQuantityUnit(rawUnit) || truncateText(rawUnit, 24);
   const category =
-    typeof source?.category === 'string' ? source.category.trim().toLowerCase().slice(0, 30) : '';
+    typeof source?.category === 'string' ? source.category.trim().toLowerCase().slice(0, 30) : inferIngredientCategory(name);
   const normalizedName = truncateText(name, 72);
   if (!normalizedName) {
     return { name: `Ingredient ${index + 1}` };
@@ -620,7 +889,7 @@ function normalizeGeneratedIngredient(entry, index = 0) {
   return {
     name: normalizedName,
     quantity: quantity ? truncateText(quantity, 24) : undefined,
-    unit: unit ? truncateText(unit, 24) : undefined,
+    unit: unit || undefined,
     category: category || undefined,
   };
 }
@@ -646,7 +915,7 @@ function resolveRecipeMealType(entry) {
 function normalizeGeneratedRecipe(entry, index = 0) {
   if (!entry || typeof entry !== 'object') return null;
   const mealType = resolveRecipeMealType(entry);
-  const titleCandidate = truncateText(entry?.title || '', 84);
+  const titleCandidate = truncateText(entry?.title || entry?.name || '', 84);
   const title = titleCandidate || `${mealType[0].toUpperCase()}${mealType.slice(1)} recipe ${index + 1}`;
 
   const baseId = slugifyRecipeId(entry?.id || `${mealType}-${title}`, `${mealType}-${index + 1}`);
@@ -665,25 +934,43 @@ function normalizeGeneratedRecipe(entry, index = 0) {
     ? entry.instructions
     : Array.isArray(entry?.steps)
       ? entry.steps
-      : tokenizeTextInput(entry?.instructionsText);
+      : Array.isArray(entry?.method)
+        ? entry.method
+        : tokenizeTextInput(entry?.instructionsText || entry?.directionsText);
   const instructions = instructionsSource
     .map((step) => truncateText(step, 220))
     .filter(Boolean)
     .slice(0, 10);
 
   if (ingredients.length < 3 || instructions.length < 2) return null;
+  const stableId = buildGeneratedRecipeStableId({
+    baseId,
+    title,
+    mealType,
+    ingredients,
+    instructions,
+  });
 
   const prepTimeMinutes = toPositiveNumber(entry?.prepTimeMinutes ?? entry?.prepMinutes, { max: 240 });
   const cookTimeMinutes = toPositiveNumber(entry?.cookTimeMinutes ?? entry?.cookMinutes, { max: 360 });
   const totalFromPayload = toPositiveNumber(entry?.totalTimeMinutes ?? entry?.totalMinutes, { max: 420 });
   const totalTimeMinutes = totalFromPayload || toPositiveNumber((prepTimeMinutes || 0) + (cookTimeMinutes || 0), { max: 420 });
-  const serves = toPositiveNumber(entry?.serves, { min: 1, max: 12, precision: 1 });
-  const calories = toPositiveNumber(entry?.calories, { max: 2200 });
-  const protein = toPositiveNumber(entry?.protein, { max: 220, precision: 1 });
-  const carbs = toPositiveNumber(entry?.carbs, { max: 300, precision: 1 });
-  const fat = toPositiveNumber(entry?.fat, { max: 180, precision: 1 });
-  const dietaryTags = normalizeList(entry?.dietaryTags, { limit: 8, lowercase: true });
-  const allergens = normalizeList(entry?.allergens, { limit: 8, lowercase: true });
+  const serves =
+    toPositiveNumber(entry?.serves ?? entry?.servings, { min: 1, max: 12, precision: 1 }) || defaultServesForMealType(mealType);
+  const calories = toPositiveNumber(entry?.calories ?? entry?.nutrition?.calories, { max: 2200 });
+  const protein = toPositiveNumber(entry?.protein ?? entry?.nutrition?.protein, { max: 220, precision: 1 });
+  const carbs = toPositiveNumber(entry?.carbs ?? entry?.nutrition?.carbs, { max: 300, precision: 1 });
+  const fat = toPositiveNumber(entry?.fat ?? entry?.nutrition?.fat, { max: 180, precision: 1 });
+  const dietaryTags = deriveGeneratedDietaryTags({
+    dietaryTags: entry?.dietaryTags,
+    protein,
+    calories,
+    totalTimeMinutes,
+  });
+  const allergens = normalizeList(
+    [...normalizeList(entry?.allergens, { limit: 8, lowercase: true }), ...inferAllergensFromIngredients(ingredients)],
+    { limit: 10, lowercase: true },
+  );
   const cuisines = normalizeList(
     [
       ...(Array.isArray(entry?.cuisines) ? entry.cuisines : []),
@@ -696,7 +983,7 @@ function normalizeGeneratedRecipe(entry, index = 0) {
   const estimatedCost = truncateText(entry?.estimatedCost || 'balanced', 18).toLowerCase() || 'balanced';
 
   return {
-    id: baseId,
+    id: stableId,
     title,
     description: description || undefined,
     ingredients,
@@ -728,6 +1015,7 @@ function normalizeGeneratedPlanDays({
   includeSnack,
   recipesByMealType,
   idAliases,
+  requiredCoreMealTypes = CORE_MEAL_TYPES,
 }) {
   const inputDays = Array.isArray(days) ? days : [];
   const normalizedDays = [];
@@ -766,30 +1054,174 @@ function normalizeGeneratedPlanDays({
       },
     });
   }
-  return normalizedDays;
+  return normalizedDays.map((day) => ({
+    ...day,
+    meals: {
+      ...day.meals,
+      breakfast: requiredCoreMealTypes.includes('breakfast') ? day.meals.breakfast : day.meals.breakfast || day.meals.dinner,
+      lunch: requiredCoreMealTypes.includes('lunch') ? day.meals.lunch : day.meals.lunch || day.meals.dinner,
+      dinner: requiredCoreMealTypes.includes('dinner') ? day.meals.dinner : day.meals.dinner || day.meals.lunch,
+    },
+  }));
 }
 
-function buildOnboardingSummary(answers = {}) {
-  const preferenceSummary = {
-    mainGoal: truncateText(answers?.mainGoal || '', 120),
-    primaryHealthFocus: truncateText(answers?.primaryHealthFocus || '', 80),
-    biggestChallenge: truncateText(answers?.biggestChallenge || '', 120),
-    dietaryRequirements: normalizeList(answers?.dietaryRequirements, { limit: 10, lowercase: true }),
-    allergies: normalizeList([...(answers?.allergyChips || []), ...tokenizeTextInput(answers?.allergiesText)], {
-      limit: 12,
-      lowercase: true,
-    }),
-    dislikes: normalizeList(tokenizeTextInput(answers?.dislikes), { limit: 12, lowercase: true }),
-    favoriteFoods: normalizeList(answers?.favoriteFoods, { limit: 10, lowercase: true }),
-    preferredCuisines: normalizeList(answers?.preferredCuisines, { limit: 8, lowercase: true }),
-    preferredMealStyle: truncateText(answers?.preferredMealStyle || '', 80).toLowerCase(),
-    mealsPerDay: Math.max(2, Math.min(5, Number(answers?.mealsPerDay || 3))),
-    daysPerWeek: Math.max(2, Math.min(7, Number(answers?.daysPerWeek || 7))),
-    groceryPreference: truncateText(answers?.groceryPreference || '', 80).toLowerCase(),
-    budgetPreference: truncateText(answers?.budgetPreference || '', 80).toLowerCase(),
-    cookingSkill: truncateText(answers?.cookingSkill || '', 80).toLowerCase(),
+function resolveCoreMealTypesFromMealsPerDay(mealsPerDayValue, selectedMealTypes = []) {
+  const explicit = Array.isArray(selectedMealTypes)
+    ? [...new Set(
+        selectedMealTypes
+          .map((entry) => normalizeMealType(entry))
+          .filter((entry) => entry === 'breakfast' || entry === 'lunch' || entry === 'dinner'),
+      )]
+    : [];
+  if (explicit.length >= 2) {
+    return CORE_MEAL_TYPES.filter((mealType) => explicit.includes(mealType));
+  }
+
+  const mealsPerDay = Math.max(2, Math.min(3, Number(mealsPerDayValue || 3)));
+  if (mealsPerDay <= 2) return ['breakfast', 'dinner'];
+  return ['breakfast', 'lunch', 'dinner'];
+}
+
+function calculateGeneratedRecipeQuality(recipes) {
+  const source = Array.isArray(recipes) ? recipes : [];
+  if (source.length === 0) {
+    return {
+      servesCoverage: 0,
+      quantityCoverage: 0,
+      richInstructionCoverage: 0,
+      ingredientReuseRatio: 0,
+      uniqueIngredientCount: 0,
+      valid: false,
+    };
+  }
+
+  let totalIngredients = 0;
+  let ingredientsWithQtyAndUnit = 0;
+  let recipesWithServes = 0;
+  let recipesWithRichInstructions = 0;
+  const uniqueIngredients = new Set();
+
+  for (const recipe of source) {
+    const serves = Number(recipe?.serves || 0);
+    if (Number.isFinite(serves) && serves > 0) recipesWithServes += 1;
+
+    const instructions = Array.isArray(recipe?.instructions) ? recipe.instructions : [];
+    const stepsAtLeastEightWords = instructions.filter(
+      (step) => String(step || '').trim().split(/\s+/).filter(Boolean).length >= 8,
+    );
+    if (instructions.length >= 3 && stepsAtLeastEightWords.length >= 2) {
+      recipesWithRichInstructions += 1;
+    }
+
+    const ingredients = Array.isArray(recipe?.ingredients) ? recipe.ingredients : [];
+    for (const ingredient of ingredients) {
+      totalIngredients += 1;
+      const key = normalizeText(String(ingredient?.name || '').replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' '));
+      if (key) uniqueIngredients.add(key);
+      const quantity = String(ingredient?.quantity || '').trim();
+      const unit = String(ingredient?.unit || '').trim();
+      if (quantity && unit) ingredientsWithQtyAndUnit += 1;
+    }
+  }
+
+  const servesCoverage = recipesWithServes / source.length;
+  const quantityCoverage = totalIngredients > 0 ? ingredientsWithQtyAndUnit / totalIngredients : 0;
+  const richInstructionCoverage = recipesWithRichInstructions / source.length;
+  const ingredientReuseRatio =
+    totalIngredients > 0
+      ? Math.max(0, Math.min(1, 1 - uniqueIngredients.size / totalIngredients))
+      : 0;
+  const valid =
+    servesCoverage >= 0.95 &&
+    quantityCoverage >= 0.8 &&
+    richInstructionCoverage >= 0.72 &&
+    ingredientReuseRatio >= 0.32;
+
+  return {
+    servesCoverage,
+    quantityCoverage,
+    richInstructionCoverage,
+    ingredientReuseRatio,
+    uniqueIngredientCount: uniqueIngredients.size,
+    valid,
   };
-  return preferenceSummary;
+}
+
+function buildOnboardingSummary(answers = {}, includeSnack = false) {
+  const coreMealTypes = resolveCoreMealTypesFromMealsPerDay(answers?.mealsPerDay, answers?.selectedMealTypes);
+  const hasTwoCoreMeals = coreMealTypes.length === 2;
+  const mealsPerDay = coreMealTypes.length;
+  const daysPerWeek = Math.max(2, Math.min(7, Number(answers?.daysPerWeek || 7)));
+  const twoMealMode = coreMealTypes.length === 2 && coreMealTypes.includes('breakfast') && coreMealTypes.includes('dinner');
+  const groceryPreference = truncateText(answers?.groceryPreference || '', 80).toLowerCase();
+  const fastPrepTargetMinutes =
+    groceryPreference === 'fastest meals possible'
+      ? 22
+      : groceryPreference === 'meal prep friendly'
+        ? 30
+        : 35;
+  const ingredientOverlapTarget = groceryPreference === 'meal prep friendly' ? 0.62 : 0.5;
+
+  return {
+    intakeVersion: 'v2',
+    person: {
+      firstName: truncateText(answers?.firstName || '', 48),
+      age: toPositiveNumber(answers?.age, { min: 10, max: 99 }),
+      gender: truncateText(answers?.gender || '', 24).toLowerCase() || undefined,
+      heightCm: toPositiveNumber(answers?.heightCm, { min: 100, max: 240 }),
+      currentWeightKg: toPositiveNumber(answers?.currentWeightKg, { min: 30, max: 260, precision: 1 }),
+      goalWeightKg: toPositiveNumber(answers?.goalWeightKg, { min: 30, max: 260, precision: 1 }),
+    },
+    goals: {
+      mainGoal: truncateText(answers?.mainGoal || '', 200),
+      motivation: truncateText(answers?.motivation || '', 240),
+      primaryHealthFocus: truncateText(answers?.primaryHealthFocus || '', 80),
+      timeframeWeeks: toPositiveNumber(answers?.timeframeWeeks, { min: 1, max: 104 }),
+      biggestChallenge: truncateText(answers?.biggestChallenge || '', 160),
+    },
+    restrictions: {
+      dietaryRequirements: normalizeList(answers?.dietaryRequirements, { limit: 10, lowercase: true }),
+      allergies: normalizeList([...(answers?.allergyChips || []), ...tokenizeTextInput(answers?.allergiesText)], {
+        limit: 14,
+        lowercase: true,
+      }),
+      dislikes: normalizeList(tokenizeTextInput(answers?.dislikes), { limit: 14, lowercase: true }),
+    },
+    preferences: {
+      favoriteFoods: normalizeList(answers?.favoriteFoods, { limit: 12, lowercase: true }),
+      preferredCuisines: normalizeList(answers?.preferredCuisines, { limit: 8, lowercase: true }),
+      preferredMealStyle: truncateText(answers?.preferredMealStyle || '', 80).toLowerCase(),
+      cookingSkill: truncateText(answers?.cookingSkill || '', 80).toLowerCase(),
+      budgetPreference: truncateText(answers?.budgetPreference || '', 80).toLowerCase(),
+      groceryPreference,
+      prepDay: truncateText(answers?.prepDay || '', 24),
+      includeSnack,
+      mealsPerDay,
+      daysPerWeek,
+      coreMealTypes,
+    },
+    generationConstraints: {
+      planDays: 7,
+      targetRecipeCountMin: twoMealMode ? 2 : hasTwoCoreMeals ? (includeSnack ? 4 : 3) : includeSnack ? 8 : 7,
+      targetRecipeCountMax: twoMealMode ? (includeSnack ? 4 : 3) : hasTwoCoreMeals ? (includeSnack ? 6 : 5) : includeSnack ? 12 : 10,
+      maxPrepMinutesDefault: fastPrepTargetMinutes,
+      maxDinnerMinutes: 45,
+      maxBreakfastMinutes: 18,
+      targetIngredientOverlapRatio: ingredientOverlapTarget,
+      maxUniqueCoreIngredients: twoMealMode ? 16 : groceryPreference === 'meal prep friendly' ? 34 : 42,
+      servingsRange: { min: 2, max: 4 },
+      snackServingsRange: { min: 4, max: 8 },
+      strictTwoMealMode: twoMealMode,
+      requiredFields: [
+        'recipes[].title',
+        'recipes[].serves',
+        'recipes[].ingredients[].name',
+        'recipes[].ingredients[].quantity',
+        'recipes[].ingredients[].unit',
+        'recipes[].instructions[]',
+      ],
+    },
+  };
 }
 
 function buildRecipeImagePrompt(recipe, answers = {}) {
@@ -821,36 +1253,64 @@ async function generateRecipeImageDataUri(recipe, answers = {}) {
   if (!apiKey) return '';
 
   const imageModel = process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1-mini';
-  const outputFormat = process.env.OPENAI_IMAGE_OUTPUT_FORMAT || 'webp';
+  const outputFormat = 'webp';
   const imageQuality = process.env.OPENAI_IMAGE_QUALITY || 'low';
   const imageSize = process.env.OPENAI_IMAGE_SIZE || '1024x1024';
   const compression = Math.max(1, Math.min(100, Number(process.env.OPENAI_IMAGE_OUTPUT_COMPRESSION || 70)));
   const prompt = buildRecipeImagePrompt(recipe, answers);
 
-  const controller = new AbortController();
-  const timeoutHandle = setTimeout(() => controller.abort(), OPENAI_MEAL_IMAGE_TIMEOUT_MS);
-  try {
+  const createRequestBody = (includeCompression) => {
+    const body = {
+      model: imageModel,
+      prompt,
+      n: 1,
+      size: imageSize,
+      quality: imageQuality,
+      output_format: outputFormat,
+    };
+    if (includeCompression && (outputFormat === 'webp' || outputFormat === 'jpeg')) {
+      body.output_compression = compression;
+    }
+    return body;
+  };
+
+  const requestImage = async (includeCompression) => {
     const response = await fetch(OPENAI_IMAGES_URL, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model: imageModel,
-        prompt,
-        n: 1,
-        size: imageSize,
-        quality: imageQuality,
-        output_format: outputFormat,
-        output_compression: compression,
-      }),
+      body: JSON.stringify(createRequestBody(includeCompression)),
       signal: controller.signal,
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
       const detail = payload?.error?.message || JSON.stringify(payload);
-      throw new Error(`Meal image generation failed (${response.status}): ${detail}`);
+      const errorObject = new Error(`Meal image generation failed (${response.status}): ${detail}`);
+      errorObject.status = response.status;
+      throw errorObject;
+    }
+    return payload;
+  };
+
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), OPENAI_MEAL_IMAGE_TIMEOUT_MS);
+  try {
+    let payload;
+    try {
+      payload = await requestImage(true);
+    } catch (errorObject) {
+      const message = String(errorObject?.message || '');
+      if (
+        message.toLowerCase().includes('output_compression') ||
+        message.toLowerCase().includes('unsupported') ||
+        message.toLowerCase().includes('invalid parameter')
+      ) {
+        payload = await requestImage(false);
+      } else {
+        throw errorObject;
+      }
     }
 
     const image = payload?.data?.[0] || null;
@@ -858,7 +1318,7 @@ async function generateRecipeImageDataUri(recipe, answers = {}) {
       return `data:image/${outputFormat};base64,${image.b64_json}`;
     }
     if (typeof image?.url === 'string' && image.url) {
-      return image.url;
+      return normalizeRecipeImageToWebp(image.url);
     }
     return '';
   } finally {
@@ -1103,6 +1563,92 @@ function calculatePlanQuality(plan, recipeMetaMap, answers = {}) {
   };
 }
 
+async function requestOpenAiTextOutput({
+  apiKey,
+  model,
+  input,
+  timeoutMs,
+  maxOutputTokens,
+  label,
+  textFormat,
+  allowExtendedRetry = true,
+}) {
+  const baseAttempt = {
+    tokenBudget: maxOutputTokens,
+    timeout: timeoutMs,
+    reasoningEffort: resolveReasoningEffort(),
+  };
+  const attempts = [
+    baseAttempt,
+    ...(allowExtendedRetry
+      ? [
+          {
+            tokenBudget: Math.min(20000, Math.round(maxOutputTokens * 1.35)),
+            timeout: Math.min(180000, Math.round(timeoutMs * 1.35)),
+            reasoningEffort: 'minimal',
+          },
+        ]
+      : []),
+  ];
+
+  let lastError = null;
+
+  for (const attempt of attempts) {
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), attempt.timeout);
+    try {
+      const body = {
+        model,
+        input,
+        text: {
+          ...(textFormat && typeof textFormat === 'object' ? textFormat : {}),
+          verbosity: resolveTextVerbosity(),
+        },
+        max_output_tokens: attempt.tokenBudget,
+      };
+      const reasoning = buildReasoningOptions(model);
+      if (reasoning?.effort) {
+        body.reasoning = { effort: attempt.reasoningEffort || reasoning.effort };
+      }
+
+      const response = await fetch(OPENAI_RESPONSES_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) {
+        const detail = payload?.error?.message || JSON.stringify(payload || {});
+        throw new Error(`${label} request failed (${response.status}): ${detail}`);
+      }
+
+      return extractResponseTextOrThrow(payload, label);
+    } catch (errorObject) {
+      if (errorObject?.name === 'AbortError') {
+        lastError = new Error(`${label} request timed out after ${attempt.timeout}ms`);
+      } else {
+        const message = String(errorObject?.message || errorObject || '');
+        lastError = errorObject;
+        const isRetryableEmptyOutput =
+          message.includes('returned no usable text (incomplete: max_output_tokens)') ||
+          message.includes('returned no usable text (incomplete)');
+        if (!isRetryableEmptyOutput) {
+          throw errorObject;
+        }
+      }
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
+  }
+
+  throw lastError || new Error(`${label} request failed.`);
+}
+
 async function callOpenAiForMealPlan({ answers, recipes, includeSnack, seedSalt }) {
   const apiKey = process.env.OPENAI_API_KEY || '';
   if (!apiKey) return null;
@@ -1139,49 +1685,23 @@ async function callOpenAiForMealPlan({ answers, recipes, includeSnack, seedSalt 
     null,
     2,
   );
-
-  const controller = new AbortController();
-  const timeoutHandle = setTimeout(() => controller.abort(), OPENAI_MEAL_PLAN_TIMEOUT_MS);
-  let response;
-  try {
-    response = await fetch(OPENAI_RESPONSES_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
+  return requestOpenAiTextOutput({
+    apiKey,
+    model,
+    label: 'OpenAI meal plan',
+    timeoutMs: OPENAI_MEAL_PLAN_TIMEOUT_MS,
+    maxOutputTokens: OPENAI_MEAL_PLAN_MAX_OUTPUT_TOKENS,
+    input: [
+      {
+        role: 'system',
+        content: [{ type: 'input_text', text: systemPrompt }],
       },
-      body: JSON.stringify({
-        model,
-        input: [
-          {
-            role: 'system',
-            content: [{ type: 'input_text', text: systemPrompt }],
-          },
-          {
-            role: 'user',
-            content: [{ type: 'input_text', text: userPrompt }],
-          },
-        ],
-        max_output_tokens: 2600,
-      }),
-      signal: controller.signal,
-    });
-  } catch (errorObject) {
-    if (errorObject?.name === 'AbortError') {
-      throw new Error(`OpenAI meal plan request timed out after ${OPENAI_MEAL_PLAN_TIMEOUT_MS}ms`);
-    }
-    throw errorObject;
-  } finally {
-    clearTimeout(timeoutHandle);
-  }
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`OpenAI meal plan request failed (${response.status}): ${text}`);
-  }
-
-  const payload = await response.json();
-  return extractResponseText(payload);
+      {
+        role: 'user',
+        content: [{ type: 'input_text', text: userPrompt }],
+      },
+    ],
+  });
 }
 
 async function callOpenAiForPlanRepair({ answers, recipes, includeSnack, seedSalt, invalidPlan, qualityIssues }) {
@@ -1218,49 +1738,23 @@ async function callOpenAiForPlanRepair({ answers, recipes, includeSnack, seedSal
     null,
     2,
   );
-
-  const controller = new AbortController();
-  const timeoutHandle = setTimeout(() => controller.abort(), OPENAI_MEAL_PLAN_TIMEOUT_MS);
-  let response;
-  try {
-    response = await fetch(OPENAI_RESPONSES_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
+  return requestOpenAiTextOutput({
+    apiKey,
+    model,
+    label: 'OpenAI meal plan repair',
+    timeoutMs: OPENAI_MEAL_PLAN_TIMEOUT_MS,
+    maxOutputTokens: OPENAI_MEAL_PLAN_MAX_OUTPUT_TOKENS,
+    input: [
+      {
+        role: 'system',
+        content: [{ type: 'input_text', text: systemPrompt }],
       },
-      body: JSON.stringify({
-        model,
-        input: [
-          {
-            role: 'system',
-            content: [{ type: 'input_text', text: systemPrompt }],
-          },
-          {
-            role: 'user',
-            content: [{ type: 'input_text', text: userPrompt }],
-          },
-        ],
-        max_output_tokens: 2600,
-      }),
-      signal: controller.signal,
-    });
-  } catch (errorObject) {
-    if (errorObject?.name === 'AbortError') {
-      throw new Error(`OpenAI meal plan repair request timed out after ${OPENAI_MEAL_PLAN_TIMEOUT_MS}ms`);
-    }
-    throw errorObject;
-  } finally {
-    clearTimeout(timeoutHandle);
-  }
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`OpenAI meal plan repair request failed (${response.status}): ${text}`);
-  }
-
-  const payload = await response.json();
-  return extractResponseText(payload);
+      {
+        role: 'user',
+        content: [{ type: 'input_text', text: userPrompt }],
+      },
+    ],
+  });
 }
 
 async function callOpenAiForGeneratedMeals({ answers, includeSnack, seedSalt }) {
@@ -1268,24 +1762,36 @@ async function callOpenAiForGeneratedMeals({ answers, includeSnack, seedSalt }) 
   if (!apiKey) return null;
 
   const model = process.env.OPENAI_GENERATED_RECIPES_MODEL || process.env.OPENAI_MEAL_PLAN_MODEL || 'gpt-5-nano';
-  const onboarding = buildOnboardingSummary(answers);
+  const onboarding = buildOnboardingSummary(answers, includeSnack);
+  const coreMealTypes = Array.isArray(onboarding?.preferences?.coreMealTypes)
+    ? onboarding.preferences.coreMealTypes
+    : CORE_MEAL_TYPES;
+  const twoMealMode = coreMealTypes.length === 2 && coreMealTypes.includes('breakfast') && coreMealTypes.includes('dinner');
+  const requiredMealsLabel = coreMealTypes.length > 0 ? coreMealTypes.join(', ') : CORE_MEAL_TYPES.join(', ');
+  const recipeCountMin = Number(onboarding?.generationConstraints?.targetRecipeCountMin || 8);
+  const recipeCountMax = Number(onboarding?.generationConstraints?.targetRecipeCountMax || 12);
 
   const systemPrompt = [
     'You are an Accredited Practising Dietitian (APD) and meal-planning specialist.',
-    'Create a realistic weekly plan and full recipe set from the patient preferences only.',
-    'Return valid JSON only and do not wrap in markdown.',
-    'Respect allergies and dietary requirements first. Do not include unsafe ingredients.',
-    'Prefer practical Australian supermarket ingredients and straightforward cooking steps.',
-    'Meals must be nutritionally balanced and usable in a real weekly routine.',
-    'Use unique recipe IDs, and ensure every plan meal references an ID from recipes.',
+    'This is stage 2 of a two-stage pipeline: stage 1 already produced intakeProfile JSON from the intake form.',
+    'Use intakeProfile as the source of truth and generate a practical weekly meal plan plus recipe catalog.',
+    'Return one valid JSON object only. No markdown.',
+    'Safety first: strictly avoid allergens and explicitly disliked foods from intakeProfile.',
+    'All recipes must include full ingredient quantities/units and complete numbered cooking steps.',
+    'Prioritize overlapping ingredients across recipes to minimize unique groceries and reduce waste.',
+    'Prefer short prep/cook times and practical Australian supermarket ingredients.',
+    `Each day must include the required meal types: ${requiredMealsLabel}. Include snack only when requested.`,
+    'Every meal id in days must reference an id present in recipes.',
+    'Keep output concise and avoid unnecessary metadata.',
   ].join('\n');
 
   const userPrompt = JSON.stringify(
     {
-      task: 'Generate weekly meal plan and recipe catalog from onboarding preferences.',
+      stage: 'meal_plan_generation_v2',
+      task: 'Generate weekly meal plan, grocery-friendly recipe catalog, and meal assignments from intakeProfile.',
       includeSnack,
       seedSalt,
-      onboarding,
+      intakeProfile: onboarding,
       outputSchema: {
         notes: ['short string'],
         recipes: [
@@ -1294,7 +1800,8 @@ async function callOpenAiForGeneratedMeals({ answers, includeSnack, seedSalt }) 
             title: 'string',
             description: 'string',
             mealType: 'breakfast|lunch|dinner|snack',
-            ingredients: [{ name: 'string', quantity: 'string', unit: 'string', category: 'string' }],
+            serves: 0,
+            ingredients: [{ name: 'string', quantity: 'string|number', unit: 'string', category: 'protein|produce|grains|dairy|herbs & spices|pantry' }],
             instructions: ['string'],
             calories: 0,
             protein: 0,
@@ -1302,14 +1809,9 @@ async function callOpenAiForGeneratedMeals({ answers, includeSnack, seedSalt }) 
             fat: 0,
             dietaryTags: ['string'],
             allergens: ['string'],
-            serves: 0,
             prepTimeMinutes: 0,
             cookTimeMinutes: 0,
             totalTimeMinutes: 0,
-            estimatedCost: 'low cost|balanced|premium',
-            cuisines: ['string'],
-            cardTags: ['string'],
-            collections: ['string'],
           },
         ],
         days: [
@@ -1321,68 +1823,85 @@ async function callOpenAiForGeneratedMeals({ answers, includeSnack, seedSalt }) 
           },
         ],
       },
-      requirements: [
-        'Generate 14-22 total recipes with enough variety for a 7-day plan.',
-        'Include at least 4 breakfast recipes, 5 lunch recipes, and 5 dinner recipes.',
+      hardRequirements: [
+        `Generate ${recipeCountMin}-${recipeCountMax} total recipes with quality over quantity.`,
+        'Each recipe must have at least 4 ingredients and at least 3 clear instruction steps.',
+        'Each ingredient entry must include: name, quantity, unit, category.',
+        'Each recipe must include calories and protein as positive numbers.',
+        'Each recipe must include a realistic serves value (breakfast/lunch/dinner typically 2-4, snack 4-8).',
+        'At least 60% of recipes should reuse core ingredients from the weekly base pantry/protein set.',
+        'Keep prep practical: breakfast mostly <=18 min, lunch/dinner mostly <=35 min total.',
+        'No placeholder values like N/A, to taste, as needed, some, handful as quantity.',
+        twoMealMode
+          ? 'Strict two-meal mode: only breakfast and dinner are required core meals. Generate exactly 1 breakfast and 1 dinner recipe, then repeat these across the week for maximum overlap.'
+          : `Generate practical recipes covering the required core meal types: ${requiredMealsLabel}.`,
         includeSnack ? 'Include snack recipes and one snack per day.' : 'Do not include snack assignments unless explicitly needed.',
-        'Meals should support the stated grocery and budget preferences.',
+        'Respect dietary requirements and allergies as hard constraints.',
+        'Keep each recipe compact: concise description, 3-6 ingredients, 2-5 steps.',
       ],
+      formatExample: {
+        notes: ['string'],
+        recipes: [
+          {
+            id: 'high-protein-overnight-oats',
+            title: 'High-Protein Overnight Oats',
+            mealType: 'breakfast',
+            serves: 2,
+            ingredients: [
+              { name: 'rolled oats', quantity: 1, unit: 'cup', category: 'grains' },
+              { name: 'greek yogurt', quantity: 200, unit: 'g', category: 'dairy' },
+            ],
+            instructions: ['Step 1...', 'Step 2...', 'Step 3...'],
+          },
+        ],
+        days: [
+          { breakfast: 'high-protein-overnight-oats', lunch: 'recipe-id', dinner: 'recipe-id', snacks: ['snack-id'] },
+        ],
+      },
     },
     null,
     2,
   );
-
-  const controller = new AbortController();
-  const timeoutHandle = setTimeout(() => controller.abort(), OPENAI_GENERATED_RECIPES_TIMEOUT_MS);
-  let response;
-  try {
-    response = await fetch(OPENAI_RESPONSES_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
+  return requestOpenAiTextOutput({
+    apiKey,
+    model,
+    label: 'OpenAI generated recipe',
+    timeoutMs: OPENAI_GENERATED_RECIPES_TIMEOUT_MS,
+    maxOutputTokens: OPENAI_GENERATED_RECIPES_MAX_OUTPUT_TOKENS,
+    input: [
+      {
+        role: 'system',
+        content: [{ type: 'input_text', text: systemPrompt }],
       },
-      body: JSON.stringify({
-        model,
-        input: [
-          {
-            role: 'system',
-            content: [{ type: 'input_text', text: systemPrompt }],
-          },
-          {
-            role: 'user',
-            content: [{ type: 'input_text', text: userPrompt }],
-          },
-        ],
-        text: {
-          format: {
-            type: 'json_object',
-          },
-        },
-        max_output_tokens: 7600,
-      }),
-      signal: controller.signal,
-    });
-  } catch (errorObject) {
-    if (errorObject?.name === 'AbortError') {
-      throw new Error(`OpenAI generated recipe request timed out after ${OPENAI_GENERATED_RECIPES_TIMEOUT_MS}ms`);
-    }
-    throw errorObject;
-  } finally {
-    clearTimeout(timeoutHandle);
-  }
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`OpenAI generated recipe request failed (${response.status}): ${text}`);
-  }
-
-  const payload = await response.json();
-  return extractResponseText(payload);
+      {
+        role: 'user',
+        content: [{ type: 'input_text', text: userPrompt }],
+      },
+    ],
+    textFormat: {
+      format: {
+        type: 'json_object',
+      },
+    },
+    allowExtendedRetry: false,
+  });
 }
 
-function normalizeGeneratedBundle({ parsed, includeSnack }) {
+function normalizeGeneratedBundle({ parsed, includeSnack, coreMealTypes = CORE_MEAL_TYPES }) {
+  const requiredCoreMealTypes = Array.isArray(coreMealTypes) && coreMealTypes.length > 0
+    ? coreMealTypes.filter((entry) => CORE_MEAL_TYPES.includes(entry))
+    : CORE_MEAL_TYPES;
+  const twoMealMode =
+    requiredCoreMealTypes.length === 2 &&
+    requiredCoreMealTypes.includes('breakfast') &&
+    requiredCoreMealTypes.includes('dinner');
+  const minimumRecipeCount = requiredCoreMealTypes.length <= 2 ? 2 : 6;
   const rawRecipes = Array.isArray(parsed?.recipes) ? parsed.recipes : [];
+  debugMealPlanAi('normalizeGeneratedBundle.input', {
+    rawRecipeCount: rawRecipes.length,
+    hasDays: Array.isArray(parsed?.days),
+    dayCount: Array.isArray(parsed?.days) ? parsed.days.length : 0,
+  });
   const normalizedRecipes = [];
   const idAliases = new Map();
   const usedIds = new Set();
@@ -1404,7 +1923,14 @@ function normalizeGeneratedBundle({ parsed, includeSnack }) {
     idAliases.set(slugifyRecipeId(normalized.title, uniqueId), uniqueId);
   }
 
-  if (normalizedRecipes.length < 8) return null;
+  if (normalizedRecipes.length < minimumRecipeCount) {
+    debugMealPlanAi('normalizeGeneratedBundle.fail.recipe_count', {
+      normalizedRecipeCount: normalizedRecipes.length,
+      minimumRecipeCount,
+      requiredCoreMealTypes,
+    });
+    return null;
+  }
 
   const recipesByMealType = {
     breakfast: normalizedRecipes.filter((recipe) => recipe.mealType === 'breakfast').map((recipe) => recipe.id),
@@ -1413,7 +1939,34 @@ function normalizeGeneratedBundle({ parsed, includeSnack }) {
     snack: normalizedRecipes.filter((recipe) => recipe.mealType === 'snack').map((recipe) => recipe.id),
   };
 
-  if (recipesByMealType.breakfast.length === 0 || recipesByMealType.lunch.length === 0 || recipesByMealType.dinner.length === 0) {
+  const hasMissingRequiredType = requiredCoreMealTypes.some((mealType) => (recipesByMealType[mealType] || []).length === 0);
+  if (hasMissingRequiredType) {
+    debugMealPlanAi('normalizeGeneratedBundle.fail.missing_core_meal_type', {
+      counts: {
+        breakfast: recipesByMealType.breakfast.length,
+        lunch: recipesByMealType.lunch.length,
+        dinner: recipesByMealType.dinner.length,
+        snack: recipesByMealType.snack.length,
+      },
+      requiredCoreMealTypes,
+    });
+    return null;
+  }
+  const minVarietyPerRequiredType = requiredCoreMealTypes.length <= 2 ? 1 : 2;
+  const hasLowVariety = requiredCoreMealTypes.some((mealType) => {
+    const count = (recipesByMealType[mealType] || []).length;
+    return count < minVarietyPerRequiredType;
+  });
+  if (hasLowVariety) {
+    debugMealPlanAi('normalizeGeneratedBundle.fail.low_meal_type_variety', {
+      counts: {
+        breakfast: recipesByMealType.breakfast.length,
+        lunch: recipesByMealType.lunch.length,
+        dinner: recipesByMealType.dinner.length,
+        snack: recipesByMealType.snack.length,
+      },
+      requiredCoreMealTypes,
+    });
     return null;
   }
 
@@ -1428,39 +1981,171 @@ function normalizeGeneratedBundle({ parsed, includeSnack }) {
     includeSnack,
     recipesByMealType,
     idAliases,
+    requiredCoreMealTypes,
   });
   const hasMissingCoreMeals = days.some((day) =>
-    CORE_MEAL_TYPES.some((mealType) => !String(day?.meals?.[mealType] || '').trim()),
+    requiredCoreMealTypes.some((mealType) => !String(day?.meals?.[mealType] || '').trim()),
   );
-  if (hasMissingCoreMeals) return null;
+  if (hasMissingCoreMeals) {
+    debugMealPlanAi('normalizeGeneratedBundle.fail.missing_core_day_assignment');
+    return null;
+  }
 
   const notes = normalizeList(parsed?.notes, { limit: 6 }).filter(Boolean);
+  const caloriesCoverage =
+    normalizedRecipes.length > 0
+      ? normalizedRecipes.filter((recipe) => Number.isFinite(Number(recipe?.calories || 0)) && Number(recipe?.calories || 0) > 0).length /
+        normalizedRecipes.length
+      : 0;
+  const proteinCoverage =
+    normalizedRecipes.length > 0
+      ? normalizedRecipes.filter((recipe) => Number.isFinite(Number(recipe?.protein || 0)) && Number(recipe?.protein || 0) > 0).length /
+        normalizedRecipes.length
+      : 0;
+  if (caloriesCoverage < 0.9 || proteinCoverage < 0.9) {
+    debugMealPlanAi('normalizeGeneratedBundle.fail.macro_coverage', {
+      caloriesCoverage,
+      proteinCoverage,
+      recipeCount: normalizedRecipes.length,
+    });
+    return null;
+  }
+  const quality = calculateGeneratedRecipeQuality(normalizedRecipes);
+  if (!quality.valid) {
+    debugMealPlanAi('normalizeGeneratedBundle.fail.quality', quality);
+    const twoCoreMealsSelected = requiredCoreMealTypes.length === 2;
+    const hardQualityFailure =
+      quality.servesCoverage < (twoCoreMealsSelected ? 0.62 : 0.72) ||
+      quality.quantityCoverage < (twoCoreMealsSelected ? 0.5 : 0.58) ||
+      quality.richInstructionCoverage < (twoCoreMealsSelected ? 0.38 : 0.45);
+    if (hardQualityFailure) {
+      return null;
+    }
+    notes.push(
+      'Quality safeguards were partially relaxed to return a usable plan while preserving allergy and meal-type constraints.',
+    );
+  }
   return {
     recipes: normalizedRecipes,
     mealPlan: {
       days,
       generatedBy: 'openai',
-      notes,
+      notes: [
+        ...notes,
+        `AI quality checks: servings ${Math.round(quality.servesCoverage * 100)}%, quantities ${Math.round(
+          quality.quantityCoverage * 100,
+        )}%, detailed steps ${Math.round(quality.richInstructionCoverage * 100)}%, ingredient reuse ${Math.round(
+          quality.ingredientReuseRatio * 100,
+        )}% (${quality.uniqueIngredientCount} unique items).`,
+      ].slice(0, 6),
       generatedAt: new Date().toISOString(),
+    },
+  };
+}
+
+function compactBundleForTwoMealMode(bundle, includeSnack = false) {
+  if (!bundle || !Array.isArray(bundle.recipes) || !bundle.mealPlan) return bundle;
+  const recipes = bundle.recipes;
+  const breakfasts = recipes.filter((recipe) => recipe.mealType === 'breakfast');
+  const dinners = recipes.filter((recipe) => recipe.mealType === 'dinner');
+  if (breakfasts.length === 0 || dinners.length === 0) return bundle;
+
+  const breakfast = breakfasts[0];
+  const breakfastTokens = ingredientTokenSet(breakfast);
+  const bestDinner = dinners
+    .map((dinner) => ({
+      dinner,
+      overlap: tokenOverlapCount(breakfastTokens, ingredientTokenSet(dinner)),
+    }))
+    .sort((left, right) => right.overlap - left.overlap)[0]?.dinner;
+  if (!bestDinner) return bundle;
+
+  const snack = includeSnack ? recipes.find((recipe) => recipe.mealType === 'snack') : null;
+  const keepIds = new Set([breakfast.id, bestDinner.id, ...(snack ? [snack.id] : [])]);
+  const compactRecipes = recipes.filter((recipe) => keepIds.has(recipe.id));
+  const compactDays = (Array.isArray(bundle.mealPlan.days) ? bundle.mealPlan.days : []).map((day, dayIndex) => ({
+    ...day,
+    dayIndex,
+    meals: {
+      breakfast: breakfast.id,
+      lunch: bestDinner.id,
+      dinner: bestDinner.id,
+      snacks: includeSnack && snack ? [snack.id] : undefined,
+    },
+  }));
+
+  return {
+    recipes: compactRecipes,
+    mealPlan: {
+      ...bundle.mealPlan,
+      days: compactDays,
+      notes: [
+        ...(Array.isArray(bundle.mealPlan.notes) ? bundle.mealPlan.notes : []),
+        'Two-meal mode applied: one breakfast and one dinner recipe repeated for maximum ingredient overlap.',
+      ].slice(0, 6),
     },
   };
 }
 
 export async function generateOpenAiMealPlanWithGeneratedRecipes({ answers, includeSnack = false, seedSalt = '' }) {
   try {
-    const outputText = await callOpenAiForGeneratedMeals({ answers, includeSnack, seedSalt });
-    if (!outputText) return null;
-    const parsed = parseJsonFromText(outputText);
-    const normalized = normalizeGeneratedBundle({ parsed, includeSnack });
-    if (!normalized) return null;
+    const intakeProfile = buildOnboardingSummary(answers, includeSnack);
+    const coreMealTypes = Array.isArray(intakeProfile?.preferences?.coreMealTypes)
+      ? intakeProfile.preferences.coreMealTypes
+      : CORE_MEAL_TYPES;
+    const twoMealMode =
+      coreMealTypes.length === 2 &&
+      coreMealTypes.includes('breakfast') &&
+      coreMealTypes.includes('dinner');
+    let normalized = null;
+    let lastError = null;
+    const maxAttempts = 2;
 
-    const planIds = new Set(
-      normalized.mealPlan.days
-        .flatMap((day) => [day.meals.breakfast, day.meals.lunch, day.meals.dinner, ...(day.meals.snacks || [])])
-        .filter(Boolean),
-    );
-    const recipesNeedingImages = normalized.recipes.filter((recipe) => planIds.has(recipe.id)).slice(0, OPENAI_MAX_GENERATED_RECIPE_IMAGES);
-    await withConcurrency(recipesNeedingImages, 3, async (recipe) => {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const attemptSeed =
+        attempt === 0
+          ? seedSalt
+          : `${seedSalt || 'meal-plan'}|retry:${attempt}|ts:${Date.now()}`;
+      try {
+        const outputText = await callOpenAiForGeneratedMeals({
+          answers,
+          includeSnack,
+          seedSalt: attemptSeed,
+        });
+        if (!outputText) {
+          debugMealPlanAi('generateOpenAiMealPlanWithGeneratedRecipes.empty_output', { attempt });
+          continue;
+        }
+        const parsed = parseJsonFromText(outputText);
+        if (!parsed || typeof parsed !== 'object') {
+          debugMealPlanAi('generateOpenAiMealPlanWithGeneratedRecipes.invalid_json', { attempt });
+          continue;
+        }
+        normalized = normalizeGeneratedBundle({ parsed, includeSnack, coreMealTypes });
+        if (normalized) break;
+      } catch (errorObject) {
+        lastError = errorObject;
+        debugMealPlanAi('generateOpenAiMealPlanWithGeneratedRecipes.attempt_error', {
+          attempt,
+          message: errorObject?.message || String(errorObject),
+        });
+      }
+    }
+
+    if (!normalized) {
+      if (lastError) throw lastError;
+      return null;
+    }
+
+    if (twoMealMode) {
+      normalized = compactBundleForTwoMealMode(normalized, includeSnack);
+    }
+
+    const hasConcreteRecipeImage = (value) => Boolean(normalizeRecipeImageToWebp(value));
+    const recipesNeedingImages = normalized.recipes
+      .filter((recipe) => !hasConcreteRecipeImage(recipe?.imageUrl))
+      .slice(0, OPENAI_MAX_GENERATED_RECIPE_IMAGES);
+    await withConcurrency(recipesNeedingImages, 4, async (recipe) => {
       try {
         const imageUrl = await generateRecipeImageDataUri(recipe, answers);
         if (imageUrl) {
@@ -1477,9 +2162,23 @@ export async function generateOpenAiMealPlanWithGeneratedRecipes({ answers, incl
 
     normalized.recipes = normalized.recipes.map((recipe) => ({
       ...recipe,
-      imageUrl: String(recipe?.imageUrl || '').trim(),
+      imageUrl: normalizeRecipeImageToWebp(recipe?.imageUrl) || '',
     }));
-    return normalized;
+    const imageCoverage =
+      normalized.recipes.length > 0
+        ? normalized.recipes.filter((recipe) => hasConcreteRecipeImage(recipe?.imageUrl)).length / normalized.recipes.length
+        : 0;
+    if (imageCoverage < 0.85) {
+      debugMealPlanAi('generateOpenAiMealPlanWithGeneratedRecipes.fail.image_coverage', {
+        imageCoverage,
+        recipeCount: normalized.recipes.length,
+      });
+      return null;
+    }
+    return {
+      ...normalized,
+      intakeProfile,
+    };
   } catch (errorObject) {
     console.error('Generated recipe AI generation failed:', errorObject?.message || String(errorObject));
     return null;

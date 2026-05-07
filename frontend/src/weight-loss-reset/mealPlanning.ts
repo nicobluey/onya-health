@@ -1,5 +1,5 @@
 import { MEAL_PLAN_DAYS } from './constants';
-import type { MealPlan, MealPlanDay, MealType, OnboardingAnswers, Recipe, WeightLogEntry } from './types';
+import type { CoreMealType, MealPlan, MealPlanDay, MealType, OnboardingAnswers, Recipe, WeightLogEntry } from './types';
 
 export interface GroceryItem {
   key: string;
@@ -78,11 +78,12 @@ const SWEET_OR_SNACK_KEYWORDS = [
   'beverage',
   'drink',
 ];
+const CORE_MEAL_TYPE_ORDER: CoreMealType[] = ['breakfast', 'lunch', 'dinner'];
 
 function getPlannedMealsPerDay(mealsPerDay: number) {
   const parsed = Math.round(Number(mealsPerDay || 3));
   if (!Number.isFinite(parsed)) return 3;
-  return Math.max(2, Math.min(5, parsed));
+  return Math.max(2, Math.min(3, parsed));
 }
 
 function getPlannedDayCount(daysPerWeek: number) {
@@ -94,6 +95,28 @@ function getPlannedDayCount(daysPerWeek: number) {
 function getCoreMealTypesForMealsPerDay(mealsPerDay: number): Array<'breakfast' | 'lunch' | 'dinner'> {
   if (getPlannedMealsPerDay(mealsPerDay) <= 2) return ['lunch', 'dinner'];
   return ['breakfast', 'lunch', 'dinner'];
+}
+
+function normalizeCoreMealTypes(input: unknown): CoreMealType[] {
+  if (!Array.isArray(input)) return [];
+  const normalized = [...new Set(
+    input
+      .map((entry) => String(entry || '').trim().toLowerCase())
+      .filter((entry): entry is CoreMealType => entry === 'breakfast' || entry === 'lunch' || entry === 'dinner')
+  )];
+  return CORE_MEAL_TYPE_ORDER.filter((entry) => normalized.includes(entry));
+}
+
+function getCoreMealTypesForAnswers(answers: OnboardingAnswers): Array<'breakfast' | 'lunch' | 'dinner'> {
+  const explicit = normalizeCoreMealTypes(answers?.selectedMealTypes);
+  if (explicit.length >= 2) return explicit;
+  return getCoreMealTypesForMealsPerDay(answers?.mealsPerDay || 3);
+}
+
+function getIncludeSnackForAnswers(answers: OnboardingAnswers) {
+  const explicit = normalizeCoreMealTypes(answers?.selectedMealTypes);
+  if (explicit.length > 0) return false;
+  return getPlannedMealsPerDay(answers?.mealsPerDay || 3) >= 4;
 }
 
 function normalizeText(value: string) {
@@ -189,7 +212,57 @@ function recipeMatchesDietaryRequirements(recipe: Recipe, requirements: string[]
 function recipePassesAllergyCheck(recipe: Recipe, allergyTerms: string[]) {
   if (allergyTerms.length === 0) return true;
   const text = recipeText(recipe);
-  return !allergyTerms.some((term) => text.includes(term));
+  const allergens = new Set((recipe.allergens || []).map((item) => normalizeText(item)));
+  const hasToken = (value: string) => new RegExp(`\\b${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text);
+  const hasFreeToken = (value: string) =>
+    new RegExp(`\\b${value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[-\\s]?free\\b`, 'i').test(text);
+
+  for (const allergyTerm of allergyTerms) {
+    const normalized = normalizeText(allergyTerm);
+    if (!normalized) continue;
+
+    if (normalized.includes('gluten')) {
+      if (allergens.has('gluten')) return false;
+      if (hasToken('gluten') && !hasFreeToken('gluten')) return false;
+      continue;
+    }
+
+    if (normalized.includes('peanut')) {
+      if (allergens.has('peanut') || allergens.has('peanuts')) return false;
+      if (hasToken('peanut') && !hasFreeToken('peanut')) return false;
+      continue;
+    }
+
+    if (normalized.includes('tree nut') || normalized === 'nuts' || normalized === 'nut') {
+      if ([...allergens].some((token) => token.includes('nut') || token.includes('almond') || token.includes('walnut'))) {
+        return false;
+      }
+      if (hasToken('nut') && !hasFreeToken('nut')) return false;
+      continue;
+    }
+
+    if (normalized.includes('dairy') || normalized.includes('milk') || normalized.includes('lactose')) {
+      if ([...allergens].some((token) => token.includes('dairy') || token.includes('milk') || token.includes('lactose'))) {
+        return false;
+      }
+      if (
+        (hasToken('dairy') || hasToken('milk') || hasToken('cheese') || hasToken('yoghurt') || hasToken('yogurt')) &&
+        !(hasFreeToken('dairy') || hasFreeToken('lactose'))
+      ) {
+        return false;
+      }
+      continue;
+    }
+
+    if (allergens.has(normalized) || [...allergens].some((token) => token.includes(normalized) || normalized.includes(token))) {
+      return false;
+    }
+    if (hasToken(normalized) && !hasFreeToken(normalized)) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function recipePassesDislikes(recipe: Recipe, dislikes: string[]) {
@@ -377,9 +450,18 @@ function buildCandidatePool({
   const allergyTerms = extractAllergyTerms(answers);
   const dislikes = stage === 3 ? [] : extractDislikes(answers);
 
-  const withMealType = stage === 3
-    ? recipes.filter((recipe) => recipe.mealType === mealType || (mealType === 'snack' && recipe.mealType === 'breakfast'))
-    : recipes.filter((recipe) => recipe.mealType === mealType);
+  const withMealType =
+    stage === 3
+      ? recipes.filter((recipe) => {
+          if (mealType === 'snack') {
+            return recipe.mealType === 'snack' || recipe.mealType === 'breakfast';
+          }
+          if (mealType === 'lunch' || mealType === 'dinner') {
+            return recipe.mealType === 'lunch' || recipe.mealType === 'dinner';
+          }
+          return recipe.mealType === mealType;
+        })
+      : recipes.filter((recipe) => recipe.mealType === mealType);
 
   return withMealType
     .filter((recipe) => recipePassesMealPlanningHeuristics(recipe, mealType, stage))
@@ -575,7 +657,7 @@ function normalizeMealAssignmentsForPracticality(mealPlan: MealPlan, answers: On
   const recipes = [...recipeMap.values()];
   if (recipes.length === 0 || mealPlan.days.length === 0) return mealPlan;
 
-  const coreMealTypes = getCoreMealTypesForMealsPerDay(answers.mealsPerDay);
+  const coreMealTypes = getCoreMealTypesForAnswers(answers);
   const pools = {
     breakfast: buildBestEffortPool({ recipes, mealType: 'breakfast', answers }),
     lunch: buildBestEffortPool({ recipes, mealType: 'lunch', answers }),
@@ -926,9 +1008,8 @@ export function generateMealPlan({
   const baseSeed = `${answers.firstName}|${answers.age || ''}|${answers.goalWeightKg || ''}|${answers.biggestChallenge}|${answers.mainGoal}|${seedSalt}`;
 
   const plannedDayCount = getPlannedDayCount(answers.daysPerWeek);
-  const plannedMealsPerDay = getPlannedMealsPerDay(answers.mealsPerDay);
-  const coreMealTypes = getCoreMealTypesForMealsPerDay(plannedMealsPerDay);
-  const requiresSnack = plannedMealsPerDay >= 4;
+  const coreMealTypes = getCoreMealTypesForAnswers(answers);
+  const requiresSnack = getIncludeSnackForAnswers(answers);
   const mealTypesForDay: MealType[] = requiresSnack ? [...coreMealTypes, 'snack'] : [...coreMealTypes];
 
   const candidatePools = {
@@ -1163,7 +1244,7 @@ export function getSwapCandidates({
   answers,
   mealType,
   currentRecipe,
-  limit = 12,
+  limit = 24,
 }: {
   recipes: Recipe[];
   answers: OnboardingAnswers;
@@ -1171,21 +1252,78 @@ export function getSwapCandidates({
   currentRecipe?: Recipe;
   limit?: number;
 }) {
+  const hasConcreteImage = (recipe: Recipe) => {
+    const candidate = String(recipe?.imageUrl || '').trim();
+    if (!candidate) return false;
+    if (/^data:image\/webp;base64,/i.test(candidate)) return true;
+    if (candidate.includes('/api/patient/meal-plan/recipe-image')) return true;
+    if (!/^https?:\/\//i.test(candidate)) return false;
+    try {
+      const parsed = new URL(candidate);
+      if (parsed.pathname === '/api/patient/meal-plan/recipe-image') return true;
+      if (parsed.pathname.toLowerCase().endsWith('.webp')) return true;
+    } catch {
+      return false;
+    }
+    return /(?:^|[?&])(fm|format)=webp(?:&|$)/i.test(candidate);
+  };
+
   const strict = buildCandidatePool({ recipes, mealType, answers, stage: 1 });
   const withFallback = strict.length >= limit ? strict : buildCandidatePool({ recipes, mealType, answers, stage: 2 });
   const loose = withFallback.length >= limit ? withFallback : buildCandidatePool({ recipes, mealType, answers, stage: 3 });
   const filtered = loose.filter((recipe) => recipe.id !== currentRecipe?.id);
+  const withConcreteImages = filtered.filter((recipe) => hasConcreteImage(recipe));
+  let candidatePool = withConcreteImages;
 
-  if (!currentRecipe) return filtered.slice(0, limit);
+  if (candidatePool.length < limit) {
+    const criticalRequirements = normalizeRequirements(answers.dietaryRequirements).filter((requirement) =>
+      CRITICAL_REQUIREMENTS.has(normalizeText(requirement))
+    );
+    const allergyTerms = extractAllergyTerms(answers);
+    const broadFallback = recipes
+      .filter((recipe) => recipe.id !== currentRecipe?.id)
+      .filter((recipe) => hasConcreteImage(recipe))
+      .filter((recipe) => recipePassesAllergyCheck(recipe, allergyTerms))
+      .filter((recipe) => recipeMatchesDietaryRequirements(recipe, criticalRequirements))
+      .sort((a, b) => {
+        const typeA = a.mealType === mealType ? 2 : mealType === 'snack' && a.mealType === 'breakfast' ? 1 : 0;
+        const typeB = b.mealType === mealType ? 2 : mealType === 'snack' && b.mealType === 'breakfast' ? 1 : 0;
+        const imageA = hasConcreteImage(a) ? 1 : 0;
+        const imageB = hasConcreteImage(b) ? 1 : 0;
+        return (
+          imageB - imageA ||
+          typeB - typeA ||
+          recipePreferenceScore(b, answers) - recipePreferenceScore(a, answers) ||
+          a.title.localeCompare(b.title)
+        );
+      });
+    if (candidatePool.length === 0) {
+      candidatePool = broadFallback;
+    } else {
+      const merged = new Map(candidatePool.map((recipe) => [recipe.id, recipe]));
+      for (const recipe of broadFallback) {
+        if (!merged.has(recipe.id)) merged.set(recipe.id, recipe);
+      }
+      candidatePool = [...merged.values()];
+    }
+  }
 
-  return filtered
+  if (!currentRecipe) {
+    return candidatePool
+      .map((recipe) => ({ recipe, hasImage: hasConcreteImage(recipe) }))
+      .sort((a, b) => Number(b.hasImage) - Number(a.hasImage) || a.recipe.title.localeCompare(b.recipe.title))
+      .slice(0, limit)
+      .map((entry) => entry.recipe);
+  }
+
+  return candidatePool
     .map((recipe) => {
       const calorieDelta = Math.abs((recipe.calories || 0) - (currentRecipe.calories || 0));
       const proteinDelta = Math.abs((recipe.protein || 0) - (currentRecipe.protein || 0));
       const delta = calorieDelta + proteinDelta * 2;
-      return { recipe, delta };
+      return { recipe, delta, hasImage: hasConcreteImage(recipe) };
     })
-    .sort((a, b) => a.delta - b.delta || a.recipe.title.localeCompare(b.recipe.title))
+    .sort((a, b) => Number(b.hasImage) - Number(a.hasImage) || a.delta - b.delta || a.recipe.title.localeCompare(b.recipe.title))
     .slice(0, limit)
     .map((entry) => entry.recipe);
 }
@@ -1231,8 +1369,8 @@ export function swapMealInPlan({
 }
 
 function constrainMealsPerDay(mealPlan: MealPlan, answers: OnboardingAnswers): MealPlan {
-  const coreMealTypes = getCoreMealTypesForMealsPerDay(getPlannedMealsPerDay(answers.mealsPerDay));
-  const includeSnack = getPlannedMealsPerDay(answers.mealsPerDay) >= 4;
+  const coreMealTypes = getCoreMealTypesForAnswers(answers);
+  const includeSnack = getIncludeSnackForAnswers(answers);
   const nextDays = mealPlan.days.map((day) => ({
     ...day,
     meals: {
@@ -1292,7 +1430,7 @@ function compactMealPlanVariety(
   recipeMap: Map<string, Recipe>,
   aggressive = false,
 ): MealPlan {
-  const coreMealTypes = getCoreMealTypesForMealsPerDay(getPlannedMealsPerDay(answers.mealsPerDay));
+  const coreMealTypes = getCoreMealTypesForAnswers(answers);
   const plannedDayCount = getPlannedDayCount(answers.daysPerWeek);
   const mealPrepFriendly = answers.groceryPreference === 'meal prep friendly';
 
@@ -1344,8 +1482,8 @@ function countGroceryItemsForPlan(mealPlan: MealPlan, recipeMap: Map<string, Rec
 
 function groceryItemBudgetForAnswers(answers: OnboardingAnswers) {
   const days = getPlannedDayCount(answers.daysPerWeek);
-  const coreMealTypes = getCoreMealTypesForMealsPerDay(getPlannedMealsPerDay(answers.mealsPerDay)).length;
-  const includeSnack = getPlannedMealsPerDay(answers.mealsPerDay) >= 4;
+  const coreMealTypes = getCoreMealTypesForAnswers(answers).length;
+  const includeSnack = getIncludeSnackForAnswers(answers);
   const mealSlots = days * (coreMealTypes + (includeSnack ? 1 : 0));
   const baseline = Math.round(mealSlots * 4.2);
   const cap = answers.groceryPreference === 'meal prep friendly' ? 75 : 95;
@@ -1649,6 +1787,22 @@ const UNIT_DISPLAY_ORDER = [
   'mango',
   'leek',
 ];
+const QUALITATIVE_QUANTITY_PATTERNS = [
+  /^to taste$/i,
+  /^as needed$/i,
+  /^as required$/i,
+  /^for serving$/i,
+  /^for garnish(?:ing)?$/i,
+  /^optional$/i,
+  /^pinch$/i,
+  /^pinches$/i,
+];
+
+function isQualitativeQuantityLabel(value: string) {
+  const normalized = cleanIngredientLine(String(value || '')).toLowerCase();
+  if (!normalized) return false;
+  return QUALITATIVE_QUANTITY_PATTERNS.some((pattern) => pattern.test(normalized));
+}
 
 function cleanIngredientLine(value: string) {
   return String(value || '')
@@ -1839,9 +1993,14 @@ function formatQuantityLabels(quantityTotals: Map<string, number>, unparsedCount
     });
 
   const looseTotals = new Map<string, number>();
+  const qualitativeLabels = new Set<string>();
   const remainingUnparsed: Array<{ label: string; count: number }> = [];
   for (const [label, count] of unparsedCounts.entries()) {
     const cleanedLabel = cleanIngredientLine(label);
+    if (isQualitativeQuantityLabel(cleanedLabel)) {
+      qualitativeLabels.add(cleanedLabel.toLowerCase());
+      continue;
+    }
     const looseMatch = cleanedLabel.match(
       /^((?:\d+\s+\d+\/\d+|\d+\s*[¼½¾⅓⅔⅛⅜⅝⅞]|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]|(?:half|quarter|one|two|three|four|five|six|seven|eight|nine|ten|a|an)\b)(?:\s*-\s*(?:\d+\s+\d+\/\d+|\d+\s*[¼½¾⅓⅔⅛⅜⅝⅞]|\d+\/\d+|\d+(?:\.\d+)?|[¼½¾⅓⅔⅛⅜⅝⅞]))?)\s+(.+)$/i
     );
@@ -1851,6 +2010,10 @@ function formatQuantityLabels(quantityTotals: Map<string, number>, unparsedCount
     }
     const looseAmount = parseAmountExpression(looseMatch[1]);
     const looseUnitText = cleanIngredientLine(looseMatch[2]).replace(/\s+/g, ' ').trim();
+    if (isQualitativeQuantityLabel(looseUnitText)) {
+      qualitativeLabels.add(looseUnitText.toLowerCase());
+      continue;
+    }
     if (!looseAmount || !Number.isFinite(looseAmount) || looseAmount <= 0 || !looseUnitText) {
       remainingUnparsed.push({ label: cleanedLabel, count });
       continue;
@@ -1865,11 +2028,19 @@ function formatQuantityLabels(quantityTotals: Map<string, number>, unparsedCount
   const unparsed = [...remainingUnparsed]
     .sort((a, b) => a.label.localeCompare(b.label))
     .map(({ label, count }) => {
+      if (isQualitativeQuantityLabel(label)) {
+        return label.toLowerCase();
+      }
       if (count <= 1.01) return label;
       return `${label} x${formatAggregatedAmount(count)}`;
     });
 
-  return [...totals, ...looseLabels, ...unparsed];
+  const qualitative = [...qualitativeLabels]
+    .map((label) => label.trim().toLowerCase())
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+
+  return [...totals, ...looseLabels, ...qualitative, ...unparsed];
 }
 
 function shouldIgnoreIngredientLine(line: string) {

@@ -113,6 +113,11 @@ const PATIENT_PASSWORD_RESET_SIGNING_SECRET =
   process.env.PATIENT_SESSION_SECRET ||
   process.env.DOCTOR_SESSION_SECRET ||
   'change-this-patient-reset-secret';
+const MEAL_PLAN_IMAGE_PROXY_SIGNING_SECRET =
+  process.env.MEAL_PLAN_IMAGE_PROXY_SIGNING_SECRET ||
+  PATIENT_PASSWORD_RESET_SIGNING_SECRET ||
+  'change-this-meal-image-secret';
+const MEAL_PLAN_IMAGE_PROXY_PATH = '/api/patient/meal-plan/recipe-image';
 const PATIENT_SUPABASE_RESET_METADATA_KEY = 'onya_patient_password_reset';
 const DOCTOR_PASSWORD_RESET_TTL_MS = Math.max(
   1000 * 60 * 5,
@@ -361,6 +366,56 @@ function normalizeStringForCache(value, limit = 160) {
     .slice(0, limit);
 }
 
+function sanitizeOnboardingAnswersForBundle(answers) {
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers)) return null;
+  const safeAnswers = answers;
+  const selectedMealTypes = normalizeCoreMealTypesForCache(safeAnswers.selectedMealTypes);
+  const mealsPerDay =
+    selectedMealTypes.length >= 2
+      ? selectedMealTypes.length
+      : Math.max(2, Math.min(3, Math.round(Number(safeAnswers.mealsPerDay || 3))));
+
+  return {
+    firstName: String(safeAnswers.firstName || '').trim().slice(0, 64),
+    age: Math.round(clampNumberForCache(safeAnswers.age, 10, 99, 0)) || undefined,
+    gender: String(safeAnswers.gender || '').trim().slice(0, 24) || undefined,
+    heightCm: Math.round(clampNumberForCache(safeAnswers.heightCm, 100, 240, 0)) || undefined,
+    currentWeightKg: Math.round(clampNumberForCache(safeAnswers.currentWeightKg, 30, 260, 0) * 10) / 10 || undefined,
+    goalWeightKg: Math.round(clampNumberForCache(safeAnswers.goalWeightKg, 30, 260, 0) * 10) / 10 || undefined,
+    mainGoal: String(safeAnswers.mainGoal || '').trim().slice(0, 220) || undefined,
+    motivation: String(safeAnswers.motivation || '').trim().slice(0, 260) || undefined,
+    timeframeWeeks: Math.round(clampNumberForCache(safeAnswers.timeframeWeeks, 1, 104, 0)) || undefined,
+    biggestChallenge: String(safeAnswers.biggestChallenge || '').trim().slice(0, 120) || undefined,
+    primaryHealthFocus: String(safeAnswers.primaryHealthFocus || '').trim().slice(0, 120) || undefined,
+    dietaryRequirements: Array.isArray(safeAnswers.dietaryRequirements)
+      ? safeAnswers.dietaryRequirements.map((entry) => String(entry || '').trim()).filter(Boolean).slice(0, 16)
+      : [],
+    favoriteFoods: Array.isArray(safeAnswers.favoriteFoods)
+      ? safeAnswers.favoriteFoods.map((entry) => String(entry || '').trim()).filter(Boolean).slice(0, 20)
+      : [],
+    allergiesText: String(safeAnswers.allergiesText || '').trim().slice(0, 320) || undefined,
+    allergyChips: Array.isArray(safeAnswers.allergyChips)
+      ? safeAnswers.allergyChips.map((entry) => String(entry || '').trim()).filter(Boolean).slice(0, 20)
+      : [],
+    dislikes: String(safeAnswers.dislikes || '').trim().slice(0, 320) || undefined,
+    cookingSkill: String(safeAnswers.cookingSkill || '').trim().slice(0, 80) || undefined,
+    selectedMealTypes,
+    mealsPerDay,
+    daysPerWeek: Math.round(clampNumberForCache(safeAnswers.daysPerWeek, 2, 7, 7)),
+    budgetPreference: String(safeAnswers.budgetPreference || '').trim().slice(0, 80) || undefined,
+    groceryPreference: String(safeAnswers.groceryPreference || '').trim().slice(0, 120) || undefined,
+    prepDay: String(safeAnswers.prepDay || '').trim().slice(0, 32) || undefined,
+    preferredMealStyle: String(safeAnswers.preferredMealStyle || '').trim().slice(0, 120) || undefined,
+    preferredCuisines: Array.isArray(safeAnswers.preferredCuisines)
+      ? safeAnswers.preferredCuisines.map((entry) => String(entry || '').trim()).filter(Boolean).slice(0, 16)
+      : [],
+    supportWanted: String(safeAnswers.supportWanted || '').trim().slice(0, 24) || undefined,
+    supportAreas: Array.isArray(safeAnswers.supportAreas)
+      ? safeAnswers.supportAreas.map((entry) => String(entry || '').trim()).filter(Boolean).slice(0, 16)
+      : [],
+  };
+}
+
 function buildMealPlanCacheIdentity({ patientEmail, answers, includeSnack }) {
   const safeAnswers = answers && typeof answers === 'object' ? answers : {};
   const selectedMealTypes = normalizeCoreMealTypesForCache(safeAnswers.selectedMealTypes);
@@ -371,7 +426,6 @@ function buildMealPlanCacheIdentity({ patientEmail, answers, includeSnack }) {
   const normalized = {
     schemaVersion: 'ai_recipes_v3',
     includeSnack: Boolean(includeSnack),
-    firstName: normalizeStringForCache(safeAnswers.firstName, 48),
     age: Math.round(clampNumberForCache(safeAnswers.age, 10, 99, 0)),
     gender: normalizeStringForCache(safeAnswers.gender, 32),
     heightCm: Math.round(clampNumberForCache(safeAnswers.heightCm, 100, 240, 0)),
@@ -409,6 +463,20 @@ function buildMealPlanCacheIdentity({ patientEmail, answers, includeSnack }) {
     intakeHash,
     normalized,
   };
+}
+
+function buildMealPlanGenerationHistoryCacheKey({ patientEmail, intakeHash, seedSalt = '' }) {
+  const normalizedEmail = normalizeEmail(patientEmail);
+  const normalizedHash = String(intakeHash || '').trim().toLowerCase();
+  if (!normalizedEmail || !normalizedHash) return '';
+  const saltFragment = String(seedSalt || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '')
+    .slice(0, 24);
+  const runtimeSuffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+  const runId = [saltFragment, runtimeSuffix].filter(Boolean).join('-').slice(0, 52);
+  return `mealplan:${normalizedEmail}:${normalizedHash}:run:${runId}`;
 }
 
 function normalizeRecipeIdList(value) {
@@ -468,6 +536,80 @@ function normalizeRecipeImageToWebp(value) {
   if (isWebpDataUri(candidate)) return candidate;
   if (isWebpHttpImage(candidate)) return candidate;
   return '';
+}
+
+function signMealPlanRecipeImageId(recipeId) {
+  const normalizedId = String(recipeId || '').trim();
+  if (!normalizedId) return '';
+  return crypto
+    .createHmac('sha256', MEAL_PLAN_IMAGE_PROXY_SIGNING_SECRET)
+    .update(normalizedId)
+    .digest('base64url');
+}
+
+function isValidMealPlanRecipeImageSignature(recipeId, signature) {
+  const expected = signMealPlanRecipeImageId(recipeId);
+  const candidate = String(signature || '').trim();
+  if (!expected || !candidate) return false;
+
+  const expectedBuffer = Buffer.from(expected, 'utf8');
+  const candidateBuffer = Buffer.from(candidate, 'utf8');
+  if (expectedBuffer.length !== candidateBuffer.length) return false;
+
+  try {
+    return crypto.timingSafeEqual(expectedBuffer, candidateBuffer);
+  } catch {
+    return false;
+  }
+}
+
+function buildMealPlanRecipeImageProxyUrl(req, recipeId) {
+  const normalizedId = String(recipeId || '').trim();
+  if (!normalizedId) return '';
+  const signature = signMealPlanRecipeImageId(normalizedId);
+  if (!signature) return '';
+  return `${getAppBaseUrl(req)}${MEAL_PLAN_IMAGE_PROXY_PATH}?recipeId=${encodeURIComponent(normalizedId)}&sig=${encodeURIComponent(
+    signature
+  )}`;
+}
+
+function resolveRecipeImageUrlForClient(req, recipe, { inlineDataImages = false } = {}) {
+  const source = recipe?.source && typeof recipe.source === 'object' && !Array.isArray(recipe.source)
+    ? recipe.source
+    : {};
+  const candidate = normalizeRecipeImageToWebp(String(recipe?.imageUrl || source.image_url || source.imageUrl || '').trim());
+  if (!candidate) return '';
+  if (isWebpDataUri(candidate)) {
+    if (inlineDataImages) return candidate;
+    return buildMealPlanRecipeImageProxyUrl(req, recipe?.id);
+  }
+  return candidate;
+}
+
+function mapRecipeForClient(recipe, req, options = {}) {
+  if (!recipe || typeof recipe !== 'object' || Array.isArray(recipe)) return null;
+  const source = recipe?.source && typeof recipe.source === 'object' && !Array.isArray(recipe.source)
+    ? { ...recipe.source }
+    : {};
+  const imageUrl = resolveRecipeImageUrlForClient(req, recipe, options);
+  if (imageUrl) {
+    source.image_url = imageUrl;
+    source.imageUrl = imageUrl;
+  } else {
+    delete source.image_url;
+    delete source.imageUrl;
+  }
+  return {
+    ...recipe,
+    imageUrl: imageUrl || undefined,
+    source,
+  };
+}
+
+function mapRecipeListForClient(recipes, req, options = {}) {
+  return (Array.isArray(recipes) ? recipes : [])
+    .map((recipe) => mapRecipeForClient(recipe, req, options))
+    .filter((recipe) => Boolean(recipe && recipe.id));
 }
 
 function normalizeRecipeForProduct(recipe, { generatedBy = '' } = {}) {
@@ -560,14 +702,27 @@ function isLikelyGeneratedRecipe(recipe) {
   const source = recipe?.source && typeof recipe.source === 'object' && !Array.isArray(recipe.source)
     ? recipe.source
     : {};
-  const provider = String(source.provider || source.generatedBy || source.origin || '').trim().toLowerCase();
+  const provider = String(
+    source.provider ||
+      source.generatedBy ||
+      source.origin ||
+      source.generator ||
+      source.label ||
+      ''
+  )
+    .trim()
+    .toLowerCase();
   if (provider.includes('openai') || provider.includes('rules-generated') || provider.includes('ai-generated')) {
     return true;
   }
+  if (provider.includes('generated')) return true;
+  if (String(source.stage || '').toLowerCase().includes('ai_recipes')) return true;
+  if (String(source.model || '').trim().toLowerCase().startsWith('gpt')) return true;
+  if (String(source.url || '').trim().toLowerCase().includes('dietitiansaustralia.org.au')) return false;
   return Boolean(String(source.imagePrompt || '').trim());
 }
 
-function buildMealPlanCacheBundle({ mealPlan, recipes }) {
+function buildMealPlanCacheBundle({ mealPlan, recipes, onboardingAnswers = null }) {
   const normalizedRecipes = normalizeRecipeListForProduct(recipes);
   const recipeIds = normalizeRecipeIdList([
     ...normalizeRecipeIdList(normalizedRecipes.map((recipe) => recipe.id)),
@@ -583,6 +738,7 @@ function buildMealPlanCacheBundle({ mealPlan, recipes }) {
     mealPlan,
     recipeIds,
     recipes: compactRecipes,
+    onboardingAnswers: sanitizeOnboardingAnswersForBundle(onboardingAnswers) || undefined,
   };
 }
 
@@ -646,10 +802,17 @@ function recipeMatchesHardConstraints(recipe, constraints) {
 function buildRuleFallbackBundleFromCatalog({ recipes, answers, includeSnack, seedSalt }) {
   const catalog = Array.isArray(recipes) ? recipes.filter((recipe) => recipe && recipe.id && recipe.title) : [];
   if (catalog.length === 0) return null;
+  const catalogWithImages = catalog.filter((recipe) => {
+    const source = recipe?.source && typeof recipe.source === 'object' && !Array.isArray(recipe.source)
+      ? recipe.source
+      : {};
+    return Boolean(normalizeRecipeImageToWebp(recipe?.imageUrl || source.image_url || source.imageUrl));
+  });
+  if (catalogWithImages.length === 0) return null;
 
   const constraints = extractAnswerConstraintTokens(answers);
-  const filtered = catalog.filter((recipe) => recipeMatchesHardConstraints(recipe, constraints));
-  const candidateCatalog = filtered.length >= 18 ? filtered : catalog;
+  const filtered = catalogWithImages.filter((recipe) => recipeMatchesHardConstraints(recipe, constraints));
+  const candidateCatalog = filtered.length >= 18 ? filtered : catalogWithImages;
   const mealPlan = generateFallbackMealPlan({
     recipes: candidateCatalog,
     includeSnack,
@@ -674,6 +837,9 @@ async function hydrateMealPlanBundleFromCacheEntry(entry) {
   if (!bundle || typeof bundle !== 'object') return null;
   const mealPlan = bundle.mealPlan && typeof bundle.mealPlan === 'object' && !Array.isArray(bundle.mealPlan) ? bundle.mealPlan : null;
   if (!mealPlan) return null;
+  const onboardingAnswers = sanitizeOnboardingAnswersForBundle(
+    bundle.onboardingAnswers || bundle.onboarding_answers || bundle.answers || null
+  );
 
   const recipeIds = normalizeRecipeIdList([
     ...normalizeRecipeIdList(bundle.recipeIds ?? bundle.recipe_ids),
@@ -691,6 +857,25 @@ async function hydrateMealPlanBundleFromCacheEntry(entry) {
       .filter(([id]) => Boolean(id))
   );
 
+  const legacyRecipesToPersist = recipeIds
+    .filter((id) => !persistedById.has(id) && legacyById.has(id))
+    .map((id) => legacyById.get(id))
+    .filter((recipe) => recipe && typeof recipe === 'object');
+  if (legacyRecipesToPersist.length > 0) {
+    const normalizedLegacyRecipes = normalizeRecipeListForProduct(legacyRecipesToPersist);
+    if (normalizedLegacyRecipes.length > 0) {
+      await upsertMealPlannerRecipes(normalizedLegacyRecipes).catch((errorObject) => {
+        error('meal_plan.hydrate_backfill_recipes_failed', {
+          cacheKey: String(entry?.cacheKey || entry?.cache_key || ''),
+          message: errorObject?.message || String(errorObject),
+        });
+      });
+      for (const recipe of normalizedLegacyRecipes) {
+        persistedById.set(recipe.id, recipe);
+      }
+    }
+  }
+
   const hydratedRecipes = recipeIds
     .map((id) => persistedById.get(id) || legacyById.get(id))
     .filter((recipe) => recipe && typeof recipe === 'object');
@@ -706,6 +891,7 @@ async function hydrateMealPlanBundleFromCacheEntry(entry) {
   return {
     mealPlan,
     recipes: normalizedHydratedRecipes,
+    onboardingAnswers: onboardingAnswers || undefined,
   };
 }
 
@@ -739,15 +925,6 @@ async function loadPatientGeneratedRecipeCatalog({
     return [];
   });
 
-  const hydratedBundles = await Promise.all(
-    (Array.isArray(cacheEntries) ? cacheEntries : []).map((entry) =>
-      hydrateMealPlanBundleFromCacheEntry(entry).catch(() => null)
-    )
-  );
-  const hydratedRecipes = normalizeRecipeListForProduct(
-    hydratedBundles.flatMap((bundle) => (bundle && Array.isArray(bundle.recipes) ? bundle.recipes : []))
-  ).filter((recipe) => isLikelyGeneratedRecipe(recipe));
-
   const cacheRecipeIds = collectRecipeIdsFromCacheEntries(cacheEntries);
   const persistedByCacheIds = cacheRecipeIds.length > 0
     ? await listMealPlannerRecipesByIds(cacheRecipeIds).catch((errorObject) => {
@@ -758,12 +935,57 @@ async function loadPatientGeneratedRecipeCatalog({
         return [];
       })
     : [];
-  const persistedRecipes = normalizeRecipeListForProduct(persistedByCacheIds).filter((recipe) => isLikelyGeneratedRecipe(recipe));
+  const persistedRecipes = normalizeRecipeListForProduct(persistedByCacheIds);
+  const persistedById = new Map(persistedRecipes.map((recipe) => [recipe.id, recipe]));
+  const missingLegacyById = new Map();
+
+  for (const entry of Array.isArray(cacheEntries) ? cacheEntries : []) {
+    const bundle = entry?.bundle && typeof entry.bundle === 'object' && !Array.isArray(entry.bundle) ? entry.bundle : null;
+    if (!bundle) continue;
+    const legacyRecipes = normalizeRecipeListForProduct(Array.isArray(bundle.recipes) ? bundle.recipes : []);
+    for (const recipe of legacyRecipes) {
+      if (persistedById.has(recipe.id) || missingLegacyById.has(recipe.id)) continue;
+      missingLegacyById.set(recipe.id, recipe);
+      if (missingLegacyById.size >= 240) break;
+    }
+    if (missingLegacyById.size >= 240) break;
+  }
+
+  if (missingLegacyById.size > 0) {
+    const missingLegacyRecipes = [...missingLegacyById.values()];
+    await upsertMealPlannerRecipes(missingLegacyRecipes).catch((errorObject) => {
+      error('meal_plan.generated_catalog_legacy_backfill_failed', {
+        email: normalizedEmail,
+        message: errorObject?.message || String(errorObject),
+      });
+    });
+    for (const recipe of missingLegacyRecipes) {
+      persistedById.set(recipe.id, recipe);
+    }
+  }
 
   const merged = new Map();
-  for (const recipe of hydratedRecipes) {
-    merged.set(recipe.id, recipe);
+  let hydratedRecipeCount = 0;
+
+  for (const entry of Array.isArray(cacheEntries) ? cacheEntries : []) {
+    const bundle = entry?.bundle && typeof entry.bundle === 'object' && !Array.isArray(entry.bundle) ? entry.bundle : null;
+    if (!bundle) continue;
+    const candidateIds = normalizeRecipeIdList([
+      ...normalizeRecipeIdList(bundle.recipeIds ?? bundle.recipe_ids),
+      ...extractRecipeIdsFromMealPlan(bundle.mealPlan),
+    ]);
+    if (candidateIds.length === 0) continue;
+
+    const legacyRecipes = normalizeRecipeListForProduct(Array.isArray(bundle.recipes) ? bundle.recipes : []);
+    const legacyById = new Map(legacyRecipes.map((recipe) => [recipe.id, recipe]));
+    for (const recipeId of candidateIds) {
+      const recipe = persistedById.get(recipeId) || legacyById.get(recipeId);
+      if (!recipe || merged.has(recipe.id)) continue;
+      merged.set(recipe.id, recipe);
+      hydratedRecipeCount += 1;
+    }
   }
+
   for (const recipe of persistedRecipes) {
     if (!merged.has(recipe.id)) merged.set(recipe.id, recipe);
   }
@@ -788,7 +1010,7 @@ async function loadPatientGeneratedRecipeCatalog({
   return {
     recipes: [...merged.values()],
     cacheEntryCount: Array.isArray(cacheEntries) ? cacheEntries.length : 0,
-    hydratedEntryCount: hydratedRecipes.length,
+    hydratedEntryCount: hydratedRecipeCount,
   };
 }
 
@@ -1157,7 +1379,7 @@ function patientSummaryFromCertificate(certificate) {
 function buildPatientIdentity({ email, latestCertificate, account }) {
   const draft = latestCertificate?.certificateDraft || {};
   return {
-    fullName: String(account?.fullName || draft.fullName || '').trim(),
+    fullName: String(draft.fullName || account?.fullName || '').trim(),
     email: normalizeEmail(email || account?.email || draft.email || ''),
     dob: String(account?.dob || draft.dob || '').trim(),
     phone: String(account?.phone || draft.phone || '').trim(),
@@ -2590,15 +2812,10 @@ async function createPatientAccountViaSupabase({ email, password, fullName = '',
 async function authenticatePatientViaSupabase(email, password) {
   const config = getSupabaseConfig();
   if (!config.url || !config.anonKey) {
-    return { account: null, shouldFallbackLocal: true, temporarilyUnavailable: false };
+    return { account: null, shouldFallbackLocal: true };
   }
 
   let loginResponse;
-  const controller = new AbortController();
-  const timeoutMs = Math.max(1000, Number(process.env.SUPABASE_AUTH_TIMEOUT_MS || 8000));
-  const timeoutHandle = setTimeout(() => {
-    controller.abort(new Error('Supabase auth request timed out'));
-  }, timeoutMs);
   try {
     loginResponse = await fetch(`${config.url}/auth/v1/token?grant_type=password`, {
       method: 'POST',
@@ -2608,20 +2825,13 @@ async function authenticatePatientViaSupabase(email, password) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ email, password }),
-      signal: controller.signal,
     });
   } catch (errorObject) {
-    const message = errorObject?.message || String(errorObject);
-    const aborted = errorObject?.name === 'AbortError' || /timed out/i.test(message);
     info('patient.login.supabase_auth_unavailable', {
       email: normalizeEmail(email),
-      message,
-      aborted,
-      timeoutMs,
+      message: errorObject?.message || String(errorObject),
     });
-    return { account: null, shouldFallbackLocal: true, temporarilyUnavailable: true };
-  } finally {
-    clearTimeout(timeoutHandle);
+    return { account: null, shouldFallbackLocal: true };
   }
 
   const text = await loginResponse.text();
@@ -2634,17 +2844,16 @@ async function authenticatePatientViaSupabase(email, password) {
 
   if (!loginResponse.ok) {
     const authRejected = loginResponse.status === 400 || loginResponse.status === 401 || loginResponse.status === 422;
-    return { account: null, shouldFallbackLocal: !authRejected, temporarilyUnavailable: false };
+    return { account: null, shouldFallbackLocal: !authRejected };
   }
   const user = data?.user || null;
   if (!user || userHasDoctorRole(user)) {
-    return { account: null, shouldFallbackLocal: false, temporarilyUnavailable: false };
+    return { account: null, shouldFallbackLocal: false };
   }
 
   return {
     account: toPatientAccountFromSupabaseUser(user, email),
     shouldFallbackLocal: false,
-    temporarilyUnavailable: false,
   };
 }
 
@@ -3400,11 +3609,9 @@ export default async function handler(req, res) {
         const authStartedAt = Date.now();
         let account = null;
         let localFallbackAttempted = false;
-        let supabaseTemporarilyUnavailable = false;
         if (supabaseConfig.url && supabaseConfig.anonKey) {
           const supabaseAuth = await authenticatePatientViaSupabase(email, password);
           account = supabaseAuth.account;
-          supabaseTemporarilyUnavailable = Boolean(supabaseAuth.temporarilyUnavailable);
           if (!account && supabaseAuth.shouldFallbackLocal) {
             localFallbackAttempted = true;
             account = await authenticatePatientAccount({ email, password });
@@ -3414,14 +3621,6 @@ export default async function handler(req, res) {
           account = await authenticatePatientAccount({ email, password });
         }
         if (!account) {
-          if (supabaseTemporarilyUnavailable) {
-            sendJson(res, 503, {
-              error:
-                'Login service is temporarily unavailable due to heavy database load. Please retry in a minute, or sign in with date of birth.',
-              code: 'AUTH_TEMPORARILY_UNAVAILABLE',
-            });
-            return;
-          }
           sendJson(res, 401, { error: 'Invalid email or password' });
           return;
         }
@@ -4031,50 +4230,84 @@ export default async function handler(req, res) {
       return;
     }
 
+    if (req.method === 'GET' && routePath === 'patient/meal-plan/recipe-image') {
+      const recipeId = String(url.searchParams.get('recipeId') || '').trim();
+      const signature = String(url.searchParams.get('sig') || '').trim();
+      if (!recipeId || !isValidMealPlanRecipeImageSignature(recipeId, signature)) {
+        setCors(res, req);
+        res.status(404).end('Not found');
+        return;
+      }
+
+      try {
+        const recipes = await listMealPlannerRecipesByIds([recipeId]);
+        const normalized = normalizeRecipeListForProduct(recipes);
+        const recipe = normalized.find((entry) => String(entry?.id || '').trim() === recipeId) || null;
+        if (!recipe) {
+          setCors(res, req);
+          res.status(404).end('Not found');
+          return;
+        }
+
+        const source = recipe?.source && typeof recipe.source === 'object' && !Array.isArray(recipe.source)
+          ? recipe.source
+          : {};
+        const imageCandidate = normalizeRecipeImageToWebp(
+          String(recipe?.imageUrl || source.image_url || source.imageUrl || '').trim()
+        );
+        if (!imageCandidate) {
+          setCors(res, req);
+          res.status(404).end('Not found');
+          return;
+        }
+
+        setCors(res, req);
+        res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800');
+        if (isWebpHttpImage(imageCandidate)) {
+          res.redirect(302, imageCandidate);
+          return;
+        }
+
+        const base64Body = imageCandidate.replace(/^data:image\/webp;base64,/i, '').trim();
+        if (!base64Body) {
+          res.status(404).end('Not found');
+          return;
+        }
+        const buffer = Buffer.from(base64Body, 'base64');
+        if (!buffer.length) {
+          res.status(404).end('Not found');
+          return;
+        }
+        res.setHeader('Content-Type', 'image/webp');
+        res.setHeader('Content-Length', String(buffer.length));
+        res.status(200).send(buffer);
+      } catch (errorObject) {
+        error('meal_plan.recipe_image_load_failed', {
+          recipeId,
+          message: errorObject?.message || String(errorObject),
+        });
+        setCors(res, req);
+        res.status(404).end('Not found');
+      }
+      return;
+    }
+
     if (req.method === 'GET' && routePath === 'patient/meal-plan/catalog') {
       const patient = await requirePatient(req, res);
       if (!patient) return;
 
       const requestedLimit = Math.round(Number(url.searchParams.get('limit') || 500));
       const limit = Math.max(50, Math.min(800, Number.isFinite(requestedLimit) ? requestedLimit : 500));
-      const includeDataImages = ['1', 'true', 'yes'].includes(String(url.searchParams.get('includeDataImages') || '').toLowerCase());
-      const maxDataImageLength = 320_000;
-      const sanitizeWebpImage = (value) => {
-        const candidate = normalizeRecipeImageToWebp(value);
-        if (!candidate) return '';
-        if (isWebpDataUri(candidate)) {
-          if (!includeDataImages) return '';
-          if (candidate.length > maxDataImageLength) return '';
-        }
-        return candidate;
-      };
 
       try {
         const generatedCatalog = await loadPatientGeneratedRecipeCatalog({
           patientEmail: patient.email,
-          cacheLimit: 48,
+          cacheLimit: 84,
           includeGlobalGeneratedFallback: false,
         });
 
-        const recipes = normalizeRecipeListForProduct(generatedCatalog.recipes)
-          .map((recipe) => {
-            const source = recipe?.source && typeof recipe.source === 'object' && !Array.isArray(recipe.source)
-              ? { ...recipe.source }
-              : {};
-            const imageUrl = sanitizeWebpImage(recipe?.imageUrl || source.image_url || source.imageUrl);
-            if (imageUrl) {
-              source.image_url = imageUrl;
-              source.imageUrl = imageUrl;
-            } else {
-              delete source.image_url;
-              delete source.imageUrl;
-            }
-            return {
-              ...recipe,
-              imageUrl: imageUrl || undefined,
-              source,
-            };
-          })
+        const recipes = mapRecipeListForClient(normalizeRecipeListForProduct(generatedCatalog.recipes), req)
+          .filter((recipe) => Boolean(String(recipe?.imageUrl || '').trim()))
           .slice(0, limit);
 
         const catalogSource =
@@ -4108,18 +4341,6 @@ export default async function handler(req, res) {
     if (req.method === 'GET' && routePath === 'patient/meal-plan/latest') {
       const patient = await requirePatient(req, res);
       if (!patient) return;
-
-      const includeDataImages = ['1', 'true', 'yes'].includes(String(url.searchParams.get('includeDataImages') || '').toLowerCase());
-      const maxDataImageLength = 320_000;
-      const sanitizeWebpImage = (value) => {
-        const candidate = normalizeRecipeImageToWebp(value);
-        if (!candidate) return '';
-        if (isWebpDataUri(candidate)) {
-          if (!includeDataImages) return '';
-          if (candidate.length > maxDataImageLength) return '';
-        }
-        return candidate;
-      };
 
       try {
         const latestEntry = await getLatestMealPlanGenerationCacheByPatientEmail(patient.email).catch((cacheError) => {
@@ -4156,26 +4377,27 @@ export default async function handler(req, res) {
           return;
         }
 
-        const recipes = normalizeRecipeListForProduct(hydrated.recipes).map((recipe) => {
-          const source = recipe?.source && typeof recipe.source === 'object' && !Array.isArray(recipe.source)
-            ? { ...recipe.source }
-            : {};
-          const imageUrl = sanitizeWebpImage(recipe?.imageUrl);
-          const sourceImage = sanitizeWebpImage(source.image_url || source.imageUrl);
-          const resolvedImageUrl = imageUrl || sourceImage || '';
-          if (resolvedImageUrl) {
-            source.image_url = resolvedImageUrl;
-            source.imageUrl = resolvedImageUrl;
-          } else {
-            delete source.image_url;
-            delete source.imageUrl;
-          }
-          return {
-            ...recipe,
-            imageUrl: resolvedImageUrl || undefined,
-            source,
-          };
+        const recipes = mapRecipeListForClient(normalizeRecipeListForProduct(hydrated.recipes), req, {
+          inlineDataImages: true,
         });
+        let onboardingAnswers = sanitizeOnboardingAnswersForBundle(
+          hydrated.onboardingAnswers || latestEntry?.bundle?.onboardingAnswers || latestEntry?.bundle?.answers || null
+        );
+        if (!onboardingAnswers) {
+          const cacheEntries = await listMealPlanGenerationCacheByPatientEmail(patient.email, 36).catch((cacheError) => {
+            error('meal_plan.latest_onboarding_cache_list_failed', {
+              email: normalizeEmail(patient.email),
+              message: cacheError?.message || String(cacheError),
+            });
+            return [];
+          });
+          for (const cacheEntry of cacheEntries) {
+            onboardingAnswers = sanitizeOnboardingAnswersForBundle(
+              cacheEntry?.bundle?.onboardingAnswers || cacheEntry?.bundle?.onboarding_answers || cacheEntry?.bundle?.answers || null
+            );
+            if (onboardingAnswers) break;
+          }
+        }
 
         sendJson(res, 200, {
           ok: true,
@@ -4184,6 +4406,7 @@ export default async function handler(req, res) {
           stage: latestEntry.stage || 'ai_recipes_v3',
           mealPlan: hydrated.mealPlan,
           recipes,
+          onboardingAnswers: onboardingAnswers || null,
           cachedAt: latestEntry.updatedAt || latestEntry.lastUsedAt || latestEntry.createdAt || null,
         });
       } catch (errorObject) {
@@ -4207,6 +4430,7 @@ export default async function handler(req, res) {
 
       const body = await parseJsonBody(req);
       const answers = body?.answers && typeof body.answers === 'object' ? body.answers : {};
+      const sanitizedOnboardingAnswers = sanitizeOnboardingAnswersForBundle(answers);
       const includeSnack = Boolean(body?.includeSnack);
       const seedSalt = String(body?.seedSalt || '').slice(0, 120);
       const bypassCache = Boolean(seedSalt);
@@ -4236,12 +4460,16 @@ export default async function handler(req, res) {
             const cachedRecipes = normalizeRecipeListForProduct(hydratedUserCache.recipes, {
               generatedBy: cachedGeneratedBy,
             });
+            const cachedRecipesForClient = mapRecipeListForClient(cachedRecipes, req, {
+              inlineDataImages: true,
+            });
             sendJson(res, 200, {
               ok: true,
               generatedBy: cachedGeneratedBy,
               stage: cachedStage,
               mealPlan: hydratedUserCache.mealPlan,
-              recipes: cachedRecipes,
+              recipes: cachedRecipesForClient,
+              onboardingAnswers: hydratedUserCache.onboardingAnswers || sanitizedOnboardingAnswers || null,
               intakeProfile: null,
               catalogSource: 'generated-cache-user',
               cached: true,
@@ -4269,37 +4497,66 @@ export default async function handler(req, res) {
             const sharedCachedRecipes = normalizeRecipeListForProduct(hydratedSharedCache.recipes, {
               generatedBy: sharedCachedGeneratedBy,
             });
+            const sharedCachedRecipesForClient = mapRecipeListForClient(sharedCachedRecipes, req, {
+              inlineDataImages: true,
+            });
+            const assignedBundle = buildMealPlanCacheBundle({
+              mealPlan: hydratedSharedCache.mealPlan,
+              recipes: hydratedSharedCache.recipes,
+              onboardingAnswers: sanitizedOnboardingAnswers,
+            });
+            if (assignedBundle) {
+              const assignedHistoryCacheKey = buildMealPlanGenerationHistoryCacheKey({
+                patientEmail: patient.email,
+                intakeHash: cacheIdentity.intakeHash,
+              });
+              const assignmentWrites = [
+                upsertMealPlanGenerationCache({
+                  cacheKey: cacheIdentity.userCacheKey,
+                  intakeHash: cacheIdentity.intakeHash,
+                  patientEmail: patient.email,
+                  source: sharedCachedGeneratedBy,
+                  stage: sharedCachedStage,
+                  bundle: assignedBundle,
+                }).catch((persistError) => {
+                  error('meal_plan.cache_assign_from_template_failed', {
+                    email: normalizeEmail(patient.email),
+                    cacheKey: cacheIdentity.userCacheKey,
+                    message: persistError?.message || String(persistError),
+                  });
+                }),
+                ...(assignedHistoryCacheKey
+                  ? [
+                      upsertMealPlanGenerationCache({
+                        cacheKey: assignedHistoryCacheKey,
+                        intakeHash: cacheIdentity.intakeHash,
+                        patientEmail: patient.email,
+                        source: sharedCachedGeneratedBy,
+                        stage: sharedCachedStage,
+                        bundle: assignedBundle,
+                      }).catch((persistError) => {
+                        error('meal_plan.cache_assign_history_from_template_failed', {
+                          email: normalizeEmail(patient.email),
+                          cacheKey: assignedHistoryCacheKey,
+                          message: persistError?.message || String(persistError),
+                        });
+                      }),
+                    ]
+                  : []),
+              ];
+              await Promise.all(assignmentWrites);
+            }
             sendJson(res, 200, {
               ok: true,
               generatedBy: sharedCachedGeneratedBy,
               stage: sharedCachedStage,
               mealPlan: hydratedSharedCache.mealPlan,
-              recipes: sharedCachedRecipes,
+              recipes: sharedCachedRecipesForClient,
+              onboardingAnswers: sanitizedOnboardingAnswers || null,
               intakeProfile: null,
               catalogSource: 'generated-cache-template',
               cached: true,
             });
-
-            const assignedBundle = buildMealPlanCacheBundle({
-              mealPlan: hydratedSharedCache.mealPlan,
-              recipes: hydratedSharedCache.recipes,
-            });
-            if (assignedBundle) {
-              void upsertMealPlanGenerationCache({
-                cacheKey: cacheIdentity.userCacheKey,
-                intakeHash: cacheIdentity.intakeHash,
-                patientEmail: patient.email,
-                source: 'openai',
-                stage: 'ai_recipes_v3',
-                bundle: assignedBundle,
-              }).catch((persistError) => {
-                error('meal_plan.cache_assign_from_template_failed', {
-                  email: normalizeEmail(patient.email),
-                  cacheKey: cacheIdentity.userCacheKey,
-                  message: persistError?.message || String(persistError),
-                });
-              });
-            }
             return;
           }
         }
@@ -4316,8 +4573,8 @@ export default async function handler(req, res) {
         if (!resolvedBundle) {
           const generatedFallbackCatalog = await loadPatientGeneratedRecipeCatalog({
             patientEmail: patient.email,
-            cacheLimit: 48,
-            includeGlobalGeneratedFallback: false,
+            cacheLimit: 180,
+            includeGlobalGeneratedFallback: true,
           });
           const fallbackBundle = buildRuleFallbackBundleFromCatalog({
             recipes: generatedFallbackCatalog.recipes,
@@ -4364,14 +4621,24 @@ export default async function handler(req, res) {
           recipes: normalizedGeneratedRecipes,
         };
 
-        const bundlePayload = buildMealPlanCacheBundle({
+        const userBundlePayload = buildMealPlanCacheBundle({
+          mealPlan: normalizedResolvedBundle.mealPlan,
+          recipes: normalizedResolvedBundle.recipes,
+          onboardingAnswers: sanitizedOnboardingAnswers,
+        });
+        const templateBundlePayload = buildMealPlanCacheBundle({
           mealPlan: normalizedResolvedBundle.mealPlan,
           recipes: normalizedResolvedBundle.recipes,
         });
         const shouldWriteTemplateCache = generatedBy === 'openai';
+        const historyCacheKey = buildMealPlanGenerationHistoryCacheKey({
+          patientEmail: patient.email,
+          intakeHash: cacheIdentity.intakeHash,
+          seedSalt,
+        });
         await Promise.all([
           upsertMealPlannerRecipes(normalizedResolvedBundle.recipes),
-          ...(bundlePayload
+          ...(userBundlePayload
             ? [
                 upsertMealPlanGenerationCache({
                   cacheKey: cacheIdentity.userCacheKey,
@@ -4379,9 +4646,21 @@ export default async function handler(req, res) {
                   patientEmail: patient.email,
                   source: generatedBy,
                   stage,
-                  bundle: bundlePayload,
+                  bundle: userBundlePayload,
                 }),
-                ...(shouldWriteTemplateCache
+                ...(historyCacheKey
+                  ? [
+                      upsertMealPlanGenerationCache({
+                        cacheKey: historyCacheKey,
+                        intakeHash: cacheIdentity.intakeHash,
+                        patientEmail: patient.email,
+                        source: generatedBy,
+                        stage,
+                        bundle: userBundlePayload,
+                      }),
+                    ]
+                  : []),
+                ...(shouldWriteTemplateCache && templateBundlePayload
                   ? [
                       upsertMealPlanGenerationCache({
                         cacheKey: cacheIdentity.templateCacheKey,
@@ -4389,7 +4668,7 @@ export default async function handler(req, res) {
                         patientEmail: 'mealplan-template@onyahealth.local',
                         source: generatedBy,
                         stage,
-                        bundle: bundlePayload,
+                        bundle: templateBundlePayload,
                       }),
                     ]
                   : []),
@@ -4408,7 +4687,10 @@ export default async function handler(req, res) {
           generatedBy,
           stage,
           mealPlan: normalizedResolvedBundle.mealPlan,
-          recipes: normalizedResolvedBundle.recipes,
+          recipes: mapRecipeListForClient(normalizedResolvedBundle.recipes, req, {
+            inlineDataImages: true,
+          }),
+          onboardingAnswers: sanitizedOnboardingAnswers || null,
           intakeProfile: normalizedResolvedBundle.intakeProfile || null,
           catalogSource,
           cached: false,
