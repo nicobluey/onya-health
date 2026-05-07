@@ -2590,10 +2590,15 @@ async function createPatientAccountViaSupabase({ email, password, fullName = '',
 async function authenticatePatientViaSupabase(email, password) {
   const config = getSupabaseConfig();
   if (!config.url || !config.anonKey) {
-    return { account: null, shouldFallbackLocal: true };
+    return { account: null, shouldFallbackLocal: true, temporarilyUnavailable: false };
   }
 
   let loginResponse;
+  const controller = new AbortController();
+  const timeoutMs = Math.max(1000, Number(process.env.SUPABASE_AUTH_TIMEOUT_MS || 8000));
+  const timeoutHandle = setTimeout(() => {
+    controller.abort(new Error('Supabase auth request timed out'));
+  }, timeoutMs);
   try {
     loginResponse = await fetch(`${config.url}/auth/v1/token?grant_type=password`, {
       method: 'POST',
@@ -2603,13 +2608,20 @@ async function authenticatePatientViaSupabase(email, password) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ email, password }),
+      signal: controller.signal,
     });
   } catch (errorObject) {
+    const message = errorObject?.message || String(errorObject);
+    const aborted = errorObject?.name === 'AbortError' || /timed out/i.test(message);
     info('patient.login.supabase_auth_unavailable', {
       email: normalizeEmail(email),
-      message: errorObject?.message || String(errorObject),
+      message,
+      aborted,
+      timeoutMs,
     });
-    return { account: null, shouldFallbackLocal: true };
+    return { account: null, shouldFallbackLocal: true, temporarilyUnavailable: true };
+  } finally {
+    clearTimeout(timeoutHandle);
   }
 
   const text = await loginResponse.text();
@@ -2622,16 +2634,17 @@ async function authenticatePatientViaSupabase(email, password) {
 
   if (!loginResponse.ok) {
     const authRejected = loginResponse.status === 400 || loginResponse.status === 401 || loginResponse.status === 422;
-    return { account: null, shouldFallbackLocal: !authRejected };
+    return { account: null, shouldFallbackLocal: !authRejected, temporarilyUnavailable: false };
   }
   const user = data?.user || null;
   if (!user || userHasDoctorRole(user)) {
-    return { account: null, shouldFallbackLocal: false };
+    return { account: null, shouldFallbackLocal: false, temporarilyUnavailable: false };
   }
 
   return {
     account: toPatientAccountFromSupabaseUser(user, email),
     shouldFallbackLocal: false,
+    temporarilyUnavailable: false,
   };
 }
 
@@ -3387,9 +3400,11 @@ export default async function handler(req, res) {
         const authStartedAt = Date.now();
         let account = null;
         let localFallbackAttempted = false;
+        let supabaseTemporarilyUnavailable = false;
         if (supabaseConfig.url && supabaseConfig.anonKey) {
           const supabaseAuth = await authenticatePatientViaSupabase(email, password);
           account = supabaseAuth.account;
+          supabaseTemporarilyUnavailable = Boolean(supabaseAuth.temporarilyUnavailable);
           if (!account && supabaseAuth.shouldFallbackLocal) {
             localFallbackAttempted = true;
             account = await authenticatePatientAccount({ email, password });
@@ -3399,6 +3414,14 @@ export default async function handler(req, res) {
           account = await authenticatePatientAccount({ email, password });
         }
         if (!account) {
+          if (supabaseTemporarilyUnavailable) {
+            sendJson(res, 503, {
+              error:
+                'Login service is temporarily unavailable due to heavy database load. Please retry in a minute, or sign in with date of birth.',
+              code: 'AUTH_TEMPORARILY_UNAVAILABLE',
+            });
+            return;
+          }
           sendJson(res, 401, { error: 'Invalid email or password' });
           return;
         }
