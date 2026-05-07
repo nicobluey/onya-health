@@ -5,6 +5,7 @@ import {
   RefreshCcw,
   ShoppingCart,
   Shuffle,
+  Sparkles,
   UserRound,
   Weight,
 } from 'lucide-react';
@@ -18,6 +19,13 @@ import type { DietitianMessage, MealPlan, MealType, OnboardingAnswers, Recipe, W
 
 type DashboardTab = 'overview' | 'meal-plan' | 'grocery' | 'progress' | 'messages';
 type PrimaryMealType = 'breakfast' | 'lunch' | 'dinner';
+type PersonalizedSummary = {
+  title: string;
+  intro: string;
+  detail: string;
+  highlights: string[];
+  qualityChecks: Array<{ label: string; value: string }>;
+};
 
 function readSourceTime(recipe: Recipe, key: 'prepTime' | 'cookTime') {
   const raw = recipe.source?.[key];
@@ -173,6 +181,59 @@ function toDisplayList(items: string[]) {
   return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
 }
 
+function extractQualityChecks(notes: string[]) {
+  const text = notes.join(' ');
+  const patterns = [
+    { label: 'Servings', regex: /servings?\s*(\d+)%/i },
+    { label: 'Quantities', regex: /quantities?\s*(\d+)%/i },
+    { label: 'Detailed steps', regex: /detailed steps?\s*(\d+)%/i },
+    { label: 'Ingredient reuse', regex: /ingredient reuse\s*(\d+)%/i },
+  ];
+
+  return patterns
+    .map((entry) => {
+      const match = text.match(entry.regex);
+      if (!match) return null;
+      return { label: entry.label, value: `${match[1]}%` };
+    })
+    .filter((entry): entry is { label: string; value: string } => Boolean(entry));
+}
+
+function buildPersonalizedSummary({
+  answers,
+  notes,
+}: {
+  answers: OnboardingAnswers;
+  notes: string[];
+}): PersonalizedSummary {
+  const firstName = answers.firstName || 'there';
+  const cleanedDietary = (answers.dietaryRequirements || [])
+    .map((item) => String(item || '').trim().toLowerCase())
+    .filter((item) => item && item !== 'no specific requirements');
+  const dietaryLabel = cleanedDietary.length ? toDisplayList(cleanedDietary.slice(0, 3)) : 'your core nutrition preferences';
+  const cuisines = (answers.preferredCuisines || []).map((item) => String(item || '').trim()).filter(Boolean);
+  const cuisineLabel = cuisines.length ? toDisplayList(cuisines.slice(0, 3)) : 'your preferred flavour profile';
+  const supportAreas = (answers.supportAreas || []).map((item) => String(item || '').trim()).filter(Boolean);
+  const supportLabel = supportAreas.length ? toDisplayList(supportAreas.slice(0, 3)) : 'weekly accountability and routine';
+  const prepDay = answers.prepDay || 'Sunday';
+  const qualityChecks = extractQualityChecks(notes);
+
+  const highlights = [
+    `${answers.preferredMealStyle || 'balanced'} meal style`,
+    `Prep day set to ${prepDay}`,
+    `Focus: ${getHealthFocusDisplayLabel(answers.primaryHealthFocus)}`,
+  ];
+  if (supportAreas.length > 0) highlights.push(`Support priorities: ${supportLabel}`);
+
+  return {
+    title: `${firstName}, your week is crafted around ${answers.mainGoal || 'your goals'}.`,
+    intro: `We prioritised ${dietaryLabel} meals with ${cuisineLabel} influences so every day feels aligned to you.`,
+    detail: `Your plan is built to reduce decision fatigue, keep grocery overlap practical, and support ${supportLabel}.`,
+    highlights,
+    qualityChecks,
+  };
+}
+
 function buildGenerationMessages(answers: OnboardingAnswers) {
   const normalizedDietary = (answers.dietaryRequirements || [])
     .map((item) => String(item || '').trim().toLowerCase())
@@ -291,6 +352,14 @@ export default function WeightLossResetDashboard({
         );
       }),
     [mealPlan?.notes]
+  );
+  const personalizedSummary = useMemo(
+    () =>
+      buildPersonalizedSummary({
+        answers,
+        notes: visiblePlanNotes,
+      }),
+    [answers, visiblePlanNotes]
   );
 
   const currentWeight = getCurrentWeight(weightLogs, answers.currentWeightKg);
@@ -532,8 +601,77 @@ export default function WeightLossResetDashboard({
             </article>
           ) : null}
 
-          {visiblePlanNotes.length ? (
-            <article className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-3 text-sm text-[#5f7063]">{visiblePlanNotes.join(' ')}</article>
+          {mealPlan ? (
+            <article className="overflow-hidden rounded-3xl border border-[#cbd5e1] bg-white shadow-[0_24px_46px_-34px_rgba(15,23,42,0.28)]">
+              <div className="border-b border-[#dbeeff] bg-gradient-to-r from-[#f8fbff] via-[#f1f8ff] to-white px-4 py-4 sm:px-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.07em] text-[#1f7be6]">
+                    <Sparkles size={14} />
+                    Crafted for you
+                  </p>
+                  <p className="rounded-full border border-[#cbd5e1] bg-white px-3 py-1 text-xs font-semibold text-[#0f172a]">
+                    Dietitian-guided weekly note
+                  </p>
+                </div>
+
+                <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_auto] lg:items-start">
+                  <div>
+                    <h3 className="text-xl font-semibold tracking-tight text-[#020617]">{personalizedSummary.title}</h3>
+                    <p className="mt-2 text-base leading-relaxed text-[#0f172a]">"{personalizedSummary.intro}"</p>
+                    <p className="mt-2 text-sm leading-relaxed text-[#1e293b]">{personalizedSummary.detail}</p>
+                  </div>
+
+                  <div className="w-full rounded-2xl border border-[#b7dcff] bg-white p-3 lg:w-[260px]">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src="/nutrionist.webp"
+                        alt="Dietitian headshot placeholder"
+                        className="h-16 w-16 rounded-xl border border-[#dbeeff] object-cover"
+                      />
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-[#1f7be6]">Your dietitian</p>
+                        <p className="text-base font-semibold text-[#020617]">Felicity</p>
+                        <p className="text-xs text-[#334155]">APD • practical nutrition coaching</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 px-4 py-4 sm:px-5 lg:grid-cols-[1.1fr_0.9fr]">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[#0f172a]">Plan guide</p>
+                  <div className="mt-2 space-y-2">
+                    {personalizedSummary.highlights.map((highlight) => (
+                      <p
+                        key={highlight}
+                        className="rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3 py-2 text-sm font-medium text-[#0f172a]"
+                      >
+                        {highlight}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[#0f172a]">Quality checks</p>
+                  {personalizedSummary.qualityChecks.length > 0 ? (
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      {personalizedSummary.qualityChecks.map((metric) => (
+                        <div key={metric.label} className="rounded-xl border border-[#cbd5e1] bg-white px-3 py-2">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-[#334155]">{metric.label}</p>
+                          <p className="mt-0.5 text-lg font-semibold text-[#020617]">{metric.value}</p>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="mt-2 rounded-xl border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#0f172a]">
+                      Dietitian safeguards for allergies, meal balance, and prep practicality are active.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </article>
           ) : null}
 
           {mealPlan?.prepDayPlan ? (
