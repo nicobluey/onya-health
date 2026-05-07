@@ -277,17 +277,19 @@ function RecipeBadgePills({ recipe, compact = false }: { recipe: Recipe; compact
 function isConcreteRecipeImage(url: string) {
   const value = String(url || '').trim();
   if (!value) return false;
-  if (/^data:image\/webp;base64,/i.test(value)) return true;
+  if (/^data:image\/(?:webp|png|jpe?g|gif|avif);base64,/i.test(value)) return true;
   if (value.includes('/api/patient/meal-plan/recipe-image')) return true;
   if (!/^https?:\/\//i.test(value)) return false;
   try {
     const parsed = new URL(value);
     if (parsed.pathname === '/api/patient/meal-plan/recipe-image') return true;
-    if (parsed.pathname.toLowerCase().endsWith('.webp')) return true;
+    if (/\.(?:webp|png|jpe?g|gif|avif)$/i.test(parsed.pathname.toLowerCase())) return true;
+    const format = String(parsed.searchParams.get('fm') || parsed.searchParams.get('format') || '').trim().toLowerCase();
+    if (format && /^(?:webp|png|jpe?g|gif|avif)$/.test(format)) return true;
   } catch {
     return false;
   }
-  return /(?:^|[?&])(fm|format)=webp(?:&|$)/i.test(value);
+  return /(?:^|[?&])(fm|format)=(?:webp|png|jpe?g|gif|avif)(?:&|$)/i.test(value);
 }
 
 function resolveRecipeImageUrl(recipe: Recipe) {

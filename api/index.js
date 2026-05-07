@@ -515,8 +515,31 @@ function extractRecipeIdsFromMealPlan(mealPlan) {
   return normalizeRecipeIdList(ids);
 }
 
+const SUPPORTED_RECIPE_DATA_IMAGE_MIMES = new Set([
+  'image/webp',
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/gif',
+  'image/avif',
+]);
+
+const SUPPORTED_RECIPE_HTTP_IMAGE_EXTENSIONS = new Set(['webp', 'png', 'jpg', 'jpeg', 'gif', 'avif']);
+
+function parseSupportedRecipeDataImageUri(value) {
+  const candidate = String(value || '').trim();
+  if (!candidate) return null;
+  const match = candidate.match(/^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\r\n]+)$/i);
+  if (!match) return null;
+  const mime = String(match[1] || '').trim().toLowerCase();
+  if (!SUPPORTED_RECIPE_DATA_IMAGE_MIMES.has(mime)) return null;
+  const body = String(match[2] || '').replace(/\s+/g, '').trim();
+  if (!body) return null;
+  return { mime, body };
+}
+
 function isWebpDataUri(value) {
-  return /^data:image\/webp;base64,/i.test(String(value || '').trim());
+  return Boolean(parseSupportedRecipeDataImageUri(value));
 }
 
 function isWebpHttpImage(value) {
@@ -524,7 +547,19 @@ function isWebpHttpImage(value) {
   if (!/^https?:\/\//i.test(candidate)) return false;
   try {
     const parsed = new URL(candidate);
-    return parsed.pathname.toLowerCase().endsWith('.webp');
+    const pathname = String(parsed.pathname || '').toLowerCase();
+    const extensionMatch = pathname.match(/\.([a-z0-9]+)$/i);
+    if (extensionMatch && SUPPORTED_RECIPE_HTTP_IMAGE_EXTENSIONS.has(String(extensionMatch[1] || '').toLowerCase())) {
+      return true;
+    }
+
+    const formatCandidate = String(parsed.searchParams.get('fm') || parsed.searchParams.get('format') || '')
+      .trim()
+      .toLowerCase();
+    if (formatCandidate && SUPPORTED_RECIPE_HTTP_IMAGE_EXTENSIONS.has(formatCandidate)) {
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
@@ -4268,17 +4303,17 @@ export default async function handler(req, res) {
           return;
         }
 
-        const base64Body = imageCandidate.replace(/^data:image\/webp;base64,/i, '').trim();
-        if (!base64Body) {
+        const parsedDataImage = parseSupportedRecipeDataImageUri(imageCandidate);
+        if (!parsedDataImage) {
           res.status(404).end('Not found');
           return;
         }
-        const buffer = Buffer.from(base64Body, 'base64');
+        const buffer = Buffer.from(parsedDataImage.body, 'base64');
         if (!buffer.length) {
           res.status(404).end('Not found');
           return;
         }
-        res.setHeader('Content-Type', 'image/webp');
+        res.setHeader('Content-Type', parsedDataImage.mime || 'application/octet-stream');
         res.setHeader('Content-Length', String(buffer.length));
         res.status(200).send(buffer);
       } catch (errorObject) {
@@ -4306,9 +4341,7 @@ export default async function handler(req, res) {
           includeGlobalGeneratedFallback: false,
         });
 
-        const recipes = mapRecipeListForClient(normalizeRecipeListForProduct(generatedCatalog.recipes), req)
-          .filter((recipe) => Boolean(String(recipe?.imageUrl || '').trim()))
-          .slice(0, limit);
+        const recipes = mapRecipeListForClient(normalizeRecipeListForProduct(generatedCatalog.recipes), req).slice(0, limit);
 
         const catalogSource =
           generatedCatalog.hydratedEntryCount > 0
@@ -4350,23 +4383,47 @@ export default async function handler(req, res) {
           });
           return null;
         });
-        if (!latestEntry) {
-          sendJson(res, 200, {
-            ok: true,
-            found: false,
-            mealPlan: null,
-            recipes: [],
-          });
-          return;
-        }
-
-        const hydrated = await hydrateMealPlanBundleFromCacheEntry(latestEntry).catch((hydrateError) => {
+        let selectedEntry = latestEntry;
+        let hydrated = selectedEntry ? await hydrateMealPlanBundleFromCacheEntry(selectedEntry).catch((hydrateError) => {
           error('meal_plan.latest_cache_hydrate_failed', {
             email: normalizeEmail(patient.email),
             message: hydrateError?.message || String(hydrateError),
           });
           return null;
-        });
+        }) : null;
+
+        if (!hydrated) {
+          const cacheEntries = await listMealPlanGenerationCacheByPatientEmail(patient.email, 48).catch((cacheError) => {
+            error('meal_plan.latest_cache_list_failed', {
+              email: normalizeEmail(patient.email),
+              message: cacheError?.message || String(cacheError),
+            });
+            return [];
+          });
+          for (const cacheEntry of cacheEntries) {
+            if (!cacheEntry) continue;
+            if (
+              selectedEntry &&
+              String(cacheEntry.cacheKey || '').trim() === String(selectedEntry.cacheKey || '').trim()
+            ) {
+              continue;
+            }
+            // Fall back to the newest hydration-valid cache entry when the latest row is incomplete.
+            const fallbackHydrated = await hydrateMealPlanBundleFromCacheEntry(cacheEntry).catch((hydrateError) => {
+              error('meal_plan.latest_cache_fallback_hydrate_failed', {
+                email: normalizeEmail(patient.email),
+                cacheKey: String(cacheEntry?.cacheKey || ''),
+                message: hydrateError?.message || String(hydrateError),
+              });
+              return null;
+            });
+            if (!fallbackHydrated) continue;
+            selectedEntry = cacheEntry;
+            hydrated = fallbackHydrated;
+            break;
+          }
+        }
+
         if (!hydrated) {
           sendJson(res, 200, {
             ok: true,
@@ -4381,7 +4438,7 @@ export default async function handler(req, res) {
           inlineDataImages: true,
         });
         let onboardingAnswers = sanitizeOnboardingAnswersForBundle(
-          hydrated.onboardingAnswers || latestEntry?.bundle?.onboardingAnswers || latestEntry?.bundle?.answers || null
+          hydrated.onboardingAnswers || selectedEntry?.bundle?.onboardingAnswers || selectedEntry?.bundle?.answers || null
         );
         if (!onboardingAnswers) {
           const cacheEntries = await listMealPlanGenerationCacheByPatientEmail(patient.email, 36).catch((cacheError) => {
@@ -4402,12 +4459,12 @@ export default async function handler(req, res) {
         sendJson(res, 200, {
           ok: true,
           found: true,
-          generatedBy: latestEntry.source || 'openai',
-          stage: latestEntry.stage || 'ai_recipes_v3',
+          generatedBy: selectedEntry?.source || 'openai',
+          stage: selectedEntry?.stage || 'ai_recipes_v3',
           mealPlan: hydrated.mealPlan,
           recipes,
           onboardingAnswers: onboardingAnswers || null,
-          cachedAt: latestEntry.updatedAt || latestEntry.lastUsedAt || latestEntry.createdAt || null,
+          cachedAt: selectedEntry?.updatedAt || selectedEntry?.lastUsedAt || selectedEntry?.createdAt || null,
         });
       } catch (errorObject) {
         error('meal_plan.latest_load_failed', {

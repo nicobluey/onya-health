@@ -83,7 +83,7 @@ function safeLocalStorageSetItem(key: string, value: string) {
 }
 
 function isPersistableDataRecipeImage(url: string) {
-    return /^data:image\/webp;base64,/i.test(String(url || '').trim());
+    return /^data:image\/(?:webp|png|jpe?g|gif|avif);base64,/i.test(String(url || '').trim());
 }
 
 function isConcreteRecipeImageUrl(url: string) {
@@ -95,11 +95,13 @@ function isConcreteRecipeImageUrl(url: string) {
     try {
         const parsed = new URL(value);
         if (parsed.pathname === '/api/patient/meal-plan/recipe-image') return true;
-        if (parsed.pathname.toLowerCase().endsWith('.webp')) return true;
+        if (/\.(?:webp|png|jpe?g|gif|avif)$/i.test(parsed.pathname.toLowerCase())) return true;
+        const format = String(parsed.searchParams.get('fm') || parsed.searchParams.get('format') || '').trim().toLowerCase();
+        if (format && /^(?:webp|png|jpe?g|gif|avif)$/.test(format)) return true;
     } catch {
         return false;
     }
-    return /(?:^|[?&])(fm|format)=webp(?:&|$)/i.test(value);
+    return /(?:^|[?&])(fm|format)=(?:webp|png|jpe?g|gif|avif)(?:&|$)/i.test(value);
 }
 
 function isValidWeightLossRecipe(entry: unknown): entry is Recipe {
@@ -1677,16 +1679,12 @@ export default function PatientPortalPage() {
                                 }).length;
                                 const imageCoverage =
                                     validServerRecipes.length > 0 ? withRealImageCount / validServerRecipes.length : 0;
-                                if (imageCoverage < 0.85) {
-                                    setWeightLossRecipeError(
-                                        'Generated meals did not include enough real food images. Please regenerate.'
-                                    );
-                                    return;
-                                }
                                 setWeightLossRecipeError(
-                                    withRealImageCount > 0
-                                        ? ''
-                                        : 'Meal plan generated, but some image links are unavailable right now.'
+                                    imageCoverage < 0.85
+                                        ? 'Meal plan generated. Some meal images are unavailable right now, but your meals are saved and usable.'
+                                        : withRealImageCount > 0
+                                          ? ''
+                                          : 'Meal plan generated, but some image links are unavailable right now.'
                                 );
                                 setMealPlan(postProcessGeneratedMealPlan(serverMealPlan, answers, recipeMap));
                                 return;
