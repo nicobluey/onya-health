@@ -1,5 +1,63 @@
 # Fixes Log
 
+## 2026-05-09 - Database-backed patient/dietitian profiles and production headshot wiring
+
+### Symptoms
+
+- Portal and onboarding still relied on hardcoded placeholder profile values in parts of the frontend.
+- Dietitian profile rendering was not fully wired from API payloads through all weight-loss screens.
+- Infrastructure needed to support multiple dietitians (not a single static placeholder assumption).
+
+### Root causes
+
+1. `PatientPortalPage` initialized with hardcoded fallback patient identity and did not maintain a dedicated assigned-dietitian state from bootstrap payloads.
+2. `HomeTab` did not accept/pass dietitian profile through to the weight-loss dashboard card.
+3. Profile data model support existed partially but required production migration + wiring completion end-to-end.
+
+### Files changed
+
+- `supabase/migrations/20260508_refactor_patient_dietitian_profiles.sql`
+  - creates/normalizes `patients`, `dietitians`, `patient_dietitians`
+  - adds primary-assignment safeguards, indexes, RLS policies
+  - seeds active default dietitian row and assignments where missing
+- `supabase/migrations/20260509_add_patient_email_index.sql`
+  - adds/backfills `patients.email`
+  - adds unique lower(email) index and `owner_id` index
+- `api/index.js`
+  - resolves patient + dietitian profile from DB via `resolvePatientProfileByEmail`
+  - returns `{ patient, dietitian }` across auth/bootstrap endpoints
+  - persists patient profile rows via `upsertSupabasePatientProfileRows`
+- `backend/lib/storage.js`
+  - keeps `patients` profile columns in sync during request/profile writes
+- `frontend/src/pages/PatientPortalPage.tsx`
+  - removed hardcoded patient placeholders
+  - added normalized patient/dietitian hydration from API payload
+  - stores assigned dietitian state and passes to onboarding/dashboard/home card
+- `frontend/src/patient-portal/home/HomeTab.tsx`
+  - accepts dietitian prop and passes into `PatientDashboardWeightLossCard`
+- `frontend/src/weight-loss-reset/components/PatientDashboardWeightLossCard.tsx`
+  - dynamic dietitian profile rendering with avatar fallback
+  - removed hardcoded CTA copy mentioning Felicity
+- `frontend/src/weight-loss-reset/components/OnboardingFlow.tsx`
+  - dynamic dietitian identity rendering + generic expert-label helper usage
+- `frontend/src/weight-loss-reset/components/WeightLossResetDashboard.tsx`
+  - dynamic assigned dietitian rendering from props
+- `frontend/src/weight-loss-reset/components/ProfileAvatar.tsx`
+  - resilient image fallback avatar component
+- `frontend/src/weight-loss-reset/constants.ts`
+  - centralized default production dietitian image URL and generic helper aliasing
+- `frontend/public/felicity-profile.webp`
+  - production dietitian headshot asset
+- `.agents/FE_AGENT.md`, `.agents/BE_AGENT.md`
+  - implementation contracts and regression checklists
+
+### Verification
+
+1. `npm run build` succeeds.
+2. `GET /api/patient/bootstrap` returns both `patient` and `dietitian`.
+3. Onboarding + dashboard + home card display assigned dietitian profile from payload.
+4. Missing/invalid profile image gracefully falls back to initials avatar.
+
 ## 2026-05-08 - GPT-only catalog enforcement, swap recovery, and generation progress fix
 
 ### Symptoms
@@ -77,3 +135,47 @@
 2. Supabase check confirms historical cache rows exist for affected patients.
 3. API path now supports legacy image formats and older valid cache rows.
 4. Frontend no longer discards generated meals when image coverage is incomplete.
+
+## 2026-05-08 - Felicity profile headshot rollout and patient-name provenance trace
+
+### Symptoms
+
+- Felicity profile cards were still icon-only/text-only in onboarding and dashboard states.
+- Need to verify where patient full name `Fff` originated for `n.vanhoorick1@gmail.com`.
+
+### Root causes
+
+1. Weight-loss reset UI used placeholder iconography instead of a dedicated dietitian headshot asset.
+2. Patient display name is sourced from persisted patient identity fields, and for this account those fields were already set to `Fff` in upstream data.
+
+### Files changed
+
+- `frontend/public/felicity-profile.webp`
+  - new WebP headshot asset (converted from provided source image).
+- `frontend/src/weight-loss-reset/constants.ts`
+  - added `FELICITY_PROFILE_IMAGE_URL` shared constant.
+- `frontend/src/weight-loss-reset/components/PatientDashboardWeightLossCard.tsx`
+  - replaced icon-only Felicity block with headshot + profile text.
+- `frontend/src/weight-loss-reset/components/WeightLossResetDashboard.tsx`
+  - replaced right-rail Felicity icon block with headshot + profile text.
+- `frontend/src/weight-loss-reset/components/OnboardingFlow.tsx`
+  - added Felicity headshot to match preview and onboarding match card.
+
+### Data provenance findings (`Fff`)
+
+- API identity resolution path:
+  - `api/index.js` `buildPatientIdentity(...)` prefers `latestCertificate.certificateDraft.fullName`, then falls back to account full name.
+  - `api/index.js` `patientProfileFromCertificate(...)` returns `certificateDraft.fullName`.
+- Live Supabase records for `n.vanhoorick1@gmail.com` show `Fff` exists in both:
+  - `auth.users.user_metadata.full_name = "Fff"`
+  - `medical_certificate_requests.patient_full_name = "Fff"` on latest request (`request_id = 3fd92cd6-ce7b-4cdf-8ecc-2c959de7193c`).
+
+### Verification
+
+1. `npm run build` passes.
+2. Felicity headshot renders in:
+   - onboarding match preview,
+   - onboarding step 8 matched card,
+   - dashboard right-rail Felicity card,
+   - patient dashboard match card.
+3. Patient-name trace confirms `Fff` is data-originated, not generated by frontend defaults.

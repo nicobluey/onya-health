@@ -75,6 +75,16 @@ export interface DietitianMessage {
   createdAt: string;
 }
 
+export interface AssignedDietitianProfile {
+  id: string;
+  fullName: string;
+  phone?: string;
+  credentials?: string;
+  bio?: string;
+  profilePhotoPath?: string;
+  profilePhotoUrl?: string;
+}
+
 export interface OnboardingAnswers {
   firstName: string;
   age?: number;
@@ -123,7 +133,7 @@ export interface WeightLossResetState {
   onboardingAnswers: OnboardingAnswers;
   onboardingComplete: boolean;
   onboardingStep: number;
-  matchedDietitianId: 'felicity' | null;
+  matchedDietitianId: string | null;
   dietitianBookingComplete: boolean;
   mealPlan: MealPlan | null;
   weightLogs: WeightLogEntry[];

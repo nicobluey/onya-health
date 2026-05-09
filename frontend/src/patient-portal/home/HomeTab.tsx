@@ -32,7 +32,7 @@ import {
     statusLabel,
 } from '../model';
 import PatientDashboardWeightLossCard from '../../weight-loss-reset/components/PatientDashboardWeightLossCard';
-import type { WeightLossResetCardState } from '../../weight-loss-reset/types';
+import type { AssignedDietitianProfile, WeightLossResetCardState } from '../../weight-loss-reset/types';
 
 const RECORD_TAB_META: Record<
     RecordTab,
@@ -770,6 +770,7 @@ export default function HomeTab({
     requests,
     queuedRequest,
     patient,
+    dietitian,
     data,
     recordTab,
     onRecordTabChange,
@@ -786,6 +787,7 @@ export default function HomeTab({
     requests: PortalRequest[];
     queuedRequest: PortalRequest | null;
     patient: PatientProfile;
+    dietitian?: AssignedDietitianProfile | null;
     data: PortalProfileData;
     recordTab: RecordTab;
     onRecordTabChange: (tab: RecordTab) => void;
@@ -815,6 +817,7 @@ export default function HomeTab({
                 <PatientDashboardWeightLossCard
                     cardState={weightLossResetCard.cardState}
                     firstName={firstNameValue}
+                    dietitian={dietitian}
                     primaryHealthFocus={weightLossResetCard.primaryHealthFocus}
                     currentWeight={weightLossResetCard.currentWeight}
                     goalWeight={weightLossResetCard.goalWeight}
@@ -849,6 +852,7 @@ export default function HomeTab({
             <PatientDashboardWeightLossCard
                 cardState={weightLossResetCard.cardState}
                 firstName={firstNameValue}
+                dietitian={dietitian}
                 primaryHealthFocus={weightLossResetCard.primaryHealthFocus}
                 currentWeight={weightLossResetCard.currentWeight}
                 goalWeight={weightLossResetCard.goalWeight}

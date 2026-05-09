@@ -1,15 +1,18 @@
-import { ArrowRight, CalendarCheck2, UserRound } from 'lucide-react';
+import { ArrowRight, CalendarCheck2 } from 'lucide-react';
 import {
-  getFelicityExpertLabel,
+  DEFAULT_DIETITIAN_PROFILE_IMAGE_URL,
+  getDietitianExpertLabel,
   WEIGHT_LOSS_RESET_MIN_PLAN_WEEKS,
   WEIGHT_LOSS_RESET_PRICE_COPY,
   WEIGHT_LOSS_RESET_PROGRAM_NAME,
 } from '../constants';
-import type { WeightLossResetCardState } from '../types';
+import type { AssignedDietitianProfile, WeightLossResetCardState } from '../types';
+import ProfileAvatar from './ProfileAvatar';
 
 export default function PatientDashboardWeightLossCard({
   cardState,
   firstName,
+  dietitian,
   primaryHealthFocus,
   currentWeight,
   goalWeight,
@@ -20,6 +23,7 @@ export default function PatientDashboardWeightLossCard({
 }: {
   cardState: WeightLossResetCardState;
   firstName: string;
+  dietitian?: AssignedDietitianProfile | null;
   primaryHealthFocus?: string;
   currentWeight?: number;
   goalWeight?: number;
@@ -32,11 +36,14 @@ export default function PatientDashboardWeightLossCard({
     cardState === 'not-started'
       ? 'Start nutrition plan'
       : cardState === 'onboarding'
-        ? 'Continue with Felicity'
+        ? 'Continue onboarding'
         : 'Open nutrition plan';
 
   const ctaAction = cardState === 'not-started' ? onStart : cardState === 'onboarding' ? onContinueBooking : onOpen;
-  const expertLabel = getFelicityExpertLabel(primaryHealthFocus);
+  const expertLabel = getDietitianExpertLabel(primaryHealthFocus);
+  const dietitianName = String(dietitian?.fullName || '').trim() || 'Your dietitian';
+  const dietitianImageUrl = String(dietitian?.profilePhotoUrl || '').trim() || DEFAULT_DIETITIAN_PROFILE_IMAGE_URL;
+  const dietitianBio = String(dietitian?.bio || '').trim() || 'Practical, kind, realistic, non-judgemental support.';
 
   return (
     <section className="rounded-3xl border border-[#cbd5e1] bg-white p-5 shadow-[0_24px_42px_-34px_rgba(15,23,42,0.24)] sm:p-6">
@@ -48,7 +55,7 @@ export default function PatientDashboardWeightLossCard({
             {cardState === 'not-started'
               ? `${WEIGHT_LOSS_RESET_PRICE_COPY}. Minimum plan length is ${WEIGHT_LOSS_RESET_MIN_PLAN_WEEKS} weeks.`
               : cardState === 'onboarding'
-                ? `Your setup is saved, ${firstName || 'there'}. Finish booking your intro consult with Felicity to unlock the full dashboard.`
+                ? `Your setup is saved, ${firstName || 'there'}. Finish booking your intro consult with ${dietitianName} to unlock the full dashboard.`
                 : `Your dashboard is ready with meal swaps, progress tracking, grocery planning, and weekly support.`}
           </p>
 
@@ -63,11 +70,16 @@ export default function PatientDashboardWeightLossCard({
         </div>
 
         <div className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-4">
-          <div className="flex items-center gap-2 text-[#2e8cff]">
-            <UserRound size={16} />
-            <p className="text-sm font-semibold text-[#020617]">Matched with Felicity • {expertLabel}</p>
+          <div className="flex items-center gap-3">
+            <ProfileAvatar
+              name={dietitianName}
+              imageUrl={dietitianImageUrl}
+              alt={`${dietitianName} profile`}
+              className="h-12 w-12 rounded-xl border border-[#b7dcff] object-cover"
+            />
+            <p className="text-sm font-semibold text-[#020617]">Matched with {dietitianName} • {expertLabel}</p>
           </div>
-          <p className="mt-1 text-sm text-[#475569]">Practical, kind, realistic, non-judgemental support.</p>
+          <p className="mt-1 text-sm text-[#475569]">{dietitianBio}</p>
 
           {cardState === 'ready' ? (
             <div className="mt-4 space-y-2">
@@ -92,7 +104,7 @@ export default function PatientDashboardWeightLossCard({
               <p className="mt-1">
                 {cardState === 'not-started'
                   ? 'Complete your onboarding to build your personalised plan.'
-                  : 'Book your intro consult with Felicity to unlock your dashboard.'}
+                  : `Book your intro consult with ${dietitianName} to unlock your dashboard.`}
               </p>
             </div>
           )}

@@ -57,9 +57,23 @@ export interface PortalRequest {
 
 export interface PatientProfile {
   fullName: string;
+  firstName?: string;
+  lastName?: string;
   email: string;
   dob?: string;
   phone?: string;
+  profilePhotoPath?: string;
+  profilePhotoUrl?: string;
+}
+
+export interface DietitianProfile {
+  id: string;
+  fullName: string;
+  phone?: string;
+  credentials?: string;
+  bio?: string;
+  profilePhotoPath?: string;
+  profilePhotoUrl?: string;
 }
 
 export interface PatientBillingInfo {

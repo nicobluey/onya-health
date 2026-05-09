@@ -1150,6 +1150,11 @@ async function createPatientForSubmission(certificate) {
     prefer: 'resolution=merge-duplicates,return=representation',
     body: {
       id: patientId,
+      owner_id: patientId,
+      email: patientEmail || null,
+      full_name: [firstName, lastName].filter(Boolean).join(' ') || null,
+      phone: draft.phone || null,
+      profile_photo_path: null,
       consent_telehealth: true,
       consent_marketing: false,
     },

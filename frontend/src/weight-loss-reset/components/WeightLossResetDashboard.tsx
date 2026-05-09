@@ -11,18 +11,19 @@ import {
   Shuffle,
   Sparkles,
   Sprout,
-  UserRound,
   Weight,
   WheatOff,
   type LucideIcon,
 } from 'lucide-react';
 import {
+  DEFAULT_DIETITIAN_PROFILE_IMAGE_URL,
   getHealthFocusDisplayLabel,
   WEIGHT_LOSS_RESET_PRICE_COPY,
   WEIGHT_LOSS_RESET_PROGRAM_NAME,
 } from '../constants';
 import { buildGroceryListFromMealPlan, calculateGoalProgress, getCurrentWeight, getSwapCandidates } from '../mealPlanning';
-import type { DietitianMessage, MealPlan, MealType, OnboardingAnswers, Recipe, WeightLogEntry } from '../types';
+import type { AssignedDietitianProfile, DietitianMessage, MealPlan, MealType, OnboardingAnswers, Recipe, WeightLogEntry } from '../types';
+import ProfileAvatar from './ProfileAvatar';
 
 type DashboardTab = 'overview' | 'meal-plan' | 'grocery' | 'progress' | 'messages';
 type PrimaryMealType = 'breakfast' | 'lunch' | 'dinner';
@@ -481,6 +482,7 @@ function buildGenerationMessages(answers: OnboardingAnswers) {
 export default function WeightLossResetDashboard({
   answers,
   displayFirstName,
+  dietitian,
   mealPlan,
   recipes,
   weightLogs,
@@ -496,6 +498,7 @@ export default function WeightLossResetDashboard({
 }: {
   answers: OnboardingAnswers;
   displayFirstName?: string;
+  dietitian?: AssignedDietitianProfile | null;
   mealPlan: MealPlan | null;
   recipes: Recipe[];
   weightLogs: WeightLogEntry[];
@@ -518,6 +521,10 @@ export default function WeightLossResetDashboard({
   const [weightNote, setWeightNote] = useState('');
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationMessageIndex, setGenerationMessageIndex] = useState(0);
+  const dietitianName = String(dietitian?.fullName || '').trim() || 'Your dietitian';
+  const dietitianImageUrl = String(dietitian?.profilePhotoUrl || '').trim() || DEFAULT_DIETITIAN_PROFILE_IMAGE_URL;
+  const dietitianCredentials = String(dietitian?.credentials || '').trim() || 'Accredited Dietitian';
+  const dietitianBio = String(dietitian?.bio || '').trim() || 'Practical, kind, realistic support.';
 
   const recipeMap = useMemo(() => new Map(recipes.map((recipe) => [recipe.id, recipe])), [recipes]);
   const groceryGroups = useMemo(() => buildGroceryListFromMealPlan(mealPlan, recipeMap), [mealPlan, recipeMap]);
@@ -706,7 +713,7 @@ export default function WeightLossResetDashboard({
             </p>
             <h1 className="mt-1 text-3xl font-semibold tracking-tight text-[#020617]">Welcome back, {displayFirstName || answers.firstName || 'there'}</h1>
             <p className="mt-2 text-sm text-[#475569]">
-              Small changes, consistent support. No perfect days required. Felicity can adjust your plan any time.
+              Small changes, consistent support. No perfect days required. {dietitianName} can adjust your plan any time.
             </p>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:max-w-[520px]">
@@ -724,7 +731,7 @@ export default function WeightLossResetDashboard({
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#cbd5e1] bg-white px-4 text-sm font-semibold text-[#334155]"
               >
                 <MessageCircle size={16} />
-                Message Felicity
+                Message {dietitianName}
               </button>
               <button
                 type="button"
@@ -747,11 +754,16 @@ export default function WeightLossResetDashboard({
 
           <div className="space-y-3">
             <article className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3">
-              <p className="inline-flex items-center gap-2 text-sm font-semibold text-[#020617]">
-                <UserRound size={15} className="text-[#2e8cff]" />
-                Felicity
-              </p>
-              <p className="mt-1 text-sm text-[#475569]">Accredited Dietitian • practical, kind, realistic support.</p>
+              <div className="inline-flex items-center gap-3">
+                <ProfileAvatar
+                  name={dietitianName}
+                  imageUrl={dietitianImageUrl}
+                  alt={`${dietitianName} profile`}
+                  className="h-11 w-11 rounded-xl border border-[#b7dcff] object-cover"
+                />
+                <p className="text-sm font-semibold text-[#020617]">{dietitianName}</p>
+              </div>
+              <p className="mt-1 text-sm text-[#475569]">{dietitianCredentials} • {dietitianBio}</p>
             </article>
 
             <article className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3">
@@ -780,7 +792,7 @@ export default function WeightLossResetDashboard({
         <TabButton active={activeTab === 'meal-plan'} label="Meal plan" onClick={() => setActiveTab('meal-plan')} />
         <TabButton active={activeTab === 'grocery'} label="Grocery list" onClick={() => setActiveTab('grocery')} />
         <TabButton active={activeTab === 'progress'} label="Progress" onClick={() => setActiveTab('progress')} />
-        <TabButton active={activeTab === 'messages'} label="Message Felicity" onClick={() => setActiveTab('messages')} />
+        <TabButton active={activeTab === 'messages'} label={`Message ${dietitianName}`} onClick={() => setActiveTab('messages')} />
       </nav>
 
       {(activeTab === 'overview' || activeTab === 'meal-plan') && (
@@ -1148,9 +1160,9 @@ export default function WeightLossResetDashboard({
 
       {activeTab === 'messages' && (
         <section className="rounded-2xl border border-[#cbd5e1] bg-white p-4 sm:p-5">
-          <h2 className="text-xl font-semibold text-[#020617]">Message Felicity</h2>
+          <h2 className="text-xl font-semibold text-[#020617]">Message {dietitianName}</h2>
           <p className="mt-1 text-sm text-[#475569]">
-            Send Felicity a note about what you&apos;d like adjusted. In this demo, messages are saved locally until live dietitian messaging is
+            Send {dietitianName} a note about what you&apos;d like adjusted. In this demo, messages are saved locally until live dietitian messaging is
             connected.
           </p>
           <div className="mt-4 space-y-2 rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3">
@@ -1176,7 +1188,7 @@ export default function WeightLossResetDashboard({
             <input
               value={messageInput}
               onChange={(event) => setMessageInput(event.target.value)}
-              placeholder="Type your note for Felicity"
+              placeholder={`Type your note for ${dietitianName}`}
               className="h-10 flex-1 rounded-xl border border-[#cbd5e1] px-3 text-sm outline-none focus:border-[#2e8cff]"
             />
             <button type="submit" className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#2e8cff] px-4 text-sm font-semibold text-white">

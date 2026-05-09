@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { DEFAULT_ONBOARDING_ANSWERS, FELICITY_ID, STORAGE_KEYS } from './constants';
+import { DEFAULT_DIETITIAN_ID, DEFAULT_ONBOARDING_ANSWERS, STORAGE_KEYS } from './constants';
 import type {
   CoreMealType,
   DietitianMessage,
@@ -132,7 +132,7 @@ function readInitialState(): WeightLossResetState {
     answers?: Partial<OnboardingAnswers>;
     onboardingComplete?: boolean;
     onboardingStep?: number;
-    matchedDietitianId?: 'felicity' | null;
+    matchedDietitianId?: string | null;
   } | null>(window.localStorage.getItem(STORAGE_KEYS.onboarding), null);
 
   const onboardingAnswers = sanitizeOnboardingAnswers(onboardingRaw?.answers);
@@ -230,7 +230,7 @@ export function useWeightLossResetState() {
     setState((current) => ({
       ...current,
       onboardingComplete: true,
-      matchedDietitianId: FELICITY_ID,
+      matchedDietitianId: DEFAULT_DIETITIAN_ID,
     }));
   };
 
@@ -239,7 +239,7 @@ export function useWeightLossResetState() {
       ...current,
       dietitianBookingComplete: true,
       onboardingComplete: true,
-      matchedDietitianId: FELICITY_ID,
+      matchedDietitianId: DEFAULT_DIETITIAN_ID,
     }));
   };
 

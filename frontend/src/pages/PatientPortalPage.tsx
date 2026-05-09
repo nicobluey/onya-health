@@ -32,6 +32,7 @@ import {
     type LayoutMode,
     type MainTab,
     type PatientBillingInfo,
+    type DietitianProfile,
     type PatientProfile,
     type PortalProfileData,
     type PortalRequest,
@@ -227,6 +228,58 @@ function normalizeBillingInfo(input: unknown): PatientBillingInfo | null {
         cancelAtPeriodEnd: Boolean(value.cancelAtPeriodEnd),
         currentPeriodEnd: value.currentPeriodEnd ? String(value.currentPeriodEnd) : null,
         canManageSubscription: Boolean(value.canManageSubscription),
+    };
+}
+
+function normalizePatientProfile(input: unknown, fallbackEmail = ''): PatientProfile {
+    const safeFallbackEmail = String(fallbackEmail || '').trim().toLowerCase();
+    if (!input || typeof input !== 'object') {
+        return {
+            fullName: 'Patient',
+            firstName: '',
+            lastName: '',
+            email: safeFallbackEmail,
+            dob: '',
+            phone: '',
+            profilePhotoPath: '',
+            profilePhotoUrl: '',
+        };
+    }
+
+    const value = input as Record<string, unknown>;
+    const firstNameValue = String(value.firstName || '').trim();
+    const lastNameValue = String(value.lastName || '').trim();
+    const combinedName = [firstNameValue, lastNameValue].filter(Boolean).join(' ').trim();
+    const fullNameValue = String(value.fullName || combinedName || '').trim() || 'Patient';
+    const [derivedFirstName, ...derivedLastName] = fullNameValue.split(/\s+/).filter(Boolean);
+
+    return {
+        fullName: fullNameValue,
+        firstName: firstNameValue || derivedFirstName || '',
+        lastName: lastNameValue || derivedLastName.join(' ') || '',
+        email: String(value.email || safeFallbackEmail || '').trim().toLowerCase(),
+        dob: String(value.dob || '').trim(),
+        phone: String(value.phone || '').trim(),
+        profilePhotoPath: String(value.profilePhotoPath || '').trim(),
+        profilePhotoUrl: String(value.profilePhotoUrl || '').trim(),
+    };
+}
+
+function normalizeDietitianProfile(input: unknown): DietitianProfile | null {
+    if (!input || typeof input !== 'object') return null;
+    const value = input as Record<string, unknown>;
+    const id = String(value.id || '').trim();
+    const fullName = String(value.fullName || '').trim();
+    if (!id || !fullName) return null;
+
+    return {
+        id,
+        fullName,
+        phone: String(value.phone || '').trim(),
+        credentials: String(value.credentials || '').trim(),
+        bio: String(value.bio || '').trim(),
+        profilePhotoPath: String(value.profilePhotoPath || '').trim(),
+        profilePhotoUrl: String(value.profilePhotoUrl || '').trim(),
     };
 }
 
@@ -1118,10 +1171,15 @@ export default function PatientPortalPage() {
     const [selectedConsultOptionId, setSelectedConsultOptionId] = useState<ConsultOptionId | null>(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');
-    const [patient, setPatient] = useState<PatientProfile>({
-        fullName: 'John Von',
-        email: window.localStorage.getItem('onya_patient_email') || 'john@gmail.com',
-    });
+    const [patient, setPatient] = useState<PatientProfile>(() =>
+        normalizePatientProfile(
+            {
+                email: window.localStorage.getItem('onya_patient_email') || '',
+            },
+            window.localStorage.getItem('onya_patient_email') || '',
+        ),
+    );
+    const [primaryDietitian, setPrimaryDietitian] = useState<DietitianProfile | null>(null);
     const [requests, setRequests] = useState<PortalRequest[]>([]);
     const [billing, setBilling] = useState<PatientBillingInfo | null>(null);
     const [billingActionState, setBillingActionState] = useState<'idle' | 'opening_portal' | 'cancelling'>('idle');
@@ -1394,8 +1452,15 @@ export default function PatientPortalPage() {
                     const preferredEmail = window.localStorage.getItem('onya_patient_email') || 'patient@demo.local';
                     setPatient({
                         fullName: preferredName,
+                        firstName: preferredName,
+                        lastName: '',
                         email: preferredEmail,
+                        dob: '',
+                        phone: '',
+                        profilePhotoPath: '',
+                        profilePhotoUrl: '',
                     });
+                    setPrimaryDietitian(null);
                     setRequests([]);
                     setBilling(null);
                     setBillingError('');
@@ -1450,13 +1515,13 @@ export default function PatientPortalPage() {
 
                 if (disposed) return;
 
-                const patientProfile: PatientProfile = {
-                    fullName: payload?.patient?.fullName || 'Patient',
-                    email: payload?.patient?.email || window.localStorage.getItem('onya_patient_email') || '',
-                    dob: payload?.patient?.dob || '',
-                    phone: payload?.patient?.phone || '',
-                };
+                const patientProfile = normalizePatientProfile(
+                    payload?.patient,
+                    window.localStorage.getItem('onya_patient_email') || '',
+                );
+                const assignedDietitian = normalizeDietitianProfile(payload?.dietitian);
                 setPatient(patientProfile);
+                setPrimaryDietitian(assignedDietitian);
                 window.localStorage.setItem('onya_patient_email', patientProfile.email);
                 setBilling(normalizeBillingInfo(payload?.billing));
                 setBillingError('');
@@ -2025,6 +2090,7 @@ export default function PatientPortalPage() {
                 <OnboardingFlow
                     initialAnswers={weightLossResetState.onboardingAnswers}
                     initialStep={weightLossResetState.onboardingStep}
+                    dietitian={primaryDietitian}
                     mode={weightLossOnboardingMode}
                     onSaveProgress={handleWeightLossOnboardingProgress}
                     onMarkOnboardingComplete={completeOnboarding}
@@ -2046,6 +2112,7 @@ export default function PatientPortalPage() {
                     <WeightLossResetDashboard
                         answers={weightLossResetState.onboardingAnswers}
                         displayFirstName={firstNameValue}
+                        dietitian={primaryDietitian}
                         mealPlan={weightLossResetState.mealPlan}
                         recipes={allWeightLossRecipes}
                         weightLogs={weightLossResetState.weightLogs}
@@ -2089,6 +2156,7 @@ export default function PatientPortalPage() {
                     requests={requests}
                     queuedRequest={queuedRequest}
                     patient={patient}
+                    dietitian={primaryDietitian}
                     data={portalData}
                     recordTab={recordTab}
                     onRecordTabChange={setRecordTab}

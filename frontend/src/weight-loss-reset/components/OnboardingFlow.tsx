@@ -25,7 +25,8 @@ import {
   DIETARY_REQUIREMENT_OPTIONS,
   FAVORITE_FOOD_OPTIONS,
   FELICITY_CALENDLY_URL,
-  getFelicityExpertLabel,
+  DEFAULT_DIETITIAN_PROFILE_IMAGE_URL,
+  getDietitianExpertLabel,
   getHealthFocusDisplayLabel,
   GROCERY_PREFERENCE_OPTIONS,
   HEALTH_FOCUS_OPTIONS,
@@ -37,7 +38,8 @@ import {
   WEIGHT_LOSS_RESET_PRICE_COPY,
   WEIGHT_LOSS_RESET_PROGRAM_NAME,
 } from '../constants';
-import type { CoreMealType, OnboardingAnswers } from '../types';
+import type { AssignedDietitianProfile, CoreMealType, OnboardingAnswers } from '../types';
+import ProfileAvatar from './ProfileAvatar';
 
 const inputClassName =
   'h-11 w-full rounded-xl border border-[#cbd5e1] bg-white px-3 text-sm text-[#020617] outline-none transition focus:border-[#2e8cff]';
@@ -111,7 +113,7 @@ function stepValidation(step: number, answers: OnboardingAnswers) {
   if (step === 6) {
     if (!answers.primaryHealthFocus.trim()) return 'Choose the main area you want expert support with.';
     if (answers.supportWanted === 'yes' && answers.supportAreas.length === 0) {
-      return 'Choose at least one support area so Felicity can tailor your plan.';
+      return 'Choose at least one support area so your dietitian can tailor your plan.';
     }
   }
   return '';
@@ -158,6 +160,7 @@ export default function OnboardingFlow({
   initialAnswers,
   initialStep,
   mode = 'initial',
+  dietitian,
   onSaveProgress,
   onMarkOnboardingComplete,
   onBookingComplete,
@@ -167,6 +170,7 @@ export default function OnboardingFlow({
   initialAnswers: OnboardingAnswers;
   initialStep: number;
   mode?: 'initial' | 'update';
+  dietitian?: AssignedDietitianProfile | null;
   onSaveProgress: (answers: OnboardingAnswers, step: number) => void;
   onMarkOnboardingComplete: () => void;
   onBookingComplete: (answers: OnboardingAnswers) => Promise<void> | void;
@@ -378,7 +382,10 @@ export default function OnboardingFlow({
   };
 
   const activeFocus = HEALTH_FOCUS_OPTIONS.find((entry) => entry.value === answers.primaryHealthFocus);
-  const felicityExpertLabel = getFelicityExpertLabel(answers.primaryHealthFocus);
+  const dietitianExpertLabel = getDietitianExpertLabel(answers.primaryHealthFocus);
+  const dietitianName = String(dietitian?.fullName || '').trim() || 'your dietitian';
+  const dietitianImageUrl = String(dietitian?.profilePhotoUrl || '').trim() || DEFAULT_DIETITIAN_PROFILE_IMAGE_URL;
+  const dietitianCredentials = String(dietitian?.credentials || '').trim() || 'Accredited Dietitian';
   const focusLabel = getHealthFocusDisplayLabel(answers.primaryHealthFocus);
   const selectedFavoriteFoodLabels = FAVORITE_FOOD_OPTIONS.filter((entry) =>
     (answers.favoriteFoods || []).map((value) => value.toLowerCase()).includes(entry.value.toLowerCase())
@@ -404,7 +411,7 @@ export default function OnboardingFlow({
         <p className="mt-1 text-sm text-[#475569]">
           {isPreferenceUpdate
             ? 'Update your intake preferences'
-            : `Step ${Math.min(step + 1, 11)} of 11 • ${focusLabel} support with Felicity`} • {WEIGHT_LOSS_RESET_PRICE_COPY}
+            : `Step ${Math.min(step + 1, 11)} of 11 • ${focusLabel} support with ${dietitianName}`} • {WEIGHT_LOSS_RESET_PRICE_COPY}
         </p>
         <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#eef5ff]">
           <div className="h-full rounded-full bg-[#2e8cff] transition-all duration-300" style={{ width: `${progress}%` }} />
@@ -509,7 +516,7 @@ export default function OnboardingFlow({
         <div className="space-y-4">
           <div>
             <h2 className="text-2xl font-semibold text-[#020617]">Your goals</h2>
-            <p className="mt-1 text-sm text-[#475569]">No judgement. This helps Felicity understand what support matters most.</p>
+            <p className="mt-1 text-sm text-[#475569]">No judgement. This helps your dietitian understand what support matters most.</p>
           </div>
 
           <label className="space-y-1">
@@ -835,9 +842,18 @@ export default function OnboardingFlow({
             </div>
           </div>
 
-          <p className="rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3 py-2 text-sm text-[#475569]">
-            Current match preview: Felicity, your <span className="font-semibold text-[#2e8cff]">{felicityExpertLabel}</span>.
-          </p>
+          <div className="flex items-center gap-3 rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3 py-2 text-sm text-[#475569]">
+            <ProfileAvatar
+              name={dietitianName}
+              imageUrl={dietitianImageUrl}
+              alt={`${dietitianName} profile`}
+              className="h-10 w-10 rounded-xl border border-[#b7dcff] object-cover"
+            />
+            <p>
+              Current match preview: {dietitianName}, your{' '}
+              <span className="font-semibold text-[#2e8cff]">{dietitianExpertLabel}</span>.
+            </p>
+          </div>
         </div>
       )}
 
@@ -867,7 +883,7 @@ export default function OnboardingFlow({
             <div className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3 md:col-span-2">
               <p className="text-sm font-semibold text-[#020617]">Food and support preferences</p>
               <p className="mt-1 text-sm text-[#475569]">
-                Focus match: {activeFocus?.label || 'General healthy eating'} with Felicity ({felicityExpertLabel})
+                Focus match: {activeFocus?.label || 'General healthy eating'} with {dietitianName} ({dietitianExpertLabel})
               </p>
               <p className="mt-1 text-sm text-[#475569]">Dietary: {answers.dietaryRequirements.join(', ')}</p>
               <p className="text-sm text-[#475569]">Meal style: {answers.preferredMealStyle}</p>
@@ -888,15 +904,25 @@ export default function OnboardingFlow({
       {step === 8 && (
         <div className="space-y-4">
           <h2 className="text-2xl font-semibold text-[#020617]">
-            You&apos;re matched with Felicity, your {felicityExpertLabel}.
+            You&apos;re matched with {dietitianName}, your {dietitianExpertLabel}.
           </h2>
           <p className="text-sm leading-relaxed text-[#475569]">
-            Based on your focus area ({activeFocus?.label || 'General healthy eating'}), Felicity will tailor your plan around your lifestyle,
+            Based on your focus area ({activeFocus?.label || 'General healthy eating'}), {dietitianName} will tailor your plan around your lifestyle,
             food preferences, budget, and routine.
           </p>
           <div className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-4">
-            <p className="text-sm font-semibold text-[#020617]">Felicity • {felicityExpertLabel}</p>
-            <p className="text-sm text-[#475569]">Accredited Dietitian</p>
+            <div className="flex items-center gap-3">
+              <ProfileAvatar
+                name={dietitianName}
+                imageUrl={dietitianImageUrl}
+                alt={`${dietitianName} profile`}
+                className="h-12 w-12 rounded-xl border border-[#b7dcff] object-cover"
+              />
+              <div>
+                <p className="text-sm font-semibold text-[#020617]">{dietitianName} • {dietitianExpertLabel}</p>
+                <p className="text-sm text-[#475569]">{dietitianCredentials}</p>
+              </div>
+            </div>
             <p className="mt-2 text-sm text-[#475569]">
               Support style: practical, kind, realistic, non-judgemental. {WEIGHT_LOSS_RESET_PRICE_COPY}.
             </p>
@@ -912,7 +938,7 @@ export default function OnboardingFlow({
           </div>
           <h2 className="text-2xl font-semibold text-[#020617]">Your next step is to book your intro consult.</h2>
           <p className="text-sm text-[#475569]">
-            Open Felicity&apos;s booking link, then confirm below to unlock your dashboard.
+            Open {dietitianName}&apos;s booking link, then confirm below to unlock your dashboard.
           </p>
           <div className="grid gap-3 md:grid-cols-2">
             <a
