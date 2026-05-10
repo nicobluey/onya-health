@@ -118,6 +118,10 @@ const PATIENT_MAGIC_LINK_TTL_MS = Math.max(
   1000 * 60 * 5,
   Number(process.env.PATIENT_MAGIC_LINK_TTL_MS || 1000 * 60 * 30)
 );
+const PATIENT_EMAIL_CHANGE_TTL_MS = Math.max(
+  1000 * 60 * 5,
+  Number(process.env.PATIENT_EMAIL_CHANGE_TTL_MS || 1000 * 60 * 30)
+);
 const MEAL_PLAN_IMAGE_PROXY_SIGNING_SECRET =
   process.env.MEAL_PLAN_IMAGE_PROXY_SIGNING_SECRET ||
   PATIENT_PASSWORD_RESET_SIGNING_SECRET ||
@@ -139,6 +143,8 @@ const ACTIVE_STRIPE_SUBSCRIPTION_STATUSES = new Set(['active', 'trialing', 'past
 const POST_ONLY_ROUTES = new Set([
   'patient/password/reset/request',
   'patient/password/reset/confirm',
+  'patient/profile/email-change/request',
+  'patient/profile/email-change/consume',
   'doctor/password/reset/request',
   'doctor/password/reset/confirm',
 ]);
@@ -1232,6 +1238,48 @@ function buildPatientMagicLinkUrl(req, token, email = '') {
   return loginUrl.toString();
 }
 
+function issuePatientEmailChangeToken({ currentEmail, nextEmail }) {
+  const payload = {
+    scope: 'patient_email_change',
+    currentEmail: normalizeEmail(currentEmail),
+    nextEmail: normalizeEmail(nextEmail),
+    exp: Date.now() + PATIENT_EMAIL_CHANGE_TTL_MS,
+  };
+  const encodedPayload = encodeBase64Url(JSON.stringify(payload));
+  const signature = signResetTokenPayload(encodedPayload);
+  return `${encodedPayload}.${signature}`;
+}
+
+function verifyPatientEmailChangeToken(token) {
+  const normalizedToken = normalizeResetToken(token);
+  if (!normalizedToken || !normalizedToken.includes('.')) return null;
+  const [encodedPayload, incomingSignature] = normalizedToken.split('.');
+  const expectedSignature = signResetTokenPayload(encodedPayload);
+  if (!safeTimingCompare(incomingSignature, expectedSignature)) return null;
+
+  let payload = null;
+  try {
+    payload = JSON.parse(decodeBase64Url(encodedPayload));
+  } catch {
+    payload = null;
+  }
+  if (!payload || typeof payload !== 'object') return null;
+  if (payload.scope !== 'patient_email_change') return null;
+  if (!payload.exp || Number(payload.exp) < Date.now()) return null;
+  const currentEmail = normalizeEmail(payload.currentEmail);
+  const nextEmail = normalizeEmail(payload.nextEmail);
+  if (!isLikelyPatientEmail(currentEmail) || !isLikelyPatientEmail(nextEmail)) return null;
+  if (currentEmail === nextEmail) return null;
+  return { currentEmail, nextEmail };
+}
+
+function buildPatientEmailChangeConfirmUrl(req, token) {
+  const baseUrl = getFrontendBaseUrl(req);
+  const portalUrl = new URL('/patient', baseUrl || getAppBaseUrl(req));
+  portalUrl.searchParams.set('email_change_token', String(token || '').trim());
+  return portalUrl.toString();
+}
+
 function issueScopedPatientResetToken(subject) {
   return `${encodeBase64Url(String(subject || '').trim())}.${crypto.randomBytes(32).toString('base64url')}`;
 }
@@ -1741,13 +1789,18 @@ async function resolvePatientProfileByEmail({ email, latestCertificate, account 
     );
     const profileRow = profileRows?.[0] || null;
 
+    const accountFullName = String(account?.fullName || '').trim();
+    const accountDob = String(account?.dob || '').trim();
+    const accountPhone = String(account?.phone || '').trim();
+    const accountAddress = String(account?.address || '').trim();
+    const accountPhotoPath = normalizeStoragePath(account?.profilePhotoPath || '');
     const profileName = joinName(profileRow?.first_name, profileRow?.last_name);
-    const patientFullName = String(patientRow.full_name || profileName || fallbackPatient.fullName).trim();
+    const patientFullName = String(accountFullName || patientRow.full_name || profileName || fallbackPatient.fullName).trim();
     const patientNameParts = splitFullName(patientFullName);
-    const patientPhone = String(patientRow.phone || profileRow?.phone || fallbackPatient.phone).trim();
-    const patientDob = String(profileRow?.dob || fallbackPatient.dob).trim();
-    const patientAddress = String(patientRow.address || fallbackPatient.address || '').trim();
-    const patientPhotoPath = normalizeStoragePath(patientRow.profile_photo_path);
+    const patientPhone = String(accountPhone || patientRow.phone || profileRow?.phone || fallbackPatient.phone).trim();
+    const patientDob = String(accountDob || profileRow?.dob || fallbackPatient.dob).trim();
+    const patientAddress = String(accountAddress || patientRow.address || fallbackPatient.address || '').trim();
+    const patientPhotoPath = normalizeStoragePath(accountPhotoPath || patientRow.profile_photo_path);
 
     let assignmentRows = await supabaseRestRequest(
       config,
@@ -2625,6 +2678,214 @@ async function cancelStripeSubscriptionAtPeriodEnd(subscriptionId) {
 
   stripeSubscriptionCache.delete(normalizedId);
   return payload;
+}
+
+async function updateStripeCustomerEmail(customerId, nextEmail) {
+  const normalizedCustomerId = String(customerId || '').trim();
+  const normalizedEmail = normalizeEmail(nextEmail);
+  if (!normalizedCustomerId || !normalizedEmail || !STRIPE_SECRET_KEY) return null;
+
+  const params = new URLSearchParams();
+  params.set('email', normalizedEmail);
+
+  const response = await fetch(`https://api.stripe.com/v1/customers/${encodeURIComponent(normalizedCustomerId)}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: params.toString(),
+  });
+
+  const text = await response.text();
+  let payload = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    payload = { raw: text };
+  }
+
+  if (!response.ok) {
+    const message = payload?.error?.message || `Unable to update Stripe customer email (${response.status})`;
+    const err = new Error(message);
+    err.status = response.status;
+    err.data = payload;
+    throw err;
+  }
+
+  return payload;
+}
+
+async function updateStripeSubscriptionPatientEmail(subscriptionId, nextEmail) {
+  const normalizedSubscriptionId = String(subscriptionId || '').trim();
+  const normalizedEmail = normalizeEmail(nextEmail);
+  if (!normalizedSubscriptionId || !normalizedEmail || !STRIPE_SECRET_KEY) return null;
+
+  const params = new URLSearchParams();
+  params.set('metadata[patient_email]', normalizedEmail);
+
+  const response = await fetch(`https://api.stripe.com/v1/subscriptions/${encodeURIComponent(normalizedSubscriptionId)}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: params.toString(),
+  });
+
+  const text = await response.text();
+  let payload = null;
+  try {
+    payload = text ? JSON.parse(text) : null;
+  } catch {
+    payload = { raw: text };
+  }
+
+  if (!response.ok) {
+    const message = payload?.error?.message || `Unable to update Stripe subscription metadata (${response.status})`;
+    const err = new Error(message);
+    err.status = response.status;
+    err.data = payload;
+    throw err;
+  }
+
+  stripeSubscriptionCache.delete(normalizedSubscriptionId);
+  return payload;
+}
+
+async function migratePatientBillingForEmailChange({ currentEmail, nextEmail }) {
+  const previousEmail = normalizeEmail(currentEmail);
+  const targetEmail = normalizeEmail(nextEmail);
+  if (!previousEmail || !targetEmail || previousEmail === targetEmail) return null;
+
+  const existingBilling = await getPatientBillingByEmail(previousEmail).catch(() => null);
+  if (!existingBilling) return null;
+
+  const stripeCustomerId = String(existingBilling.stripeCustomerId || '').trim();
+  const stripeSubscriptionId = String(existingBilling.stripeSubscriptionId || '').trim();
+  const billingPatch = {
+    ...existingBilling,
+    patientEmail: targetEmail,
+    source: 'patient.email_change',
+  };
+
+  let savedBilling = null;
+  try {
+    savedBilling = await upsertPatientBillingByEmail(targetEmail, billingPatch);
+  } catch (errorObject) {
+    error('patient.billing.email_migration_failed', {
+      currentEmail: previousEmail,
+      nextEmail: targetEmail,
+      message: errorObject?.message || String(errorObject),
+    });
+  }
+
+  if (stripeCustomerId || stripeSubscriptionId) {
+    if (stripeCustomerId) {
+      try {
+        await updateStripeCustomerEmail(stripeCustomerId, targetEmail);
+      } catch (errorObject) {
+        error('patient.billing.stripe_customer_email_update_failed', {
+          currentEmail: previousEmail,
+          nextEmail: targetEmail,
+          stripeCustomerId,
+          message: errorObject?.message || String(errorObject),
+        });
+      }
+    }
+    if (stripeSubscriptionId) {
+      try {
+        const updatedSubscription = await updateStripeSubscriptionPatientEmail(stripeSubscriptionId, targetEmail);
+        await syncPatientBillingFromStripeSubscription(updatedSubscription, {
+          source: 'patient.email_change',
+          fallbackPatientEmail: targetEmail,
+        });
+      } catch (errorObject) {
+        error('patient.billing.stripe_subscription_email_update_failed', {
+          currentEmail: previousEmail,
+          nextEmail: targetEmail,
+          stripeSubscriptionId,
+          message: errorObject?.message || String(errorObject),
+        });
+      }
+    }
+  }
+
+  return normalizeBillingProfile(savedBilling || billingPatch, targetEmail);
+}
+
+async function migratePatientCertificateEmailReferences({ currentEmail, nextEmail }) {
+  const previousEmail = normalizeEmail(currentEmail);
+  const targetEmail = normalizeEmail(nextEmail);
+  if (!previousEmail || !targetEmail || previousEmail === targetEmail) return 0;
+
+  const certificates = await listCertificatesByPatientEmail(previousEmail).catch(() => []);
+  let migratedCount = 0;
+  for (const certificate of certificates) {
+    const certificateId = String(certificate?.id || '').trim();
+    if (!certificateId) continue;
+    const migrated = await updateCertificate(certificateId, (current) => {
+      const draft = current?.certificateDraft && typeof current.certificateDraft === 'object' ? current.certificateDraft : {};
+      const rawSubmission =
+        current?.rawSubmission && typeof current.rawSubmission === 'object' && !Array.isArray(current.rawSubmission)
+          ? { ...current.rawSubmission }
+          : {};
+      const existingPatientPayload =
+        rawSubmission.patient && typeof rawSubmission.patient === 'object' && !Array.isArray(rawSubmission.patient)
+          ? { ...rawSubmission.patient }
+          : {};
+      const existingConsultPayload =
+        rawSubmission.consult && typeof rawSubmission.consult === 'object' && !Array.isArray(rawSubmission.consult)
+          ? { ...rawSubmission.consult }
+          : {};
+      const nextRawSubmission = {
+        ...rawSubmission,
+        patientEmail: targetEmail,
+        email: targetEmail,
+        patient: {
+          ...existingPatientPayload,
+          email: targetEmail,
+        },
+        consult: {
+          ...existingConsultPayload,
+          email: targetEmail,
+        },
+      };
+      return {
+        ...current,
+        certificateDraft: {
+          ...draft,
+          email: targetEmail,
+        },
+        rawSubmission: nextRawSubmission,
+      };
+    });
+    if (migrated) migratedCount += 1;
+  }
+
+  const config = getSupabaseConfig();
+  if (config.enabled) {
+    try {
+      await supabaseRestRequest(
+        config,
+        `medical_certificate_requests?patient_email=eq.${encodeURIComponent(previousEmail)}`,
+        {
+          method: 'PATCH',
+          body: {
+            patient_email: targetEmail,
+          },
+        }
+      );
+    } catch (errorObject) {
+      error('patient.email_change.medical_requests_email_patch_failed', {
+        currentEmail: previousEmail,
+        nextEmail: targetEmail,
+        message: errorObject?.message || String(errorObject),
+      });
+    }
+  }
+
+  return migratedCount;
 }
 
 async function patientAccountExists(email) {
@@ -5018,7 +5279,12 @@ export default async function handler(req, res) {
       const patient = await requirePatient(req, res);
       if (!patient) return;
 
-      await reconcileAwaitingPaymentCertificatesForPatient(patient.email, req).catch(() => undefined);
+      void reconcileAwaitingPaymentCertificatesForPatient(patient.email, req).catch((errorObject) => {
+        error('patient.bootstrap.payment_reconcile_failed', {
+          email: patient.email,
+          message: errorObject?.message || String(errorObject),
+        });
+      });
       const supabaseConfig = getSupabaseConfig();
       const snapshot = await loadPatientPortalSnapshot(patient.email, { includeBilling: true });
       if (snapshot.patientCertificates.length === 0 && !snapshot.account) {
@@ -5069,7 +5335,12 @@ export default async function handler(req, res) {
       const patient = await requirePatient(req, res);
       if (!patient) return;
 
-      await reconcileAwaitingPaymentCertificatesForPatient(patient.email, req).catch(() => undefined);
+      void reconcileAwaitingPaymentCertificatesForPatient(patient.email, req).catch((errorObject) => {
+        error('patient.me.payment_reconcile_failed', {
+          email: patient.email,
+          message: errorObject?.message || String(errorObject),
+        });
+      });
       const supabaseConfig = getSupabaseConfig();
       const snapshot = await loadPatientPortalSnapshot(patient.email, { includeBilling: true });
       if (snapshot.patientCertificates.length === 0 && !snapshot.account) {
@@ -5113,12 +5384,198 @@ export default async function handler(req, res) {
       return;
     }
 
+    if (req.method === 'POST' && routePath === 'patient/profile/email-change/request') {
+      const patient = await requirePatient(req, res);
+      if (!patient) return;
+
+      const body = await parseJsonBody(req);
+      const currentEmail = normalizeEmail(patient.email);
+      const nextEmail = normalizeEmail(body?.nextEmail || body?.email || '');
+      if (!currentEmail || !isLikelyPatientEmail(currentEmail)) {
+        sendJson(res, 400, { error: 'Current account email is missing.' });
+        return;
+      }
+      if (!nextEmail || !isLikelyPatientEmail(nextEmail)) {
+        sendJson(res, 400, { error: 'A valid new email is required.' });
+        return;
+      }
+      if (nextEmail === currentEmail) {
+        sendJson(res, 400, { error: 'The new email matches your current email.' });
+        return;
+      }
+      if (await patientAccountExists(nextEmail)) {
+        sendJson(res, 409, { error: 'This email is already linked to another account.' });
+        return;
+      }
+
+      const changeToken = issuePatientEmailChangeToken({
+        currentEmail,
+        nextEmail,
+      });
+      const confirmUrl = buildPatientEmailChangeConfirmUrl(req, changeToken);
+      const expiresMinutes = Math.max(1, Math.round(PATIENT_EMAIL_CHANGE_TTL_MS / (1000 * 60)));
+      const safeCurrent = currentEmail.replace(/</g, '&lt;');
+      const safeNext = nextEmail.replace(/</g, '&lt;');
+      const safeUrl = confirmUrl.replace(/"/g, '&quot;');
+
+      await sendEmail({
+        to: nextEmail,
+        subject: 'Confirm your Onya Health email change',
+        html: `
+          <div style="font-family:Arial,sans-serif;line-height:1.5;color:#0f172a">
+            <h2 style="margin:0 0 12px">Confirm your email change</h2>
+            <p style="margin:0 0 12px">We received a request to move your Onya Health account from <strong>${safeCurrent}</strong> to <strong>${safeNext}</strong>.</p>
+            <p style="margin:0 0 16px">Click below to confirm. This link expires in ${expiresMinutes} minutes.</p>
+            <p style="margin:0 0 20px">
+              <a href="${safeUrl}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600">Confirm email change</a>
+            </p>
+            <p style="margin:0;color:#475569">If you did not request this change, you can safely ignore this email.</p>
+          </div>
+        `,
+        text: [
+          'Confirm your email change',
+          '',
+          `We received a request to move your Onya Health account from ${currentEmail} to ${nextEmail}.`,
+          `Open this link to confirm (expires in ${expiresMinutes} minutes):`,
+          confirmUrl,
+          '',
+          'If you did not request this change, ignore this email.',
+        ].join('\n'),
+      });
+
+      await appendAudit({
+        type: 'PATIENT_EMAIL_CHANGE_REQUESTED',
+        email: currentEmail,
+        nextEmail,
+      }).catch(() => undefined);
+
+      sendJson(res, 200, {
+        ok: true,
+        message: `Verification link sent to ${nextEmail}.`,
+        nextEmail,
+      });
+      return;
+    }
+
+    if (req.method === 'POST' && routePath === 'patient/profile/email-change/consume') {
+      const body = await parseJsonBody(req);
+      const decoded = verifyPatientEmailChangeToken(body?.token || '');
+      if (!decoded?.currentEmail || !decoded?.nextEmail) {
+        sendJson(res, 400, { error: 'Invalid or expired email change link.' });
+        return;
+      }
+
+      const currentEmail = normalizeEmail(decoded.currentEmail);
+      const nextEmail = normalizeEmail(decoded.nextEmail);
+      const supabaseConfig = getSupabaseConfig();
+
+      const currentSupabaseAccount = supabaseConfig.enabled ? await findSupabasePatientByEmail(currentEmail) : null;
+      const nextSupabaseAccount = supabaseConfig.enabled ? await findSupabasePatientByEmail(nextEmail) : null;
+      const currentLocalAccount = await getPatientAccountByEmail(currentEmail);
+      const nextLocalAccount = await getPatientAccountByEmail(nextEmail);
+      const hasCurrentAccount = Boolean(currentSupabaseAccount || currentLocalAccount);
+      const nextBelongsElsewhere = Boolean(
+        nextSupabaseAccount && (!currentSupabaseAccount || nextSupabaseAccount.id !== currentSupabaseAccount.id)
+      ) || Boolean(nextLocalAccount && !currentLocalAccount);
+
+      if (nextBelongsElsewhere) {
+        sendJson(res, 409, { error: 'This email is already linked to another account.' });
+        return;
+      }
+
+      if (!hasCurrentAccount && (nextSupabaseAccount || nextLocalAccount)) {
+        const profilePayload = await resolvePatientProfileByEmail({
+          email: nextEmail,
+          latestCertificate: null,
+          account: nextLocalAccount || nextSupabaseAccount || null,
+        });
+        sendJson(res, 200, {
+          ok: true,
+          token: issuePatientToken(nextEmail),
+          patient: profilePayload.patient,
+          dietitian: profilePayload.dietitian,
+          alreadyApplied: true,
+        });
+        return;
+      }
+
+      if (!hasCurrentAccount) {
+        sendJson(res, 404, { error: 'No account was found for this email change request.' });
+        return;
+      }
+
+      if (supabaseConfig.enabled) {
+        try {
+          await updateSupabasePatientEmail({
+            currentEmail,
+            nextEmail,
+          });
+        } catch (errorObject) {
+          const statusCode = Number(errorObject?.status || 500);
+          sendJson(res, statusCode === 409 ? 409 : 500, {
+            error: errorObject?.message || 'Unable to update account email right now.',
+          });
+          return;
+        }
+      }
+
+      const migratedCertificates = await migratePatientCertificateEmailReferences({
+        currentEmail,
+        nextEmail,
+      }).catch((errorObject) => {
+        error('patient.email_change.certificate_migration_failed', {
+          currentEmail,
+          nextEmail,
+          message: errorObject?.message || String(errorObject),
+        });
+        return 0;
+      });
+      await migratePatientBillingForEmailChange({
+        currentEmail,
+        nextEmail,
+      }).catch((errorObject) => {
+        error('patient.email_change.billing_migration_failed', {
+          currentEmail,
+          nextEmail,
+          message: errorObject?.message || String(errorObject),
+        });
+      });
+
+      const localAccount = await updatePatientAccountProfile({
+        email: currentEmail,
+        nextEmail,
+      }).catch(() => null);
+
+      await appendAudit({
+        type: 'PATIENT_EMAIL_CHANGE_CONFIRMED',
+        email: nextEmail,
+        previousEmail: currentEmail,
+        migratedCertificates,
+      }).catch(() => undefined);
+
+      const profilePayload = await resolvePatientProfileByEmail({
+        email: nextEmail,
+        latestCertificate: null,
+        account: localAccount || nextLocalAccount || currentLocalAccount || null,
+      });
+
+      sendJson(res, 200, {
+        ok: true,
+        token: issuePatientToken(nextEmail),
+        patient: profilePayload.patient,
+        dietitian: profilePayload.dietitian,
+        migratedCertificates,
+      });
+      return;
+    }
+
     if (req.method === 'POST' && routePath === 'patient/profile') {
       const patient = await requirePatient(req, res);
       if (!patient) return;
 
       const body = await parseJsonBody(req);
-      const requestedEmail = normalizeEmail(body?.email || patient.email);
+      const currentEmail = normalizeEmail(patient.email);
+      const requestedEmail = normalizeEmail(body?.email || currentEmail);
       const fullName = String(body?.fullName || '').trim();
       const dob = String(body?.dob || '').trim();
       const phone = String(body?.phone || '').trim();
@@ -5130,8 +5587,15 @@ export default async function handler(req, res) {
         sendJson(res, 400, { error: 'Full name is required' });
         return;
       }
-      if (!requestedEmail || !isLikelyPatientEmail(requestedEmail)) {
-        sendJson(res, 400, { error: 'A valid email is required' });
+      if (!currentEmail || !isLikelyPatientEmail(currentEmail)) {
+        sendJson(res, 400, { error: 'A valid account email is required' });
+        return;
+      }
+      if (requestedEmail && requestedEmail !== currentEmail) {
+        sendJson(res, 409, {
+          error: 'Email changes require confirmation. Use the email change action in account settings.',
+          code: 'EMAIL_CHANGE_REQUIRES_CONFIRMATION',
+        });
         return;
       }
 
@@ -5152,32 +5616,9 @@ export default async function handler(req, res) {
         return;
       }
 
-      const priorEmail = normalizeEmail(patient.email);
-      let resolvedEmail = priorEmail;
+      const priorEmail = currentEmail;
+      const resolvedEmail = priorEmail;
       const supabaseConfig = getSupabaseConfig();
-      if (requestedEmail !== priorEmail) {
-        if (await patientAccountExists(requestedEmail)) {
-          sendJson(res, 409, { error: 'Email is already used by another account' });
-          return;
-        }
-
-        if (supabaseConfig.enabled) {
-          try {
-            await updateSupabasePatientEmail({
-              currentEmail: priorEmail,
-              nextEmail: requestedEmail,
-            });
-          } catch (errorObject) {
-            const statusCode = Number(errorObject?.status || 500);
-            sendJson(res, statusCode === 409 ? 409 : 500, {
-              error: errorObject?.message || 'Unable to update account email right now',
-            });
-            return;
-          }
-        }
-
-        resolvedEmail = requestedEmail;
-      }
 
       if (supabaseConfig.enabled) {
         try {
@@ -5223,7 +5664,7 @@ export default async function handler(req, res) {
         ok: true,
         patient: profilePayload.patient,
         dietitian: profilePayload.dietitian,
-        token: resolvedEmail !== priorEmail ? issuePatientToken(resolvedEmail) : null,
+        token: null,
       });
       return;
     }
@@ -5812,7 +6253,12 @@ export default async function handler(req, res) {
       const patient = await requirePatient(req, res);
       if (!patient) return;
 
-      await reconcileAwaitingPaymentCertificatesForPatient(patient.email, req).catch(() => undefined);
+      void reconcileAwaitingPaymentCertificatesForPatient(patient.email, req).catch((errorObject) => {
+        error('patient.requests.payment_reconcile_failed', {
+          email: patient.email,
+          message: errorObject?.message || String(errorObject),
+        });
+      });
       const snapshot = await loadPatientPortalSnapshot(patient.email, { includeBilling: false });
 
       sendJson(res, 200, {

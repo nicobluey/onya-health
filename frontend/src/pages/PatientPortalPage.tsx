@@ -43,7 +43,6 @@ import {
     type TextEntry,
     CONSULT_OPTIONS,
     MAIN_TABS,
-    PORTAL_BACKGROUND_CARDS,
     appendRecordEntry,
     avatarInitials,
     consultTitle,
@@ -192,26 +191,7 @@ function mergeRecipeCatalog(existing: Recipe[], incoming: Recipe[]): Recipe[] {
 }
 
 function PortalBackdropArt() {
-    return (
-        <>
-            {PORTAL_BACKGROUND_CARDS.map((card, index) => (
-                <div
-                    key={`${card.src}-${index}`}
-                    className={`science-float-card pointer-events-none ${card.reverse ? 'is-reverse' : ''} ${card.className}`}
-                    aria-hidden="true"
-                    style={
-                        {
-                            '--science-tilt': card.tilt,
-                            '--drift-duration': card.duration,
-                            '--drift-delay': card.delay,
-                        } as CSSProperties
-                    }
-                >
-                    <img src={card.src} alt="" className="h-full w-full object-cover" />
-                </div>
-            ))}
-        </>
-    );
+    return null;
 }
 
 function statusPillClasses(status: string) {
@@ -307,7 +287,7 @@ function DesktopSidebar({
     onProfileClick: () => void;
 }) {
     return (
-        <aside className="sticky top-0 hidden h-screen w-[260px] shrink-0 flex-col border-r border-[#cbd5e1] bg-[#f8fbff]/95 backdrop-blur md:flex">
+        <aside className="sticky top-0 hidden h-dvh w-[260px] shrink-0 flex-col overflow-y-auto border-r border-[#cbd5e1] bg-[#f8fbff]/95 backdrop-blur md:flex">
             <div className="px-5 pt-5">
                 <a href="/" className="inline-flex items-center" aria-label="Go to home page">
                     <img src="/logo.webp" alt="Onya Health" className="h-10 w-auto object-contain" />
@@ -365,15 +345,15 @@ function DesktopSidebar({
     );
 }
 
-function MobileTopBar({ activeTab }: { activeTab: MainTab }) {
+function MobileTopBar({ activeTab, onHome }: { activeTab: MainTab; onHome: () => void }) {
     const label = activeTab.slice(0, 1).toUpperCase() + activeTab.slice(1);
 
     return (
         <header className="sticky top-0 z-40 border-b border-[#cbd5e1] bg-[#f8fbff]/95 backdrop-blur">
             <div className="flex h-14 items-center justify-between px-4">
-                <a href="/" className="inline-flex items-center" aria-label="Go to home page">
+                <button type="button" onClick={onHome} className="inline-flex items-center" aria-label="Go to patient home">
                     <img src="/logo.webp" alt="Onya Health" className="h-10 w-auto object-contain" />
-                </a>
+                </button>
                 <span className="rounded-full border border-[#cbd5e1] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#334155]">
                     {label}
                 </span>
@@ -632,7 +612,9 @@ function AccountTab({
     onCancelSubscription,
     billingActionState,
     billingError,
+    emailChangeNotice,
     onSaveProfile,
+    onRequestEmailChange,
 }: {
     patient: PatientProfile;
     latestRequest: PortalRequest | null;
@@ -643,17 +625,17 @@ function AccountTab({
     onCancelSubscription: () => void;
     billingActionState: 'idle' | 'opening_portal' | 'cancelling';
     billingError: string;
+    emailChangeNotice: string;
     onSaveProfile: (payload: {
-        email: string;
         fullName: string;
         dob: string;
         phone: string;
         address: string;
         profilePhotoDataUrl?: string;
     }) => Promise<void>;
+    onRequestEmailChange: (nextEmail: string) => Promise<string>;
 }) {
     const [fullName, setFullName] = useState(patient.fullName || '');
-    const [email, setEmail] = useState(patient.email || '');
     const [dob, setDob] = useState(patient.dob || '');
     const [phone, setPhone] = useState(patient.phone || '');
     const [address, setAddress] = useState(patient.address || '');
@@ -662,15 +644,19 @@ function AccountTab({
     const [savingProfile, setSavingProfile] = useState(false);
     const [profileSaveError, setProfileSaveError] = useState('');
     const [profileSaveSuccess, setProfileSaveSuccess] = useState('');
+    const [pendingEmail, setPendingEmail] = useState('');
+    const [emailChangeSending, setEmailChangeSending] = useState(false);
+    const [emailChangeError, setEmailChangeError] = useState('');
+    const [emailChangeSuccess, setEmailChangeSuccess] = useState('');
 
     useEffect(() => {
         setFullName(patient.fullName || '');
-        setEmail(patient.email || '');
         setDob(patient.dob || '');
         setPhone(patient.phone || '');
         setAddress(patient.address || '');
         setPhotoPreviewUrl(patient.profilePhotoUrl || '');
         setProfilePhotoDataUrl('');
+        setPendingEmail('');
     }, [patient.address, patient.dob, patient.email, patient.fullName, patient.phone, patient.profilePhotoUrl]);
 
     const handlePhotoSelection = (event: ChangeEvent<HTMLInputElement>) => {
@@ -699,14 +685,9 @@ function AccountTab({
             setProfileSaveError('Full name is required.');
             return;
         }
-        if (!email.trim() || !email.includes('@')) {
-            setProfileSaveError('A valid email is required.');
-            return;
-        }
         setSavingProfile(true);
         try {
             await onSaveProfile({
-                email: email.trim(),
                 fullName: fullName.trim(),
                 dob: dob.trim(),
                 phone: phone.trim(),
@@ -722,6 +703,30 @@ function AccountTab({
         }
     };
 
+    const handleEmailChangeRequest = async () => {
+        setEmailChangeError('');
+        setEmailChangeSuccess('');
+        const nextEmail = pendingEmail.trim().toLowerCase();
+        if (!nextEmail || !nextEmail.includes('@')) {
+            setEmailChangeError('Enter a valid new email address.');
+            return;
+        }
+        if (nextEmail === String(patient.email || '').trim().toLowerCase()) {
+            setEmailChangeError('New email matches your current email.');
+            return;
+        }
+        setEmailChangeSending(true);
+        try {
+            const message = await onRequestEmailChange(nextEmail);
+            setEmailChangeSuccess(message || `Verification link sent to ${nextEmail}.`);
+            setPendingEmail('');
+        } catch (errorObject) {
+            setEmailChangeError(errorObject instanceof Error ? errorObject.message : 'Unable to send verification email.');
+        } finally {
+            setEmailChangeSending(false);
+        }
+    };
+
     const stats = [
         { label: 'Medical history', value: data.medicalHistory.length },
         { label: 'Lifestyle notes', value: data.lifestyleNotes.length },
@@ -734,6 +739,11 @@ function AccountTab({
                 <h1 className="text-3xl font-semibold tracking-tight text-[#020617]">Account</h1>
                 <p className="mt-1 text-base text-[#475569]">Edit your details and manage profile activity</p>
             </header>
+            {emailChangeNotice && (
+                <div className="rounded-2xl border border-[#b7dcff] bg-[#f1f8ff] px-4 py-3 text-sm font-semibold text-[#0f172a]">
+                    {emailChangeNotice}
+                </div>
+            )}
 
             <section className={sectionCardClassName()}>
                 <div className="border-b border-[#dbeeff] px-5 py-4">
@@ -766,9 +776,9 @@ function AccountTab({
                             <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-[#64748b]">Email</span>
                             <input
                                 type="email"
-                                value={email}
-                                onChange={(event) => setEmail(event.target.value)}
-                                className="h-11 w-full rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3 text-sm outline-none focus:border-[#7dbdff]"
+                                value={patient.email || ''}
+                                readOnly
+                                className="h-11 w-full rounded-xl border border-[#cbd5e1] bg-[#f1f5f9] px-3 text-sm text-[#334155]"
                             />
                         </label>
                         <label className="block">
@@ -807,6 +817,31 @@ function AccountTab({
                         {savingProfile ? 'Saving...' : 'Save account settings'}
                     </button>
                 </form>
+                <div className="border-t border-[#dbeeff] px-4 py-4">
+                    <p className="text-sm font-semibold text-[#020617]">Change email</p>
+                    <p className="mt-1 text-xs text-[#64748b]">
+                        We send a verification link to the new email before updating your login.
+                    </p>
+                    <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                        <input
+                            type="email"
+                            value={pendingEmail}
+                            onChange={(event) => setPendingEmail(event.target.value)}
+                            placeholder="new-email@example.com"
+                            className="h-11 w-full rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3 text-sm outline-none focus:border-[#7dbdff]"
+                        />
+                        <button
+                            type="button"
+                            onClick={handleEmailChangeRequest}
+                            disabled={emailChangeSending}
+                            className="inline-flex h-11 items-center justify-center rounded-xl border border-[#cbd5e1] bg-white px-4 text-sm font-semibold text-[#0f172a] disabled:cursor-not-allowed disabled:opacity-70"
+                        >
+                            {emailChangeSending ? 'Sending...' : 'Send verification link'}
+                        </button>
+                    </div>
+                    {emailChangeError && <p className="mt-2 text-sm font-semibold text-red-600">{emailChangeError}</p>}
+                    {emailChangeSuccess && <p className="mt-2 text-sm font-semibold text-[#2e8cff]">{emailChangeSuccess}</p>}
+                </div>
             </section>
 
             <section className={sectionCardClassName()}>
@@ -1325,6 +1360,7 @@ function CheckoutAccountSetupScreen({
 export default function PatientPortalPage() {
     const initialSearchParams = useMemo(() => new URLSearchParams(window.location.search), []);
     const requestedProgram = initialSearchParams.get('program')?.toLowerCase() || '';
+    const initialEmailChangeToken = String(initialSearchParams.get('email_change_token') || '').trim();
     const openWeightLossFromRoute = requestedProgram === 'weight-loss-reset' || requestedProgram === 'nutritionist';
     const [mainTab, setMainTab] = useState<MainTab>('home');
     const {
@@ -1379,6 +1415,8 @@ export default function PatientPortalPage() {
     const [portalData, setPortalData] = useState<PortalProfileData>(createEmptyPortalData);
     const [portalDataReady, setPortalDataReady] = useState(false);
     const [checkoutSetupContext, setCheckoutSetupContext] = useState<CheckoutSetupContext | null>(null);
+    const [emailChangeNotice, setEmailChangeNotice] = useState('');
+    const [emailChangeConsuming, setEmailChangeConsuming] = useState(Boolean(initialEmailChangeToken));
 
     const [token, setToken] = useState(() => window.localStorage.getItem('onya_patient_token') || '');
     const profileStorageKey = useMemo(() => {
@@ -1389,6 +1427,65 @@ export default function PatientPortalPage() {
         () => mergeRecipeCatalog(weightLossCatalogRecipes, weightLossRecipes),
         [weightLossCatalogRecipes, weightLossRecipes]
     );
+
+    useEffect(() => {
+        if (!initialEmailChangeToken) return;
+        let disposed = false;
+
+        const consumeEmailChangeToken = async () => {
+            setEmailChangeConsuming(true);
+            try {
+                const activeToken = window.localStorage.getItem('onya_patient_token') || '';
+                const headers: Record<string, string> = {
+                    'Content-Type': 'application/json',
+                };
+                if (activeToken) {
+                    headers.Authorization = `Bearer ${activeToken}`;
+                }
+                const { response, payload } = await fetchApiJson('/api/patient/profile/email-change/consume', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ token: initialEmailChangeToken }),
+                });
+                if (!response.ok) {
+                    throw new Error(payload?.error || 'Email change link is invalid or expired.');
+                }
+
+                const nextToken = String(payload?.token || '').trim();
+                const nextPatient = normalizePatientProfile(payload?.patient, window.localStorage.getItem('onya_patient_email') || '');
+                const nextDietitian = normalizeDietitianProfile(payload?.dietitian);
+                if (disposed) return;
+
+                if (nextPatient?.email) {
+                    window.localStorage.setItem('onya_patient_email', nextPatient.email);
+                }
+                if (nextToken) {
+                    window.localStorage.setItem('onya_patient_token', nextToken);
+                    setToken(nextToken);
+                }
+                setPatient(nextPatient);
+                if (nextDietitian) setPrimaryDietitian(nextDietitian);
+                setEmailChangeNotice(`Email updated to ${nextPatient.email}.`);
+            } catch (errorObject) {
+                if (disposed) return;
+                const message = errorObject instanceof Error ? errorObject.message : 'Email change verification failed.';
+                setEmailChangeNotice(message);
+            } finally {
+                const url = new URL(window.location.href);
+                url.searchParams.delete('email_change_token');
+                const nextSearch = url.searchParams.toString();
+                window.history.replaceState({}, '', `${url.pathname}${nextSearch ? `?${nextSearch}` : ''}${url.hash || ''}`);
+                if (!disposed) {
+                    setEmailChangeConsuming(false);
+                }
+            }
+        };
+
+        void consumeEmailChangeToken();
+        return () => {
+            disposed = true;
+        };
+    }, [initialEmailChangeToken]);
 
     useEffect(() => {
         const saved = window.localStorage.getItem(profileStorageKey);
@@ -1631,6 +1728,13 @@ export default function PatientPortalPage() {
 
             const activeToken = token || window.localStorage.getItem('onya_patient_token') || '';
             if (!activeToken) {
+                if (emailChangeConsuming) {
+                    if (!silent) {
+                        setLoading(true);
+                        setLoadError('');
+                    }
+                    return;
+                }
                 const currentWeightLossState = weightLossStateRef.current;
                 if (
                     openWeightLossFromRoute ||
@@ -1733,16 +1837,17 @@ export default function PatientPortalPage() {
             }
         };
 
+        const pollIntervalMs = activeQueuedRequest ? 8000 : 30000;
         fetchPortalData(false);
         const pollTimer = window.setInterval(() => {
             fetchPortalData(true);
-        }, 10000);
+        }, pollIntervalMs);
 
         return () => {
             disposed = true;
             window.clearInterval(pollTimer);
         };
-    }, [token, checkoutSetupContext, openWeightLossFromRoute]);
+    }, [token, checkoutSetupContext, openWeightLossFromRoute, activeQueuedRequest?.id, activeQueuedRequest?.status, emailChangeConsuming]);
 
     const firstNameValue = useMemo(() => firstName(patient.fullName || ''), [patient.fullName]);
     const nutritionConsultRequest = useMemo<PortalRequest | null>(() => {
@@ -1818,6 +1923,10 @@ export default function PatientPortalPage() {
 
     const openAccountSettings = () => {
         setTab('account');
+    };
+
+    const openPortalHome = () => {
+        setTab('home');
     };
 
     const startUnlimitedCertificateRequest = async () => {
@@ -2169,7 +2278,6 @@ export default function PatientPortalPage() {
     };
 
     const savePatientProfile = async (payload: {
-        email: string;
         fullName: string;
         dob: string;
         phone: string;
@@ -2205,6 +2313,25 @@ export default function PatientPortalPage() {
         if (nextDietitian) {
             setPrimaryDietitian(nextDietitian);
         }
+    };
+
+    const requestPatientEmailChange = async (nextEmail: string) => {
+        const activeToken = token || window.localStorage.getItem('onya_patient_token') || '';
+        if (!activeToken) {
+            throw new Error('Please sign in again to update account settings.');
+        }
+        const { response, payload: apiPayload } = await fetchApiJson('/api/patient/profile/email-change/request', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${activeToken}`,
+            },
+            body: JSON.stringify({ nextEmail }),
+        });
+        if (!response.ok) {
+            throw new Error(apiPayload?.error || 'Unable to send email verification link.');
+        }
+        return String(apiPayload?.message || `Verification link sent to ${nextEmail}.`);
     };
 
     const sendMessageToDoctor = async () => {
@@ -2470,7 +2597,9 @@ export default function PatientPortalPage() {
                 onCancelSubscription={cancelSubscriptionAtPeriodEnd}
                 billingActionState={billingActionState}
                 billingError={billingError}
+                emailChangeNotice={emailChangeNotice}
                 onSaveProfile={savePatientProfile}
+                onRequestEmailChange={requestPatientEmailChange}
             />
         );
     };
@@ -2519,7 +2648,7 @@ export default function PatientPortalPage() {
 
     return (
         <>
-            <div className="relative hidden min-h-screen overflow-x-hidden bg-[#f8fbff] text-[#020617] md:flex">
+            <div className="relative hidden min-h-screen bg-[#f8fbff] text-[#020617] md:flex">
                 <PortalBackdropArt />
                 <DesktopSidebar activeTab={mainTab} onTabChange={setTab} patient={patient} onProfileClick={openAccountSettings} />
                 <main className="relative z-10 flex-1">
@@ -2537,7 +2666,7 @@ export default function PatientPortalPage() {
 
             <div className={`relative min-h-screen overflow-hidden bg-[#f8fbff] text-[#020617] md:hidden ${portalScreen === 'main' ? 'pb-28' : 'pb-6'}`}>
                 <PortalBackdropArt />
-                <MobileTopBar activeTab={mainTab} />
+                <MobileTopBar activeTab={mainTab} onHome={openPortalHome} />
                 <main className="relative z-10 px-4 py-5">{renderPortalContent('mobile')}</main>
                 {portalScreen === 'main' && queuedRequest && <QueueBanner request={queuedRequest} onTap={openQueuedScreen} />}
                 {portalScreen === 'main' && <MobileBottomNav activeTab={mainTab} onTabChange={setTab} />}
