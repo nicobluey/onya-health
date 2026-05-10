@@ -686,22 +686,11 @@ export default function WeightLossResetDashboard({
   return (
     <section className="space-y-5 font-sans">
       <header className="rounded-3xl border border-[#cbd5e1] bg-white p-5 shadow-[0_24px_42px_-34px_rgba(15,23,42,0.24)] sm:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={onBackToHome}
-            className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#dbe2d9] bg-[#f8faf7] px-3 text-xs font-semibold text-[#1f5f3f]"
-          >
-            <ArrowLeft size={14} />
-            Back to patient home
-          </button>
-          <p className="text-sm font-medium text-[#475569]">
-            {WEIGHT_LOSS_RESET_PROGRAM_NAME} • Week {weekNumber} • Focus: {focusLabel}
-          </p>
-        </div>
-
-        <div className="mt-4 grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+        <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
           <div>
+            <p className="text-sm font-medium text-[#475569]">
+              {WEIGHT_LOSS_RESET_PROGRAM_NAME} • Week {weekNumber} • Focus: {focusLabel}
+            </p>
             <h1 className="text-3xl font-semibold tracking-tight text-[#020617]">Welcome back, {displayFirstName || answers.firstName || 'there'}</h1>
             <p className="mt-2 text-sm text-[#475569]">
               Small changes, consistent support. No perfect days required. {dietitianName} can adjust your plan any time.
@@ -744,14 +733,14 @@ export default function WeightLossResetDashboard({
           </div>
 
           <div className="space-y-3">
-            <article className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-4">
+            <article className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-4">
               <div className="flex items-start gap-3">
                 <ProfileAvatar
                   name={dietitianName}
                   imageUrl={dietitianImageUrl}
                   fallbackImageUrl={DEFAULT_DIETITIAN_PROFILE_IMAGE_URL}
                   alt={`${dietitianName} profile`}
-                  className="h-16 w-16 rounded-2xl border border-[#b9c8ba] object-cover"
+                  className="h-16 w-16 rounded-2xl border border-[#dbeeff] object-cover"
                 />
                 <div className="min-w-0">
                   <p className="text-base font-semibold text-[#020617]">{dietitianName}</p>
@@ -775,7 +764,15 @@ export default function WeightLossResetDashboard({
         </div>
       </header>
 
-      <nav className="flex flex-wrap items-center gap-4 border-b border-[#cbd5e1]">
+      <nav className="flex flex-wrap items-center gap-3 border-b border-[#cbd5e1]">
+        <button
+          type="button"
+          onClick={onBackToHome}
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#cbd5e1] bg-white px-2.5 text-xs font-semibold text-[#334155] hover:text-[#020617]"
+        >
+          <ArrowLeft size={13} />
+          Back
+        </button>
         <TabButton active={activeTab === 'overview'} label="Overview" onClick={() => setActiveTab('overview')} />
         <TabButton active={activeTab === 'meal-plan'} label="Meal plan" onClick={() => setActiveTab('meal-plan')} />
         <TabButton active={activeTab === 'grocery'} label="Grocery list" onClick={() => setActiveTab('grocery')} />
@@ -861,40 +858,43 @@ export default function WeightLossResetDashboard({
 
           {mealPlan ? (
             <article className="rounded-2xl border border-[#cbd5e1] bg-white p-4 shadow-[0_20px_42px_-34px_rgba(15,23,42,0.38)] sm:p-5">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.07em] text-[#1f7be6]">
-                  <Sparkles size={14} />
-                  Crafted for you
-                </p>
-                <div className="inline-flex items-center gap-2 rounded-xl border border-[#dbe2d9] bg-[#f8faf7] px-2.5 py-2">
+              <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
+                <div>
+                  <p className="inline-flex items-center gap-2 text-sm font-medium text-[#1f7be6]">
+                    <Sparkles size={14} />
+                    Crafted for you
+                  </p>
+
+                  <h3 className="mt-2 text-2xl font-semibold tracking-tight text-[#020617]">{personalizedSummary.title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-[#334155]">{personalizedSummary.intro}</p>
+                  <p className="mt-1 text-sm leading-6 text-[#475569]">{personalizedSummary.detail}</p>
+                </div>
+
+                <div className="inline-flex items-center gap-3 rounded-xl border border-[#dbeeff] bg-[#f8fbff] px-3 py-2">
                   <ProfileAvatar
                     name={dietitianName}
                     imageUrl={dietitianImageUrl}
                     fallbackImageUrl={DEFAULT_DIETITIAN_PROFILE_IMAGE_URL}
                     alt={`${dietitianName} profile`}
-                    className="h-12 w-12 rounded-xl border border-[#b9c8ba] object-cover"
+                    className="h-14 w-14 rounded-xl border border-[#dbeeff] object-cover"
                   />
                   <div>
-                    <p className="text-sm font-semibold text-[#020617]">{dietitianName}</p>
-                    <p className="text-xs text-[#475569]">{dietitianCredentials}</p>
+                    <p className="text-xl leading-none text-[#020617]">{dietitianName}</p>
+                    <p className="mt-1 text-sm text-[#475569]">{dietitianCredentials}</p>
                   </div>
                 </div>
               </div>
 
-              <h3 className="mt-3 text-2xl font-semibold tracking-tight text-[#020617]">{personalizedSummary.title}</h3>
-              <p className="mt-2 text-sm text-[#334155]">{personalizedSummary.intro}</p>
-              <p className="mt-1 text-sm text-[#475569]">{personalizedSummary.detail}</p>
-
-              <div className="mt-3 rounded-xl border border-[#dbe2d9] bg-[#f8faf7] p-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1f5f3f]">
+              <div className="mt-3 rounded-xl border border-[#dbeeff] bg-[#f8fbff] p-3.5">
+                <p className="text-sm font-semibold text-[#334155]">
                   A personal note from {dietitianName}
                 </p>
-                <p className="mt-1 text-sm leading-6 text-[#1e293b]">{personalizedSummary.personalNote}</p>
+                <p className="mt-1 text-sm leading-6 text-[#334155]">{personalizedSummary.personalNote}</p>
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
                 {personalizedSummary.highlights.slice(0, 3).map((highlight) => (
-                  <p key={highlight} className="rounded-full border border-[#dbeeff] bg-[#f8fbff] px-3 py-1.5 text-xs font-semibold text-[#334155]">
+                  <p key={highlight} className="rounded-full border border-[#dbeeff] bg-[#f8fbff] px-3 py-1.5 text-xs font-medium text-[#334155]">
                     {highlight}
                   </p>
                 ))}
@@ -913,7 +913,7 @@ export default function WeightLossResetDashboard({
 
               {mealPlan.prepDayPlan.sharedIngredients.length > 0 ? (
                 <div className="mt-3 rounded-xl border border-[#cbd5e1] bg-white p-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.05em] text-[#475569]">Shared Ingredients</p>
+                  <p className="text-xs font-semibold text-[#475569]">Shared ingredients</p>
                   <p className="mt-1 text-sm text-[#334155]">
                     {mealPlan.prepDayPlan.sharedIngredients.slice(0, 14).join(', ')}
                   </p>
@@ -921,7 +921,7 @@ export default function WeightLossResetDashboard({
               ) : null}
 
               <div className="mt-3 rounded-xl border border-[#cbd5e1] bg-white p-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.05em] text-[#475569]">Step-By-Step</p>
+                <p className="text-xs font-semibold text-[#475569]">Step by step</p>
                 <ol className="mt-2 space-y-1 text-sm text-[#334155]">
                   {mealPlan.prepDayPlan.steps.map((step, index) => (
                     <li key={`prep-step-${index}`}>
@@ -1043,7 +1043,7 @@ export default function WeightLossResetDashboard({
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   {groceryGroups.map((group) => (
                     <article key={`grocery-total-${group.category}`} className="rounded-xl border border-[#cbd5e1] bg-white p-3">
-                      <h4 className="text-xs font-semibold uppercase tracking-[0.06em] text-[#475569]">{group.category}</h4>
+                      <h4 className="text-xs font-semibold text-[#475569]">{group.category}</h4>
                       <ul className="mt-2 space-y-2">
                         {group.items.map((item) => {
                           const checked = groceryCheckedItems.includes(item.key);
