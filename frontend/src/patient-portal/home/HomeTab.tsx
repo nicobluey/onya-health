@@ -69,17 +69,17 @@ const RECORD_TAB_META: Record<
 };
 
 const panelClassName =
-    'rounded-3xl border border-[#cbd5e1] bg-white shadow-[0_24px_42px_-34px_rgba(15,23,42,0.24)]';
+    'rounded-3xl border border-[#b3cfe5] bg-white shadow-[0_24px_42px_-34px_rgba(15,23,42,0.24)]';
 
 function statusTone(status: string) {
     const normalized = String(status || '').toLowerCase();
-    if (normalized === 'approved' || normalized === 'closed') return 'bg-[#eefaf3] text-[#16784c] border-[#bfe7d0]';
-    if (normalized === 'awaiting_payment') return 'bg-[#f8fafc] text-[#475569] border-[#cbd5e1]';
+    if (normalized === 'approved' || normalized === 'closed') return 'bg-[#ecfdf3] text-[#166534] border-[#86efac]';
+    if (normalized === 'awaiting_payment') return 'bg-[#f6fafd] text-[#1a3d63] border-[#b3cfe5]';
     if (['pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(normalized)) {
         return 'bg-[#fff8e8] text-[#8a6700] border-[#f3df9d]';
     }
     if (normalized === 'denied') return 'bg-[#ffe9e8] text-[#a93736] border-[#f3c5c4]';
-    return 'bg-[#f1f8ff] text-[#475569] border-[#cbd5e1]';
+    return 'bg-[#f6fafd] text-[#1a3d63] border-[#b3cfe5]';
 }
 
 function getRecordEntries(data: PortalProfileData, tab: RecordTab): TextEntry[] {
@@ -103,15 +103,15 @@ function EmptySectionState({
 }) {
     return (
         <div className="px-4 py-10 text-center sm:px-8">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] text-[#64748b]">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] text-[#4a7fa7]">
                 <Icon size={22} />
             </div>
-            <h3 className="mt-4 text-lg font-semibold text-[#020617]">{title}</h3>
-            <p className="mt-2 text-sm leading-relaxed text-[#475569]">{description}</p>
+            <h3 className="mt-4 text-lg font-semibold text-[#0a1931]">{title}</h3>
+            <p className="mt-2 text-sm leading-relaxed text-[#1a3d63]">{description}</p>
             <button
                 type="button"
                 onClick={onAdd}
-                className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[#cbd5e1] bg-white px-4 py-2 text-sm font-semibold text-[#2e8cff] transition hover:border-[#7dbdff]"
+                className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[#b3cfe5] bg-white px-4 py-2 text-sm font-semibold text-[#1a3d63] transition hover:border-[#b3cfe5]"
             >
                 <Plus size={16} />
                 {buttonLabel}
@@ -132,16 +132,16 @@ function HomeHero({
     onGoToTab: (tab: Exclude<MainTab, 'home'>) => void;
 }) {
     return (
-        <section className="relative overflow-hidden rounded-[30px] border border-[#cbd5e1] bg-white p-5 sm:p-7">
+        <section className="relative overflow-hidden rounded-[30px] border border-[#b3cfe5] bg-white p-5 sm:p-7">
             <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-end">
                 <div>
-                    <p className="inline-flex items-center rounded-full border border-[#cbd5e1] bg-[#f8fbff] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#475569]">
+                    <p className="inline-flex items-center rounded-full border border-[#b3cfe5] bg-[#f6fafd] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1a3d63]">
                         Patient Home
                     </p>
-                    <h1 className="mt-4 text-3xl font-semibold tracking-tight text-[#020617] sm:text-4xl">
+                    <h1 className="mt-4 text-3xl font-semibold tracking-tight text-[#0a1931] sm:text-4xl">
                         Welcome back, {firstNameValue}
                     </h1>
-                    <p className="mt-2 max-w-[560px] text-sm text-[#475569] sm:text-base">
+                    <p className="mt-2 max-w-[560px] text-sm text-[#1a3d63] sm:text-base">
                         Your records, consult activity, and profile details are in one clean, unified workspace.
                     </p>
 
@@ -149,7 +149,7 @@ function HomeHero({
                         <button
                             type="button"
                             onClick={() => onGoToTab('consult')}
-                            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#2e8cff] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#1f7be6]"
+                            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#1a3d63] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0a1931]"
                         >
                             <ClipboardPlus size={16} />
                             Start Consult
@@ -157,27 +157,27 @@ function HomeHero({
                         <button
                             type="button"
                             onClick={() => onGoToTab('account')}
-                            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#cbd5e1] bg-white px-4 py-3 text-sm font-semibold text-[#020617] transition hover:border-[#b7dcff]"
+                            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#b3cfe5] bg-white px-4 py-3 text-sm font-semibold text-[#0a1931] transition hover:border-[#b3cfe5]"
                         >
                             <UserRound size={16} />
                             Manage Account
                         </button>
                         {hasNutritionAccess ? (
-                            <div className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] px-4 py-3 sm:col-span-2">
-                                <p className="text-xs uppercase tracking-[0.12em] text-[#475569]">Consults on file</p>
-                                <p className="mt-1 text-2xl font-semibold text-[#020617]">{requestCount}</p>
+                            <div className="rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] px-4 py-3 sm:col-span-2">
+                                <p className="text-xs uppercase tracking-[0.12em] text-[#1a3d63]">Consults on file</p>
+                                <p className="mt-1 text-2xl font-semibold text-[#0a1931]">{requestCount}</p>
                             </div>
                         ) : (
                             <button
                                 type="button"
                                 onClick={() => onGoToTab('consult')}
-                                className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] px-4 py-3 text-left transition hover:border-[#b7dcff] sm:col-span-2"
+                                className="rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] px-4 py-3 text-left transition hover:border-[#b3cfe5] sm:col-span-2"
                             >
-                                <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#475569]">
+                                <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#1a3d63]">
                                     <Lock size={12} />
                                     Nutritionist consults
                                 </p>
-                                <p className="mt-1 text-sm font-semibold text-[#020617]">
+                                <p className="mt-1 text-sm font-semibold text-[#0a1931]">
                                     Get matched with a nutritionist and achieve your goals today.
                                 </p>
                             </button>
@@ -186,7 +186,7 @@ function HomeHero({
                 </div>
 
                 <div className="relative hidden min-h-[260px] lg:block">
-                    <div className="overflow-hidden rounded-[1.8rem] border border-[#cbd5e1]">
+                    <div className="overflow-hidden rounded-[1.8rem] border border-[#b3cfe5]">
                         <img src="/HERO.webp" alt="" aria-hidden="true" className="h-[260px] w-full object-cover" />
                     </div>
                     <div
@@ -221,9 +221,9 @@ function QueueStatusCard({
     if (!request) {
         return (
             <section className={`${panelClassName} p-5`}>
-                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#475569]">Queue Status</p>
-                <h2 className="mt-2 text-lg font-semibold text-[#020617]">No active queue</h2>
-                <p className="mt-1 text-sm text-[#475569]">Start a consult and it will appear here when a doctor is reviewing it.</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1a3d63]">Queue Status</p>
+                <h2 className="mt-2 text-lg font-semibold text-[#0a1931]">No active queue</h2>
+                <p className="mt-1 text-sm text-[#1a3d63]">Start a consult and it will appear here when a doctor is reviewing it.</p>
             </section>
         );
     }
@@ -233,20 +233,20 @@ function QueueStatusCard({
     const waitingCopy = stageIndex >= 3 ? 'Certificate issued' : `Estimated wait: ${etaMinutes} min`;
 
     return (
-        <section className="overflow-hidden rounded-3xl border border-[#b7dcff] bg-white p-5 shadow-[0_18px_36px_-28px_rgba(15,23,42,0.28)]">
+        <section className="overflow-hidden rounded-3xl border border-[#b3cfe5] bg-white p-5 shadow-[0_18px_36px_-28px_rgba(15,23,42,0.28)]">
             <div className="flex items-start gap-3">
-                <div className="relative mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#eef5ff] text-[#2e8cff]">
+                <div className="relative mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#f6fafd] text-[#1a3d63]">
                     <Heart size={19} className="fill-current stroke-current" />
                     <span className="portal-live-dot absolute -right-0.5 -top-0.5" aria-hidden="true" />
                 </div>
                 <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.11em] text-[#475569]">Queue Status</p>
-                    <h2 className="mt-1 text-lg font-semibold text-[#020617]">You are in the doctor queue</h2>
-                    <p className="mt-1 text-sm text-[#475569]">{statusLabel(request.status)}</p>
-                    <p className="mt-1 text-sm font-semibold text-[#2e8cff]">{waitingCopy}</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.11em] text-[#1a3d63]">Queue Status</p>
+                    <h2 className="mt-1 text-lg font-semibold text-[#0a1931]">You are in the doctor queue</h2>
+                    <p className="mt-1 text-sm text-[#1a3d63]">{statusLabel(request.status)}</p>
+                    <p className="mt-1 text-sm font-semibold text-[#1a3d63]">{waitingCopy}</p>
                 </div>
             </div>
-            <div className="mt-4 rounded-2xl border border-[#dbeeff] bg-[#f8fbff] p-3">
+            <div className="mt-4 rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] p-3">
                 <div className="grid grid-cols-4 gap-2">
                     {queueSteps.map((label, index) => {
                         const completed = index < stageIndex || stageIndex >= 3;
@@ -258,19 +258,19 @@ function QueueStatusCard({
                                 <span
                                     className={`mx-auto flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-semibold ${
                                         completed
-                                            ? 'border-[#2e8cff] bg-[#2e8cff] text-white'
+                                            ? 'border-[#1a3d63] bg-[#1a3d63] text-white'
                                             : active
-                                              ? 'border-[#2e8cff] bg-[#eef5ff] text-[#2e8cff]'
-                                              : 'border-[#cbd5e1] bg-white text-[#64748b]'
+                                              ? 'border-[#1a3d63] bg-[#f6fafd] text-[#1a3d63]'
+                                              : 'border-[#b3cfe5] bg-white text-[#4a7fa7]'
                                     } ${pulse ? 'animate-pulse' : ''}`}
                                 >
                                     {completed ? <Check size={12} /> : index + 1}
                                 </span>
-                                <span className="mt-1 block text-[11px] font-semibold text-[#475569]">{label}</span>
+                                <span className="mt-1 block text-[11px] font-semibold text-[#1a3d63]">{label}</span>
                                 {index < queueSteps.length - 1 && (
                                     <span
                                         className={`absolute left-[58%] top-3 h-[2px] w-[84%] ${
-                                            completed ? 'bg-[#7dbdff]' : 'bg-[#d2e8ff]'
+                                            completed ? 'bg-[#b3cfe5]' : 'bg-[#b3cfe5]'
                                         }`}
                                         aria-hidden="true"
                                     />
@@ -281,14 +281,14 @@ function QueueStatusCard({
                 </div>
             </div>
             {stageIndex < 3 && (
-                <p className="mt-3 text-xs text-[#475569]">
+                <p className="mt-3 text-xs text-[#1a3d63]">
                     Review is in progress and updates automatically every few seconds.
                 </p>
             )}
             <button
                 type="button"
                 onClick={onOpenQueue}
-                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#2e8cff] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1f7be6]"
+                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-[#1a3d63] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#0a1931]"
             >
                 View Queue
                 <ChevronRight size={16} />
@@ -313,16 +313,16 @@ function PreviousConsultQueue({
         <section className={`${panelClassName} p-5 sm:p-6`}>
             <div className="flex items-center justify-between gap-3">
                 <div>
-                    <h2 className="text-lg font-semibold text-[#020617]">Latest Consults</h2>
-                    <p className="mt-1 text-sm text-[#475569]">Most recent activity first. Expand if you need older consults.</p>
+                    <h2 className="text-lg font-semibold text-[#0a1931]">Latest Consults</h2>
+                    <p className="mt-1 text-sm text-[#1a3d63]">Most recent activity first. Expand if you need older consults.</p>
                 </div>
-                <div className="hidden rounded-full border border-[#cbd5e1] bg-[#f8fbff] px-3 py-1 text-xs font-semibold text-[#475569] sm:block">
+                <div className="hidden rounded-full border border-[#b3cfe5] bg-[#f6fafd] px-3 py-1 text-xs font-semibold text-[#1a3d63] sm:block">
                     {requests.length} records
                 </div>
             </div>
 
             {visibleHistory.length === 0 ? (
-                <div className="mt-4 rounded-2xl border border-dashed border-[#cbd5e1] bg-[#f8fbff] p-6 text-sm text-[#475569]">
+                <div className="mt-4 rounded-2xl border border-dashed border-[#b3cfe5] bg-[#f6fafd] p-6 text-sm text-[#1a3d63]">
                     No consult history yet.
                 </div>
             ) : (
@@ -332,16 +332,16 @@ function PreviousConsultQueue({
 
                         return (
                             <li key={request.id}>
-                                <article className="rounded-2xl border border-[#cbd5e1] bg-[#ffffff] p-4 transition hover:border-[#b7dcff]">
+                                <article className="rounded-2xl border border-[#b3cfe5] bg-[#ffffff] p-4 transition hover:border-[#b3cfe5]">
                                     <div className="flex flex-wrap items-center justify-between gap-2">
                                         <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${statusTone(request.status)}`}>
                                             {statusLabel(request.status)}
                                         </span>
-                                        <span className="text-xs font-medium text-[#475569]">{formatDate(request.createdAt)}</span>
+                                        <span className="text-xs font-medium text-[#1a3d63]">{formatDate(request.createdAt)}</span>
                                     </div>
 
-                                    <h3 className="mt-3 text-base font-semibold text-[#020617]">{consultTitle(request.serviceType)}</h3>
-                                    <p className="mt-1 text-sm text-[#475569]">
+                                    <h3 className="mt-3 text-base font-semibold text-[#0a1931]">{consultTitle(request.serviceType)}</h3>
+                                    <p className="mt-1 text-sm text-[#1a3d63]">
                                         {request.decision?.by || (queued ? 'Awaiting doctor assignment' : 'Completed consult')}
                                     </p>
 
@@ -349,7 +349,7 @@ function PreviousConsultQueue({
                                         <button
                                             type="button"
                                             onClick={() => onDownloadCertificate(request)}
-                                            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[#cbd5e1] bg-white px-3 py-1.5 text-xs font-semibold text-[#2e8cff] transition hover:border-[#7dbdff]"
+                                            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[#b3cfe5] bg-white px-3 py-1.5 text-xs font-semibold text-[#1a3d63] transition hover:border-[#b3cfe5]"
                                         >
                                             <FileText size={14} />
                                             Download certificate PDF
@@ -366,7 +366,7 @@ function PreviousConsultQueue({
                 <button
                     type="button"
                     onClick={() => setShowOlder((prev) => !prev)}
-                    className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-4 py-2 text-sm font-semibold text-[#2e8cff] transition hover:border-[#b7dcff]"
+                    className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[#b3cfe5] bg-[#f6fafd] px-4 py-2 text-sm font-semibold text-[#1a3d63] transition hover:border-[#b3cfe5]"
                 >
                     {showOlder ? 'Hide older consults' : `View older consults (${older.length})`}
                     <ChevronRight size={15} className={`transition ${showOlder ? 'rotate-90' : ''}`} />
@@ -386,14 +386,14 @@ function AccountSnapshot({ patient }: { patient: PatientProfile }) {
 
     return (
         <section className={`${panelClassName} overflow-hidden`}>
-            <div className="border-b border-[#dbeeff] px-5 py-4">
-                <h2 className="text-lg font-semibold text-[#020617]">Account Snapshot</h2>
+            <div className="border-b border-[#b3cfe5] px-5 py-4">
+                <h2 className="text-lg font-semibold text-[#0a1931]">Account Snapshot</h2>
             </div>
             <div className="space-y-1 p-4">
                 {rows.map((row) => (
-                    <div key={row.label} className="rounded-xl border border-[#eef5ff] bg-[#f8fbff] px-3 py-2.5">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-[#64748b]">{row.label}</p>
-                        <p className="mt-1 text-sm font-medium text-[#020617]">{row.value}</p>
+                    <div key={row.label} className="rounded-xl border border-[#f6fafd] bg-[#f6fafd] px-3 py-2.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-[#4a7fa7]">{row.label}</p>
+                        <p className="mt-1 text-sm font-medium text-[#0a1931]">{row.value}</p>
                     </div>
                 ))}
             </div>
@@ -419,16 +419,16 @@ function ProfilePulse({ patient, data }: { patient: PatientProfile; data: Portal
 
     return (
         <section className={`${panelClassName} p-5`}>
-            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#475569]">Profile Progress</p>
-            <h2 className="mt-2 text-lg font-semibold text-[#020617]">{percent}% complete</h2>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#eef5ff]">
-                <div className="h-full rounded-full bg-[#2e8cff]" style={{ width: `${percent}%` }} />
+            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1a3d63]">Profile Progress</p>
+            <h2 className="mt-2 text-lg font-semibold text-[#0a1931]">{percent}% complete</h2>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#f6fafd]">
+                <div className="h-full rounded-full bg-[#1a3d63]" style={{ width: `${percent}%` }} />
             </div>
             <div className="mt-4 space-y-2">
                 {metrics.map((metric) => (
-                    <div key={metric.label} className="flex items-center justify-between rounded-xl border border-[#eef5ff] bg-[#ffffff] px-3 py-2">
-                        <span className="text-xs font-medium text-[#475569]">{metric.label}</span>
-                        <span className="text-sm font-semibold text-[#2e8cff]">{metric.value}</span>
+                    <div key={metric.label} className="flex items-center justify-between rounded-xl border border-[#f6fafd] bg-[#ffffff] px-3 py-2">
+                        <span className="text-xs font-medium text-[#1a3d63]">{metric.label}</span>
+                        <span className="text-sm font-semibold text-[#1a3d63]">{metric.value}</span>
                     </div>
                 ))}
             </div>
@@ -465,7 +465,7 @@ function MedicalRecordsSection({
 
     return (
         <section className={`${panelClassName} overflow-hidden`}>
-            <div className="border-b border-[#dbeeff] px-3 py-3">
+            <div className="border-b border-[#b3cfe5] px-3 py-3">
                 <div className="grid grid-cols-3 gap-2">
                     {(Object.keys(RECORD_TAB_META) as RecordTab[]).map((tab) => {
                         const active = tab === recordTab;
@@ -476,8 +476,8 @@ function MedicalRecordsSection({
                                 onClick={() => onRecordTabChange(tab)}
                                 className={`rounded-xl px-2 py-2 text-center text-[12px] font-semibold leading-tight transition sm:text-sm ${
                                     active
-                                        ? 'border border-[#b7dcff] bg-[#0f172a] text-white'
-                                        : 'border border-[#dbeeff] text-[#475569] hover:bg-[#f1f8ff]'
+                                        ? 'border border-[#b3cfe5] bg-[#0a1931] text-white'
+                                        : 'border border-[#b3cfe5] text-[#1a3d63] hover:bg-[#f6fafd]'
                                 }`}
                             >
                                 {RECORD_TAB_META[tab].label}
@@ -488,7 +488,7 @@ function MedicalRecordsSection({
                 <button
                     type="button"
                     onClick={() => setIsAdding((value) => !value)}
-                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-4 py-2 text-sm font-semibold text-[#2e8cff] transition hover:border-[#b7dcff]"
+                    className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-[#b3cfe5] bg-[#f6fafd] px-4 py-2 text-sm font-semibold text-[#1a3d63] transition hover:border-[#b3cfe5]"
                 >
                     <Plus size={15} />
                     {tabMeta.ctaLabel}
@@ -497,30 +497,30 @@ function MedicalRecordsSection({
 
             <div className="p-4">
                 {isAdding && (
-                    <form onSubmit={submit} className="mb-4 space-y-3 rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3">
+                    <form onSubmit={submit} className="mb-4 space-y-3 rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] p-3">
                         <input
                             value={title}
                             onChange={(event) => setTitle(event.target.value)}
-                            className="h-10 w-full rounded-xl border border-[#cbd5e1] bg-white px-3 text-sm outline-none focus:border-[#7dbdff]"
+                            className="h-10 w-full rounded-xl border border-[#b3cfe5] bg-white px-3 text-sm outline-none focus:border-[#b3cfe5]"
                             placeholder={tabMeta.placeholderTitle}
                         />
                         <textarea
                             value={details}
                             onChange={(event) => setDetails(event.target.value)}
-                            className="min-h-20 w-full rounded-xl border border-[#cbd5e1] bg-white px-3 py-2 text-sm outline-none focus:border-[#7dbdff]"
+                            className="min-h-20 w-full rounded-xl border border-[#b3cfe5] bg-white px-3 py-2 text-sm outline-none focus:border-[#b3cfe5]"
                             placeholder="Optional details for your care team"
                         />
                         <div className="flex items-center justify-end gap-2">
                             <button
                                 type="button"
                                 onClick={() => setIsAdding(false)}
-                                className="rounded-lg border border-[#cbd5e1] px-3 py-1.5 text-xs font-semibold text-[#475569]"
+                                className="rounded-lg border border-[#b3cfe5] px-3 py-1.5 text-xs font-semibold text-[#1a3d63]"
                             >
                                 Cancel
                             </button>
                             <button
                                 type="submit"
-                                className="rounded-lg bg-[#2e8cff] px-3 py-1.5 text-xs font-semibold text-white"
+                                className="rounded-lg bg-[#1a3d63] px-3 py-1.5 text-xs font-semibold text-white"
                             >
                                 Save
                             </button>
@@ -539,10 +539,10 @@ function MedicalRecordsSection({
                 ) : (
                     <ul className="space-y-2">
                         {activeEntries.map((entry) => (
-                            <li key={entry.id} className="rounded-2xl border border-[#dbeeff] bg-[#f8fbff] px-4 py-3">
-                                <p className="text-sm font-semibold text-[#020617]">{entry.title}</p>
-                                {entry.details && <p className="mt-1 text-sm text-[#475569]">{entry.details}</p>}
-                                <p className="mt-2 text-xs text-[#64748b]">Added {formatDate(entry.createdAt)}</p>
+                            <li key={entry.id} className="rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] px-4 py-3">
+                                <p className="text-sm font-semibold text-[#0a1931]">{entry.title}</p>
+                                {entry.details && <p className="mt-1 text-sm text-[#1a3d63]">{entry.details}</p>}
+                                <p className="mt-2 text-xs text-[#4a7fa7]">Added {formatDate(entry.createdAt)}</p>
                             </li>
                         ))}
                     </ul>
@@ -575,12 +575,12 @@ function LifestyleNotesSection({
 
     return (
         <section className={`${panelClassName} overflow-hidden`}>
-            <div className="flex items-center border-b border-[#dbeeff] px-5 py-4">
-                <h2 className="text-lg font-semibold text-[#020617]">Lifestyle Notes</h2>
+            <div className="flex items-center border-b border-[#b3cfe5] px-5 py-4">
+                <h2 className="text-lg font-semibold text-[#0a1931]">Lifestyle Notes</h2>
                 <button
                     type="button"
                     onClick={() => setIsAdding((value) => !value)}
-                    className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#cbd5e1] text-[#2e8cff]"
+                    className="ml-auto inline-flex h-8 w-8 items-center justify-center rounded-lg border border-[#b3cfe5] text-[#1a3d63]"
                     aria-label="Add lifestyle note"
                 >
                     <Plus size={16} />
@@ -589,30 +589,30 @@ function LifestyleNotesSection({
 
             <div className="p-4">
                 {isAdding && (
-                    <form onSubmit={submit} className="mb-4 space-y-3 rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3">
+                    <form onSubmit={submit} className="mb-4 space-y-3 rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] p-3">
                         <input
                             value={title}
                             onChange={(event) => setTitle(event.target.value)}
-                            className="h-10 w-full rounded-xl border border-[#cbd5e1] bg-white px-3 text-sm outline-none focus:border-[#7dbdff]"
+                            className="h-10 w-full rounded-xl border border-[#b3cfe5] bg-white px-3 text-sm outline-none focus:border-[#b3cfe5]"
                             placeholder="e.g. Sleep routine"
                         />
                         <textarea
                             value={details}
                             onChange={(event) => setDetails(event.target.value)}
-                            className="min-h-20 w-full rounded-xl border border-[#cbd5e1] bg-white px-3 py-2 text-sm outline-none focus:border-[#7dbdff]"
+                            className="min-h-20 w-full rounded-xl border border-[#b3cfe5] bg-white px-3 py-2 text-sm outline-none focus:border-[#b3cfe5]"
                             placeholder="Share habits, sleep, activity, nutrition, or triggers"
                         />
                         <div className="flex items-center justify-end gap-2">
                             <button
                                 type="button"
                                 onClick={() => setIsAdding(false)}
-                                className="rounded-lg border border-[#cbd5e1] px-3 py-1.5 text-xs font-semibold text-[#475569]"
+                                className="rounded-lg border border-[#b3cfe5] px-3 py-1.5 text-xs font-semibold text-[#1a3d63]"
                             >
                                 Cancel
                             </button>
                             <button
                                 type="submit"
-                                className="rounded-lg bg-[#2e8cff] px-3 py-1.5 text-xs font-semibold text-white"
+                                className="rounded-lg bg-[#1a3d63] px-3 py-1.5 text-xs font-semibold text-white"
                             >
                                 Save
                             </button>
@@ -631,10 +631,10 @@ function LifestyleNotesSection({
                 ) : (
                     <ul className="space-y-2">
                         {entries.map((entry) => (
-                            <li key={entry.id} className="rounded-2xl border border-[#dbeeff] bg-[#f8fbff] px-4 py-3">
-                                <p className="text-sm font-semibold text-[#020617]">{entry.title}</p>
-                                {entry.details && <p className="mt-1 text-sm text-[#475569]">{entry.details}</p>}
-                                <p className="mt-2 text-xs text-[#64748b]">Added {formatDate(entry.createdAt)}</p>
+                            <li key={entry.id} className="rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] px-4 py-3">
+                                <p className="text-sm font-semibold text-[#0a1931]">{entry.title}</p>
+                                {entry.details && <p className="mt-1 text-sm text-[#1a3d63]">{entry.details}</p>}
+                                <p className="mt-2 text-xs text-[#4a7fa7]">Added {formatDate(entry.createdAt)}</p>
                             </li>
                         ))}
                     </ul>
@@ -677,12 +677,12 @@ function TestResultsSection({
 
     return (
         <section className={`${panelClassName} overflow-hidden`}>
-            <div className="flex items-center border-b border-[#dbeeff] px-5 py-4">
-                <h2 className="text-lg font-semibold text-[#020617]">Test Results</h2>
+            <div className="flex items-center border-b border-[#b3cfe5] px-5 py-4">
+                <h2 className="text-lg font-semibold text-[#0a1931]">Test Results</h2>
                 <button
                     type="button"
                     onClick={() => setIsAdding((value) => !value)}
-                    className="ml-auto inline-flex items-center gap-2 rounded-lg border border-[#cbd5e1] px-3 py-1.5 text-xs font-semibold text-[#2e8cff]"
+                    className="ml-auto inline-flex items-center gap-2 rounded-lg border border-[#b3cfe5] px-3 py-1.5 text-xs font-semibold text-[#1a3d63]"
                 >
                     <Upload size={14} />
                     Upload Test
@@ -691,45 +691,45 @@ function TestResultsSection({
 
             <div className="p-4">
                 {isAdding && (
-                    <form onSubmit={submit} className="mb-4 space-y-3 rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3">
+                    <form onSubmit={submit} className="mb-4 space-y-3 rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] p-3">
                         <input
                             value={name}
                             onChange={(event) => setName(event.target.value)}
-                            className="h-10 w-full rounded-xl border border-[#cbd5e1] bg-white px-3 text-sm outline-none focus:border-[#7dbdff]"
+                            className="h-10 w-full rounded-xl border border-[#b3cfe5] bg-white px-3 text-sm outline-none focus:border-[#b3cfe5]"
                             placeholder="e.g. Full Blood Count"
                         />
                         <input
                             type="date"
                             value={testDate}
                             onChange={(event) => setTestDate(event.target.value)}
-                            className="h-10 w-full rounded-xl border border-[#cbd5e1] bg-white px-3 text-sm outline-none focus:border-[#7dbdff]"
+                            className="h-10 w-full rounded-xl border border-[#b3cfe5] bg-white px-3 text-sm outline-none focus:border-[#b3cfe5]"
                         />
                         <textarea
                             value={summary}
                             onChange={(event) => setSummary(event.target.value)}
-                            className="min-h-20 w-full rounded-xl border border-[#cbd5e1] bg-white px-3 py-2 text-sm outline-none focus:border-[#7dbdff]"
+                            className="min-h-20 w-full rounded-xl border border-[#b3cfe5] bg-white px-3 py-2 text-sm outline-none focus:border-[#b3cfe5]"
                             placeholder="Add a short summary of this result"
                         />
                         <div className="space-y-2">
-                            <label className="block text-xs font-semibold uppercase tracking-[0.08em] text-[#475569]">Attachment</label>
+                            <label className="block text-xs font-semibold uppercase tracking-[0.08em] text-[#1a3d63]">Attachment</label>
                             <input
                                 type="file"
                                 onChange={(event) => setFileName(event.target.files?.[0]?.name || '')}
-                                className="block w-full text-xs text-[#475569] file:mr-3 file:rounded-lg file:border-0 file:bg-[#eef5ff] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[#2e8cff]"
+                                className="block w-full text-xs text-[#1a3d63] file:mr-3 file:rounded-lg file:border-0 file:bg-[#f6fafd] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[#1a3d63]"
                             />
-                            {fileName && <p className="text-xs text-[#64748b]">Selected: {fileName}</p>}
+                            {fileName && <p className="text-xs text-[#4a7fa7]">Selected: {fileName}</p>}
                         </div>
                         <div className="flex items-center justify-end gap-2">
                             <button
                                 type="button"
                                 onClick={() => setIsAdding(false)}
-                                className="rounded-lg border border-[#cbd5e1] px-3 py-1.5 text-xs font-semibold text-[#475569]"
+                                className="rounded-lg border border-[#b3cfe5] px-3 py-1.5 text-xs font-semibold text-[#1a3d63]"
                             >
                                 Cancel
                             </button>
                             <button
                                 type="submit"
-                                className="rounded-lg bg-[#2e8cff] px-3 py-1.5 text-xs font-semibold text-white"
+                                className="rounded-lg bg-[#1a3d63] px-3 py-1.5 text-xs font-semibold text-white"
                             >
                                 Save result
                             </button>
@@ -748,15 +748,15 @@ function TestResultsSection({
                 ) : (
                     <ul className="space-y-2">
                         {entries.map((entry) => (
-                            <li key={entry.id} className="rounded-2xl border border-[#dbeeff] bg-[#f8fbff] px-4 py-3">
+                            <li key={entry.id} className="rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] px-4 py-3">
                                 <div className="flex items-start gap-2">
                                     <div className="min-w-0">
-                                        <p className="text-sm font-semibold text-[#020617]">{entry.name}</p>
-                                        {entry.summary && <p className="mt-1 text-sm text-[#475569]">{entry.summary}</p>}
+                                        <p className="text-sm font-semibold text-[#0a1931]">{entry.name}</p>
+                                        {entry.summary && <p className="mt-1 text-sm text-[#1a3d63]">{entry.summary}</p>}
                                     </div>
-                                    <span className="ml-auto shrink-0 text-xs text-[#64748b]">{formatDate(entry.testDate)}</span>
+                                    <span className="ml-auto shrink-0 text-xs text-[#4a7fa7]">{formatDate(entry.testDate)}</span>
                                 </div>
-                                {entry.fileName && <p className="mt-2 text-xs text-[#64748b]">Attachment: {entry.fileName}</p>}
+                                {entry.fileName && <p className="mt-2 text-xs text-[#4a7fa7]">Attachment: {entry.fileName}</p>}
                             </li>
                         ))}
                     </ul>

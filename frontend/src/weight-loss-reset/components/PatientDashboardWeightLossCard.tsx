@@ -46,12 +46,12 @@ export default function PatientDashboardWeightLossCard({
   const dietitianBio = String(dietitian?.bio || '').trim() || 'Practical, kind, realistic, non-judgemental support.';
 
   return (
-    <section className="rounded-3xl border border-[#cbd5e1] bg-white p-5 shadow-[0_24px_42px_-34px_rgba(15,23,42,0.24)] sm:p-6">
+    <section className="rounded-3xl border border-[#b3cfe5] bg-white p-5 shadow-[0_24px_42px_-34px_rgba(15,23,42,0.24)] sm:p-6">
       <div className="grid gap-4 lg:grid-cols-[1.28fr_0.72fr]">
         <div>
-          <p className="text-sm font-medium text-[#475569]">{WEIGHT_LOSS_RESET_PROGRAM_NAME}</p>
-          <h2 className="mt-1 text-3xl font-semibold tracking-tight text-[#020617]">Let&apos;s build a plan that fits your real life.</h2>
-          <p className="mt-2 text-sm leading-relaxed text-[#475569]">
+          <p className="text-sm font-medium text-[#1a3d63]">{WEIGHT_LOSS_RESET_PROGRAM_NAME}</p>
+          <h2 className="mt-1 text-3xl font-semibold tracking-tight text-[#0a1931]">Let&apos;s build a plan that fits your real life.</h2>
+          <p className="mt-2 text-sm leading-relaxed text-[#1a3d63]">
             {cardState === 'not-started'
               ? `${WEIGHT_LOSS_RESET_PRICE_COPY}. Minimum plan length is ${WEIGHT_LOSS_RESET_MIN_PLAN_WEEKS} weeks.`
               : cardState === 'onboarding'
@@ -62,43 +62,43 @@ export default function PatientDashboardWeightLossCard({
           <button
             type="button"
             onClick={ctaAction}
-            className="mt-4 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#2e8cff] px-5 text-sm font-semibold text-white transition hover:bg-[#1f7be6]"
+            className="mt-4 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#1a3d63] px-5 text-sm font-semibold text-white transition hover:bg-[#0a1931]"
           >
             {ctaLabel}
             <ArrowRight size={16} />
           </button>
         </div>
 
-        <div className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-4">
+        <div className="rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] p-4">
           <div className="flex items-center gap-3">
             <ProfileAvatar
               name={dietitianName}
               imageUrl={dietitianImageUrl}
               fallbackImageUrl={DEFAULT_DIETITIAN_PROFILE_IMAGE_URL}
               alt={`${dietitianName} profile`}
-              className="h-12 w-12 rounded-xl border border-[#b7dcff] object-cover"
+              className="h-12 w-12 rounded-xl border border-[#b3cfe5] object-cover"
             />
-            <p className="text-sm font-semibold text-[#020617]">Matched with {dietitianName} • {expertLabel}</p>
+            <p className="text-sm font-semibold text-[#0a1931]">Matched with {dietitianName} • {expertLabel}</p>
           </div>
-          <p className="mt-1 text-sm text-[#475569]">{dietitianBio}</p>
+          <p className="mt-1 text-sm text-[#1a3d63]">{dietitianBio}</p>
 
           {cardState === 'ready' ? (
             <div className="mt-4 space-y-2">
-              <div className="flex items-center justify-between text-sm text-[#475569]">
+              <div className="flex items-center justify-between text-sm text-[#1a3d63]">
                 <span>Goal progress</span>
-                <span className="font-semibold text-[#2e8cff]">{progressPercent}%</span>
+                <span className="font-semibold text-[#1a3d63]">{progressPercent}%</span>
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-[#cbd5e1]">
-                <div className="h-full rounded-full bg-[#2e8cff]" style={{ width: `${progressPercent}%` }} />
+              <div className="h-2 overflow-hidden rounded-full bg-[#b3cfe5]">
+                <div className="h-full rounded-full bg-[#1a3d63]" style={{ width: `${progressPercent}%` }} />
               </div>
-              <p className="text-sm text-[#475569]">
+              <p className="text-sm text-[#1a3d63]">
                 {currentWeight ? `Current ${currentWeight} kg` : 'Current weight pending'}
                 {goalWeight ? ` • Goal ${goalWeight} kg` : ''}
               </p>
             </div>
           ) : (
-            <div className="mt-4 rounded-xl border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#475569]">
-              <p className="inline-flex items-center gap-1 font-medium text-[#2e8cff]">
+            <div className="mt-4 rounded-xl border border-[#b3cfe5] bg-white px-3 py-2 text-sm text-[#1a3d63]">
+              <p className="inline-flex items-center gap-1 font-medium text-[#1a3d63]">
                 <CalendarCheck2 size={13} />
                 Next step
               </p>

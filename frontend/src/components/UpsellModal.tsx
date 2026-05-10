@@ -57,8 +57,8 @@ export function UpsellModal() {
 
                     <ShineButton
                         className="w-full rounded-xl py-3 text-base font-semibold"
-                        trailColor="#2e8cff"
-                        blurColor="#7dbdff"
+                        trailColor="#1a3d63"
+                        blurColor="#b3cfe5"
                         onClick={() => handleChoice(true)}
                     >
                         {upsell.recommended.cta}

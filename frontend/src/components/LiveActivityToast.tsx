@@ -28,7 +28,7 @@ export function LiveActivityToast({ mobile = false }: LiveActivityToastProps) {
             fixedUser={{
                 name: 'Onya Clinical Desk',
                 initials: 'OC',
-                color: '#58a8ff',
+                color: '#4a7fa7',
             }}
             className={mobile ? 'bottom-4 right-4 left-4 !fixed !p-0 !items-end !justify-end' : 'bottom-6 right-6 !fixed !p-0 !items-end !justify-end'}
         />

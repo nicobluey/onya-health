@@ -86,7 +86,7 @@ export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
                 <>
                     {isDoctorPage ? (
                         <>
-                            <section className="border-b border-border bg-[linear-gradient(135deg,#f8fbff_0%,#f1f8ff_45%,#ffffff_100%)] py-14 lg:py-20">
+                            <section className="border-b border-border bg-[linear-gradient(135deg,#f6fafd_0%,#f6fafd_45%,#ffffff_100%)] py-14 lg:py-20">
                                 <div className="mx-auto grid w-full max-w-7xl items-center gap-10 px-5 md:grid-cols-[minmax(0,0.95fr)_minmax(0,1.18fr)] md:px-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)] xl:gap-14">
                                     <div className="max-w-xl">
                                         <p className="inline-flex rounded-full border border-sunlight-200 bg-white/90 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-bark-600">
@@ -174,8 +174,8 @@ export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
 
                                         <div className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-text-primary shadow-md">
                                             <span className="relative flex h-2.5 w-2.5">
-                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#4A7FA7] opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#1A3D63]"></span>
                                             </span>
                                             {`${service.providerPlural} online now`}
                                         </div>

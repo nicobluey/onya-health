@@ -53,8 +53,8 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
                         {view === 'landing' && (
                             <div className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-text-primary shadow-sm">
                                 <span className="relative flex h-2 w-2 shrink-0">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#4A7FA7] opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[#1A3D63]"></span>
                                 </span>
                                 <span>{service.slug === 'doctor' ? 'Certificate consults 24/7' : `${service.providerPlural} online`}</span>
                             </div>
@@ -76,7 +76,7 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
                 <main className="flex-1">
                     {isDoctorPage ? (
                         <>
-                            <section className="border-b border-border bg-[linear-gradient(135deg,#f8fbff_0%,#f1f8ff_45%,#ffffff_100%)] px-4 py-11">
+                            <section className="border-b border-border bg-[linear-gradient(135deg,#f6fafd_0%,#f6fafd_45%,#ffffff_100%)] px-4 py-11">
                                 <div className="mx-auto max-w-xl">
                                     <p className="inline-flex rounded-full border border-sunlight-200 bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-bark-600">
                                         Australian doctor-reviewed service

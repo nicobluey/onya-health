@@ -196,13 +196,13 @@ function PortalBackdropArt() {
 
 function statusPillClasses(status: string) {
     const normalized = String(status || '').trim().toLowerCase();
-    if (normalized === 'approved' || normalized === 'closed') return 'border-[#bfe7d0] bg-[#eefaf3] text-[#16784c]';
-    if (normalized === 'awaiting_payment') return 'border-[#cbd5e1] bg-[#f8fafc] text-[#475569]';
+    if (normalized === 'approved' || normalized === 'closed') return 'border-[#86efac] bg-[#ecfdf3] text-[#166534]';
+    if (normalized === 'awaiting_payment') return 'border-[#b3cfe5] bg-[#f6fafd] text-[#1a3d63]';
     if (['pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(normalized)) {
         return 'border-[#f3df9d] bg-[#fff8e8] text-[#8a6700]';
     }
     if (normalized === 'denied') return 'border-[#f3c5c4] bg-[#ffe9e8] text-[#a93736]';
-    return 'border-[#cbd5e1] bg-[#f1f8ff] text-[#475569]';
+    return 'border-[#b3cfe5] bg-[#f6fafd] text-[#1a3d63]';
 }
 
 function normalizeBillingInfo(input: unknown): PatientBillingInfo | null {
@@ -287,12 +287,12 @@ function DesktopSidebar({
     onProfileClick: () => void;
 }) {
     return (
-        <aside className="sticky top-0 hidden h-dvh w-[260px] shrink-0 flex-col overflow-y-auto border-r border-[#cbd5e1] bg-[#f8fbff]/95 backdrop-blur md:flex">
+        <aside className="sticky top-0 hidden h-dvh w-[260px] shrink-0 flex-col overflow-y-auto border-r border-[#b3cfe5] bg-[#f6fafd]/95 backdrop-blur md:flex">
             <div className="px-5 pt-5">
                 <a href="/" className="inline-flex items-center" aria-label="Go to home page">
                     <img src="/logo.webp" alt="Onya Health" className="h-10 w-auto object-contain" />
                 </a>
-                <p className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-[#475569]">Platform</p>
+                <p className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-[#1a3d63]">Platform</p>
                 <nav className="mt-3 space-y-1">
                     {[
                         { id: 'home' as const, label: 'Home', icon: Home },
@@ -308,8 +308,8 @@ function DesktopSidebar({
                                 onClick={() => onTabChange(item.id)}
                                 className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${
                                     active
-                                        ? 'bg-[#0f172a] text-white'
-                                        : 'text-[#334155] hover:bg-[#f1f8ff] hover:text-[#020617]'
+                                        ? 'bg-[#0a1931] text-white'
+                                        : 'text-[#1a3d63] hover:bg-[#f6fafd] hover:text-[#0a1931]'
                                 }`}
                             >
                                 <Icon size={16} />
@@ -320,14 +320,14 @@ function DesktopSidebar({
                 </nav>
             </div>
 
-            <div className="mt-auto border-t border-[#cbd5e1] p-4">
+            <div className="mt-auto border-t border-[#b3cfe5] p-4">
                 <button
                     type="button"
                     onClick={onProfileClick}
-                    className="w-full rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3 text-left transition hover:border-[#b7dcff]"
+                    className="w-full rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] p-3 text-left transition hover:border-[#b3cfe5]"
                 >
                     <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#dbeeff] text-sm font-semibold text-[#2e8cff]">
+                        <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#b3cfe5] text-sm font-semibold text-[#1a3d63]">
                             {patient.profilePhotoUrl ? (
                                 <img src={patient.profilePhotoUrl} alt={`${patient.fullName || 'Patient'} avatar`} className="h-full w-full object-cover" />
                             ) : (
@@ -335,8 +335,8 @@ function DesktopSidebar({
                             )}
                         </div>
                         <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-[#020617]">{patient.fullName || 'Patient'}</p>
-                            <p className="truncate text-xs text-[#475569]">{patient.email || 'No email'}</p>
+                            <p className="truncate text-sm font-semibold text-[#0a1931]">{patient.fullName || 'Patient'}</p>
+                            <p className="truncate text-xs text-[#1a3d63]">{patient.email || 'No email'}</p>
                         </div>
                     </div>
                 </button>
@@ -349,12 +349,12 @@ function MobileTopBar({ activeTab, onHome }: { activeTab: MainTab; onHome: () =>
     const label = activeTab.slice(0, 1).toUpperCase() + activeTab.slice(1);
 
     return (
-        <header className="sticky top-0 z-40 border-b border-[#cbd5e1] bg-[#f8fbff]/95 backdrop-blur">
+        <header className="sticky top-0 z-40 border-b border-[#b3cfe5] bg-[#f6fafd]/95 backdrop-blur">
             <div className="flex h-14 items-center justify-between px-4">
                 <button type="button" onClick={onHome} className="inline-flex items-center" aria-label="Go to patient home">
                     <img src="/logo.webp" alt="Onya Health" className="h-10 w-auto object-contain" />
                 </button>
-                <span className="rounded-full border border-[#cbd5e1] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#334155]">
+                <span className="rounded-full border border-[#b3cfe5] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#1a3d63]">
                     {label}
                 </span>
             </div>
@@ -370,7 +370,7 @@ function MobileBottomNav({
     onTabChange: (next: MainTab) => void;
 }) {
     return (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#cbd5e1] bg-[#f8fbff]">
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#b3cfe5] bg-[#f6fafd]">
             <div className="mx-auto flex h-16 w-full max-w-[740px] items-center px-1">
                 {[
                     { id: 'home' as const, label: 'Home', icon: Home },
@@ -385,7 +385,7 @@ function MobileBottomNav({
                             type="button"
                             onClick={() => onTabChange(item.id)}
                             className={`flex flex-1 flex-col items-center justify-center gap-1.5 py-2 ${
-                                active ? 'text-[#2e8cff]' : 'text-[#475569]'
+                                active ? 'text-[#1a3d63]' : 'text-[#1a3d63]'
                             }`}
                         >
                             <Icon size={20} />
@@ -415,19 +415,19 @@ function QueueBanner({
         <button
             type="button"
             onClick={onTap}
-            className="fixed bottom-16 left-3 right-3 z-40 overflow-hidden rounded-2xl border border-[#b7dcff] bg-white px-4 py-3 text-left shadow-[0_24px_40px_-30px_rgba(15,23,42,0.55)]"
+            className="fixed bottom-16 left-3 right-3 z-40 overflow-hidden rounded-2xl border border-[#b3cfe5] bg-white px-4 py-3 text-left shadow-[0_24px_40px_-30px_rgba(15,23,42,0.55)]"
         >
-            <span className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-[#2e8cff]" aria-hidden="true" />
+            <span className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-[#1a3d63]" aria-hidden="true" />
             <div className="flex items-center gap-3">
-                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#dbeeff] text-[#2e8cff]">
+                <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#b3cfe5] text-[#1a3d63]">
                     <Heart size={18} className="fill-current stroke-current" />
                     <span className="portal-live-dot absolute -right-0.5 -top-0.5" aria-hidden="true" />
                 </div>
                 <div className="min-w-0">
-                    <p className="text-sm font-semibold text-[#020617]">{queueTitle}</p>
-                    <p className="text-xs text-[#475569]">{queueSubtitle}</p>
+                    <p className="text-sm font-semibold text-[#0a1931]">{queueTitle}</p>
+                    <p className="text-xs text-[#1a3d63]">{queueSubtitle}</p>
                 </div>
-                <ChevronRight size={18} className="ml-auto text-[#64748b]" />
+                <ChevronRight size={18} className="ml-auto text-[#4a7fa7]" />
             </div>
         </button>
     );
@@ -450,22 +450,22 @@ function ConsultTab({
     return (
         <section className="space-y-5">
             <header>
-                <h1 className="text-3xl font-semibold tracking-tight text-[#020617]">Book a consultation</h1>
-                <p className="mt-1 text-base text-[#475569]">Choose a service to continue. Live services open instantly, others are previewable.</p>
+                <h1 className="text-3xl font-semibold tracking-tight text-[#0a1931]">Book a consultation</h1>
+                <p className="mt-1 text-base text-[#1a3d63]">Choose a service to continue. Live services open instantly, others are previewable.</p>
             </header>
 
-            <article className="rounded-2xl border border-[#cbd5e1] bg-white px-4 py-3">
+            <article className="rounded-2xl border border-[#b3cfe5] bg-white px-4 py-3">
                 <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#eef5ff] text-[#2e8cff]">
+                    <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#f6fafd] text-[#1a3d63]">
                         <CreditCard size={18} />
                     </div>
                     <div>
-                        <p className="text-sm font-semibold text-[#020617]">
+                        <p className="text-sm font-semibold text-[#0a1931]">
                             {billing?.hasActiveUnlimited
                                 ? 'Unlimited plan active'
                                 : 'Pay-as-you-go or unlimited available'}
                         </p>
-                        <p className="mt-1 text-sm text-[#475569]">
+                        <p className="mt-1 text-sm text-[#1a3d63]">
                             {billing?.hasActiveUnlimited
                                 ? 'Your next medical certificate request will go straight to doctor review with no checkout screen.'
                                 : 'Start a medical certificate request and you can choose one-off payment or unlimited at checkout.'}
@@ -487,33 +487,33 @@ function ConsultTab({
                             onFocus={option.id === 'medical-certificate' ? warmCheckoutPath : undefined}
                             className={`${sectionCardClassName(
                                 'group p-4 text-left transition hover:-translate-y-0.5 hover:shadow-[0_26px_50px_-36px_rgba(15,23,42,0.46)]'
-                            )} ${live ? 'border-[#b7dcff] bg-[#f8fbff]' : ''}`}
+                            )} ${live ? 'border-[#b3cfe5] bg-[#f6fafd]' : ''}`}
                         >
                             <div className="flex items-start gap-3">
                                 <div
                                     className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-                                        live ? 'bg-[#dbeeff] text-[#2e8cff]' : 'bg-[#f1f5f9] text-[#64748b]'
+                                        live ? 'bg-[#b3cfe5] text-[#1a3d63]' : 'bg-[#f6fafd] text-[#4a7fa7]'
                                     }`}
                                 >
                                     <Icon size={18} />
                                 </div>
                                 <div className="min-w-0">
-                                    <h2 className="text-base font-semibold text-[#020617]">{option.title}</h2>
-                                    <p className="mt-1 text-sm text-[#475569]">{option.subtitle}</p>
+                                    <h2 className="text-base font-semibold text-[#0a1931]">{option.title}</h2>
+                                    <p className="mt-1 text-sm text-[#1a3d63]">{option.subtitle}</p>
                                 </div>
                                 <span
                                     className={`ml-auto shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${
-                                        live ? 'bg-[#dbeeff] text-[#165fad]' : 'bg-[#e2e8f0] text-[#475569]'
+                                        live ? 'bg-[#b3cfe5] text-[#1a3d63]' : 'bg-[#f6fafd] text-[#1a3d63]'
                                     }`}
                                 >
                                     {option.badge}
                                 </span>
                             </div>
                             <div className="mt-3 flex items-center justify-between">
-                                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">
+                                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#4a7fa7]">
                                     {live ? 'Available now' : 'Preview available'}
                                 </p>
-                                <span className="inline-flex items-center gap-1 text-sm font-semibold text-[#2e8cff] transition group-hover:gap-1.5">
+                                <span className="inline-flex items-center gap-1 text-sm font-semibold text-[#1a3d63] transition group-hover:gap-1.5">
                                     {live ? 'Continue' : 'View details'}
                                     <ChevronRight size={15} />
                                 </span>
@@ -524,9 +524,9 @@ function ConsultTab({
             </div>
 
             <section className={sectionCardClassName()}>
-                <div className="border-b border-[#dbeeff] px-5 py-4">
-                    <h2 className="text-lg font-semibold text-[#020617]">Latest consults</h2>
-                    <p className="mt-1 text-sm text-[#475569]">Recent consult activity, including your recurring nutrition consult.</p>
+                <div className="border-b border-[#b3cfe5] px-5 py-4">
+                    <h2 className="text-lg font-semibold text-[#0a1931]">Latest consults</h2>
+                    <p className="mt-1 text-sm text-[#1a3d63]">Recent consult activity, including your recurring nutrition consult.</p>
                 </div>
                 <div className="space-y-3 px-5 py-4">
                     {latestConsults.length > 0 ? (
@@ -536,22 +536,22 @@ function ConsultTab({
                                 String(request.serviceType || '').toLowerCase() === 'weight-loss' ||
                                 String(request.serviceType || '').toLowerCase() === 'nutritionist';
                             return (
-                                <article key={request.id} className="rounded-2xl border border-[#dbeeff] bg-[#f8fbff] p-3">
+                                <article key={request.id} className="rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] p-3">
                                     <div className="flex flex-wrap items-center justify-between gap-2">
-                                        <h3 className="text-sm font-semibold text-[#020617]">{consultTitle(request.serviceType)}</h3>
+                                        <h3 className="text-sm font-semibold text-[#0a1931]">{consultTitle(request.serviceType)}</h3>
                                         <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] font-semibold ${statusPillClasses(request.status)}`}>
                                             {statusLabel(request.status)}
                                         </span>
                                     </div>
                                     {isNutrition && (
-                                        <p className="mt-1 text-xs text-[#475569]">Dietitian: {dietitianName}</p>
+                                        <p className="mt-1 text-xs text-[#1a3d63]">Dietitian: {dietitianName}</p>
                                     )}
-                                    <p className="mt-1 text-xs text-[#64748b]">Updated {formatDate(request.createdAt)}</p>
+                                    <p className="mt-1 text-xs text-[#4a7fa7]">Updated {formatDate(request.createdAt)}</p>
                                 </article>
                             );
                         })
                     ) : (
-                        <p className="text-sm text-[#475569]">No consult history yet.</p>
+                        <p className="text-sm text-[#1a3d63]">No consult history yet.</p>
                     )}
                 </div>
             </section>
@@ -568,30 +568,30 @@ function ConsultComingSoonScreen({
 }) {
     return (
         <section className="space-y-5">
-            <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-[#475569]">
+            <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-[#1a3d63]">
                 <ArrowLeft size={16} />
                 Back to consult options
             </button>
 
-            <article className="overflow-hidden rounded-3xl border border-[#cbd5e1] bg-white">
-                <div className="border-b border-[#dbeeff] bg-[#f8fbff] px-5 py-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#64748b]">Coming soon</p>
-                    <h1 className="mt-1 text-2xl font-semibold text-[#020617]">{option?.title ?? 'Service'}</h1>
+            <article className="overflow-hidden rounded-3xl border border-[#b3cfe5] bg-white">
+                <div className="border-b border-[#b3cfe5] bg-[#f6fafd] px-5 py-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#4a7fa7]">Coming soon</p>
+                    <h1 className="mt-1 text-2xl font-semibold text-[#0a1931]">{option?.title ?? 'Service'}</h1>
                 </div>
                 <div className="p-5">
-                    <p className="text-sm leading-relaxed text-[#475569]">
+                    <p className="text-sm leading-relaxed text-[#1a3d63]">
                         {option?.subtitle ?? 'This service is being prepared.'} We&apos;re currently finalizing workflows and clinician availability.
                     </p>
-                    <div className="mt-4 rounded-2xl border border-[#dbeeff] bg-[#f8fbff] p-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#64748b]">What happens next</p>
-                        <p className="mt-1 text-sm text-[#475569]">
+                    <div className="mt-4 rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#4a7fa7]">What happens next</p>
+                        <p className="mt-1 text-sm text-[#1a3d63]">
                             Keep using live services today. This option will automatically appear as available once launched.
                         </p>
                     </div>
                     <button
                         type="button"
                         onClick={onBack}
-                        className="mt-4 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#2e8cff] px-5 text-sm font-semibold text-white"
+                        className="mt-4 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#1a3d63] px-5 text-sm font-semibold text-white"
                     >
                         Got it
                         <ChevronRight size={16} />
@@ -736,90 +736,90 @@ function AccountTab({
     return (
         <section className="space-y-5">
             <header>
-                <h1 className="text-3xl font-semibold tracking-tight text-[#020617]">Account</h1>
-                <p className="mt-1 text-base text-[#475569]">Edit your details and manage profile activity</p>
+                <h1 className="text-3xl font-semibold tracking-tight text-[#0a1931]">Account</h1>
+                <p className="mt-1 text-base text-[#1a3d63]">Edit your details and manage profile activity</p>
             </header>
             {emailChangeNotice && (
-                <div className="rounded-2xl border border-[#b7dcff] bg-[#f1f8ff] px-4 py-3 text-sm font-semibold text-[#0f172a]">
+                <div className="rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] px-4 py-3 text-sm font-semibold text-[#0a1931]">
                     {emailChangeNotice}
                 </div>
             )}
 
             <section className={sectionCardClassName()}>
-                <div className="border-b border-[#dbeeff] px-5 py-4">
-                    <h2 className="text-lg font-semibold text-[#020617]">Account Settings</h2>
+                <div className="border-b border-[#b3cfe5] px-5 py-4">
+                    <h2 className="text-lg font-semibold text-[#0a1931]">Account Settings</h2>
                 </div>
                 <form className="space-y-4 p-4" onSubmit={handleSaveProfile}>
                     <div className="flex items-center gap-3">
-                        <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-[#b7dcff] bg-[#dbeeff] text-sm font-semibold text-[#2e8cff]">
+                        <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-[#b3cfe5] bg-[#b3cfe5] text-sm font-semibold text-[#1a3d63]">
                             {photoPreviewUrl ? (
                                 <img src={photoPreviewUrl} alt="Profile preview" className="h-full w-full object-cover" />
                             ) : (
                                 avatarInitials(fullName || patient.email || 'P')
                             )}
                         </div>
-                        <label className="inline-flex cursor-pointer items-center rounded-xl border border-[#cbd5e1] bg-white px-3 py-2 text-sm font-semibold text-[#334155] hover:border-[#b7dcff]">
+                        <label className="inline-flex cursor-pointer items-center rounded-xl border border-[#b3cfe5] bg-white px-3 py-2 text-sm font-semibold text-[#1a3d63] hover:border-[#b3cfe5]">
                             Upload photo
                             <input type="file" accept="image/*" className="hidden" onChange={handlePhotoSelection} />
                         </label>
                     </div>
                     <div className="grid gap-3 md:grid-cols-2">
                         <label className="block">
-                            <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-[#64748b]">Full name</span>
+                            <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-[#4a7fa7]">Full name</span>
                             <input
                                 value={fullName}
                                 onChange={(event) => setFullName(event.target.value)}
-                                className="h-11 w-full rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3 text-sm outline-none focus:border-[#7dbdff]"
+                                className="h-11 w-full rounded-xl border border-[#b3cfe5] bg-[#f6fafd] px-3 text-sm outline-none focus:border-[#b3cfe5]"
                             />
                         </label>
                         <label className="block">
-                            <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-[#64748b]">Email</span>
+                            <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-[#4a7fa7]">Email</span>
                             <input
                                 type="email"
                                 value={patient.email || ''}
                                 readOnly
-                                className="h-11 w-full rounded-xl border border-[#cbd5e1] bg-[#f1f5f9] px-3 text-sm text-[#334155]"
+                                className="h-11 w-full rounded-xl border border-[#b3cfe5] bg-[#f6fafd] px-3 text-sm text-[#1a3d63]"
                             />
                         </label>
                         <label className="block">
-                            <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-[#64748b]">Date of birth</span>
+                            <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-[#4a7fa7]">Date of birth</span>
                             <input
                                 type="date"
                                 value={dob || ''}
                                 onChange={(event) => setDob(event.target.value)}
-                                className="h-11 w-full rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3 text-sm outline-none focus:border-[#7dbdff]"
+                                className="h-11 w-full rounded-xl border border-[#b3cfe5] bg-[#f6fafd] px-3 text-sm outline-none focus:border-[#b3cfe5]"
                             />
                         </label>
                         <label className="block">
-                            <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-[#64748b]">Phone</span>
+                            <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-[#4a7fa7]">Phone</span>
                             <input
                                 value={phone}
                                 onChange={(event) => setPhone(event.target.value)}
-                                className="h-11 w-full rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3 text-sm outline-none focus:border-[#7dbdff]"
+                                className="h-11 w-full rounded-xl border border-[#b3cfe5] bg-[#f6fafd] px-3 text-sm outline-none focus:border-[#b3cfe5]"
                             />
                         </label>
                     </div>
                     <label className="block">
-                        <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-[#64748b]">Address</span>
+                        <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-[#4a7fa7]">Address</span>
                         <input
                             value={address}
                             onChange={(event) => setAddress(event.target.value)}
-                            className="h-11 w-full rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3 text-sm outline-none focus:border-[#7dbdff]"
+                            className="h-11 w-full rounded-xl border border-[#b3cfe5] bg-[#f6fafd] px-3 text-sm outline-none focus:border-[#b3cfe5]"
                         />
                     </label>
                     {profileSaveError && <p className="text-sm font-semibold text-red-600">{profileSaveError}</p>}
-                    {profileSaveSuccess && <p className="text-sm font-semibold text-[#2e8cff]">{profileSaveSuccess}</p>}
+                    {profileSaveSuccess && <p className="text-sm font-semibold text-[#1a3d63]">{profileSaveSuccess}</p>}
                     <button
                         type="submit"
                         disabled={savingProfile}
-                        className="inline-flex h-10 items-center justify-center rounded-xl bg-[#2e8cff] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
+                        className="inline-flex h-10 items-center justify-center rounded-xl bg-[#1a3d63] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
                     >
                         {savingProfile ? 'Saving...' : 'Save account settings'}
                     </button>
                 </form>
-                <div className="border-t border-[#dbeeff] px-4 py-4">
-                    <p className="text-sm font-semibold text-[#020617]">Change email</p>
-                    <p className="mt-1 text-xs text-[#64748b]">
+                <div className="border-t border-[#b3cfe5] px-4 py-4">
+                    <p className="text-sm font-semibold text-[#0a1931]">Change email</p>
+                    <p className="mt-1 text-xs text-[#4a7fa7]">
                         We send a verification link to the new email before updating your login.
                     </p>
                     <div className="mt-3 flex flex-col gap-2 sm:flex-row">
@@ -828,39 +828,39 @@ function AccountTab({
                             value={pendingEmail}
                             onChange={(event) => setPendingEmail(event.target.value)}
                             placeholder="new-email@example.com"
-                            className="h-11 w-full rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3 text-sm outline-none focus:border-[#7dbdff]"
+                            className="h-11 w-full rounded-xl border border-[#b3cfe5] bg-[#f6fafd] px-3 text-sm outline-none focus:border-[#b3cfe5]"
                         />
                         <button
                             type="button"
                             onClick={handleEmailChangeRequest}
                             disabled={emailChangeSending}
-                            className="inline-flex h-11 items-center justify-center rounded-xl border border-[#cbd5e1] bg-white px-4 text-sm font-semibold text-[#0f172a] disabled:cursor-not-allowed disabled:opacity-70"
+                            className="inline-flex h-11 items-center justify-center rounded-xl border border-[#b3cfe5] bg-white px-4 text-sm font-semibold text-[#0a1931] disabled:cursor-not-allowed disabled:opacity-70"
                         >
                             {emailChangeSending ? 'Sending...' : 'Send verification link'}
                         </button>
                     </div>
                     {emailChangeError && <p className="mt-2 text-sm font-semibold text-red-600">{emailChangeError}</p>}
-                    {emailChangeSuccess && <p className="mt-2 text-sm font-semibold text-[#2e8cff]">{emailChangeSuccess}</p>}
+                    {emailChangeSuccess && <p className="mt-2 text-sm font-semibold text-[#1a3d63]">{emailChangeSuccess}</p>}
                 </div>
             </section>
 
             <section className={sectionCardClassName()}>
-                <div className="border-b border-[#dbeeff] px-5 py-4">
-                    <h2 className="text-lg font-semibold text-[#020617]">Billing & Subscription</h2>
+                <div className="border-b border-[#b3cfe5] px-5 py-4">
+                    <h2 className="text-lg font-semibold text-[#0a1931]">Billing & Subscription</h2>
                 </div>
                 <div className="space-y-3 px-5 py-4">
-                    <div className="rounded-2xl border border-[#dbeeff] bg-[#f8fbff] p-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#64748b]">Current plan</p>
-                        <p className="mt-1 text-base font-semibold text-[#020617]">
+                    <div className="rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] p-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#4a7fa7]">Current plan</p>
+                        <p className="mt-1 text-base font-semibold text-[#0a1931]">
                             {billing?.hasActiveUnlimited ? 'Unlimited certificates' : 'Pay as you go'}
                         </p>
-                        <p className="mt-1 text-sm text-[#475569]">
+                        <p className="mt-1 text-sm text-[#1a3d63]">
                             {billing?.hasActiveUnlimited
                                 ? `Subscription status: ${billing.subscriptionStatus || 'active'}`
                                 : 'No active unlimited subscription found.'}
                         </p>
                         {billing?.hasActiveUnlimited && billing.currentPeriodEnd && (
-                            <p className="mt-1 text-xs text-[#64748b]">Current period ends {formatDate(billing.currentPeriodEnd)}</p>
+                            <p className="mt-1 text-xs text-[#4a7fa7]">Current period ends {formatDate(billing.currentPeriodEnd)}</p>
                         )}
                     </div>
 
@@ -870,14 +870,14 @@ function AccountTab({
                                 type="button"
                                 onClick={onManageBilling}
                                 disabled={billingActionState !== 'idle'}
-                                className="inline-flex h-10 items-center justify-center rounded-xl bg-[#2e8cff] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
+                                className="inline-flex h-10 items-center justify-center rounded-xl bg-[#1a3d63] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
                             >
                                 {billingActionState === 'opening_portal' ? 'Opening billing...' : 'Manage subscription'}
                             </button>
                         ) : (
                             <a
                                 href="/doctor"
-                                className="lw-shine inline-flex h-10 items-center justify-center rounded-xl bg-[#2e8cff] px-4 text-sm font-semibold text-white"
+                                className="lw-shine inline-flex h-10 items-center justify-center rounded-xl bg-[#1a3d63] px-4 text-sm font-semibold text-white"
                                 data-magnetic-strength="0.44"
                                 data-magnetic-radius="110"
                             >
@@ -890,7 +890,7 @@ function AccountTab({
                                 type="button"
                                 onClick={onCancelSubscription}
                                 disabled={billingActionState !== 'idle'}
-                                className="inline-flex h-10 items-center justify-center rounded-xl border border-[#cbd5e1] bg-white px-4 text-sm font-semibold text-[#0f172a] disabled:cursor-not-allowed disabled:opacity-70"
+                                className="inline-flex h-10 items-center justify-center rounded-xl border border-[#b3cfe5] bg-white px-4 text-sm font-semibold text-[#0a1931] disabled:cursor-not-allowed disabled:opacity-70"
                             >
                                 {billingActionState === 'cancelling' ? 'Updating...' : 'Cancel at period end'}
                             </button>
@@ -898,7 +898,7 @@ function AccountTab({
                     </div>
 
                     {billing?.cancelAtPeriodEnd && (
-                        <p className="text-sm text-[#475569]">
+                        <p className="text-sm text-[#1a3d63]">
                             Cancellation scheduled. Your unlimited access remains active until period end.
                         </p>
                     )}
@@ -907,14 +907,14 @@ function AccountTab({
             </section>
 
             <section className={sectionCardClassName()}>
-                <div className="border-b border-[#dbeeff] px-5 py-4">
-                    <h2 className="text-lg font-semibold text-[#020617]">Profile Summary</h2>
+                <div className="border-b border-[#b3cfe5] px-5 py-4">
+                    <h2 className="text-lg font-semibold text-[#0a1931]">Profile Summary</h2>
                 </div>
                 <div className="grid gap-3 px-5 py-4 sm:grid-cols-3">
                     {stats.map((item) => (
-                        <article key={item.label} className="rounded-2xl border border-[#dbeeff] bg-[#f8fbff] p-3">
-                            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">{item.label}</p>
-                            <p className="mt-2 text-2xl font-semibold text-[#020617]">{item.value}</p>
+                        <article key={item.label} className="rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] p-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#4a7fa7]">{item.label}</p>
+                            <p className="mt-2 text-2xl font-semibold text-[#0a1931]">{item.value}</p>
                         </article>
                     ))}
                 </div>
@@ -922,19 +922,19 @@ function AccountTab({
 
             <section className={sectionCardClassName()}>
                 <div className="p-5">
-                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748b]">Latest consult</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#4a7fa7]">Latest consult</p>
                     {latestRequest ? (
                         <>
-                            <h2 className="mt-2 text-lg font-semibold text-[#020617]">{consultTitle(latestRequest.serviceType)}</h2>
+                            <h2 className="mt-2 text-lg font-semibold text-[#0a1931]">{consultTitle(latestRequest.serviceType)}</h2>
                             <span className={`mt-2 inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${statusPillClasses(latestRequest.status)}`}>
                                 {statusLabel(latestRequest.status)}
                             </span>
-                            <p className="mt-1 text-xs text-[#64748b]">Updated {formatDate(latestRequest.createdAt)}</p>
+                            <p className="mt-1 text-xs text-[#4a7fa7]">Updated {formatDate(latestRequest.createdAt)}</p>
                             {latestRequest.certificatePdfUrl && (
                                 <button
                                     type="button"
                                     onClick={() => onDownloadCertificate(latestRequest)}
-                                    className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[#2e8cff] px-3 py-2 text-sm font-semibold text-white"
+                                    className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[#1a3d63] px-3 py-2 text-sm font-semibold text-white"
                                 >
                                     <FileText size={15} />
                                     Download Medical Certificate
@@ -942,7 +942,7 @@ function AccountTab({
                             )}
                         </>
                     ) : (
-                        <p className="mt-2 text-sm text-[#475569]">No consult history yet.</p>
+                        <p className="mt-2 text-sm text-[#1a3d63]">No consult history yet.</p>
                     )}
                 </div>
             </section>
@@ -962,19 +962,19 @@ function CallPrepScreen({
     return (
         <section className="space-y-5">
             <div className="grid grid-cols-3 gap-2">
-                <div className="h-1.5 rounded-full bg-[#2e8cff]" />
-                <div className="h-1.5 rounded-full bg-[#2e8cff]" />
-                <div className="h-1.5 rounded-full bg-[#dbeeff]" />
+                <div className="h-1.5 rounded-full bg-[#1a3d63]" />
+                <div className="h-1.5 rounded-full bg-[#1a3d63]" />
+                <div className="h-1.5 rounded-full bg-[#b3cfe5]" />
             </div>
 
-            <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-[#475569]">
+            <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-[#1a3d63]">
                 <ArrowLeft size={16} />
                 Back
             </button>
 
             <header>
-                <h1 className="text-3xl font-semibold tracking-tight text-[#020617]">Ready to start?</h1>
-                <p className="mt-2 text-base text-[#475569]">A quick chat with AI to help your doctor prepare</p>
+                <h1 className="text-3xl font-semibold tracking-tight text-[#0a1931]">Ready to start?</h1>
+                <p className="mt-2 text-base text-[#1a3d63]">A quick chat with AI to help your doctor prepare</p>
             </header>
 
             <article className={sectionCardClassName('overflow-hidden')}>
@@ -986,20 +986,20 @@ function CallPrepScreen({
                 ].map((item, index) => {
                     const Icon = item.icon;
                     return (
-                        <div key={item.text} className={`flex items-center gap-3 px-4 py-3 ${index > 0 ? 'border-t border-[#dbeeff]' : ''}`}>
-                            <Icon size={18} className="text-[#2e8cff]" />
-                            <p className="text-sm text-[#475569]">{item.text}</p>
+                        <div key={item.text} className={`flex items-center gap-3 px-4 py-3 ${index > 0 ? 'border-t border-[#b3cfe5]' : ''}`}>
+                            <Icon size={18} className="text-[#1a3d63]" />
+                            <p className="text-sm text-[#1a3d63]">{item.text}</p>
                         </div>
                     );
                 })}
             </article>
 
-            <article className="overflow-hidden rounded-3xl border border-[#dbeeff] bg-white p-4">
+            <article className="overflow-hidden rounded-3xl border border-[#b3cfe5] bg-white p-4">
                 <div className="flex items-center gap-2">
-                    <Phone size={16} className="text-[#2e8cff]" />
-                    <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#64748b]">Live call preview</p>
+                    <Phone size={16} className="text-[#1a3d63]" />
+                    <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#4a7fa7]">Live call preview</p>
                 </div>
-                <div className="audio-wave mt-2 min-h-[86px] rounded-2xl border border-[#dbeeff] bg-[#f8fbff] px-2">
+                <div className="audio-wave mt-2 min-h-[86px] rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] px-2">
                     {wavePattern.map((height, index) => (
                         <span
                             // intentional index key for fixed static visual bars
@@ -1019,7 +1019,7 @@ function CallPrepScreen({
             <button
                 type="button"
                 onClick={onStartCall}
-                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#2e8cff] text-sm font-semibold text-white"
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#1a3d63] text-sm font-semibold text-white"
             >
                 <Phone size={16} />
                 Start call
@@ -1053,27 +1053,27 @@ function QueuedWaitingScreen({
     return (
         <section className="space-y-5">
             <div className="grid grid-cols-3 gap-2">
-                <div className="h-1.5 rounded-full bg-[#2e8cff]" />
-                <div className="h-1.5 rounded-full bg-[#2e8cff]" />
-                <div className="h-1.5 rounded-full bg-[#2e8cff]" />
+                <div className="h-1.5 rounded-full bg-[#1a3d63]" />
+                <div className="h-1.5 rounded-full bg-[#1a3d63]" />
+                <div className="h-1.5 rounded-full bg-[#1a3d63]" />
             </div>
 
-            <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-[#475569]">
+            <button type="button" onClick={onBack} className="inline-flex items-center gap-2 text-sm font-semibold text-[#1a3d63]">
                 <ArrowLeft size={16} />
                 Back
             </button>
 
-            <article className="overflow-hidden rounded-3xl border border-[#b7dcff] bg-white px-5 py-4">
+            <article className="overflow-hidden rounded-3xl border border-[#b3cfe5] bg-white px-5 py-4">
                 <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#dbeeff] text-[#2e8cff]">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#b3cfe5] text-[#1a3d63]">
                         <Heart size={20} className="fill-current stroke-current" />
                     </div>
                     <div className="min-w-0">
-                        <h1 className="text-lg font-semibold text-[#020617]">{queueHeading}</h1>
-                        <p className="text-sm text-[#475569]">{queueSubheading}</p>
+                        <h1 className="text-lg font-semibold text-[#0a1931]">{queueHeading}</h1>
+                        <p className="text-sm text-[#1a3d63]">{queueSubheading}</p>
                     </div>
                 </div>
-                <div className="mt-4 rounded-2xl border border-[#dbeeff] bg-[#f8fbff] p-3">
+                <div className="mt-4 rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] p-3">
                     <div className="grid grid-cols-4 gap-2">
                         {queueSteps.map((step, index) => {
                             const completed = index < stageIndex;
@@ -1084,19 +1084,19 @@ function QueuedWaitingScreen({
                                     <span
                                         className={`mx-auto flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-semibold ${
                                             completed
-                                                ? 'border-[#2e8cff] bg-[#2e8cff] text-white'
+                                                ? 'border-[#1a3d63] bg-[#1a3d63] text-white'
                                                 : active
-                                                  ? 'border-[#2e8cff] bg-[#dbeeff] text-[#2e8cff]'
-                                                  : 'border-[#cbd5e1] bg-white text-[#94a3b8]'
+                                                  ? 'border-[#1a3d63] bg-[#b3cfe5] text-[#1a3d63]'
+                                                  : 'border-[#b3cfe5] bg-white text-[#b3cfe5]'
                                         } ${pulse ? 'animate-pulse' : ''}`}
                                     >
                                         {completed ? <Check size={12} /> : index + 1}
                                     </span>
-                                    <span className="mt-1 block text-[11px] font-semibold text-[#64748b]">{step}</span>
+                                    <span className="mt-1 block text-[11px] font-semibold text-[#4a7fa7]">{step}</span>
                                     {index < queueSteps.length - 1 && (
                                         <span
                                             className={`absolute left-[58%] top-3 h-[2px] w-[84%] ${
-                                                completed ? 'bg-[#9ecbff]' : 'bg-[#dbeafe]'
+                                                completed ? 'bg-[#b3cfe5]' : 'bg-[#b3cfe5]'
                                             }`}
                                             aria-hidden="true"
                                         />
@@ -1106,17 +1106,17 @@ function QueuedWaitingScreen({
                         })}
                     </div>
                     {reviewActive && (
-                        <p className="mt-3 text-xs text-[#475569]">
+                        <p className="mt-3 text-xs text-[#1a3d63]">
                             Review is active now. The pulsing step updates to issued once your certificate is completed.
                         </p>
                     )}
                     {!reviewActive && stageIndex < 2 && (
-                        <p className="mt-3 text-xs text-[#475569]">
+                        <p className="mt-3 text-xs text-[#1a3d63]">
                             Payment is being confirmed. Completed steps will tick automatically as your request moves forward.
                         </p>
                     )}
                     {stageIndex >= 3 && (
-                        <p className="mt-3 text-xs text-[#475569]">
+                        <p className="mt-3 text-xs text-[#1a3d63]">
                             Your certificate has been issued. Go back to Home or Account to download it.
                         </p>
                     )}
@@ -1127,10 +1127,10 @@ function QueuedWaitingScreen({
                 {rows.map((row, index) => {
                     const Icon = row.icon;
                     return (
-                        <div key={row.label} className={`flex items-center gap-3 px-4 py-3 ${index > 0 ? 'border-t border-[#dbeeff]' : ''}`}>
-                            <Icon size={16} className="text-[#94a3b8]" />
-                            <span className="text-sm text-[#475569]">{row.label}</span>
-                            <span className="ml-auto text-sm font-semibold text-[#020617]">{row.value}</span>
+                        <div key={row.label} className={`flex items-center gap-3 px-4 py-3 ${index > 0 ? 'border-t border-[#b3cfe5]' : ''}`}>
+                            <Icon size={16} className="text-[#b3cfe5]" />
+                            <span className="text-sm text-[#1a3d63]">{row.label}</span>
+                            <span className="ml-auto text-sm font-semibold text-[#0a1931]">{row.value}</span>
                         </div>
                     );
                 })}
@@ -1139,7 +1139,7 @@ function QueuedWaitingScreen({
             <button
                 type="button"
                 onClick={onSendMessage}
-                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#2e8cff] text-sm font-semibold text-white"
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#1a3d63] text-sm font-semibold text-white"
             >
                 <MessageCircle size={16} />
                 Message Doctor
@@ -1243,38 +1243,38 @@ function CheckoutAccountSetupScreen({
     };
 
     return (
-        <div className="relative min-h-screen overflow-hidden bg-[#f8fbff] px-4 py-8 font-sans text-[#020617]">
+        <div className="relative min-h-screen overflow-hidden bg-[#f6fafd] px-4 py-8 font-sans text-[#0a1931]">
             <PortalBackdropArt />
             <div className="relative z-10 mx-auto w-full max-w-[760px]">
-                <section className="overflow-hidden rounded-3xl border border-[#cbd5e1] bg-white shadow-[0_30px_55px_-36px_rgba(15,23,42,0.46)]">
-                    <div className="border-b border-[#dbeeff] bg-[#f8fbff] px-5 py-4 md:px-6">
-                        <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#64748b]">Payment confirmed</p>
-                        <h1 className="mt-1 text-2xl font-semibold text-[#020617] md:text-[2rem]">Create your portal password</h1>
-                        <p className="mt-2 text-sm text-[#475569]">
+                <section className="overflow-hidden rounded-3xl border border-[#b3cfe5] bg-white shadow-[0_30px_55px_-36px_rgba(15,23,42,0.46)]">
+                    <div className="border-b border-[#b3cfe5] bg-[#f6fafd] px-5 py-4 md:px-6">
+                        <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#4a7fa7]">Payment confirmed</p>
+                        <h1 className="mt-1 text-2xl font-semibold text-[#0a1931] md:text-[2rem]">Create your portal password</h1>
+                        <p className="mt-2 text-sm text-[#1a3d63]">
                             Confirm your consult email and set a password to access your patient portal.
                         </p>
                     </div>
 
                     <form className="space-y-4 px-5 py-5 md:px-6" onSubmit={handleSubmit}>
-                        <div className="rounded-2xl border border-[#dbeeff] bg-[#f8fbff] p-3">
-                            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#64748b]">Consult email on file</p>
-                            <p className="mt-1 text-sm font-semibold text-[#020617]">{setup.consultEmail}</p>
+                        <div className="rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] p-3">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#4a7fa7]">Consult email on file</p>
+                            <p className="mt-1 text-sm font-semibold text-[#0a1931]">{setup.consultEmail}</p>
                         </div>
 
                         {setup.consultEmail && (
                             <button
                                 type="button"
                                 onClick={handleUseSameEmail}
-                                className="inline-flex h-10 items-center justify-center rounded-xl border border-[#b7dcff] bg-[#eff6ff] px-4 text-sm font-semibold text-[#165fad]"
+                                className="inline-flex h-10 items-center justify-center rounded-xl border border-[#b3cfe5] bg-[#f6fafd] px-4 text-sm font-semibold text-[#1a3d63]"
                             >
                                 Use the same email as {setup.consultEmail}
                             </button>
                         )}
 
                         <label className="block">
-                            <span className="mb-1 block text-sm font-medium text-[#334155]">Email</span>
-                            <div className="flex items-center gap-2 rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3">
-                                <Mail size={16} className="text-[#64748b]" />
+                            <span className="mb-1 block text-sm font-medium text-[#1a3d63]">Email</span>
+                            <div className="flex items-center gap-2 rounded-xl border border-[#b3cfe5] bg-[#f6fafd] px-3">
+                                <Mail size={16} className="text-[#4a7fa7]" />
                                 <input
                                     type="email"
                                     value={email}
@@ -1287,9 +1287,9 @@ function CheckoutAccountSetupScreen({
                         </label>
 
                         <label className="block">
-                            <span className="mb-1 block text-sm font-medium text-[#334155]">Confirm email</span>
-                            <div className="flex items-center gap-2 rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3">
-                                <Mail size={16} className="text-[#64748b]" />
+                            <span className="mb-1 block text-sm font-medium text-[#1a3d63]">Confirm email</span>
+                            <div className="flex items-center gap-2 rounded-xl border border-[#b3cfe5] bg-[#f6fafd] px-3">
+                                <Mail size={16} className="text-[#4a7fa7]" />
                                 <input
                                     type="email"
                                     value={confirmEmail}
@@ -1302,9 +1302,9 @@ function CheckoutAccountSetupScreen({
                         </label>
 
                         <label className="block">
-                            <span className="mb-1 block text-sm font-medium text-[#334155]">Create password</span>
-                            <div className="flex items-center gap-2 rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3">
-                                <Lock size={16} className="text-[#64748b]" />
+                            <span className="mb-1 block text-sm font-medium text-[#1a3d63]">Create password</span>
+                            <div className="flex items-center gap-2 rounded-xl border border-[#b3cfe5] bg-[#f6fafd] px-3">
+                                <Lock size={16} className="text-[#4a7fa7]" />
                                 <input
                                     type="password"
                                     value={password}
@@ -1318,9 +1318,9 @@ function CheckoutAccountSetupScreen({
                         </label>
 
                         <label className="block">
-                            <span className="mb-1 block text-sm font-medium text-[#334155]">Confirm password</span>
-                            <div className="flex items-center gap-2 rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3">
-                                <Lock size={16} className="text-[#64748b]" />
+                            <span className="mb-1 block text-sm font-medium text-[#1a3d63]">Confirm password</span>
+                            <div className="flex items-center gap-2 rounded-xl border border-[#b3cfe5] bg-[#f6fafd] px-3">
+                                <Lock size={16} className="text-[#4a7fa7]" />
                                 <input
                                     type="password"
                                     value={confirmPassword}
@@ -1337,7 +1337,7 @@ function CheckoutAccountSetupScreen({
                         {existingAccountEmail && (
                             <a
                                 href={`/patient-login?email=${encodeURIComponent(existingAccountEmail)}`}
-                                className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-[#cbd5e1] bg-white text-sm font-semibold text-[#0f172a]"
+                                className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-[#b3cfe5] bg-white text-sm font-semibold text-[#0a1931]"
                             >
                                 Sign in to existing account
                             </a>
@@ -1346,7 +1346,7 @@ function CheckoutAccountSetupScreen({
                         <button
                             type="submit"
                             disabled={submitting}
-                            className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-[#2e8cff] text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
+                            className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-[#1a3d63] text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
                         >
                             {submitting ? 'Creating account...' : 'Continue to patient portal'}
                         </button>
@@ -2500,7 +2500,7 @@ export default function PatientPortalPage() {
             return (
                 <div className="space-y-3">
                     {weightLossRecipeError && (
-                        <p className="rounded-xl border border-[#dbeeff] bg-[#f8fbff] px-3 py-2 text-xs text-[#475569]">
+                        <p className="rounded-xl border border-[#b3cfe5] bg-[#f6fafd] px-3 py-2 text-xs text-[#1a3d63]">
                             {weightLossRecipeError}
                         </p>
                     )}
@@ -2605,10 +2605,10 @@ export default function PatientPortalPage() {
 
     if (loading) {
         return (
-            <div className="relative min-h-screen overflow-hidden bg-[#f8fbff] px-4 py-8 font-sans text-[#020617]">
+            <div className="relative min-h-screen overflow-hidden bg-[#f6fafd] px-4 py-8 font-sans text-[#0a1931]">
                 <PortalBackdropArt />
-                <div className="relative z-10 mx-auto max-w-[900px] rounded-3xl border border-[#cbd5e1] bg-white p-6">
-                    <p className="text-sm text-[#475569]">Loading your patient account...</p>
+                <div className="relative z-10 mx-auto max-w-[900px] rounded-3xl border border-[#b3cfe5] bg-white p-6">
+                    <p className="text-sm text-[#1a3d63]">Loading your patient account...</p>
                 </div>
             </div>
         );
@@ -2616,22 +2616,22 @@ export default function PatientPortalPage() {
 
     if (loadError) {
         return (
-            <div className="relative min-h-screen overflow-hidden bg-[#f8fbff] px-4 py-8 font-sans text-[#020617]">
+            <div className="relative min-h-screen overflow-hidden bg-[#f6fafd] px-4 py-8 font-sans text-[#0a1931]">
                 <PortalBackdropArt />
-                <div className="relative z-10 mx-auto max-w-[900px] rounded-3xl border border-[#cbd5e1] bg-white p-6">
-                    <h1 className="text-2xl font-semibold text-[#020617]">Unable to load account</h1>
-                    <p className="mt-2 text-[#475569]">{loadError}</p>
+                <div className="relative z-10 mx-auto max-w-[900px] rounded-3xl border border-[#b3cfe5] bg-white p-6">
+                    <h1 className="text-2xl font-semibold text-[#0a1931]">Unable to load account</h1>
+                    <p className="mt-2 text-[#1a3d63]">{loadError}</p>
                     <div className="mt-4 flex gap-3">
                         <button
                             type="button"
                             onClick={() => window.location.reload()}
-                            className="rounded-xl bg-[#2e8cff] px-4 py-2 text-sm font-semibold text-white"
+                            className="rounded-xl bg-[#1a3d63] px-4 py-2 text-sm font-semibold text-white"
                         >
                             Retry
                         </button>
                         <a
                             href="/patient-login"
-                            className="rounded-xl border border-[#cbd5e1] bg-white px-4 py-2 text-sm font-semibold text-[#020617]"
+                            className="rounded-xl border border-[#b3cfe5] bg-white px-4 py-2 text-sm font-semibold text-[#0a1931]"
                         >
                             Back to login
                         </a>
@@ -2643,13 +2643,13 @@ export default function PatientPortalPage() {
 
     return (
         <>
-            <div className="relative hidden min-h-screen bg-[#f8fbff] text-[#020617] md:flex">
+            <div className="relative hidden min-h-screen bg-[#f6fafd] text-[#0a1931] md:flex">
                 <PortalBackdropArt />
                 <DesktopSidebar activeTab={mainTab} onTabChange={setTab} patient={patient} onProfileClick={openAccountSettings} />
                 <main className="relative z-10 flex-1">
                     <div className="mx-auto w-full max-w-[1160px] px-8 py-7">
                         {portalScreen === 'main' && (
-                            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#cbd5e1] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#475569]">
+                            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#b3cfe5] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#1a3d63]">
                                 <Home size={14} />
                                 {MAIN_TABS.find((tab) => tab === mainTab)?.toUpperCase()}
                             </div>
@@ -2659,7 +2659,7 @@ export default function PatientPortalPage() {
                 </main>
             </div>
 
-            <div className={`relative min-h-screen overflow-hidden bg-[#f8fbff] text-[#020617] md:hidden ${portalScreen === 'main' ? 'pb-28' : 'pb-6'}`}>
+            <div className={`relative min-h-screen overflow-hidden bg-[#f6fafd] text-[#0a1931] md:hidden ${portalScreen === 'main' ? 'pb-28' : 'pb-6'}`}>
                 <PortalBackdropArt />
                 <MobileTopBar activeTab={mainTab} onHome={openPortalHome} />
                 <main className="relative z-10 px-4 py-5">{renderPortalContent('mobile')}</main>

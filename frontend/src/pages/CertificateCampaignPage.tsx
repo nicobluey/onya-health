@@ -447,11 +447,11 @@ function Hero({
                             className="h-72 w-full object-cover md:h-[340px]"
                             loading="lazy"
                         />
-                        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0f172a]/50 via-transparent to-transparent" />
+                        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0a1931]/50 via-transparent to-transparent" />
                         <div className="absolute left-3 top-3 inline-flex rounded-full border border-white/40 bg-white/90 px-3 py-1 text-xs font-semibold text-text-primary">
                             {config.heroImageLabel}
                         </div>
-                        <div className="absolute bottom-3 left-3 right-3 rounded-xl border border-white/20 bg-[#0f172a]/70 p-3 backdrop-blur-sm">
+                        <div className="absolute bottom-3 left-3 right-3 rounded-xl border border-white/20 bg-[#0a1931]/70 p-3 backdrop-blur-sm">
                             <p className="text-xs font-semibold uppercase tracking-[0.1em] text-white/80">Selected type</p>
                             <p className="mt-1 text-sm font-semibold text-white">{selectedTitle}</p>
                         </div>

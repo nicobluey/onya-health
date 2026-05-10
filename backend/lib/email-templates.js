@@ -1,11 +1,11 @@
 const BRAND = {
-  bg: '#f8fafc',
+  bg: '#f6fafd',
   card: '#ffffff',
-  border: '#d9e3f2',
-  text: '#0f172a',
-  textSoft: '#475569',
-  primary: '#3b82f6',
-  primaryDark: '#1d4ed8',
+  border: '#b3cfe5',
+  text: '#0a1931',
+  textSoft: '#1a3d63',
+  primary: '#1a3d63',
+  primaryDark: '#0a1931',
 };
 
 function escapeHtml(value) {
@@ -43,7 +43,7 @@ function renderShell({ baseUrl, badge, title, subtitle, bodyHtml, ctaLabel, ctaU
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>${safeTitle}</title>
   </head>
-  <body style="margin:0;padding:0;background:${BRAND.bg};font-family:'Basic Commercial Pro',Arial,sans-serif;color:${BRAND.text};">
+  <body style="margin:0;padding:0;background:${BRAND.bg};font-family:'Inter',Arial,sans-serif;color:${BRAND.text};">
     <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:${BRAND.bg};padding:24px 12px;">
       <tr>
         <td align="center">
@@ -55,7 +55,7 @@ function renderShell({ baseUrl, badge, title, subtitle, bodyHtml, ctaLabel, ctaU
             </tr>
             <tr>
               <td style="padding:16px 28px 0;">
-                <span style="display:inline-block;padding:6px 12px;border-radius:999px;background:#e9f2ff;border:1px solid #bcd8ff;color:${BRAND.primaryDark};font-size:11px;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;">
+                <span style="display:inline-block;padding:6px 12px;border-radius:999px;background:#f6fafd;border:1px solid #b3cfe5;color:${BRAND.primaryDark};font-size:11px;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;">
                   ${safeBadge}
                 </span>
                 <h1 style="margin:14px 0 8px;font-size:32px;line-height:1.08;color:${BRAND.text};font-weight:700;">${safeTitle}</h1>
@@ -82,7 +82,7 @@ function renderShell({ baseUrl, badge, title, subtitle, bodyHtml, ctaLabel, ctaU
               </td>
             </tr>
             <tr>
-              <td style="padding:16px 28px 24px;border-top:1px solid ${BRAND.border};font-size:12px;line-height:1.5;color:#64748b;">
+              <td style="padding:16px 28px 24px;border-top:1px solid ${BRAND.border};font-size:12px;line-height:1.5;color:#4a7fa7;">
                 ${safeFooter}
               </td>
             </tr>
@@ -171,7 +171,7 @@ export function renderPatientMoreInfoEmail({ baseUrl, requestId, doctorEmail, no
       <p style="margin:0 0 10px;"><strong>Request ID:</strong> ${escapeHtml(requestId)}</p>
       <p style="margin:0 0 10px;"><strong>Doctor:</strong> ${escapeHtml(doctorEmail)}</p>
       <p style="margin:0 0 8px;"><strong>Doctor note:</strong></p>
-      <p style="margin:0;padding:12px 14px;border:1px solid ${BRAND.border};border-radius:12px;background:#f8fbff;">${escapeHtml(notes || 'Please provide additional details to continue your review.')}</p>
+      <p style="margin:0;padding:12px 14px;border:1px solid ${BRAND.border};border-radius:12px;background:#f6fafd;">${escapeHtml(notes || 'Please provide additional details to continue your review.')}</p>
     `,
   });
 
@@ -270,7 +270,7 @@ export function renderDoctorPatientMessageEmail({ baseUrl, certId, patientEmail,
       <p style="margin:0 0 10px;"><strong>Request ID:</strong> ${escapeHtml(certId)}</p>
       <p style="margin:0 0 10px;"><strong>From:</strong> ${escapeHtml(patientEmail)}</p>
       <p style="margin:0 0 8px;"><strong>Message:</strong></p>
-      <p style="margin:0;padding:12px 14px;border:1px solid ${BRAND.border};border-radius:12px;background:#f8fbff;">${escapeHtml(message)}</p>
+      <p style="margin:0;padding:12px 14px;border:1px solid ${BRAND.border};border-radius:12px;background:#f6fafd;">${escapeHtml(message)}</p>
     `,
   });
   return {

@@ -5,22 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Doctor Queue - Onya Health</title>
     <style>
-      body { font-family: Inter, Arial, sans-serif; margin: 0; background: #eef5ff; color: #12243f; }
+      body { font-family: Inter, Arial, sans-serif; margin: 0; background: #f6fafd; color: #0a1931; }
       header {
         padding: 18px 24px;
-        border-bottom: 1px solid #cfe0ff;
+        border-bottom: 1px solid #b3cfe5;
         background: #fff;
         display: flex;
         justify-content: space-between;
         align-items: center;
         gap: 14px;
       }
-      h1 { margin: 0; font-size: 24px; font-family: "Basic Commercial Pro", Arial, sans-serif; }
+      h1 { margin: 0; font-size: 24px; font-family: "Inter", Arial, sans-serif; }
       .header-actions { display: flex; align-items: center; gap: 8px; }
       button, .action-link {
-        border: 1px solid #c4d8ff;
+        border: 1px solid #b3cfe5;
         background: #fff;
-        color: #12356a;
+        color: #1a3d63;
         border-radius: 10px;
         padding: 8px 12px;
         font-weight: 600;
@@ -29,33 +29,33 @@
         font-size: 13px;
       }
       .wrap { max-width: 980px; margin: 24px auto; padding: 0 16px; }
-      .meta { color: #5c77a7; margin-bottom: 14px; }
+      .meta { color: #4a7fa7; margin-bottom: 14px; }
       .list { display: grid; gap: 12px; }
-      .card { background: #fff; border: 1px solid #d6e4ff; border-radius: 14px; padding: 14px; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; }
-      .id { font-size: 12px; color: #607fb0; margin-top: 4px; }
+      .card { background: #fff; border: 1px solid #b3cfe5; border-radius: 14px; padding: 14px; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; }
+      .id { font-size: 12px; color: #4a7fa7; margin-top: 4px; }
       .risk { padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; display: inline-block; }
-      .risk-low { background: #dcfce7; color: #166534; }
+      .risk-low { background: #dcfce7; color: #1a3d63; }
       .risk-medium { background: #fef3c7; color: #92400e; }
       .risk-high { background: #fee2e2; color: #991b1b; }
-      a.review-link { background: #0f66e8; color: white; text-decoration: none; border-radius: 10px; padding: 9px 12px; font-size: 13px; font-weight: 700; }
-      .empty { text-align: center; padding: 32px; border: 1px dashed #c4d8ff; border-radius: 12px; color: #6783ae; background: #fff; }
-      .profile-card { background: #fff; border: 1px solid #d6e4ff; border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+      a.review-link { background: #1a3d63; color: white; text-decoration: none; border-radius: 10px; padding: 9px 12px; font-size: 13px; font-weight: 700; }
+      .empty { text-align: center; padding: 32px; border: 1px dashed #b3cfe5; border-radius: 12px; color: #4a7fa7; background: #fff; }
+      .profile-card { background: #fff; border: 1px solid #b3cfe5; border-radius: 14px; padding: 16px; margin-bottom: 16px; }
       .profile-card.hidden { display: none; }
       .profile-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-      label { display: block; font-size: 12px; font-weight: 700; color: #4c6794; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.08em; }
+      label { display: block; font-size: 12px; font-weight: 700; color: #4a7fa7; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.08em; }
       input {
         width: 100%;
         box-sizing: border-box;
-        border: 1px solid #c4d8ff;
+        border: 1px solid #b3cfe5;
         border-radius: 10px;
         padding: 10px;
         font: inherit;
       }
       .profile-actions { margin-top: 12px; display: flex; align-items: center; gap: 10px; }
-      .primary-btn { border-color: #0f66e8; background: #0f66e8; color: #fff; }
+      .primary-btn { border-color: #1a3d63; background: #1a3d63; color: #fff; }
       .status { min-height: 18px; font-size: 13px; }
-      .status.error { color: #b3122f; }
-      .status.success { color: #0f7a42; }
+      .status.error { color: #a93736; }
+      .status.success { color: #1a3d63; }
     </style>
   </head>
   <body>
@@ -69,8 +69,8 @@
     </header>
     <main class="wrap">
       <section id="profile-card" class="profile-card hidden">
-        <h2 style="margin:0 0 4px;font-size:20px;font-family:'Basic Commercial Pro', Arial, sans-serif;">Doctor profile</h2>
-        <p style="margin:0 0 12px;color:#5c77a7;font-size:13px;">These details appear on certificates and verification responses.</p>
+        <h2 style="margin:0 0 4px;font-size:20px;font-family:'Inter', Arial, sans-serif;">Doctor profile</h2>
+        <p style="margin:0 0 12px;color:#4a7fa7;font-size:13px;">These details appear on certificates and verification responses.</p>
         <form id="profile-form">
           <div class="profile-grid">
             <div>

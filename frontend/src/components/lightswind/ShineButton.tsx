@@ -10,8 +10,8 @@ interface ShineButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonEle
 
 export function ShineButton({
     children,
-    trailColor = '#2e8cff',
-    blurColor = '#7dbdff',
+    trailColor = '#1a3d63',
+    blurColor = '#b3cfe5',
     className,
     ...props
 }: ShineButtonProps) {

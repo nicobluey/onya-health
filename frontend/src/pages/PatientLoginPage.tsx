@@ -315,7 +315,7 @@ export default function PatientLoginPage() {
                                 type="button"
                                 onClick={handleSendMagicLink}
                                 disabled={magicSending || magicAuthenticating}
-                                className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-[#b7dcff] bg-[#eef5ff] text-sm font-semibold text-[#165fad] transition hover:border-[#7dbdff] disabled:cursor-not-allowed disabled:opacity-60"
+                                className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-[#b3cfe5] bg-[#f6fafd] text-sm font-semibold text-[#1a3d63] transition hover:border-[#b3cfe5] disabled:cursor-not-allowed disabled:opacity-60"
                             >
                                 {magicSending ? 'Sending magic link...' : 'Email me a magic sign-in link'}
                             </button>

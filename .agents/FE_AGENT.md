@@ -90,7 +90,7 @@ Dietitian payload (`payload.dietitian`) shape used by UI:
 7. `npm run build` succeeds.
 8. Consult tab shows `Latest consults` including recurring nutrition consult visibility.
 9. Account tab status chip colors follow:
-   - approved/issued -> green
+   - approved/issued/live -> green
    - pending review -> yellow
-   - awaiting payment -> gray
+   - awaiting payment/default neutral -> blue brand-neutral
 10. If nutrition plan is not started, Home hero should show locked nutrition upsell copy instead of implying active consult access.

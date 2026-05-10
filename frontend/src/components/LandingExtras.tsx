@@ -109,41 +109,41 @@ interface BlogsSectionProps {
 export function BlogsSection({ onStartConsult }: BlogsSectionProps) {
     return (
         <section id="blogs" className="w-full bg-white py-16 md:py-24">
-            <div className="w-full overflow-hidden bg-neutral-950 py-14 md:py-20">
-                <div className="mb-10 flex items-end justify-between border-b border-neutral-800 px-6 pb-6 md:mb-12 md:px-10 lg:px-14">
+            <div className="w-full overflow-hidden border-y border-[#b3cfe5] bg-[#f6fafd] py-14 md:py-20">
+                <div className="mb-10 flex items-end justify-between border-b border-[#b3cfe5] px-6 pb-6 md:mb-12 md:px-10 lg:px-14">
                     <div>
-                        <p className="mb-1 text-xs font-medium uppercase tracking-widest text-neutral-500">Blogs</p>
-                        <h2 className="text-2xl font-semibold tracking-tight text-white md:text-3xl">From the Onya Blogs</h2>
+                        <p className="mb-1 text-xs font-medium uppercase tracking-widest text-[#4a7fa7]">Blogs</p>
+                        <h2 className="text-2xl font-semibold tracking-tight text-[#0a1931] md:text-3xl">From the Onya Blogs</h2>
                     </div>
-                    <div className="hidden text-sm text-neutral-500 sm:block">Latest reads from our clinical team</div>
+                    <div className="hidden text-sm text-[#4a7fa7] sm:block">Latest reads from our clinical team</div>
                 </div>
 
                 <div>
                     {FEATURED_BLOGS.map((item, idx) => (
                         <div key={item.slug}>
-                            <a href={`/blog/${item.slug}`} className="group grid gap-6 px-6 py-8 md:grid-cols-[1fr_1.2fr] md:gap-8 md:px-10 lg:px-14">
-                                <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-neutral-900 md:aspect-[16/10]">
+                            <a href={`/blog/${item.slug}`} className="group grid gap-6 px-6 py-8 transition-colors hover:bg-white/60 md:grid-cols-[1fr_1.2fr] md:gap-8 md:px-10 lg:px-14">
+                                <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-[#b3cfe5] md:aspect-[16/10]">
                                     <img src={item.imageSrc} alt={item.title} className="h-full w-full object-cover opacity-90 transition-all duration-500 group-hover:scale-105 group-hover:opacity-100" loading="lazy" />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-neutral-950/60 to-transparent" />
+                                    <div className="absolute inset-0 bg-gradient-to-t from-[#0a1931]/35 to-transparent" />
                                 </div>
 
                                 <div className="flex flex-col justify-center">
                                     <div className="mb-3 flex items-center gap-3">
-                                        <span className="rounded bg-sunlight-400/15 px-2.5 py-1 text-xs font-medium text-sunlight-300">{item.category}</span>
-                                        <span className="text-xs text-neutral-500">{item.readTimeMinutes} min read</span>
+                                        <span className="rounded bg-[#b3cfe5] px-2.5 py-1 text-xs font-medium text-[#1a3d63]">{item.category}</span>
+                                        <span className="text-xs text-[#4a7fa7]">{item.readTimeMinutes} min read</span>
                                     </div>
-                                    <h3 className="mb-3 text-xl font-semibold leading-tight text-white transition-colors group-hover:text-sunlight-200 md:text-2xl">
+                                    <h3 className="mb-3 text-xl font-semibold leading-tight text-[#0a1931] transition-colors group-hover:text-[#1a3d63] md:text-2xl">
                                         {item.title}
                                     </h3>
-                                    <blockquote className="mb-4 border-l-2 border-neutral-700 pl-4 text-sm leading-relaxed text-neutral-400 italic">
+                                    <blockquote className="mb-4 border-l-2 border-[#b3cfe5] pl-4 text-sm leading-relaxed text-[#1a3d63] italic">
                                         {item.excerpt}
                                     </blockquote>
-                                    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-sunlight-300 transition-colors group-hover:text-sunlight-200">
+                                    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-[#4a7fa7] transition-colors group-hover:text-[#1a3d63]">
                                         Read blog
                                     </span>
                                 </div>
                             </a>
-                            {idx < FEATURED_BLOGS.length - 1 && <div className="border-t border-neutral-800" />}
+                            {idx < FEATURED_BLOGS.length - 1 && <div className="border-t border-[#b3cfe5]" />}
                         </div>
                     ))}
                 </div>

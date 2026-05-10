@@ -5366,14 +5366,14 @@ export default async function handler(req, res) {
         to: nextEmail,
         subject: 'Confirm your Onya Health email change',
         html: `
-          <div style="font-family:Arial,sans-serif;line-height:1.5;color:#0f172a">
+          <div style="font-family:Arial,sans-serif;line-height:1.5;color:#0a1931">
             <h2 style="margin:0 0 12px">Confirm your email change</h2>
             <p style="margin:0 0 12px">We received a request to move your Onya Health account from <strong>${safeCurrent}</strong> to <strong>${safeNext}</strong>.</p>
             <p style="margin:0 0 16px">Click below to confirm. This link expires in ${expiresMinutes} minutes.</p>
             <p style="margin:0 0 20px">
-              <a href="${safeUrl}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600">Confirm email change</a>
+              <a href="${safeUrl}" style="display:inline-block;background:#1a3d63;color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600">Confirm email change</a>
             </p>
-            <p style="margin:0;color:#475569">If you did not request this change, you can safely ignore this email.</p>
+            <p style="margin:0;color:#1a3d63">If you did not request this change, you can safely ignore this email.</p>
           </div>
         `,
         text: [
