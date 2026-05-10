@@ -39,12 +39,14 @@ Dietitian payload (`payload.dietitian`) shape used by UI:
   - Account settings are editable and persisted via `POST /api/patient/profile`.
   - Account settings supports editing:
     - full name
-    - email
     - DOB
     - phone
     - address
     - profile photo
-  - When profile email is changed, frontend stores returned rotated patient token from API response.
+  - Email is read-only in base profile form and uses verification-link flow:
+    - `POST /api/patient/profile/email-change/request`
+    - consume link token from `email_change_token` query via `POST /api/patient/profile/email-change/consume`
+  - On successful email-link consume, frontend rotates stored `onya_patient_email` + `onya_patient_token`.
   - Passes dietitian through to:
     - `OnboardingFlow`
     - `WeightLossResetDashboard`
@@ -72,6 +74,10 @@ Dietitian payload (`payload.dietitian`) shape used by UI:
   - `DEFAULT_DIETITIAN_PROFILE_IMAGE_URL`
 - Production fallback is `/felicity-profile.webp` from `frontend/public`.
 - In the meal-plan dashboard, the "Crafted for you" personal-note card should also render the assigned dietitian photo/name badge.
+- In the meal-plan dashboard, the "Crafted for you" card should render:
+  - a prominent dietitian portrait (not tiny badge),
+  - a personal note/quote from the assigned dietitian,
+  - human copy that feels like a real practitioner, not generic placeholder text.
 - Desktop sidebar profile chip must remain persistent across Home/Consult/Account; keep sidebar pinned (`sticky top-0 h-screen`) so the bottom profile card does not scroll out on long pages.
 
 ## Regression checks (before deploy)

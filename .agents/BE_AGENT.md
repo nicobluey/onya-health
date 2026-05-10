@@ -51,13 +51,17 @@ Returned API identity contract:
   - `POST /api/patient/account-exists` (email/phone collision guard)
 - Profile update endpoint (authenticated):
   - `POST /api/patient/profile`
-  - supports `fullName`, `email`, `dob`, `phone`, `address`, optional `profilePhotoDataUrl`
-  - email-change path:
-    - validates collision before update
-    - updates Supabase auth email
-    - syncs `profiles`/`patients` rows
-    - updates local auth account
-    - returns rotated patient token when email changes
+  - supports `fullName`, `dob`, `phone`, `address`, optional `profilePhotoDataUrl`
+  - direct email mutation is blocked (`EMAIL_CHANGE_REQUIRES_CONFIRMATION`) to prevent unsafe lockout edits
+- Email change verification flow:
+  - `POST /api/patient/profile/email-change/request`
+  - `POST /api/patient/profile/email-change/consume`
+  - consume path updates:
+    - Supabase auth email
+    - `patients`/`profiles` identity rows
+    - certificate email references
+    - billing references + Stripe customer email + Stripe subscription metadata (`patient_email`)
+  - returns rotated patient token for the new email.
 - Checkout confirmation:
   - `POST /api/checkout/confirm` auto-creates patient account when missing and sends magic-link email after payment.
 
@@ -68,21 +72,10 @@ When account/profile records are created/updated:
 - this keeps `profiles` and `patients` in sync
 - these sync paths now include `address` and `profilePhotoPath`.
 
-## Email idempotency rule
-- Doctor review confirmation email sending is constrained to webhook-finalization path (`stripe_webhook`) in `markPaidFromStripeSession(...)` to prevent duplicate sends from multiple payment completion code paths.
-
-## Payment reconciliation rule
-- To reduce stale `awaiting_payment` states, patient API reads now run a bounded reconciliation pass:
-  - fetch up to 5 recent `awaiting_payment` certificates with Stripe session IDs
-  - re-check Stripe session payment status
-  - auto-mark paid via `markPaidFromStripeSession(...)` when Stripe confirms `paid` or `no_payment_required`
-- Reconciliation currently runs on:
-  - `GET /api/patient/bootstrap`
-  - `GET /api/patient/me`
-  - `GET /api/patient/requests`
-- Additional hardening:
-  - `awaiting_payment` inference now only applies when Stripe session id exists in payment metadata.
-  - Supabase certificate updates now patch `medical_certificate_requests.raw_submission` so Stripe payment status changes are persisted (avoids stale `awaiting_payment` in subsequent reads).
+## Critical identity rule
+- Do not re-sync canonical patient identity from legacy certificate drafts during bootstrap/me reads.
+- `patients` + `profiles` are the source of truth for name/DOB/phone/address.
+- Certificate draft data may be stale and must never overwrite canonical identity on page refresh.
 
 ## Certificate duration cap
 - Duration is hard-capped to 7 days at all pricing/draft points:

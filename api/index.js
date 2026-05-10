@@ -69,7 +69,6 @@ import {
 import { error, info } from '../backend/lib/logger.js';
 import {
   getPatientCertificatesForEmail,
-  syncPatientProfileFromLatest,
 } from './lib/patient-snapshot.js';
 
 const CORS_ORIGIN = String(process.env.CORS_ORIGIN || '*').trim();
@@ -1795,12 +1794,12 @@ async function resolvePatientProfileByEmail({ email, latestCertificate, account 
     const accountAddress = String(account?.address || '').trim();
     const accountPhotoPath = normalizeStoragePath(account?.profilePhotoPath || '');
     const profileName = joinName(profileRow?.first_name, profileRow?.last_name);
-    const patientFullName = String(accountFullName || patientRow.full_name || profileName || fallbackPatient.fullName).trim();
+    const patientFullName = String(patientRow.full_name || profileName || accountFullName || fallbackPatient.fullName).trim();
     const patientNameParts = splitFullName(patientFullName);
-    const patientPhone = String(accountPhone || patientRow.phone || profileRow?.phone || fallbackPatient.phone).trim();
-    const patientDob = String(accountDob || profileRow?.dob || fallbackPatient.dob).trim();
-    const patientAddress = String(accountAddress || patientRow.address || fallbackPatient.address || '').trim();
-    const patientPhotoPath = normalizeStoragePath(accountPhotoPath || patientRow.profile_photo_path);
+    const patientPhone = String(patientRow.phone || profileRow?.phone || accountPhone || fallbackPatient.phone).trim();
+    const patientDob = String(profileRow?.dob || accountDob || fallbackPatient.dob).trim();
+    const patientAddress = String(patientRow.address || accountAddress || fallbackPatient.address || '').trim();
+    const patientPhotoPath = normalizeStoragePath(patientRow.profile_photo_path || accountPhotoPath);
 
     let assignmentRows = await supabaseRestRequest(
       config,
@@ -4750,19 +4749,6 @@ export default async function handler(req, res) {
           patientCertificatesCount = snapshot.patientCertificates.length;
           snapshotDurationMs = Date.now() - snapshotStartedAt;
 
-          void syncPatientProfileFromLatest({
-            email,
-            latestCertificate: latest,
-            supabaseEnabled: supabaseConfig.enabled,
-            upsertSupabasePatientMetadata,
-            updatePatientAccountProfile,
-          }).catch((profileSyncError) => {
-            error('patient.profile.sync_after_login_failed', {
-              email,
-              method: 'password',
-              message: profileSyncError?.message || String(profileSyncError),
-            });
-          });
         }
 
         const token = issuePatientToken(email);
@@ -4806,20 +4792,6 @@ export default async function handler(req, res) {
         sendJson(res, 401, { error: 'Date of birth did not match our records' });
         return;
       }
-
-      void syncPatientProfileFromLatest({
-        email,
-        latestCertificate: latest,
-        supabaseEnabled: supabaseConfig.enabled,
-        upsertSupabasePatientMetadata,
-        updatePatientAccountProfile,
-      }).catch((profileSyncError) => {
-        error('patient.profile.sync_after_login_failed', {
-          email,
-          method: 'dob',
-          message: profileSyncError?.message || String(profileSyncError),
-        });
-      });
 
       const token = issuePatientToken(email);
       const profilePayload = await resolvePatientProfileByEmail({
@@ -5285,25 +5257,11 @@ export default async function handler(req, res) {
           message: errorObject?.message || String(errorObject),
         });
       });
-      const supabaseConfig = getSupabaseConfig();
       const snapshot = await loadPatientPortalSnapshot(patient.email, { includeBilling: true });
       if (snapshot.patientCertificates.length === 0 && !snapshot.account) {
         sendJson(res, 404, { error: 'Patient not found' });
         return;
       }
-
-      void syncPatientProfileFromLatest({
-        email: patient.email,
-        latestCertificate: snapshot.latest,
-        supabaseEnabled: supabaseConfig.enabled,
-        upsertSupabasePatientMetadata,
-        updatePatientAccountProfile,
-      }).catch((profileSyncError) => {
-        error('patient.profile.sync_after_bootstrap_failed', {
-          email: patient.email,
-          message: profileSyncError?.message || String(profileSyncError),
-        });
-      });
 
       const profilePayload = await resolvePatientProfileByEmail({
         email: patient.email,
@@ -5341,25 +5299,11 @@ export default async function handler(req, res) {
           message: errorObject?.message || String(errorObject),
         });
       });
-      const supabaseConfig = getSupabaseConfig();
       const snapshot = await loadPatientPortalSnapshot(patient.email, { includeBilling: true });
       if (snapshot.patientCertificates.length === 0 && !snapshot.account) {
         sendJson(res, 404, { error: 'Patient not found' });
         return;
       }
-
-      void syncPatientProfileFromLatest({
-        email: patient.email,
-        latestCertificate: snapshot.latest,
-        supabaseEnabled: supabaseConfig.enabled,
-        upsertSupabasePatientMetadata,
-        updatePatientAccountProfile,
-      }).catch((profileSyncError) => {
-        error('patient.profile.sync_after_me_failed', {
-          email: patient.email,
-          message: profileSyncError?.message || String(profileSyncError),
-        });
-      });
 
       const profilePayload = await resolvePatientProfileByEmail({
         email: patient.email,
@@ -5556,7 +5500,7 @@ export default async function handler(req, res) {
       const profilePayload = await resolvePatientProfileByEmail({
         email: nextEmail,
         latestCertificate: null,
-        account: localAccount || nextLocalAccount || currentLocalAccount || null,
+        account: supabaseConfig.enabled ? null : localAccount || nextLocalAccount || currentLocalAccount || null,
       });
 
       sendJson(res, 200, {
@@ -5635,6 +5579,10 @@ export default async function handler(req, res) {
             email: patient.email,
             message: errorObject?.message || String(errorObject),
           });
+          sendJson(res, 500, {
+            error: 'Unable to save account settings right now. Please try again.',
+          });
+          return;
         }
       }
 
@@ -5657,7 +5605,7 @@ export default async function handler(req, res) {
       const profilePayload = await resolvePatientProfileByEmail({
         email: resolvedEmail,
         latestCertificate: null,
-        account: localAccount,
+        account: supabaseConfig.enabled ? null : localAccount,
       });
 
       sendJson(res, 200, {

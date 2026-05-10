@@ -531,6 +531,7 @@ export default function WeightLossResetDashboard({
   const dietitianImageUrl = String(dietitian?.profilePhotoUrl || '').trim() || DEFAULT_DIETITIAN_PROFILE_IMAGE_URL;
   const dietitianCredentials = String(dietitian?.credentials || '').trim() || 'Accredited Dietitian';
   const dietitianBio = String(dietitian?.bio || '').trim() || 'Practical, kind, realistic support.';
+  const dietitianQuote = `“Consistency beats perfection. If something in this week feels too hard, message me and I’ll adapt it around your real life.”`;
   const contextHistory = Array.isArray(clinicalContext?.medicalHistory) ? clinicalContext.medicalHistory.filter(Boolean) : [];
   const contextAllergies = Array.isArray(clinicalContext?.allergies) ? clinicalContext.allergies.filter(Boolean) : [];
   const contextMedications = Array.isArray(clinicalContext?.medications) ? clinicalContext.medications.filter(Boolean) : [];
@@ -911,29 +912,39 @@ export default function WeightLossResetDashboard({
           {mealPlan ? (
             <article className="overflow-hidden rounded-3xl border border-[#cbd5e1] bg-white shadow-[0_20px_42px_-34px_rgba(15,23,42,0.38)]">
               <div className="border-b border-[#dbeeff] bg-gradient-to-r from-[#f8fbff] via-[#f1f8ff] to-white px-4 py-4 sm:px-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
+                <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr] lg:items-start">
+                  <div className="space-y-3">
                     <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.07em] text-[#1f7be6]">
                       <Sparkles size={14} />
                       Crafted for you
                     </p>
-                    <h3 className="mt-1 text-xl font-semibold tracking-tight text-[#020617]">{personalizedSummary.title}</h3>
-                    <p className="mt-2 text-sm text-[#334155]">{personalizedSummary.intro}</p>
-                    <p className="mt-1 text-sm text-[#475569]">{personalizedSummary.detail}</p>
-                  </div>
-                  <div className="inline-flex items-center gap-2 rounded-xl border border-[#cbd5e1] bg-white px-2.5 py-2">
-                    <ProfileAvatar
-                      name={dietitianName}
-                      imageUrl={dietitianImageUrl}
-                      fallbackImageUrl={DEFAULT_DIETITIAN_PROFILE_IMAGE_URL}
-                      alt={`${dietitianName} profile`}
-                      className="h-9 w-9 rounded-lg border border-[#b7dcff] object-cover"
-                    />
-                    <div>
-                      <p className="text-sm font-semibold text-[#020617]">{dietitianName}</p>
-                      <p className="text-xs text-[#475569]">{dietitianCredentials}</p>
+                    <h3 className="text-xl font-semibold tracking-tight text-[#020617]">{personalizedSummary.title}</h3>
+                    <p className="text-sm text-[#334155]">{personalizedSummary.intro}</p>
+                    <p className="text-sm text-[#475569]">{personalizedSummary.detail}</p>
+                    <div className="rounded-2xl border border-[#d6e9ff] bg-white/95 p-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#4f46e5]">
+                        A personal note from {dietitianName}
+                      </p>
+                      <p className="mt-1 text-sm italic text-[#1e293b]">{dietitianQuote}</p>
                     </div>
                   </div>
+
+                  <aside className="rounded-2xl border border-[#d6e9ff] bg-white/95 p-4">
+                    <div className="flex items-start gap-3">
+                      <ProfileAvatar
+                        name={dietitianName}
+                        imageUrl={dietitianImageUrl}
+                        fallbackImageUrl={DEFAULT_DIETITIAN_PROFILE_IMAGE_URL}
+                        alt={`${dietitianName} profile`}
+                        className="h-24 w-24 rounded-2xl border border-[#b7dcff] object-cover sm:h-28 sm:w-28"
+                      />
+                      <div className="min-w-0">
+                        <p className="text-base font-semibold text-[#020617]">{dietitianName}</p>
+                        <p className="text-sm text-[#334155]">{dietitianCredentials}</p>
+                        <p className="mt-2 text-sm text-[#475569]">{dietitianBio}</p>
+                      </div>
+                    </div>
+                  </aside>
                 </div>
               </div>
 
