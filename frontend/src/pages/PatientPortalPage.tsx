@@ -1651,6 +1651,10 @@ export default function PatientPortalPage() {
     ]);
 
 
+    const hasActiveQueuedRequest = Boolean(
+        activeQueuedRequest?.id && isQueuedStatus(activeQueuedRequest?.status || '')
+    );
+
     useEffect(() => {
         let disposed = false;
 
@@ -1837,7 +1841,7 @@ export default function PatientPortalPage() {
             }
         };
 
-        const pollIntervalMs = activeQueuedRequest ? 8000 : 30000;
+        const pollIntervalMs = hasActiveQueuedRequest ? 8000 : 30000;
         fetchPortalData(false);
         const pollTimer = window.setInterval(() => {
             fetchPortalData(true);
@@ -1847,7 +1851,7 @@ export default function PatientPortalPage() {
             disposed = true;
             window.clearInterval(pollTimer);
         };
-    }, [token, checkoutSetupContext, openWeightLossFromRoute, activeQueuedRequest?.id, activeQueuedRequest?.status, emailChangeConsuming]);
+    }, [token, checkoutSetupContext, openWeightLossFromRoute, hasActiveQueuedRequest, emailChangeConsuming]);
 
     const firstNameValue = useMemo(() => firstName(patient.fullName || ''), [patient.fullName]);
     const nutritionConsultRequest = useMemo<PortalRequest | null>(() => {
@@ -1890,15 +1894,6 @@ export default function PatientPortalPage() {
         () => activeQueuedRequest || requests.find((item) => isQueuedStatus(item.status)) || null,
         [activeQueuedRequest, requests]
     );
-    const nutritionClinicalContext = useMemo(
-        () => ({
-            medicalHistory: portalData.medicalHistory.map((entry) => entry.title).filter(Boolean),
-            allergies: portalData.allergies.map((entry) => entry.title).filter(Boolean),
-            medications: portalData.medications.map((entry) => entry.title).filter(Boolean),
-        }),
-        [portalData.allergies, portalData.medicalHistory, portalData.medications]
-    );
-
     useEffect(() => {
         warmCheckoutPath();
     }, []);
@@ -2513,12 +2508,12 @@ export default function PatientPortalPage() {
                         answers={weightLossResetState.onboardingAnswers}
                         displayFirstName={firstNameValue}
                         dietitian={primaryDietitian}
-                        clinicalContext={nutritionClinicalContext}
                         mealPlan={weightLossResetState.mealPlan}
                         recipes={allWeightLossRecipes}
                         weightLogs={weightLossResetState.weightLogs}
                         messages={weightLossResetState.messages}
                         groceryCheckedItems={weightLossResetState.groceryCheckedItems}
+                        onBackToHome={openPortalHome}
                         isGeneratingPlan={isGeneratingMealPlan}
                         onUpdatePreferences={openWeightLossPreferenceEditor}
                         onRegeneratePlan={() => {

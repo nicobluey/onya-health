@@ -1,5 +1,6 @@
-import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
+import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowLeft,
   ArrowRight,
   Dumbbell,
   Leaf,
@@ -18,7 +19,6 @@ import {
 import {
   DEFAULT_DIETITIAN_PROFILE_IMAGE_URL,
   getHealthFocusDisplayLabel,
-  WEIGHT_LOSS_RESET_PRICE_COPY,
   WEIGHT_LOSS_RESET_PROGRAM_NAME,
 } from '../constants';
 import { buildGroceryListFromMealPlan, calculateGoalProgress, getCurrentWeight, getSwapCandidates } from '../mealPlanning';
@@ -146,8 +146,8 @@ type PersonalizedSummary = {
   title: string;
   intro: string;
   detail: string;
+  personalNote: string;
   highlights: string[];
-  qualityChecks: Array<{ label: string; value: string }>;
 };
 
 function normalizeToken(value: string) {
@@ -194,32 +194,12 @@ function extractRecipeBadges(recipe: Recipe): RecipeBadge[] {
   return badges.slice(0, 4);
 }
 
-function extractQualityChecks(notes: string[]) {
-  const text = notes.join(' ');
-  const patterns = [
-    { label: 'Servings', regex: /servings?\s*(\d+)%/i },
-    { label: 'Quantities', regex: /quantities?\s*(\d+)%/i },
-    { label: 'Detailed steps', regex: /detailed steps?\s*(\d+)%/i },
-    { label: 'Ingredient reuse', regex: /ingredient reuse\s*(\d+)%/i },
-  ];
-
-  return patterns
-    .map((entry) => {
-      const match = text.match(entry.regex);
-      if (!match) return null;
-      return { label: entry.label, value: `${match[1]}%` };
-    })
-    .filter((entry): entry is { label: string; value: string } => Boolean(entry));
-}
-
 function buildPersonalizedSummary({
   answers,
   displayFirstName,
-  notes,
 }: {
   answers: OnboardingAnswers;
   displayFirstName?: string;
-  notes: string[];
 }): PersonalizedSummary {
   const firstName = displayFirstName || answers.firstName || 'there';
   const cleanedDietary = (answers.dietaryRequirements || [])
@@ -233,7 +213,11 @@ function buildPersonalizedSummary({
   const supportAreas = (answers.supportAreas || []).map((item) => String(item || '').trim()).filter(Boolean);
   const supportLabel = supportAreas.length ? toDisplayList(supportAreas.slice(0, 3)) : 'weekly accountability and routine';
   const prepDay = answers.prepDay || 'Sunday';
-  const qualityChecks = extractQualityChecks(notes);
+  const preferredStyle = String(answers.preferredMealStyle || '').trim().toLowerCase();
+  const styleCopy =
+    preferredStyle && preferredStyle !== 'no preference'
+      ? preferredStyle
+      : 'keeping things simple and sustainable';
 
   const highlights = [
     `${answers.preferredMealStyle || 'balanced'} meal style`,
@@ -242,12 +226,14 @@ function buildPersonalizedSummary({
   ];
   if (supportAreas.length > 0) highlights.push(`Support priorities: ${supportLabel}`);
 
+  const personalNote = `Hi ${firstName}, I’ve aligned this plan with your intake form, preferences, and goals. I’ve included meals that should be realistic for your week, with a focus on ${styleCopy}. If anything feels hard to follow or you want changes, message me and I’ll help adjust it.`;
+
   return {
     title: `${firstName}, your week is crafted around ${answers.mainGoal || 'your goals'}.`,
     intro: `We prioritised ${dietaryLabel} meals with ${cuisineLabel} influences so every day feels aligned to you.`,
     detail: `Your plan is built to reduce decision fatigue, keep grocery overlap practical, and support ${supportLabel}.`,
+    personalNote,
     highlights,
-    qualityChecks,
   };
 }
 
@@ -483,12 +469,12 @@ export default function WeightLossResetDashboard({
   answers,
   displayFirstName,
   dietitian,
-  clinicalContext,
   mealPlan,
   recipes,
   weightLogs,
   messages,
   groceryCheckedItems,
+  onBackToHome,
   onRegeneratePlan,
   onUpdatePreferences,
   onSwapMeal,
@@ -500,16 +486,12 @@ export default function WeightLossResetDashboard({
   answers: OnboardingAnswers;
   displayFirstName?: string;
   dietitian?: AssignedDietitianProfile | null;
-  clinicalContext?: {
-    medicalHistory?: string[];
-    allergies?: string[];
-    medications?: string[];
-  } | null;
   mealPlan: MealPlan | null;
   recipes: Recipe[];
   weightLogs: WeightLogEntry[];
   messages: DietitianMessage[];
   groceryCheckedItems: string[];
+  onBackToHome: () => void;
   onRegeneratePlan: () => void;
   onUpdatePreferences: () => void;
   onSwapMeal: (dayIndex: number, mealType: MealType, recipeId: string) => void;
@@ -531,10 +513,6 @@ export default function WeightLossResetDashboard({
   const dietitianImageUrl = String(dietitian?.profilePhotoUrl || '').trim() || DEFAULT_DIETITIAN_PROFILE_IMAGE_URL;
   const dietitianCredentials = String(dietitian?.credentials || '').trim() || 'Accredited Dietitian';
   const dietitianBio = String(dietitian?.bio || '').trim() || 'Practical, kind, realistic support.';
-  const dietitianQuote = `“Consistency beats perfection. If something in this week feels too hard, message me and I’ll adapt it around your real life.”`;
-  const contextHistory = Array.isArray(clinicalContext?.medicalHistory) ? clinicalContext.medicalHistory.filter(Boolean) : [];
-  const contextAllergies = Array.isArray(clinicalContext?.allergies) ? clinicalContext.allergies.filter(Boolean) : [];
-  const contextMedications = Array.isArray(clinicalContext?.medications) ? clinicalContext.medications.filter(Boolean) : [];
 
   const recipeMap = useMemo(() => new Map(recipes.map((recipe) => [recipe.id, recipe])), [recipes]);
   const groceryGroups = useMemo(() => buildGroceryListFromMealPlan(mealPlan, recipeMap), [mealPlan, recipeMap]);
@@ -572,26 +550,13 @@ export default function WeightLossResetDashboard({
     [answers]
   );
   const showSnackMeals = false;
-  const visiblePlanNotes = useMemo(
-    () =>
-      (mealPlan?.notes || []).filter((note) => {
-        const normalized = String(note || '').toLowerCase();
-        return !(
-          normalized.includes('fallback') ||
-          normalized.includes('deterministic') ||
-          normalized.includes('quality warning')
-        );
-      }),
-    [mealPlan?.notes]
-  );
   const personalizedSummary = useMemo(
     () =>
       buildPersonalizedSummary({
         answers,
         displayFirstName,
-        notes: visiblePlanNotes,
       }),
-    [answers, displayFirstName, visiblePlanNotes]
+    [answers, displayFirstName]
   );
   const generationPercent = Math.round(Math.max(6, Math.min(100, generationProgress)));
   const generationStages = [
@@ -632,6 +597,11 @@ export default function WeightLossResetDashboard({
     [messages]
   );
   const selectedRecipeServes = selectedRecipe ? readRecipeServes(selectedRecipe) : undefined;
+  const generationProgressRef = useRef(generationProgress);
+
+  useEffect(() => {
+    generationProgressRef.current = generationProgress;
+  }, [generationProgress]);
 
   useEffect(() => {
     let disposed = false;
@@ -640,7 +610,7 @@ export default function WeightLossResetDashboard({
     const MAX_IN_PROGRESS = 98;
 
     if (!isGeneratingPlan) {
-      const shouldDelayReset = generationProgress > 0;
+      const shouldDelayReset = generationProgressRef.current > 0;
       let resetTimer: number | null = null;
       const completionTimer = window.setTimeout(() => {
         if (disposed) return;
@@ -714,14 +684,25 @@ export default function WeightLossResetDashboard({
   };
 
   return (
-    <section className="space-y-5">
+    <section className="space-y-5 font-sans">
       <header className="rounded-3xl border border-[#cbd5e1] bg-white p-5 shadow-[0_24px_42px_-34px_rgba(15,23,42,0.24)] sm:p-6">
-        <div className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={onBackToHome}
+            className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#dbe2d9] bg-[#f8faf7] px-3 text-xs font-semibold text-[#1f5f3f]"
+          >
+            <ArrowLeft size={14} />
+            Back to patient home
+          </button>
+          <p className="text-sm font-medium text-[#475569]">
+            {WEIGHT_LOSS_RESET_PROGRAM_NAME} • Week {weekNumber} • Focus: {focusLabel}
+          </p>
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
           <div>
-            <p className="text-sm font-medium text-[#475569]">
-              {WEIGHT_LOSS_RESET_PROGRAM_NAME} • Week {weekNumber} • Focus: {focusLabel}
-            </p>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight text-[#020617]">Welcome back, {displayFirstName || answers.firstName || 'there'}</h1>
+            <h1 className="text-3xl font-semibold tracking-tight text-[#020617]">Welcome back, {displayFirstName || answers.firstName || 'there'}</h1>
             <p className="mt-2 text-sm text-[#475569]">
               Small changes, consistent support. No perfect days required. {dietitianName} can adjust your plan any time.
             </p>
@@ -763,52 +744,21 @@ export default function WeightLossResetDashboard({
           </div>
 
           <div className="space-y-3">
-            <article className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3">
-              <div className="inline-flex items-center gap-3">
+            <article className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-4">
+              <div className="flex items-start gap-3">
                 <ProfileAvatar
                   name={dietitianName}
                   imageUrl={dietitianImageUrl}
                   fallbackImageUrl={DEFAULT_DIETITIAN_PROFILE_IMAGE_URL}
                   alt={`${dietitianName} profile`}
-                  className="h-11 w-11 rounded-xl border border-[#b7dcff] object-cover"
+                  className="h-16 w-16 rounded-2xl border border-[#b9c8ba] object-cover"
                 />
-                <p className="text-sm font-semibold text-[#020617]">{dietitianName}</p>
-              </div>
-              <p className="mt-1 text-sm text-[#475569]">{dietitianCredentials} • {dietitianBio}</p>
-            </article>
-
-            <article className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3">
-              <p className="text-sm font-semibold text-[#020617]">{WEIGHT_LOSS_RESET_PRICE_COPY}</p>
-              <p className="mt-1 text-xs text-[#475569]">
-                Preference-led weekly planning with practical prep guidance. General nutrition support, not medical advice.
-              </p>
-            </article>
-
-            <article className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3">
-              <p className="text-sm font-semibold text-[#020617]">Shared clinical context</p>
-              <p className="mt-1 text-xs text-[#475569]">
-                {dietitianName} can use your history, allergies, and medications to keep your plan safer and more practical.
-              </p>
-              <div className="mt-2 grid grid-cols-3 gap-2">
-                <div className="rounded-lg border border-[#dbeeff] bg-white px-2 py-1.5 text-center">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#64748b]">History</p>
-                  <p className="mt-0.5 text-sm font-semibold text-[#020617]">{contextHistory.length}</p>
-                </div>
-                <div className="rounded-lg border border-[#dbeeff] bg-white px-2 py-1.5 text-center">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#64748b]">Allergies</p>
-                  <p className="mt-0.5 text-sm font-semibold text-[#020617]">{contextAllergies.length}</p>
-                </div>
-                <div className="rounded-lg border border-[#dbeeff] bg-white px-2 py-1.5 text-center">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#64748b]">Meds</p>
-                  <p className="mt-0.5 text-sm font-semibold text-[#020617]">{contextMedications.length}</p>
+                <div className="min-w-0">
+                  <p className="text-base font-semibold text-[#020617]">{dietitianName}</p>
+                  <p className="text-sm text-[#334155]">{dietitianCredentials}</p>
+                  <p className="mt-1 text-sm text-[#475569]">{dietitianBio}</p>
                 </div>
               </div>
-              {(contextAllergies.length > 0 || contextMedications.length > 0) && (
-                <p className="mt-2 text-xs text-[#475569]">
-                  Key flags:{' '}
-                  {[...contextAllergies.slice(0, 2), ...contextMedications.slice(0, 1)].join(', ')}
-                </p>
-              )}
             </article>
 
             <article className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3">
@@ -910,70 +860,44 @@ export default function WeightLossResetDashboard({
           ) : null}
 
           {mealPlan ? (
-            <article className="overflow-hidden rounded-3xl border border-[#cbd5e1] bg-white shadow-[0_20px_42px_-34px_rgba(15,23,42,0.38)]">
-              <div className="border-b border-[#dbeeff] bg-gradient-to-r from-[#f8fbff] via-[#f1f8ff] to-white px-4 py-4 sm:px-5">
-                <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr] lg:items-start">
-                  <div className="space-y-3">
-                    <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.07em] text-[#1f7be6]">
-                      <Sparkles size={14} />
-                      Crafted for you
-                    </p>
-                    <h3 className="text-xl font-semibold tracking-tight text-[#020617]">{personalizedSummary.title}</h3>
-                    <p className="text-sm text-[#334155]">{personalizedSummary.intro}</p>
-                    <p className="text-sm text-[#475569]">{personalizedSummary.detail}</p>
-                    <div className="rounded-2xl border border-[#d6e9ff] bg-white/95 p-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#4f46e5]">
-                        A personal note from {dietitianName}
-                      </p>
-                      <p className="mt-1 text-sm italic text-[#1e293b]">{dietitianQuote}</p>
-                    </div>
+            <article className="rounded-2xl border border-[#cbd5e1] bg-white p-4 shadow-[0_20px_42px_-34px_rgba(15,23,42,0.38)] sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.07em] text-[#1f7be6]">
+                  <Sparkles size={14} />
+                  Crafted for you
+                </p>
+                <div className="inline-flex items-center gap-2 rounded-xl border border-[#dbe2d9] bg-[#f8faf7] px-2.5 py-2">
+                  <ProfileAvatar
+                    name={dietitianName}
+                    imageUrl={dietitianImageUrl}
+                    fallbackImageUrl={DEFAULT_DIETITIAN_PROFILE_IMAGE_URL}
+                    alt={`${dietitianName} profile`}
+                    className="h-12 w-12 rounded-xl border border-[#b9c8ba] object-cover"
+                  />
+                  <div>
+                    <p className="text-sm font-semibold text-[#020617]">{dietitianName}</p>
+                    <p className="text-xs text-[#475569]">{dietitianCredentials}</p>
                   </div>
-
-                  <aside className="rounded-2xl border border-[#d6e9ff] bg-white/95 p-4">
-                    <div className="flex items-start gap-3">
-                      <ProfileAvatar
-                        name={dietitianName}
-                        imageUrl={dietitianImageUrl}
-                        fallbackImageUrl={DEFAULT_DIETITIAN_PROFILE_IMAGE_URL}
-                        alt={`${dietitianName} profile`}
-                        className="h-24 w-24 rounded-2xl border border-[#b7dcff] object-cover sm:h-28 sm:w-28"
-                      />
-                      <div className="min-w-0">
-                        <p className="text-base font-semibold text-[#020617]">{dietitianName}</p>
-                        <p className="text-sm text-[#334155]">{dietitianCredentials}</p>
-                        <p className="mt-2 text-sm text-[#475569]">{dietitianBio}</p>
-                      </div>
-                    </div>
-                  </aside>
                 </div>
               </div>
 
-              <div className="grid gap-4 px-4 py-4 sm:px-5 lg:grid-cols-[1.1fr_0.9fr]">
-                <div className="space-y-2">
-                  {personalizedSummary.highlights.map((highlight) => (
-                    <p key={highlight} className="rounded-xl border border-[#dbeeff] bg-[#f8fbff] px-3 py-2 text-sm text-[#334155]">
-                      {highlight}
-                    </p>
-                  ))}
-                </div>
+              <h3 className="mt-3 text-2xl font-semibold tracking-tight text-[#020617]">{personalizedSummary.title}</h3>
+              <p className="mt-2 text-sm text-[#334155]">{personalizedSummary.intro}</p>
+              <p className="mt-1 text-sm text-[#475569]">{personalizedSummary.detail}</p>
 
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-[0.06em] text-[#475569]">Quality checks</p>
-                  {personalizedSummary.qualityChecks.length > 0 ? (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {personalizedSummary.qualityChecks.map((metric) => (
-                        <div key={metric.label} className="rounded-xl border border-[#dbeeff] bg-[#f8fbff] px-3 py-2">
-                          <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-[#64748b]">{metric.label}</p>
-                          <p className="mt-0.5 text-base font-semibold text-[#1f7be6]">{metric.value}</p>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="rounded-xl border border-[#dbeeff] bg-[#f8fbff] px-3 py-2 text-sm text-[#475569]">
-                      Dietitian safeguards for allergies, meal balance, and prep practicality are active.
-                    </p>
-                  )}
-                </div>
+              <div className="mt-3 rounded-xl border border-[#dbe2d9] bg-[#f8faf7] p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1f5f3f]">
+                  A personal note from {dietitianName}
+                </p>
+                <p className="mt-1 text-sm leading-6 text-[#1e293b]">{personalizedSummary.personalNote}</p>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                {personalizedSummary.highlights.slice(0, 3).map((highlight) => (
+                  <p key={highlight} className="rounded-full border border-[#dbeeff] bg-[#f8fbff] px-3 py-1.5 text-xs font-semibold text-[#334155]">
+                    {highlight}
+                  </p>
+                ))}
               </div>
             </article>
           ) : null}

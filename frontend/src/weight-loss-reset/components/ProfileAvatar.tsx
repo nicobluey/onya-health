@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 function initialsFromName(name: string) {
   const tokens = String(name || '')
@@ -25,18 +25,17 @@ export default function ProfileAvatar({
   className: string;
   fallbackClassName?: string;
 }) {
-  const [imageFailed, setImageFailed] = useState(false);
-  const [activeImageUrl, setActiveImageUrl] = useState(String(imageUrl || '').trim());
+  const [failedImageMap, setFailedImageMap] = useState<Record<string, true>>({});
   const initials = useMemo(() => initialsFromName(name), [name]);
   const resolvedImageUrl = String(imageUrl || '').trim();
   const resolvedFallbackImageUrl = String(fallbackImageUrl || '').trim();
+  const imageCandidates = useMemo(
+    () => Array.from(new Set([resolvedImageUrl, resolvedFallbackImageUrl].filter(Boolean))),
+    [resolvedFallbackImageUrl, resolvedImageUrl]
+  );
+  const activeImageUrl = imageCandidates.find((candidate) => !failedImageMap[candidate]) || '';
 
-  useEffect(() => {
-    setActiveImageUrl(resolvedImageUrl);
-    setImageFailed(false);
-  }, [resolvedImageUrl]);
-
-  if (activeImageUrl && !imageFailed) {
+  if (activeImageUrl) {
     return (
       <img
         src={activeImageUrl}
@@ -45,11 +44,9 @@ export default function ProfileAvatar({
         loading="lazy"
         decoding="async"
         onError={() => {
-          if (activeImageUrl !== resolvedFallbackImageUrl && resolvedFallbackImageUrl) {
-            setActiveImageUrl(resolvedFallbackImageUrl);
-            return;
-          }
-          setImageFailed(true);
+          setFailedImageMap((current) =>
+            current[activeImageUrl] ? current : { ...current, [activeImageUrl]: true }
+          );
         }}
       />
     );
