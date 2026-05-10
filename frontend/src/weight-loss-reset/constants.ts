@@ -52,7 +52,7 @@ export const DEFAULT_ONBOARDING_ANSWERS: OnboardingAnswers = {
   budgetPreference: 'balanced',
   groceryPreference: 'simple supermarket ingredients',
   prepDay: 'Sunday',
-  preferredMealStyle: 'quick and easy',
+  preferredMealStyle: 'no preference',
   preferredCuisines: [],
   supportWanted: 'yes',
   supportAreas: ['meal planning', 'accountability'],
