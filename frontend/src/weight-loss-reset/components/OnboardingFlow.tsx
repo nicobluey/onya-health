@@ -8,15 +8,26 @@ import {
   CheckCircle2,
   Cherry,
   Citrus,
+  Clock3,
   CookingPot,
   Fish,
+  HandCoins,
+  HeartPulse,
+  Home,
   Leaf,
+  ListChecks,
   LoaderCircle,
+  PiggyBank,
   Salad,
   Sandwich,
   ShieldCheck,
+  ShoppingBasket,
+  Sparkles,
+  TimerReset,
   UtensilsCrossed,
+  UsersRound,
   Wheat,
+  Zap,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -39,12 +50,13 @@ import {
   WEIGHT_LOSS_RESET_PROGRAM_NAME,
 } from '../constants';
 import type { AssignedDietitianProfile, CoreMealType, OnboardingAnswers } from '../types';
+import { ChoicePillButton, IconPill, PlanCard, ProgressBar, SoftPanel } from './PlanUi';
 import ProfileAvatar from './ProfileAvatar';
 
 const inputClassName =
-  'h-11 w-full rounded-xl border border-[#cbd5e1] bg-white px-3 text-sm text-[#020617] outline-none transition focus:border-[#2e8cff]';
+  'h-11 w-full rounded-xl border border-[#cbd5e1] bg-white px-3 text-sm text-[#020617] outline-none transition focus:border-[#1f5f3f]';
 const textareaClassName =
-  'min-h-20 w-full rounded-xl border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#020617] outline-none transition focus:border-[#2e8cff]';
+  'min-h-20 w-full rounded-xl border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#020617] outline-none transition focus:border-[#1f5f3f]';
 const CORE_MEAL_TYPE_ORDER: CoreMealType[] = ['breakfast', 'lunch', 'dinner'];
 
 const foodOptionIcons: Record<(typeof FAVORITE_FOOD_OPTIONS)[number]['value'], LucideIcon> = {
@@ -62,25 +74,70 @@ const foodOptionIcons: Record<(typeof FAVORITE_FOOD_OPTIONS)[number]['value'], L
   pasta: Wheat,
 };
 
+const mealTypeIcons: Record<CoreMealType, LucideIcon> = {
+  breakfast: Citrus,
+  lunch: Salad,
+  dinner: CookingPot,
+};
+
+const groceryPreferenceIcons: Record<(typeof GROCERY_PREFERENCE_OPTIONS)[number], LucideIcon> = {
+  'simple supermarket ingredients': ShoppingBasket,
+  'fastest meals possible': Zap,
+  'high variety': Sparkles,
+  'meal prep friendly': CalendarDays,
+};
+
+const mealStyleIcons: Record<(typeof PREFERRED_MEAL_STYLE_OPTIONS)[number], LucideIcon> = {
+  'quick and easy': TimerReset,
+  'family friendly': UsersRound,
+  'high protein': Beef,
+  'low prep': Clock3,
+  'vegetarian leaning': Leaf,
+  'no preference': ShieldCheck,
+};
+
+const healthFocusIcons: Record<(typeof HEALTH_FOCUS_OPTIONS)[number]['value'], LucideIcon> = {
+  'weight loss': TimerReset,
+  pcos: HeartPulse,
+  'blood sugar balance': Apple,
+  'gut health': Leaf,
+  "women's health": HeartPulse,
+  'sports performance': Zap,
+  'family nutrition': Home,
+  'general healthy eating': Salad,
+};
+
+const supportAreaIcons: Record<(typeof SUPPORT_AREA_OPTIONS)[number], LucideIcon> = {
+  accountability: ShieldCheck,
+  'meal planning': CalendarDays,
+  'shopping list': ShoppingBasket,
+  'portion guidance': ListChecks,
+  motivation: Sparkles,
+  'allergy/dietary substitutions': Leaf,
+  'progress tracking': HeartPulse,
+};
+
+const budgetPreferenceIcons: Record<OnboardingAnswers['budgetPreference'], LucideIcon> = {
+  'low cost': PiggyBank,
+  balanced: HandCoins,
+  premium: Sparkles,
+};
+
 function ChoiceButton({
   active,
   onClick,
   children,
+  icon,
 }: {
   active: boolean;
   onClick: () => void;
   children: string;
+  icon?: LucideIcon;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-xl border px-3 py-2 text-sm font-medium transition ${
-        active ? 'border-[#2e8cff] bg-[#f1f8ff] text-[#2e8cff]' : 'border-[#cbd5e1] bg-white text-[#334155] hover:border-[#b7dcff]'
-      }`}
-    >
+    <ChoicePillButton active={active} icon={icon} onClick={onClick}>
       {children}
-    </button>
+    </ChoicePillButton>
   );
 }
 
@@ -405,17 +462,20 @@ export default function OnboardingFlow({
   };
 
   return (
-    <section className="mx-auto w-full max-w-[920px] rounded-3xl border border-[#cbd5e1] bg-white p-5 shadow-[0_24px_42px_-34px_rgba(15,23,42,0.24)] sm:p-7">
+    <PlanCard className="mx-auto w-full max-w-[920px] p-5 sm:p-7">
       <header className="mb-6">
-        <h1 className="text-3xl font-semibold tracking-tight text-[#020617]">{WEIGHT_LOSS_RESET_PROGRAM_NAME}</h1>
-        <p className="mt-1 text-sm text-[#475569]">
-          {isPreferenceUpdate
-            ? 'Update your intake preferences'
-            : `Step ${Math.min(step + 1, 11)} of 11 • ${focusLabel} support with ${dietitianName}`} • {WEIGHT_LOSS_RESET_PRICE_COPY}
-        </p>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#eef5ff]">
-          <div className="h-full rounded-full bg-[#2e8cff] transition-all duration-300" style={{ width: `${progress}%` }} />
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight text-[#020617]">{WEIGHT_LOSS_RESET_PROGRAM_NAME}</h1>
+            <p className="mt-1 text-sm text-[#475569]">
+              {isPreferenceUpdate
+                ? 'Update your intake preferences'
+                : `Step ${Math.min(step + 1, 11)} of 11 • ${focusLabel} support with ${dietitianName}`} • {WEIGHT_LOSS_RESET_PRICE_COPY}
+            </p>
+          </div>
+          <IconPill icon={HeartPulse} label="Focus" value={focusLabel} active />
         </div>
+        <ProgressBar value={progress} className="mt-3" />
       </header>
 
       {step === 0 && (
@@ -427,10 +487,10 @@ export default function OnboardingFlow({
           <p className="mt-2 max-w-[700px] text-sm leading-relaxed text-[#475569]">
             Estimated time: 3 minutes.
           </p>
-          <div className="mt-5 rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-4 text-xs leading-relaxed text-[#475569]">
+          <SoftPanel tone="green" className="mt-5 text-xs leading-relaxed text-[#475569]">
             This is general nutrition support, not medical advice. If you have medical conditions, eating disorders, pregnancy, or complex
             allergies, consult a qualified healthcare professional.
-          </div>
+          </SoftPanel>
         </div>
       )}
 
@@ -568,7 +628,7 @@ export default function OnboardingFlow({
             </label>
           </div>
 
-          <p className="rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3 py-2 text-sm text-[#475569]">
+          <p className="rounded-xl border border-[#dbe2d9] bg-[#f8faf7] px-3 py-2 text-sm text-[#475569]">
             Your dietitian can help adjust this anytime as your week changes.
           </p>
         </div>
@@ -660,7 +720,7 @@ export default function OnboardingFlow({
                 {CORE_MEAL_TYPE_ORDER.map((mealType) => {
                   const active = (answers.selectedMealTypes || []).includes(mealType);
                   return (
-                    <ChoiceButton key={mealType} active={active} onClick={() => toggleSelectedMealType(mealType)}>
+                    <ChoiceButton key={mealType} active={active} icon={mealTypeIcons[mealType]} onClick={() => toggleSelectedMealType(mealType)}>
                       {mealType}
                     </ChoiceButton>
                   );
@@ -686,20 +746,21 @@ export default function OnboardingFlow({
               />
             </label>
 
-            <label className="space-y-1">
+            <div className="space-y-1">
               <span className="text-sm font-semibold text-[#334155]">Budget preference</span>
-              <select
-                value={answers.budgetPreference}
-                onChange={(event) =>
-                  setAnswers((current) => ({ ...current, budgetPreference: event.target.value as OnboardingAnswers['budgetPreference'] }))
-                }
-                className={inputClassName}
-              >
-                <option value="low cost">low cost</option>
-                <option value="balanced">balanced</option>
-                <option value="premium">premium</option>
-              </select>
-            </label>
+              <div className="flex flex-wrap gap-2">
+                {(['low cost', 'balanced', 'premium'] as const).map((option) => (
+                  <ChoiceButton
+                    key={option}
+                    active={answers.budgetPreference === option}
+                    icon={budgetPreferenceIcons[option]}
+                    onClick={() => setAnswers((current) => ({ ...current, budgetPreference: option }))}
+                  >
+                    {option}
+                  </ChoiceButton>
+                ))}
+              </div>
+            </div>
 
             <label className="space-y-1">
               <span className="text-sm font-semibold text-[#334155]">Preferred prep day</span>
@@ -724,6 +785,7 @@ export default function OnboardingFlow({
                 <ChoiceButton
                   key={option}
                   active={answers.groceryPreference === option}
+                  icon={groceryPreferenceIcons[option]}
                   onClick={() => setAnswers((current) => ({ ...current, groceryPreference: option as OnboardingAnswers['groceryPreference'] }))}
                 >
                   {option}
@@ -739,6 +801,7 @@ export default function OnboardingFlow({
                 <ChoiceButton
                   key={option}
                   active={answers.preferredMealStyle === option}
+                  icon={mealStyleIcons[option]}
                   onClick={() => setAnswers((current) => ({ ...current, preferredMealStyle: option as OnboardingAnswers['preferredMealStyle'] }))}
                 >
                   {option}
@@ -779,14 +842,22 @@ export default function OnboardingFlow({
                   type="button"
                   key={option.value}
                   onClick={() => setAnswers((current) => ({ ...current, primaryHealthFocus: option.value }))}
-                  className={`rounded-xl border p-3 text-left transition ${
+                  className={`flex items-start gap-3 rounded-2xl border p-3 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1f5f3f] focus-visible:ring-offset-2 ${
                     answers.primaryHealthFocus === option.value
-                      ? 'border-[#2e8cff] bg-[#f1f8ff]'
-                      : 'border-[#cbd5e1] bg-white hover:border-[#b7dcff]'
+                      ? 'border-[#b9c8ba] bg-[#eff4ef]'
+                      : 'border-[#cbd5e1] bg-white hover:border-[#b9c8ba] hover:bg-[#f8faf7]'
                   }`}
                 >
-                  <p className="text-sm font-semibold text-[#020617]">{option.label}</p>
-                  <p className="mt-1 text-xs text-[#475569]">{option.supportingCopy}</p>
+                  <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-[#1f5f3f] ring-1 ring-[#dbe2d9]">
+                    {(() => {
+                      const Icon = healthFocusIcons[option.value];
+                      return <Icon size={17} aria-hidden="true" />;
+                    })()}
+                  </span>
+                  <span>
+                    <span className="block text-sm font-semibold text-[#020617]">{option.label}</span>
+                    <span className="mt-1 block text-xs leading-5 text-[#475569]">{option.supportingCopy}</span>
+                  </span>
                 </button>
               ))}
             </div>
@@ -804,7 +875,7 @@ export default function OnboardingFlow({
                     key={option.value}
                     onClick={() => toggleFavoriteFood(option.value)}
                     className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition ${
-                      active ? 'border-[#2e8cff] bg-[#f1f8ff] text-[#2e8cff]' : 'border-[#cbd5e1] bg-white text-[#334155] hover:border-[#b7dcff]'
+                      active ? 'border-[#b9c8ba] bg-[#eff4ef] text-[#1f5f3f]' : 'border-[#cbd5e1] bg-white text-[#334155] hover:border-[#b9c8ba]'
                     }`}
                   >
                     <Icon size={16} />
@@ -816,14 +887,15 @@ export default function OnboardingFlow({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {[
-              { value: 'yes', label: 'Yes, ongoing support' },
-              { value: 'not sure', label: 'Not sure yet' },
-              { value: 'no', label: 'I mainly want the meal plan' },
+              {[
+              { value: 'yes', label: 'Yes, ongoing support', icon: ShieldCheck },
+              { value: 'not sure', label: 'Not sure yet', icon: Clock3 },
+              { value: 'no', label: 'I mainly want the meal plan', icon: ListChecks },
             ].map((item) => (
               <ChoiceButton
                 key={item.value}
                 active={answers.supportWanted === item.value}
+                icon={item.icon}
                 onClick={() => setAnswers((current) => ({ ...current, supportWanted: item.value as OnboardingAnswers['supportWanted'] }))}
               >
                 {item.label}
@@ -835,23 +907,28 @@ export default function OnboardingFlow({
             <p className="mb-2 text-sm font-semibold text-[#334155]">What would you like help with?</p>
             <div className="flex flex-wrap gap-2">
               {SUPPORT_AREA_OPTIONS.map((option) => (
-                <ChoiceButton key={option} active={answers.supportAreas.includes(option)} onClick={() => toggleSupportArea(option)}>
+                <ChoiceButton
+                  key={option}
+                  active={answers.supportAreas.includes(option)}
+                  icon={supportAreaIcons[option]}
+                  onClick={() => toggleSupportArea(option)}
+                >
                   {option}
                 </ChoiceButton>
               ))}
             </div>
           </div>
 
-          <div className="flex items-center gap-3 rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3 py-2 text-sm text-[#475569]">
+          <div className="flex items-center gap-3 rounded-xl border border-[#dbe2d9] bg-[#f8faf7] px-3 py-2 text-sm text-[#475569]">
             <ProfileAvatar
               name={dietitianName}
               imageUrl={dietitianImageUrl}
               alt={`${dietitianName} profile`}
-              className="h-10 w-10 rounded-xl border border-[#b7dcff] object-cover"
+              className="h-10 w-10 rounded-xl border border-[#dbe2d9] object-cover"
             />
             <p>
               Current match preview: {dietitianName}, your{' '}
-              <span className="font-semibold text-[#2e8cff]">{dietitianExpertLabel}</span>.
+              <span className="font-semibold text-[#1f5f3f]">{dietitianExpertLabel}</span>.
             </p>
           </div>
         </div>
@@ -864,7 +941,7 @@ export default function OnboardingFlow({
             <p className="mt-1 text-sm text-[#475569]">Review this before we generate your plan.</p>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
-            <div className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3">
+            <SoftPanel>
               <p className="text-sm font-semibold text-[#020617]">Personal details</p>
               <p className="mt-1 text-sm text-[#475569]">
                 {answers.firstName || 'You'} • {answers.age || '—'} years • {answers.heightCm || '—'} cm
@@ -872,32 +949,34 @@ export default function OnboardingFlow({
               <p className="text-sm text-[#475569]">
                 Current {answers.currentWeightKg || '—'} kg • Goal {answers.goalWeightKg || '—'} kg
               </p>
-            </div>
+            </SoftPanel>
 
-            <div className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3">
+            <SoftPanel>
               <p className="text-sm font-semibold text-[#020617]">Goal focus</p>
               <p className="mt-1 text-sm text-[#475569]">{answers.mainGoal}</p>
               <p className="text-sm text-[#475569]">Challenge: {answers.biggestChallenge || '—'}</p>
-            </div>
+            </SoftPanel>
 
-            <div className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3 md:col-span-2">
+            <SoftPanel className="md:col-span-2">
               <p className="text-sm font-semibold text-[#020617]">Food and support preferences</p>
-              <p className="mt-1 text-sm text-[#475569]">
-                Focus match: {activeFocus?.label || 'General healthy eating'} with {dietitianName} ({dietitianExpertLabel})
-              </p>
-              <p className="mt-1 text-sm text-[#475569]">Dietary: {answers.dietaryRequirements.join(', ')}</p>
-              <p className="text-sm text-[#475569]">Meal style: {answers.preferredMealStyle}</p>
-              <p className="text-sm text-[#475569]">Prep day: {answers.prepDay || 'Sunday'}</p>
-              <p className="text-sm text-[#475569]">
-                Favourite foods: {selectedFavoriteFoodLabels.join(', ') || 'No favourite foods selected'}
-              </p>
-              <p className="text-sm text-[#475569]">Cuisines: {answers.preferredCuisines.join(', ') || 'No cuisine preference selected'}</p>
-              <p className="text-sm text-[#475569]">Support areas: {answers.supportAreas.join(', ') || 'Not selected yet'}</p>
-            </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <IconPill icon={healthFocusIcons[answers.primaryHealthFocus]} label="Focus" value={activeFocus?.label || 'General healthy eating'} active />
+                <IconPill icon={mealStyleIcons[answers.preferredMealStyle]} label="Style" value={answers.preferredMealStyle} active />
+                <IconPill icon={CalendarDays} label="Prep" value={answers.prepDay || 'Sunday'} active />
+                <IconPill icon={ShoppingBasket} label="Grocery" value={answers.groceryPreference} active />
+              </div>
+              <div className="mt-3 grid gap-2 text-sm text-[#475569] md:grid-cols-2">
+                <p>Dietary: {answers.dietaryRequirements.join(', ')}</p>
+                <p>Matched with {dietitianName}, your {dietitianExpertLabel}.</p>
+                <p>Favourite foods: {selectedFavoriteFoodLabels.join(', ') || 'No favourite foods selected'}</p>
+                <p>Cuisines: {answers.preferredCuisines.join(', ') || 'No cuisine preference selected'}</p>
+                <p className="md:col-span-2">Support areas: {answers.supportAreas.join(', ') || 'Not selected yet'}</p>
+              </div>
+            </SoftPanel>
           </div>
-          <p className="rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3 py-2 text-sm text-[#475569]">
+          <SoftPanel tone="slate" className="text-sm text-[#475569]">
             This service provides general nutrition support only. No guaranteed outcomes are promised.
-          </p>
+          </SoftPanel>
         </div>
       )}
 
@@ -910,13 +989,13 @@ export default function OnboardingFlow({
             Based on your focus area ({activeFocus?.label || 'General healthy eating'}), {dietitianName} will tailor your plan around your lifestyle,
             food preferences, budget, and routine.
           </p>
-          <div className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-4">
+          <div className="rounded-2xl border border-[#dbe2d9] bg-[#f8faf7] p-4">
             <div className="flex items-center gap-3">
               <ProfileAvatar
                 name={dietitianName}
                 imageUrl={dietitianImageUrl}
                 alt={`${dietitianName} profile`}
-                className="h-12 w-12 rounded-xl border border-[#b7dcff] object-cover"
+                className="h-12 w-12 rounded-xl border border-[#dbe2d9] object-cover"
               />
               <div>
                 <p className="text-sm font-semibold text-[#020617]">{dietitianName} • {dietitianExpertLabel}</p>
@@ -932,7 +1011,7 @@ export default function OnboardingFlow({
 
       {step === 9 && (
         <div className="space-y-4">
-          <div className="inline-flex items-center gap-2 text-sm font-medium text-[#2e8cff]">
+          <div className="inline-flex items-center gap-2 text-sm font-medium text-[#1f5f3f]">
             <CalendarDays size={14} />
             Booking step
           </div>
@@ -946,7 +1025,7 @@ export default function OnboardingFlow({
               target="_blank"
               rel="noreferrer"
               className={`inline-flex h-11 items-center justify-center rounded-xl text-sm font-semibold ${
-                HAS_REAL_CALENDLY_URL ? 'bg-[#2e8cff] text-white hover:bg-[#1f7be6]' : 'border border-[#cbd5e1] bg-[#f8fbff] text-[#475569]'
+                HAS_REAL_CALENDLY_URL ? 'bg-[#1f5f3f] text-white hover:bg-[#174a31]' : 'border border-[#dbe2d9] bg-[#f8faf7] text-[#475569]'
               }`}
               onClick={(event) => {
                 if (!HAS_REAL_CALENDLY_URL) event.preventDefault();
@@ -960,13 +1039,13 @@ export default function OnboardingFlow({
                 void completeBooking();
               }}
               disabled={unlocking}
-              className="inline-flex h-11 items-center justify-center rounded-xl border border-[#2e8cff] bg-white text-sm font-semibold text-[#2e8cff] transition hover:bg-[#f1f8ff] disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex h-11 items-center justify-center rounded-xl border border-[#1f5f3f] bg-white text-sm font-semibold text-[#1f5f3f] transition hover:bg-[#eff4ef] disabled:cursor-not-allowed disabled:opacity-70"
             >
               {unlocking ? 'Generating your plan...' : 'I’ve booked my consult'}
             </button>
           </div>
           {!HAS_REAL_CALENDLY_URL && (
-            <p className="rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3 py-2 text-sm text-[#475569]">
+            <p className="rounded-xl border border-[#dbe2d9] bg-[#f8faf7] px-3 py-2 text-sm text-[#475569]">
               Calendly URL is not configured yet. Set `VITE_FELICITY_CALENDLY_URL` to your real booking link.
             </p>
           )}
@@ -978,7 +1057,7 @@ export default function OnboardingFlow({
 
       {step === 10 && (
         <div className="text-center">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[#b7dcff] bg-[#f1f8ff] text-[#2e8cff]">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border border-[#b9c8ba] bg-[#eff4ef] text-[#1f5f3f]">
             <CheckCircle2 size={26} />
           </div>
           <h2 className="mt-4 text-2xl font-semibold text-[#020617]">{isPreferenceUpdate ? 'Preferences updated.' : 'You&apos;re all set.'}</h2>
@@ -990,7 +1069,7 @@ export default function OnboardingFlow({
           <button
             type="button"
             onClick={onOpenDashboard}
-            className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#2e8cff] px-5 text-sm font-semibold text-white transition hover:bg-[#1f7be6]"
+            className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#1f5f3f] px-5 text-sm font-semibold text-white transition hover:bg-[#174a31]"
           >
             Open nutrition dashboard
             <ArrowRight size={16} />
@@ -1001,22 +1080,22 @@ export default function OnboardingFlow({
       {error && <p className="mt-5 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">{error}</p>}
 
       {unlocking && (
-        <article className="mt-5 rounded-2xl border border-[#b7dcff] bg-gradient-to-br from-[#f8fbff] via-[#f1f8ff] to-white p-4">
+        <article className="mt-5 rounded-2xl border border-[#b9c8ba] bg-gradient-to-br from-[#f8faf7] via-[#eff4ef] to-white p-4">
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="inline-flex items-center gap-2 text-sm font-semibold text-[#020617]">
-                <LoaderCircle size={15} className="animate-spin text-[#2e8cff]" />
+                <LoaderCircle size={15} className="animate-spin text-[#1f5f3f]" />
                 {isPreferenceUpdate ? 'Refreshing your weekly plan' : 'Preparing your nutrition dashboard'}
               </p>
               <p className="mt-1 text-sm text-[#475569]">{unlockMessages[unlockMessageIndex]}</p>
             </div>
-            <p className="rounded-full border border-[#b7dcff] bg-white px-3 py-1 text-xs font-semibold text-[#1f7be6]">
+            <p className="rounded-full border border-[#b9c8ba] bg-white px-3 py-1 text-xs font-semibold text-[#1f5f3f]">
               {Math.round(Math.max(6, Math.min(100, unlockProgress)))}%
             </p>
           </div>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#cbd5e1]">
             <div
-              className="h-full rounded-full bg-[#2e8cff] transition-[width] duration-300"
+              className="h-full rounded-full bg-[#1f5f3f] transition-[width] duration-300"
               style={{ width: `${Math.round(Math.max(6, Math.min(100, unlockProgress)))}%` }}
             />
           </div>
@@ -1028,7 +1107,7 @@ export default function OnboardingFlow({
                 <p
                   key={item}
                   className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold ${
-                    completed ? 'border-[#b7dcff] bg-white text-[#1f7be6]' : 'border-[#dbeeff] bg-[#f8fbff] text-[#64748b]'
+                    completed ? 'border-[#b9c8ba] bg-white text-[#1f5f3f]' : 'border-[#dbe2d9] bg-[#f8faf7] text-[#64748b]'
                   }`}
                 >
                   <span className="inline-flex items-center gap-1.5">
@@ -1058,7 +1137,7 @@ export default function OnboardingFlow({
               type="button"
               onClick={next}
               disabled={unlocking}
-              className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#2e8cff] px-4 text-sm font-semibold text-white hover:bg-[#1f7be6] disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#1f5f3f] px-4 text-sm font-semibold text-white hover:bg-[#174a31] disabled:cursor-not-allowed disabled:opacity-70"
             >
               {unlocking ? 'Building your plan...' : 'Next'}
               <ArrowRight size={15} />
@@ -1066,6 +1145,6 @@ export default function OnboardingFlow({
           )}
         </div>
       )}
-    </section>
+    </PlanCard>
   );
 }

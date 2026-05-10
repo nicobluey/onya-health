@@ -54,7 +54,7 @@ export default function ProfileAvatar({
 
   return (
     <div
-      className={fallbackClassName || `${className} flex items-center justify-center bg-[#dbeeff] text-[#2e8cff]`}
+      className={fallbackClassName || `${className} flex items-center justify-center bg-[#eff4ef] text-[#1f5f3f]`}
       aria-label={alt}
       role="img"
       title={name}

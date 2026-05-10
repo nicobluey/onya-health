@@ -7,6 +7,7 @@ import {
   WEIGHT_LOSS_RESET_PROGRAM_NAME,
 } from '../constants';
 import type { AssignedDietitianProfile, WeightLossResetCardState } from '../types';
+import { ActionButton, PlanCard, ProgressBar, SoftPanel } from './PlanUi';
 import ProfileAvatar from './ProfileAvatar';
 
 export default function PatientDashboardWeightLossCard({
@@ -46,7 +47,7 @@ export default function PatientDashboardWeightLossCard({
   const dietitianBio = String(dietitian?.bio || '').trim() || 'Practical, kind, realistic, non-judgemental support.';
 
   return (
-    <section className="rounded-3xl border border-[#cbd5e1] bg-white p-5 shadow-[0_24px_42px_-34px_rgba(15,23,42,0.24)] sm:p-6">
+    <PlanCard className="p-5 sm:p-6">
       <div className="grid gap-4 lg:grid-cols-[1.28fr_0.72fr]">
         <div>
           <p className="text-sm font-medium text-[#475569]">{WEIGHT_LOSS_RESET_PROGRAM_NAME}</p>
@@ -59,24 +60,20 @@ export default function PatientDashboardWeightLossCard({
                 : `Your dashboard is ready with meal swaps, progress tracking, grocery planning, and weekly support.`}
           </p>
 
-          <button
-            type="button"
-            onClick={ctaAction}
-            className="mt-4 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#2e8cff] px-5 text-sm font-semibold text-white transition hover:bg-[#1f7be6]"
-          >
+          <ActionButton onClick={ctaAction} className="mt-4 min-h-11 px-5">
             {ctaLabel}
             <ArrowRight size={16} />
-          </button>
+          </ActionButton>
         </div>
 
-        <div className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-4">
+        <SoftPanel>
           <div className="flex items-center gap-3">
             <ProfileAvatar
               name={dietitianName}
               imageUrl={dietitianImageUrl}
               fallbackImageUrl={DEFAULT_DIETITIAN_PROFILE_IMAGE_URL}
               alt={`${dietitianName} profile`}
-              className="h-12 w-12 rounded-xl border border-[#b7dcff] object-cover"
+              className="h-12 w-12 rounded-xl border border-[#dbe2d9] object-cover"
             />
             <p className="text-sm font-semibold text-[#020617]">Matched with {dietitianName} • {expertLabel}</p>
           </div>
@@ -86,11 +83,9 @@ export default function PatientDashboardWeightLossCard({
             <div className="mt-4 space-y-2">
               <div className="flex items-center justify-between text-sm text-[#475569]">
                 <span>Goal progress</span>
-                <span className="font-semibold text-[#2e8cff]">{progressPercent}%</span>
+                <span className="font-semibold text-[#1f5f3f]">{progressPercent}%</span>
               </div>
-              <div className="h-2 overflow-hidden rounded-full bg-[#cbd5e1]">
-                <div className="h-full rounded-full bg-[#2e8cff]" style={{ width: `${progressPercent}%` }} />
-              </div>
+              <ProgressBar value={progressPercent} />
               <p className="text-sm text-[#475569]">
                 {currentWeight ? `Current ${currentWeight} kg` : 'Current weight pending'}
                 {goalWeight ? ` • Goal ${goalWeight} kg` : ''}
@@ -98,7 +93,7 @@ export default function PatientDashboardWeightLossCard({
             </div>
           ) : (
             <div className="mt-4 rounded-xl border border-[#cbd5e1] bg-white px-3 py-2 text-sm text-[#475569]">
-              <p className="inline-flex items-center gap-1 font-medium text-[#2e8cff]">
+              <p className="inline-flex items-center gap-1 font-medium text-[#1f5f3f]">
                 <CalendarCheck2 size={13} />
                 Next step
               </p>
@@ -109,8 +104,8 @@ export default function PatientDashboardWeightLossCard({
               </p>
             </div>
           )}
-        </div>
+        </SoftPanel>
       </div>
-    </section>
+    </PlanCard>
   );
 }
