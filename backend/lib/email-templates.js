@@ -212,6 +212,23 @@ export function renderPatientPasswordResetEmail({ baseUrl, resetUrl, expiresMinu
   };
 }
 
+export function renderPatientMagicLinkEmail({ baseUrl, magicUrl, expiresMinutes }) {
+  const html = renderShell({
+    baseUrl,
+    badge: 'Secure Sign-In',
+    title: 'Sign in to your patient portal',
+    subtitle: 'Use this secure magic link to access your Onya Health account.',
+    bodyHtml: `<p style="margin:0;">This secure link expires in <strong>${escapeHtml(expiresMinutes)}</strong> minutes.</p>`,
+    ctaLabel: 'Sign in now',
+    ctaUrl: magicUrl,
+  });
+
+  return {
+    html,
+    text: `Sign in to your patient portal: ${magicUrl}\nThis link expires in ${expiresMinutes} minutes.`,
+  };
+}
+
 export function renderDoctorWelcomeEmail({ baseUrl, fullName }) {
   const greeting = fullName ? `Welcome, Dr. ${fullName}` : 'Welcome to the Onya doctor portal';
   const html = renderShell({

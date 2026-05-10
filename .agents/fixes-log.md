@@ -1,5 +1,64 @@
 # Fixes Log
 
+## 2026-05-11 - Account/profile editing, magic-link-first auth, and duplicate email trigger hardening
+
+### Symptoms
+
+- Patient account details were partially static and not fully editable from portal settings.
+- Checkout/onboarding could continue for users who already had an account, creating auth confusion.
+- Magic-link flow was fragmented and not first-class in login.
+- Medical certificate payment flow could trigger duplicate confirmation/review emails.
+- Practitioner and patient profile image handling needed production-safe storage-backed updates.
+
+### Root causes
+
+1. Profile editing endpoint and UI wiring for address/photo fields were incomplete.
+2. Pre-check for existing account by email/phone before checkout was missing.
+3. Login page favored mixed auth patterns without a clear magic-link-first path.
+4. Payment completion logic had multiple code paths capable of firing email side effects.
+
+### Files changed
+
+- `api/index.js`
+  - added `POST /api/patient/account-exists` (email/phone collision check)
+  - added `POST /api/patient/profile` (full name, dob, phone, address, profile photo upload)
+  - added `POST /api/patient/magic-link/request` and `POST /api/patient/magic-link/consume`
+  - added signed magic-link token issue/verify helpers
+  - extended patient profile sync (`createPatientAccountViaSupabase`, `upsertSupabasePatientMetadata`, `upsertSupabasePatientProfileRows`) with `address` and `profilePhotoPath`
+  - added Supabase storage upload helpers for patient profile photos from data-URL payloads
+  - updated `POST /api/checkout/confirm` to auto-create account post-payment and send patient magic link
+  - constrained doctor review email dispatch in `markPaidFromStripeSession(...)` to webhook-finalization path to prevent duplicate sends
+- `backend/lib/email-templates.js`
+  - added patient magic-link email template renderer
+- `frontend/src/components/FlowSteps.tsx`
+  - details page now collects address
+  - checks `/api/patient/account-exists` before checkout and blocks with sign-in guidance when matched
+- `frontend/src/pages/PatientLoginPage.tsx`
+  - implemented magic-link request/consume UX as primary quick-login path
+- `frontend/src/pages/PatientPortalPage.tsx`
+  - made sidebar profile section actionable (opens account/settings)
+  - account settings now editable: full name, phone, dob, address, profile photo
+  - save flow wired to `/api/patient/profile` with local state refresh
+- `frontend/src/patient-portal/model.ts`
+  - aligned patient model shape for `address` support
+- `frontend/src/weight-loss-reset/components/ProfileAvatar.tsx`
+  - added secondary fallback image URL before initials fallback
+- `frontend/src/weight-loss-reset/components/PatientDashboardWeightLossCard.tsx`
+- `frontend/src/weight-loss-reset/components/WeightLossResetDashboard.tsx`
+  - wired avatar fallback usage for practitioner display consistency
+- `supabase/migrations/20260511_add_patient_address_and_phone_index.sql`
+  - adds/backfills `patients.address`
+  - adds phone index for patient lookup performance
+
+### Verification
+
+1. `npm run build` succeeds.
+2. Profile updates persist via `/api/patient/profile`, including address and photo path.
+3. Login supports magic-link request and token consume successfully.
+4. Checkout confirm auto-creates account when needed and sends magic link email.
+5. Existing-account detection blocks duplicate-account checkout path.
+6. Duplicate review-email behavior is mitigated by webhook-only email trigger path.
+
 ## 2026-05-09 - Database-backed patient/dietitian profiles and production headshot wiring
 
 ### Symptoms

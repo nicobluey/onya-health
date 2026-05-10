@@ -17,6 +17,7 @@ Patient payload (`payload.patient`) shape used by UI:
 - `email`
 - `dob`
 - `phone`
+- `address`
 - `profilePhotoPath`
 - `profilePhotoUrl`
 
@@ -33,13 +34,22 @@ Dietitian payload (`payload.dietitian`) shape used by UI:
 - `frontend/src/pages/PatientPortalPage.tsx`
   - Normalizes `payload.patient` and `payload.dietitian`.
   - Stores patient in `patient` state and assigned dietitian in `primaryDietitian` state.
+  - Bottom-left sidebar profile now routes to Account settings.
+  - Account settings are editable and persisted via `POST /api/patient/profile`.
   - Passes dietitian through to:
     - `OnboardingFlow`
     - `WeightLossResetDashboard`
     - `HomeTab` -> `PatientDashboardWeightLossCard`
+- `frontend/src/pages/PatientLoginPage.tsx`
+  - supports magic-link-first login:
+    - requests link via `/api/patient/magic-link/request`
+    - consumes token from URL via `/api/patient/magic-link/consume`
+- `frontend/src/components/FlowSteps.tsx`
+  - details step includes address
+  - calls `/api/patient/account-exists` before checkout and blocks if account already exists.
 - `frontend/src/weight-loss-reset/components/ProfileAvatar.tsx`
   - Mandatory avatar component for fallback behavior.
-  - If image fails/missing: fallback to initials avatar.
+  - If image fails/missing: fallback to secondary URL (if provided), then initials avatar.
 
 ## Styling + fallback rules
 - If no assigned dietitian payload is present, UI copy must remain neutral:
@@ -53,5 +63,7 @@ Dietitian payload (`payload.dietitian`) shape used by UI:
 1. Login and `GET /api/patient/bootstrap` returns patient + dietitian.
 2. Onboarding and dashboard show assigned dietitian name/photo when available.
 3. Missing photo still renders clean initials avatar.
-4. No hardcoded patient placeholders (`John`, `john@gmail.com`, etc.) remain.
-5. `npm run build` succeeds.
+4. Account settings allows update for full name, DOB, phone, address, profile photo.
+5. Details step blocks checkout for existing account email/phone and shows sign-in guidance.
+6. No hardcoded patient placeholders (`John`, `john@gmail.com`, etc.) remain.
+7. `npm run build` succeeds.

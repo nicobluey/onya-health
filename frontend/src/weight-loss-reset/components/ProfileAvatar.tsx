@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 function initialsFromName(name: string) {
   const tokens = String(name || '')
@@ -13,29 +13,44 @@ function initialsFromName(name: string) {
 export default function ProfileAvatar({
   name,
   imageUrl,
+  fallbackImageUrl,
   alt,
   className,
   fallbackClassName,
 }: {
   name: string;
   imageUrl?: string;
+  fallbackImageUrl?: string;
   alt: string;
   className: string;
   fallbackClassName?: string;
 }) {
   const [imageFailed, setImageFailed] = useState(false);
+  const [activeImageUrl, setActiveImageUrl] = useState(String(imageUrl || '').trim());
   const initials = useMemo(() => initialsFromName(name), [name]);
   const resolvedImageUrl = String(imageUrl || '').trim();
+  const resolvedFallbackImageUrl = String(fallbackImageUrl || '').trim();
 
-  if (resolvedImageUrl && !imageFailed) {
+  useEffect(() => {
+    setActiveImageUrl(resolvedImageUrl);
+    setImageFailed(false);
+  }, [resolvedImageUrl]);
+
+  if (activeImageUrl && !imageFailed) {
     return (
       <img
-        src={resolvedImageUrl}
+        src={activeImageUrl}
         alt={alt}
         className={className}
         loading="lazy"
         decoding="async"
-        onError={() => setImageFailed(true)}
+        onError={() => {
+          if (activeImageUrl !== resolvedFallbackImageUrl && resolvedFallbackImageUrl) {
+            setActiveImageUrl(resolvedFallbackImageUrl);
+            return;
+          }
+          setImageFailed(true);
+        }}
       />
     );
   }

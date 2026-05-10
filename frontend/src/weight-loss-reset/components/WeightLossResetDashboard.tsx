@@ -758,6 +758,7 @@ export default function WeightLossResetDashboard({
                 <ProfileAvatar
                   name={dietitianName}
                   imageUrl={dietitianImageUrl}
+                  fallbackImageUrl={DEFAULT_DIETITIAN_PROFILE_IMAGE_URL}
                   alt={`${dietitianName} profile`}
                   className="h-11 w-11 rounded-xl border border-[#b7dcff] object-cover"
                 />

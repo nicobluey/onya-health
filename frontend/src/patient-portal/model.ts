@@ -62,6 +62,7 @@ export interface PatientProfile {
   email: string;
   dob?: string;
   phone?: string;
+  address?: string;
   profilePhotoPath?: string;
   profilePhotoUrl?: string;
 }

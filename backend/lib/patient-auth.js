@@ -104,6 +104,8 @@ function toPublicAccount(account) {
     fullName: String(account.fullName || ''),
     dob: String(account.dob || ''),
     phone: String(account.phone || ''),
+    address: String(account.address || ''),
+    profilePhotoPath: String(account.profilePhotoPath || ''),
     createdAt: String(account.createdAt || ''),
     updatedAt: String(account.updatedAt || ''),
     lastLoginAt: String(account.lastLoginAt || ''),
@@ -147,7 +149,7 @@ export async function getPatientAccountByEmail(email) {
   return toPublicAccount(account);
 }
 
-export async function createPatientAccount({ email, password, fullName = '', dob = '', phone = '' }) {
+export async function createPatientAccount({ email, password, fullName = '', dob = '', phone = '', address = '' }) {
   const normalizedEmail = normalizeEmail(email);
   if (!normalizedEmail) {
     const err = new Error('Email is required');
@@ -175,6 +177,8 @@ export async function createPatientAccount({ email, password, fullName = '', dob
       fullName: String(fullName || '').trim(),
       dob: String(dob || '').trim(),
       phone: String(phone || '').trim(),
+      address: String(address || '').trim(),
+      profilePhotoPath: '',
       createdAt: timestamp,
       updatedAt: timestamp,
       lastLoginAt: '',
@@ -208,7 +212,7 @@ export async function authenticatePatientAccount({ email, password }) {
   });
 }
 
-export async function updatePatientAccountProfile({ email, fullName, dob, phone }) {
+export async function updatePatientAccountProfile({ email, fullName, dob, phone, address, profilePhotoPath }) {
   const normalizedEmail = normalizeEmail(email);
   if (!normalizedEmail) return null;
 
@@ -227,6 +231,14 @@ export async function updatePatientAccountProfile({ email, fullName, dob, phone 
     }
     if (typeof phone === 'string' && phone.trim() && account.phone !== phone.trim()) {
       account.phone = phone.trim();
+      hasChanges = true;
+    }
+    if (typeof address === 'string' && account.address !== address.trim()) {
+      account.address = address.trim();
+      hasChanges = true;
+    }
+    if (typeof profilePhotoPath === 'string' && account.profilePhotoPath !== profilePhotoPath.trim()) {
+      account.profilePhotoPath = profilePhotoPath.trim();
       hasChanges = true;
     }
 

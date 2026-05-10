@@ -437,6 +437,8 @@ export const DatesStep = () => {
 export const DetailsStep = () => {
     const { details, setDetails, nextStep } = useBooking();
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [accountCheckError, setAccountCheckError] = useState('');
+    const [checkingAccount, setCheckingAccount] = useState(false);
     const [genderOpen, setGenderOpen] = useState(false);
     const genderMenuRef = useRef<HTMLDivElement | null>(null);
     const genderOptions = ['Male', 'Female', 'Other'];
@@ -448,18 +450,50 @@ export const DetailsStep = () => {
         const gender = details.gender.trim();
         const email = details.email.trim();
         const phone = details.phone.trim();
+        const address = details.address.trim();
 
         if (!fullName) newErrors.fullName = "Full legal name is required";
         if (!dob) newErrors.dob = "Date of birth is required";
         if (!gender) newErrors.gender = "Gender is required";
         if (!email || !email.includes('@')) newErrors.email = "Valid email is required";
         if (!phone) newErrors.phone = "Phone is required";
+        if (!address) newErrors.address = "Address is required";
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
 
-    const handleSubmit = () => {
-        if (validate()) nextStep();
+    const handleSubmit = async () => {
+        setAccountCheckError('');
+        if (!validate()) return;
+        setCheckingAccount(true);
+        try {
+            const { response, payload } = await fetchApiJson('/api/patient/account-exists', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: details.email.trim(),
+                    phone: details.phone.trim(),
+                }),
+            });
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Unable to verify account details');
+            }
+            if (payload?.exists) {
+                const matchedEmail = String(payload?.matchedEmail || details.email || '').trim().toLowerCase();
+                setAccountCheckError(
+                    'We found an existing account associated with these details. Please sign in to continue.'
+                );
+                if (matchedEmail) {
+                    window.localStorage.setItem('onya_patient_email', matchedEmail);
+                }
+                return;
+            }
+            nextStep();
+        } catch (errorObject) {
+            setAccountCheckError(errorObject instanceof Error ? errorObject.message : 'Unable to verify account details');
+        } finally {
+            setCheckingAccount(false);
+        }
     };
 
     useEffect(() => {
@@ -582,8 +616,20 @@ export const DetailsStep = () => {
                     />
                     {details.phone.trim() && <p className="text-xs font-semibold text-amber-600">Verification pending</p>}
                 </div>
+                <Input
+                    label={COPY.steps.details.fields.address}
+                    value={details.address}
+                    onChange={(e) => setDetails({ address: e.target.value })}
+                    error={errors.address}
+                    required
+                />
             </div>
-            <Button fullWidth onClick={handleSubmit}>{COPY.steps.details.cta}</Button>
+            {accountCheckError && (
+                <p className="text-xs font-semibold text-red-600">{accountCheckError}</p>
+            )}
+            <Button fullWidth onClick={handleSubmit} disabled={checkingAccount}>
+                {checkingAccount ? 'Checking your account...' : COPY.steps.details.cta}
+            </Button>
         </motion.div>
     );
 };

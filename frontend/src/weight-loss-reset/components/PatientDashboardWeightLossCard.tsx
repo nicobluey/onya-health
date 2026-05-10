@@ -74,6 +74,7 @@ export default function PatientDashboardWeightLossCard({
             <ProfileAvatar
               name={dietitianName}
               imageUrl={dietitianImageUrl}
+              fallbackImageUrl={DEFAULT_DIETITIAN_PROFILE_IMAGE_URL}
               alt={`${dietitianName} profile`}
               className="h-12 w-12 rounded-xl border border-[#b7dcff] object-cover"
             />

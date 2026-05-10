@@ -61,6 +61,7 @@ import {
   renderDoctorWelcomeEmail,
   renderPatientCertificateDeniedEmail,
   renderPatientCertificateReadyEmail,
+  renderPatientMagicLinkEmail,
   renderPatientMoreInfoEmail,
   renderPatientPasswordResetEmail,
   renderPatientWelcomeEmail,
@@ -113,12 +114,17 @@ const PATIENT_PASSWORD_RESET_SIGNING_SECRET =
   process.env.PATIENT_SESSION_SECRET ||
   process.env.DOCTOR_SESSION_SECRET ||
   'change-this-patient-reset-secret';
+const PATIENT_MAGIC_LINK_TTL_MS = Math.max(
+  1000 * 60 * 5,
+  Number(process.env.PATIENT_MAGIC_LINK_TTL_MS || 1000 * 60 * 30)
+);
 const MEAL_PLAN_IMAGE_PROXY_SIGNING_SECRET =
   process.env.MEAL_PLAN_IMAGE_PROXY_SIGNING_SECRET ||
   PATIENT_PASSWORD_RESET_SIGNING_SECRET ||
   'change-this-meal-image-secret';
 const MEAL_PLAN_IMAGE_PROXY_PATH = '/api/patient/meal-plan/recipe-image';
 const WEIGHT_LOSS_IMAGE_BUCKET = String(process.env.WEIGHT_LOSS_IMAGE_BUCKET || 'weight-loss-reset-images').trim();
+const PROFILE_IMAGE_BUCKET = String(process.env.PATIENT_PROFILE_IMAGE_BUCKET || WEIGHT_LOSS_IMAGE_BUCKET).trim();
 const DEFAULT_DIETITIAN_ID = '9f1f2a68-3b9c-4f2f-8da9-3e7e1c7f1c11';
 const DEFAULT_DIETITIAN_NAME = 'Felicity';
 const PATIENT_SUPABASE_RESET_METADATA_KEY = 'onya_patient_password_reset';
@@ -324,6 +330,14 @@ function getAppBaseUrl(req) {
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
+}
+
+function normalizePhoneForLookup(value) {
+  return String(value || '')
+    .trim()
+    .replace(/[^\d+]/g, '')
+    .replace(/^00/, '+')
+    .toLowerCase();
 }
 
 function normalizeCoreMealTypesForCache(value) {
@@ -1177,6 +1191,47 @@ function verifyStatelessPatientResetToken(token) {
   return { email };
 }
 
+function issuePatientMagicLinkToken(email) {
+  const payload = {
+    email: normalizeEmail(email),
+    scope: 'patient_magic_link',
+    exp: Date.now() + PATIENT_MAGIC_LINK_TTL_MS,
+  };
+  const encodedPayload = encodeBase64Url(JSON.stringify(payload));
+  const signature = signResetTokenPayload(encodedPayload);
+  return `${encodedPayload}.${signature}`;
+}
+
+function verifyPatientMagicLinkToken(token) {
+  const normalizedToken = normalizeResetToken(token);
+  if (!normalizedToken || !normalizedToken.includes('.')) return null;
+  const [encodedPayload, incomingSignature] = normalizedToken.split('.');
+  const expectedSignature = signResetTokenPayload(encodedPayload);
+  if (!safeTimingCompare(incomingSignature, expectedSignature)) return null;
+
+  let payload = null;
+  try {
+    payload = JSON.parse(decodeBase64Url(encodedPayload));
+  } catch {
+    payload = null;
+  }
+  if (!payload || typeof payload !== 'object') return null;
+  if (payload.scope !== 'patient_magic_link') return null;
+  if (!payload.exp || Number(payload.exp) < Date.now()) return null;
+  const email = normalizeEmail(payload.email);
+  if (!isLikelyPatientEmail(email)) return null;
+  return { email };
+}
+
+function buildPatientMagicLinkUrl(req, token, email = '') {
+  const baseUrl = getFrontendBaseUrl(req);
+  const loginUrl = new URL('/patient-login', baseUrl || getAppBaseUrl(req));
+  loginUrl.searchParams.set('magic_token', String(token || '').trim());
+  const normalizedEmail = normalizeEmail(email);
+  if (normalizedEmail) loginUrl.searchParams.set('email', normalizedEmail);
+  return loginUrl.toString();
+}
+
 function issueScopedPatientResetToken(subject) {
   return `${encodeBase64Url(String(subject || '').trim())}.${crypto.randomBytes(32).toString('base64url')}`;
 }
@@ -1328,6 +1383,8 @@ function toPatientAccountFromSupabaseUser(user, fallbackEmail = '') {
     fullName: String(metadata?.full_name || '').trim(),
     dob: String(metadata?.dob || '').trim(),
     phone: String(metadata?.phone || '').trim(),
+    address: String(metadata?.address || '').trim(),
+    profilePhotoPath: normalizeStoragePath(metadata?.profile_photo_path || ''),
     source: 'supabase',
     createdAt: String(user?.created_at || ''),
     updatedAt: String(user?.updated_at || ''),
@@ -1343,6 +1400,7 @@ async function upsertSupabasePatientProfileRows({
   fullName = '',
   dob = '',
   phone = '',
+  address = '',
   profilePhotoPath = '',
 }) {
   const config = getSupabaseConfig();
@@ -1353,6 +1411,7 @@ async function upsertSupabasePatientProfileRows({
   const nameParts = splitFullName(resolvedFullName);
   const resolvedDob = String(dob || '').trim();
   const resolvedPhone = String(phone || '').trim();
+  const resolvedAddress = String(address || '').trim();
   const resolvedPhotoPath = normalizeStoragePath(profilePhotoPath);
 
   await supabaseRestRequest(config, 'profiles', {
@@ -1375,6 +1434,7 @@ async function upsertSupabasePatientProfileRows({
     email: normalizedEmail || null,
     full_name: resolvedFullName || null,
     phone: resolvedPhone || null,
+    address: resolvedAddress || null,
     profile_photo_path: resolvedPhotoPath || null,
   };
 
@@ -1486,7 +1546,7 @@ function patientSummaryFromCertificate(certificate) {
 
 function buildPatientIdentity({ email, latestCertificate, account }) {
   const draft = latestCertificate?.certificateDraft || {};
-  const fullName = String(draft.fullName || account?.fullName || '').trim();
+  const fullName = String(account?.fullName || draft.fullName || '').trim();
   const [firstName, ...restNames] = fullName.split(/\s+/).filter(Boolean);
   return {
     fullName,
@@ -1495,8 +1555,9 @@ function buildPatientIdentity({ email, latestCertificate, account }) {
     email: normalizeEmail(email || account?.email || draft.email || ''),
     dob: String(account?.dob || draft.dob || '').trim(),
     phone: String(account?.phone || draft.phone || '').trim(),
-    profilePhotoPath: '',
-    profilePhotoUrl: '',
+    address: String(account?.address || draft.address || '').trim(),
+    profilePhotoPath: normalizeStoragePath(account?.profilePhotoPath || ''),
+    profilePhotoUrl: buildPublicStorageUrl(normalizeStoragePath(account?.profilePhotoPath || ''), PROFILE_IMAGE_BUCKET),
   };
 }
 
@@ -1533,6 +1594,83 @@ function buildPublicStorageUrl(path, bucket = WEIGHT_LOSS_IMAGE_BUCKET) {
   const encodedPath = normalizedPath.split('/').map((part) => encodeURIComponent(part)).join('/');
   const encodedBucket = encodeURIComponent(String(bucket || WEIGHT_LOSS_IMAGE_BUCKET).trim());
   return `${config.url}/storage/v1/object/public/${encodedBucket}/${encodedPath}`;
+}
+
+async function uploadBufferToSupabaseStorage({
+  config,
+  bucket,
+  objectPath,
+  contentType,
+  bodyBuffer,
+}) {
+  const response = await fetch(
+    `${config.url}/storage/v1/object/${encodeURIComponent(String(bucket || '').trim())}/${objectPath
+      .split('/')
+      .map((part) => encodeURIComponent(part))
+      .join('/')}`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: config.serviceRoleKey,
+        Authorization: `Bearer ${config.serviceRoleKey}`,
+        'Content-Type': contentType || 'application/octet-stream',
+        'x-upsert': 'true',
+      },
+      body: bodyBuffer,
+    }
+  );
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`Storage upload failed (${response.status}) ${text || ''}`.trim());
+  }
+}
+
+async function uploadPatientProfilePhotoDataUrl({ email, dataUrl, userId = '' }) {
+  const config = getSupabaseConfig();
+  if (!config.enabled) {
+    throw new Error('Profile photo upload requires Supabase storage');
+  }
+
+  const parsed = parseSupportedRecipeDataImageUri(dataUrl);
+  if (!parsed) {
+    throw new Error('Unsupported profile photo format');
+  }
+
+  const buffer = Buffer.from(parsed.body, 'base64');
+  if (!buffer.length) {
+    throw new Error('Profile photo payload was empty');
+  }
+  if (buffer.length > 8 * 1024 * 1024) {
+    throw new Error('Profile photo is too large. Max 8MB.');
+  }
+
+  const normalizedEmail = normalizeEmail(email);
+  const fallbackSubject = normalizedEmail || String(userId || '').trim() || 'patient';
+  const safeSubject = fallbackSubject.replace(/[^a-z0-9._-]/gi, '_').slice(0, 96) || 'patient';
+  const extensionByMime = {
+    'image/webp': 'webp',
+    'image/png': 'png',
+    'image/jpeg': 'jpg',
+    'image/jpg': 'jpg',
+    'image/gif': 'gif',
+    'image/avif': 'avif',
+  };
+  const extension = extensionByMime[parsed.mime] || 'webp';
+  const objectPath = `patients/${safeSubject}/profile-${Date.now()}.${extension}`;
+
+  await uploadBufferToSupabaseStorage({
+    config,
+    bucket: PROFILE_IMAGE_BUCKET,
+    objectPath,
+    contentType: parsed.mime || 'application/octet-stream',
+    bodyBuffer: buffer,
+  });
+
+  return {
+    profilePhotoPath: objectPath,
+    profilePhotoUrl: buildPublicStorageUrl(objectPath, PROFILE_IMAGE_BUCKET),
+  };
 }
 
 function normalizeDietitianProfile(row) {
@@ -1578,7 +1716,7 @@ async function resolvePatientProfileByEmail({ email, latestCertificate, account 
   try {
     const patientRows = await supabaseRestRequest(
       config,
-      `patients?email=eq.${encodeURIComponent(resolvedEmail)}&select=id,full_name,phone,profile_photo_path&limit=1`,
+      `patients?email=eq.${encodeURIComponent(resolvedEmail)}&select=id,full_name,phone,address,profile_photo_path&limit=1`,
       {
         method: 'GET',
         prefer: 'return=representation',
@@ -1608,6 +1746,7 @@ async function resolvePatientProfileByEmail({ email, latestCertificate, account 
     const patientNameParts = splitFullName(patientFullName);
     const patientPhone = String(patientRow.phone || profileRow?.phone || fallbackPatient.phone).trim();
     const patientDob = String(profileRow?.dob || fallbackPatient.dob).trim();
+    const patientAddress = String(patientRow.address || fallbackPatient.address || '').trim();
     const patientPhotoPath = normalizeStoragePath(patientRow.profile_photo_path);
 
     let assignmentRows = await supabaseRestRequest(
@@ -1663,8 +1802,9 @@ async function resolvePatientProfileByEmail({ email, latestCertificate, account 
         email: resolvedEmail,
         dob: patientDob,
         phone: patientPhone,
+        address: patientAddress,
         profilePhotoPath: patientPhotoPath,
-        profilePhotoUrl: buildPublicStorageUrl(patientPhotoPath),
+        profilePhotoUrl: buildPublicStorageUrl(patientPhotoPath, PROFILE_IMAGE_BUCKET),
       },
       dietitian,
     };
@@ -1686,6 +1826,7 @@ function patientProfileFromCertificate(certificate) {
     fullName: String(draft.fullName || '').trim(),
     dob: String(draft.dob || '').trim(),
     phone: String(draft.phone || '').trim(),
+    address: String(draft.address || '').trim(),
   };
 }
 
@@ -1693,7 +1834,8 @@ function hasPatientIdentityData(account) {
   return Boolean(
     String(account?.fullName || '').trim() ||
       String(account?.dob || '').trim() ||
-      String(account?.phone || '').trim()
+      String(account?.phone || '').trim() ||
+      String(account?.address || '').trim()
   );
 }
 
@@ -2499,6 +2641,50 @@ async function patientAccountExists(email) {
   return Boolean(localAccount);
 }
 
+async function patientAccountExistsByEmailOrPhone({ email = '', phone = '' }) {
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedPhone = normalizePhoneForLookup(phone);
+
+  if (normalizedEmail && (await patientAccountExists(normalizedEmail))) {
+    return { exists: true, reason: 'email', email: normalizedEmail };
+  }
+
+  if (!normalizedPhone) {
+    return { exists: false, reason: 'none', email: normalizedEmail };
+  }
+
+  const supabaseConfig = getSupabaseConfig();
+  if (supabaseConfig.enabled) {
+    try {
+      const phoneCandidates = [normalizedPhone];
+      if (normalizedPhone.startsWith('+')) {
+        phoneCandidates.push(normalizedPhone.slice(1));
+      } else {
+        phoneCandidates.push(`+${normalizedPhone}`);
+      }
+
+      for (const candidate of [...new Set(phoneCandidates.filter(Boolean))]) {
+        const patientRows = await supabaseRestRequest(
+          supabaseConfig,
+          `patients?phone=eq.${encodeURIComponent(candidate)}&select=email&limit=1`,
+          { method: 'GET', prefer: 'return=representation' }
+        );
+        const matchedEmail = normalizeEmail(patientRows?.[0]?.email || '');
+        if (matchedEmail) {
+          return { exists: true, reason: 'phone', email: matchedEmail };
+        }
+      }
+    } catch (errorObject) {
+      error('patient.account_exists.phone_lookup_failed', {
+        email: normalizedEmail,
+        message: errorObject?.message || String(errorObject),
+      });
+    }
+  }
+
+  return { exists: false, reason: 'none', email: normalizedEmail };
+}
+
 async function sendDoctorReviewEmail(certificate, req) {
   const reviewUrl = `${getAppBaseUrl(req)}/doctor/login`;
   const recipients = await resolveDoctorNotificationEmails();
@@ -2723,7 +2909,16 @@ async function markPaidFromStripeSession(session, trigger, req) {
       stripeSessionId: session.id || null,
       trigger,
     });
-    await sendDoctorReviewEmail(updated, req);
+    const shouldSendDoctorReviewEmail = String(trigger || '') === 'stripe_webhook' || !STRIPE_WEBHOOK_SECRET;
+    if (shouldSendDoctorReviewEmail) {
+      await sendDoctorReviewEmail(updated, req);
+    } else {
+      info('stripe.payment.review_email_skipped_non_webhook', {
+        certificateId: updated.id,
+        stripeSessionId: session.id || null,
+        trigger,
+      });
+    }
     info('stripe.payment.confirmed', {
       certificateId: updated.id,
       stripeSessionId: session.id || null,
@@ -3080,16 +3275,48 @@ async function findSupabasePatientUserByEmail(email) {
 }
 
 async function findSupabasePatientByEmail(email) {
-  const match = await findSupabasePatientUserByEmail(email);
+  const normalizedEmail = normalizeEmail(email);
+  const match = await findSupabasePatientUserByEmail(normalizedEmail);
   if (!match) return null;
 
-  return {
+  const account = {
     id: match.id || null,
-    ...toPatientAccountFromSupabaseUser(match, email),
+    ...toPatientAccountFromSupabaseUser(match, normalizedEmail),
   };
+  const config = getSupabaseConfig();
+  if (!config.enabled || !account?.id) return account;
+
+  try {
+    const rows = await supabaseRestRequest(
+      config,
+      `patients?id=eq.${encodeURIComponent(account.id)}&select=address,profile_photo_path&limit=1`,
+      {
+        method: 'GET',
+        prefer: 'return=representation',
+      }
+    );
+    const row = rows?.[0] || null;
+    if (!row) return account;
+    const profilePhotoPath = normalizeStoragePath(row.profile_photo_path || account.profilePhotoPath || '');
+    return {
+      ...account,
+      address: String(row.address || account.address || '').trim(),
+      profilePhotoPath,
+    };
+  } catch {
+    return account;
+  }
 }
 
-async function createPatientAccountViaSupabase({ email, password, fullName = '', dob = '', phone = '' }) {
+async function createPatientAccountViaSupabase({
+  email,
+  password,
+  fullName = '',
+  dob = '',
+  phone = '',
+  address = '',
+  profilePhotoPath = '',
+}) {
   const config = getSupabaseConfig();
   if (!config.enabled) return null;
 
@@ -3106,6 +3333,8 @@ async function createPatientAccountViaSupabase({ email, password, fullName = '',
           full_name: String(fullName || '').trim(),
           dob: String(dob || '').trim(),
           phone: String(phone || '').trim(),
+          address: String(address || '').trim(),
+          profile_photo_path: normalizeStoragePath(profilePhotoPath),
         },
       },
     });
@@ -3128,7 +3357,8 @@ async function createPatientAccountViaSupabase({ email, password, fullName = '',
       fullName: String(fullName || account.fullName || '').trim(),
       dob: String(dob || account.dob || '').trim(),
       phone: String(phone || account.phone || '').trim(),
-      profilePhotoPath: '',
+      address: String(address || account.address || '').trim(),
+      profilePhotoPath: normalizeStoragePath(profilePhotoPath || account.profilePhotoPath || ''),
     });
   }
   return account;
@@ -3323,7 +3553,7 @@ async function clearSupabasePatientPasswordResetToken(user) {
   });
 }
 
-async function upsertSupabasePatientMetadata({ email, fullName, dob, phone }) {
+async function upsertSupabasePatientMetadata({ email, fullName, dob, phone, address = '', profilePhotoPath = '' }) {
   const existing = await findSupabasePatientByEmail(email);
   if (!existing?.id) return null;
 
@@ -3338,6 +3568,8 @@ async function upsertSupabasePatientMetadata({ email, fullName, dob, phone }) {
     full_name: String(fullName || currentMetadata?.full_name || '').trim(),
     dob: String(dob || currentMetadata?.dob || '').trim(),
     phone: String(phone || currentMetadata?.phone || '').trim(),
+    address: String(address || currentMetadata?.address || '').trim(),
+    profile_photo_path: normalizeStoragePath(profilePhotoPath || currentMetadata?.profile_photo_path || ''),
   };
 
   const changed = JSON.stringify(currentMetadata) !== JSON.stringify(nextMetadata);
@@ -3357,7 +3589,8 @@ async function upsertSupabasePatientMetadata({ email, fullName, dob, phone }) {
       fullName: String(nextMetadata.full_name || '').trim(),
       dob: String(nextMetadata.dob || '').trim(),
       phone: String(nextMetadata.phone || '').trim(),
-      profilePhotoPath: '',
+      address: String(nextMetadata.address || '').trim(),
+      profilePhotoPath: normalizeStoragePath(nextMetadata.profile_photo_path || ''),
     });
   }
 
@@ -3366,6 +3599,8 @@ async function upsertSupabasePatientMetadata({ email, fullName, dob, phone }) {
     fullName: String(nextMetadata.full_name || '').trim(),
     dob: String(nextMetadata.dob || '').trim(),
     phone: String(nextMetadata.phone || '').trim(),
+    address: String(nextMetadata.address || '').trim(),
+    profilePhotoPath: normalizeStoragePath(nextMetadata.profile_photo_path || ''),
   };
 }
 
@@ -3753,6 +3988,25 @@ export default async function handler(req, res) {
       }
     }
 
+    if (req.method === 'POST' && routePath === 'patient/account-exists') {
+      const body = await parseJsonBody(req);
+      const email = normalizeEmail(body?.email);
+      const phone = String(body?.phone || '').trim();
+      if (!email && !phone) {
+        sendJson(res, 400, { error: 'email or phone is required' });
+        return;
+      }
+
+      const result = await patientAccountExistsByEmailOrPhone({ email, phone });
+      sendJson(res, 200, {
+        ok: true,
+        exists: Boolean(result.exists),
+        reason: result.reason,
+        matchedEmail: result.email || '',
+      });
+      return;
+    }
+
     if (req.method === 'POST' && routePath === 'checkout/confirm') {
       const body = await parseJsonBody(req);
       const sessionId =
@@ -3776,7 +4030,73 @@ export default async function handler(req, res) {
 
       const result = await markPaidFromStripeSession(session, 'checkout_success_confirm', req);
       const patientEmail = normalizeEmail(result?.patientEmail || session?.metadata?.patient_email || '');
-      const accountExists = patientEmail ? await patientAccountExists(patientEmail) : false;
+      let accountExists = patientEmail ? await patientAccountExists(patientEmail) : false;
+      let magicLinkSent = false;
+      const supabaseConfig = getSupabaseConfig();
+      if (patientEmail && result?.updated) {
+        if (!accountExists) {
+          const certificates = await listCertificatesByPatientEmail(patientEmail);
+          const { latestProfile } = getLatestFromPatientCertificates(certificates);
+          if (supabaseConfig.enabled) {
+            try {
+              await createPatientAccountViaSupabase({
+                email: patientEmail,
+                password: createBootstrapPassword(),
+                fullName: latestProfile.fullName,
+                dob: latestProfile.dob,
+                phone: latestProfile.phone,
+                address: latestProfile.address,
+              });
+            } catch (errorObject) {
+              if (errorObject?.status !== 409) throw errorObject;
+            }
+          } else {
+            try {
+              await createPatientAccount({
+                email: patientEmail,
+                password: createBootstrapPassword(),
+                fullName: latestProfile.fullName,
+                dob: latestProfile.dob,
+                phone: latestProfile.phone,
+                address: latestProfile.address,
+              });
+            } catch (errorObject) {
+              if (errorObject?.code !== 'ACCOUNT_EXISTS') throw errorObject;
+            }
+          }
+          accountExists = await patientAccountExists(patientEmail);
+        }
+
+        if (accountExists) {
+          try {
+            const token = issuePatientMagicLinkToken(patientEmail);
+            const magicUrl = buildPatientMagicLinkUrl(req, token, patientEmail);
+            const emailContent = renderPatientMagicLinkEmail({
+              baseUrl: getFrontendBaseUrl(req),
+              magicUrl,
+              expiresMinutes: String(Math.round(PATIENT_MAGIC_LINK_TTL_MS / (1000 * 60))),
+            });
+            await sendEmail({
+              to: patientEmail,
+              subject: 'Your Onya Health portal sign-in link',
+              html: emailContent.html,
+              text: emailContent.text,
+            });
+            magicLinkSent = true;
+            await appendAudit({
+              type: 'PATIENT_MAGIC_LINK_SENT_AFTER_CHECKOUT',
+              email: patientEmail,
+              stripeSessionId: sessionId,
+            });
+          } catch (errorObject) {
+            error('checkout.confirm.magic_link_send_failed', {
+              patientEmail,
+              stripeSessionId: sessionId,
+              message: errorObject?.message || String(errorObject),
+            });
+          }
+        }
+      }
       sendJson(res, 200, {
         ok: true,
         sessionId,
@@ -3786,7 +4106,8 @@ export default async function handler(req, res) {
         updated: Boolean(result?.updated),
         patientEmail,
         accountExists,
-        requiresAccountSetup: Boolean(patientEmail) && !accountExists,
+        requiresAccountSetup: false,
+        magicLinkSent,
       });
       return;
     }
@@ -3836,7 +4157,7 @@ export default async function handler(req, res) {
 
       const certificates = await listCertificatesByPatientEmail(expectedEmail);
       const { latest, latestProfile } = getLatestFromPatientCertificates(certificates);
-      const { fullName, dob, phone } = latestProfile;
+      const { fullName, dob, phone, address } = latestProfile;
 
       let account = null;
       const supabaseConfig = getSupabaseConfig();
@@ -3858,6 +4179,7 @@ export default async function handler(req, res) {
             fullName,
             dob,
             phone,
+            address,
           });
         } catch (errorObject) {
           if (errorObject?.status === 409) {
@@ -3883,6 +4205,7 @@ export default async function handler(req, res) {
             fullName,
             dob,
             phone,
+            address,
           });
         } catch (errorObject) {
           if (errorObject?.code === 'PASSWORD_INVALID') {
@@ -3924,6 +4247,111 @@ export default async function handler(req, res) {
       info('patient.checkout_account_setup.completed', {
         email: expectedEmail,
         stripeSessionId: sessionId,
+      });
+      return;
+    }
+
+    if (req.method === 'POST' && routePath === 'patient/magic-link/request') {
+      const body = await parseJsonBody(req);
+      const email = normalizeEmail(body?.email);
+      if (!isLikelyPatientEmail(email)) {
+        sendJson(res, 400, { error: 'A valid email is required' });
+        return;
+      }
+
+      const supabaseConfig = getSupabaseConfig();
+      let account = await findSupabasePatientByEmail(email);
+      if (!account && supabaseConfig.enabled) {
+        const certificates = await listCertificatesByPatientEmail(email);
+        const { latestProfile } = getLatestFromPatientCertificates(certificates);
+        if (certificates.length > 0) {
+          try {
+            account = await createPatientAccountViaSupabase({
+              email,
+              password: createBootstrapPassword(),
+              fullName: latestProfile.fullName,
+              dob: latestProfile.dob,
+              phone: latestProfile.phone,
+              address: latestProfile.address,
+            });
+          } catch (errorObject) {
+            if (errorObject?.status === 409) {
+              account = await findSupabasePatientByEmail(email);
+            } else {
+              throw errorObject;
+            }
+          }
+        }
+      }
+      if (!account && !supabaseConfig.enabled) {
+        account = await getPatientAccountByEmail(email);
+      }
+
+      if (account) {
+        try {
+          const token = issuePatientMagicLinkToken(email);
+          const magicUrl = buildPatientMagicLinkUrl(req, token, email);
+          const emailContent = renderPatientMagicLinkEmail({
+            baseUrl: getFrontendBaseUrl(req),
+            magicUrl,
+            expiresMinutes: String(Math.round(PATIENT_MAGIC_LINK_TTL_MS / (1000 * 60))),
+          });
+          await sendEmail({
+            to: email,
+            subject: 'Your secure sign-in link',
+            html: emailContent.html,
+            text: emailContent.text,
+          });
+          await appendAudit({
+            type: 'PATIENT_MAGIC_LINK_REQUESTED',
+            email,
+          });
+        } catch (errorObject) {
+          error('patient.magic_link.request_failed', {
+            email,
+            message: errorObject?.message || String(errorObject),
+          });
+        }
+      }
+
+      sendJson(res, 200, {
+        ok: true,
+        message: 'If an account exists, a magic link has been sent.',
+      });
+      return;
+    }
+
+    if (req.method === 'POST' && routePath === 'patient/magic-link/consume') {
+      const body = await parseJsonBody(req);
+      const token = normalizeResetToken(body?.token);
+      const decoded = verifyPatientMagicLinkToken(token);
+      if (!decoded?.email) {
+        sendJson(res, 400, { error: 'Invalid or expired magic link' });
+        return;
+      }
+
+      const email = normalizeEmail(decoded.email);
+      const supabaseConfig = getSupabaseConfig();
+      const account = supabaseConfig.enabled ? await findSupabasePatientByEmail(email) : await getPatientAccountByEmail(email);
+      const certificates = await listCertificatesByPatientEmail(email);
+      if (!account && certificates.length === 0) {
+        sendJson(res, 404, { error: 'No patient account found for this email yet' });
+        return;
+      }
+
+      const { latest } = getLatestFromPatientCertificates(certificates);
+      const patientToken = issuePatientToken(email);
+      const profilePayload = await resolvePatientProfileByEmail({
+        email,
+        latestCertificate: latest,
+        account: account || null,
+      });
+
+      sendJson(res, 200, {
+        ok: true,
+        token: patientToken,
+        patient: profilePayload.patient,
+        dietitian: profilePayload.dietitian,
       });
       return;
     }
@@ -4074,6 +4502,7 @@ export default async function handler(req, res) {
       const fullName = String(body.fullName || body.name || '').trim();
       const dob = String(body.dob || '').trim();
       const phone = String(body.phone || '').trim();
+      const address = String(body.address || '').trim();
 
       if (!isLikelyPatientEmail(email)) {
         sendJson(res, 400, { error: 'A valid email is required' });
@@ -4095,6 +4524,7 @@ export default async function handler(req, res) {
             fullName,
             dob,
             phone,
+            address,
           });
         } catch (errorObject) {
           if (errorObject?.status === 409) {
@@ -4111,6 +4541,7 @@ export default async function handler(req, res) {
             fullName,
             dob,
             phone,
+            address,
           });
         } catch (errorObject) {
           if (errorObject?.code === 'ACCOUNT_EXISTS') {
@@ -4180,6 +4611,7 @@ export default async function handler(req, res) {
         fullName: '',
         dob: '',
         phone: '',
+        address: '',
       };
       let latestSnapshotLoaded = false;
       const ensureLatestSnapshot = async () => {
@@ -4203,6 +4635,7 @@ export default async function handler(req, res) {
                 fullName: latestProfile.fullName,
                 dob: latestProfile.dob,
                 phone: latestProfile.phone,
+                address: latestProfile.address,
               });
             } catch (errorObject) {
               // Account may already exist in Supabase auth with different metadata.
@@ -4212,6 +4645,7 @@ export default async function handler(req, res) {
                   fullName: latestProfile.fullName,
                   dob: latestProfile.dob,
                   phone: latestProfile.phone,
+                  address: latestProfile.address,
                 });
               } else {
                 throw errorObject;
@@ -4252,6 +4686,7 @@ export default async function handler(req, res) {
                 fullName: latestProfile.fullName,
                 dob: latestProfile.dob,
                 phone: latestProfile.phone,
+                address: latestProfile.address,
               });
             } catch (errorObject) {
               if (errorObject?.code !== 'ACCOUNT_EXISTS') {
@@ -4264,6 +4699,7 @@ export default async function handler(req, res) {
               fullName: latestProfile.fullName,
               dob: latestProfile.dob,
               phone: latestProfile.phone,
+              address: latestProfile.address,
             });
 
             localAccount = await getPatientAccountByEmail(email);
@@ -4377,6 +4813,7 @@ export default async function handler(req, res) {
           fullName: '',
           dob: '',
           phone: '',
+          address: '',
         };
         if (!existing) {
           const certificates = await listCertificatesByPatientEmail(email);
@@ -4388,6 +4825,7 @@ export default async function handler(req, res) {
               fullName: latestProfile.fullName,
               dob: latestProfile.dob,
               phone: latestProfile.phone,
+              address: latestProfile.address,
             });
           } catch (errorObject) {
             if (errorObject?.status === 409) {
@@ -4583,6 +5021,87 @@ export default async function handler(req, res) {
         queueCount: snapshot.queueCount,
         certificatesFetchDurationMs: snapshot.certificatesFetchDurationMs,
         totalDurationMs: Date.now() - patientMeStartedAt,
+      });
+      return;
+    }
+
+    if (req.method === 'POST' && routePath === 'patient/profile') {
+      const patient = await requirePatient(req, res);
+      if (!patient) return;
+
+      const body = await parseJsonBody(req);
+      const fullName = String(body?.fullName || '').trim();
+      const dob = String(body?.dob || '').trim();
+      const phone = String(body?.phone || '').trim();
+      const address = String(body?.address || '').trim();
+      const incomingPhotoPath = normalizeStoragePath(body?.profilePhotoPath || '');
+      const incomingPhotoDataUrl = String(body?.profilePhotoDataUrl || '').trim();
+
+      if (!fullName) {
+        sendJson(res, 400, { error: 'Full name is required' });
+        return;
+      }
+
+      let profilePhotoPath = incomingPhotoPath;
+      try {
+        if (incomingPhotoDataUrl) {
+          const uploaded = await uploadPatientProfilePhotoDataUrl({
+            email: patient.email,
+            dataUrl: incomingPhotoDataUrl,
+            userId: patient.user?.id || '',
+          });
+          profilePhotoPath = uploaded.profilePhotoPath;
+        }
+      } catch (uploadError) {
+        sendJson(res, 400, {
+          error: uploadError?.message || 'Unable to upload profile photo',
+        });
+        return;
+      }
+
+      const supabaseConfig = getSupabaseConfig();
+      if (supabaseConfig.enabled) {
+        try {
+          await upsertSupabasePatientMetadata({
+            email: patient.email,
+            fullName,
+            dob,
+            phone,
+            address,
+            profilePhotoPath,
+          });
+        } catch (errorObject) {
+          error('patient.profile.update_supabase_failed', {
+            email: patient.email,
+            message: errorObject?.message || String(errorObject),
+          });
+        }
+      }
+
+      const localAccount = await updatePatientAccountProfile({
+        email: patient.email,
+        fullName,
+        dob,
+        phone,
+        address,
+        profilePhotoPath,
+      }).catch(() => null);
+
+      await appendAudit({
+        type: 'PATIENT_PROFILE_UPDATED',
+        email: patient.email,
+      }).catch(() => undefined);
+
+      const profilePayload = await resolvePatientProfileByEmail({
+        email: patient.email,
+        latestCertificate: null,
+        account: localAccount,
+      });
+
+      sendJson(res, 200, {
+        ok: true,
+        patient: profilePayload.patient,
+        dietitian: profilePayload.dietitian,
       });
       return;
     }

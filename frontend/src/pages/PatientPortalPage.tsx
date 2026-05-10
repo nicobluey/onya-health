@@ -1,4 +1,4 @@
-import { type CSSProperties, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, type ChangeEvent, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ArrowLeft,
     CalendarDays,
@@ -51,7 +51,6 @@ import {
     createId,
     firstName,
     formatDate,
-    formatReadableDate,
     isQueuedStatus,
     queueEstimatedMinutes,
     queueStageIndex,
@@ -241,6 +240,7 @@ function normalizePatientProfile(input: unknown, fallbackEmail = ''): PatientPro
             email: safeFallbackEmail,
             dob: '',
             phone: '',
+            address: '',
             profilePhotoPath: '',
             profilePhotoUrl: '',
         };
@@ -260,6 +260,7 @@ function normalizePatientProfile(input: unknown, fallbackEmail = ''): PatientPro
         email: String(value.email || safeFallbackEmail || '').trim().toLowerCase(),
         dob: String(value.dob || '').trim(),
         phone: String(value.phone || '').trim(),
+        address: String(value.address || '').trim(),
         profilePhotoPath: String(value.profilePhotoPath || '').trim(),
         profilePhotoUrl: String(value.profilePhotoUrl || '').trim(),
     };
@@ -287,10 +288,12 @@ function DesktopSidebar({
     activeTab,
     onTabChange,
     patient,
+    onProfileClick,
 }: {
     activeTab: MainTab;
     onTabChange: (next: MainTab) => void;
     patient: PatientProfile;
+    onProfileClick: () => void;
 }) {
     return (
         <aside className="hidden md:flex w-[260px] shrink-0 flex-col border-r border-[#cbd5e1] bg-[#f8fbff]/95 backdrop-blur">
@@ -327,7 +330,11 @@ function DesktopSidebar({
             </div>
 
             <div className="mt-auto border-t border-[#cbd5e1] p-4">
-                <div className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3">
+                <button
+                    type="button"
+                    onClick={onProfileClick}
+                    className="w-full rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3 text-left transition hover:border-[#b7dcff]"
+                >
                     <div className="flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#dbeeff] text-sm font-semibold text-[#2e8cff]">
                             {avatarInitials(patient.fullName)}
@@ -337,7 +344,7 @@ function DesktopSidebar({
                             <p className="truncate text-xs text-[#475569]">{patient.email || 'No email'}</p>
                         </div>
                     </div>
-                </div>
+                </button>
             </div>
         </aside>
     );
@@ -560,31 +567,6 @@ function ConsultComingSoonScreen({
     );
 }
 
-function ProfileCard({ patient }: { patient: PatientProfile }) {
-    const rows = [
-        { label: 'Full name', value: patient.fullName || 'Patient' },
-        { label: 'Email', value: patient.email || 'Not provided' },
-        { label: 'Date of birth', value: formatReadableDate(patient.dob) },
-        { label: 'Phone', value: patient.phone || 'Not provided' },
-    ];
-
-    return (
-        <section className={sectionCardClassName()}>
-            <div className="border-b border-[#dbeeff] px-5 py-4">
-                <h2 className="text-lg font-semibold text-[#020617]">Account Info</h2>
-            </div>
-            <div className="space-y-1 p-4">
-                {rows.map((row) => (
-                    <div key={row.label} className="rounded-xl border border-[#f1f8ff] bg-[#f8fbff] px-3 py-2.5">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-[#64748b]">{row.label}</p>
-                        <p className="mt-1 text-sm font-medium text-[#020617]">{row.value}</p>
-                    </div>
-                ))}
-            </div>
-        </section>
-    );
-}
-
 function AccountTab({
     patient,
     latestRequest,
@@ -595,6 +577,7 @@ function AccountTab({
     onCancelSubscription,
     billingActionState,
     billingError,
+    onSaveProfile,
 }: {
     patient: PatientProfile;
     latestRequest: PortalRequest | null;
@@ -605,7 +588,77 @@ function AccountTab({
     onCancelSubscription: () => void;
     billingActionState: 'idle' | 'opening_portal' | 'cancelling';
     billingError: string;
+    onSaveProfile: (payload: {
+        fullName: string;
+        dob: string;
+        phone: string;
+        address: string;
+        profilePhotoDataUrl?: string;
+    }) => Promise<void>;
 }) {
+    const [fullName, setFullName] = useState(patient.fullName || '');
+    const [dob, setDob] = useState(patient.dob || '');
+    const [phone, setPhone] = useState(patient.phone || '');
+    const [address, setAddress] = useState(patient.address || '');
+    const [profilePhotoDataUrl, setProfilePhotoDataUrl] = useState('');
+    const [photoPreviewUrl, setPhotoPreviewUrl] = useState(patient.profilePhotoUrl || '');
+    const [savingProfile, setSavingProfile] = useState(false);
+    const [profileSaveError, setProfileSaveError] = useState('');
+    const [profileSaveSuccess, setProfileSaveSuccess] = useState('');
+
+    useEffect(() => {
+        setFullName(patient.fullName || '');
+        setDob(patient.dob || '');
+        setPhone(patient.phone || '');
+        setAddress(patient.address || '');
+        setPhotoPreviewUrl(patient.profilePhotoUrl || '');
+        setProfilePhotoDataUrl('');
+    }, [patient.address, patient.dob, patient.fullName, patient.phone, patient.profilePhotoUrl]);
+
+    const handlePhotoSelection = (event: ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+            setProfileSaveError('Please choose a valid image file.');
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+            const dataUrl = String(reader.result || '');
+            if (!dataUrl) return;
+            setProfilePhotoDataUrl(dataUrl);
+            setPhotoPreviewUrl(dataUrl);
+            setProfileSaveError('');
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleSaveProfile = async (event: FormEvent) => {
+        event.preventDefault();
+        setProfileSaveError('');
+        setProfileSaveSuccess('');
+        if (!fullName.trim()) {
+            setProfileSaveError('Full name is required.');
+            return;
+        }
+        setSavingProfile(true);
+        try {
+            await onSaveProfile({
+                fullName: fullName.trim(),
+                dob: dob.trim(),
+                phone: phone.trim(),
+                address: address.trim(),
+                profilePhotoDataUrl: profilePhotoDataUrl || undefined,
+            });
+            setProfileSaveSuccess('Account settings updated.');
+            setProfilePhotoDataUrl('');
+        } catch (errorObject) {
+            setProfileSaveError(errorObject instanceof Error ? errorObject.message : 'Unable to save account settings.');
+        } finally {
+            setSavingProfile(false);
+        }
+    };
+
     const stats = [
         { label: 'Medical history', value: data.medicalHistory.length },
         { label: 'Lifestyle notes', value: data.lifestyleNotes.length },
@@ -616,10 +669,81 @@ function AccountTab({
         <section className="space-y-5">
             <header>
                 <h1 className="text-3xl font-semibold tracking-tight text-[#020617]">Account</h1>
-                <p className="mt-1 text-base text-[#475569]">View your personal details and profile activity</p>
+                <p className="mt-1 text-base text-[#475569]">Edit your details and manage profile activity</p>
             </header>
 
-            <ProfileCard patient={patient} />
+            <section className={sectionCardClassName()}>
+                <div className="border-b border-[#dbeeff] px-5 py-4">
+                    <h2 className="text-lg font-semibold text-[#020617]">Account Settings</h2>
+                </div>
+                <form className="space-y-4 p-4" onSubmit={handleSaveProfile}>
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full border border-[#b7dcff] bg-[#dbeeff] text-sm font-semibold text-[#2e8cff]">
+                            {photoPreviewUrl ? (
+                                <img src={photoPreviewUrl} alt="Profile preview" className="h-full w-full object-cover" />
+                            ) : (
+                                avatarInitials(fullName || patient.email || 'P')
+                            )}
+                        </div>
+                        <label className="inline-flex cursor-pointer items-center rounded-xl border border-[#cbd5e1] bg-white px-3 py-2 text-sm font-semibold text-[#334155] hover:border-[#b7dcff]">
+                            Upload photo
+                            <input type="file" accept="image/*" className="hidden" onChange={handlePhotoSelection} />
+                        </label>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                        <label className="block">
+                            <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-[#64748b]">Full name</span>
+                            <input
+                                value={fullName}
+                                onChange={(event) => setFullName(event.target.value)}
+                                className="h-11 w-full rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3 text-sm outline-none focus:border-[#7dbdff]"
+                            />
+                        </label>
+                        <label className="block">
+                            <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-[#64748b]">Email</span>
+                            <input
+                                value={patient.email || ''}
+                                disabled
+                                className="h-11 w-full rounded-xl border border-[#cbd5e1] bg-[#eef5ff] px-3 text-sm text-[#475569] outline-none"
+                            />
+                        </label>
+                        <label className="block">
+                            <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-[#64748b]">Date of birth</span>
+                            <input
+                                type="date"
+                                value={dob || ''}
+                                onChange={(event) => setDob(event.target.value)}
+                                className="h-11 w-full rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3 text-sm outline-none focus:border-[#7dbdff]"
+                            />
+                        </label>
+                        <label className="block">
+                            <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-[#64748b]">Phone</span>
+                            <input
+                                value={phone}
+                                onChange={(event) => setPhone(event.target.value)}
+                                className="h-11 w-full rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3 text-sm outline-none focus:border-[#7dbdff]"
+                            />
+                        </label>
+                    </div>
+                    <label className="block">
+                        <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-[#64748b]">Address</span>
+                        <input
+                            value={address}
+                            onChange={(event) => setAddress(event.target.value)}
+                            className="h-11 w-full rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3 text-sm outline-none focus:border-[#7dbdff]"
+                        />
+                    </label>
+                    {profileSaveError && <p className="text-sm font-semibold text-red-600">{profileSaveError}</p>}
+                    {profileSaveSuccess && <p className="text-sm font-semibold text-[#2e8cff]">{profileSaveSuccess}</p>}
+                    <button
+                        type="submit"
+                        disabled={savingProfile}
+                        className="inline-flex h-10 items-center justify-center rounded-xl bg-[#2e8cff] px-4 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                        {savingProfile ? 'Saving...' : 'Save account settings'}
+                    </button>
+                </form>
+            </section>
 
             <section className={sectionCardClassName()}>
                 <div className="border-b border-[#dbeeff] px-5 py-4">
@@ -1457,6 +1581,7 @@ export default function PatientPortalPage() {
                         email: preferredEmail,
                         dob: '',
                         phone: '',
+                        address: '',
                         profilePhotoPath: '',
                         profilePhotoUrl: '',
                     });
@@ -1584,6 +1709,10 @@ export default function PatientPortalPage() {
         setMainTab(next);
         setPortalScreen('main');
         setSelectedConsultOptionId(null);
+    };
+
+    const openAccountSettings = () => {
+        setTab('account');
     };
 
     const startUnlimitedCertificateRequest = async () => {
@@ -1934,6 +2063,39 @@ export default function PatientPortalPage() {
         }));
     };
 
+    const savePatientProfile = async (payload: {
+        fullName: string;
+        dob: string;
+        phone: string;
+        address: string;
+        profilePhotoDataUrl?: string;
+    }) => {
+        const activeToken = token || window.localStorage.getItem('onya_patient_token') || '';
+        if (!activeToken) {
+            throw new Error('Please sign in again to update account settings.');
+        }
+
+        const { response, payload: apiPayload } = await fetchApiJson('/api/patient/profile', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${activeToken}`,
+            },
+            body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+            throw new Error(apiPayload?.error || 'Unable to update account settings.');
+        }
+
+        const nextPatient = normalizePatientProfile(apiPayload?.patient, patient.email || '');
+        setPatient(nextPatient);
+        window.localStorage.setItem('onya_patient_email', nextPatient.email || patient.email || '');
+        const nextDietitian = normalizeDietitianProfile(apiPayload?.dietitian);
+        if (nextDietitian) {
+            setPrimaryDietitian(nextDietitian);
+        }
+    };
+
     const sendMessageToDoctor = async () => {
         if (!queuedRequest || !token) return;
         const message = window.prompt('Message for the doctor');
@@ -2195,6 +2357,7 @@ export default function PatientPortalPage() {
                 onCancelSubscription={cancelSubscriptionAtPeriodEnd}
                 billingActionState={billingActionState}
                 billingError={billingError}
+                onSaveProfile={savePatientProfile}
             />
         );
     };
@@ -2245,7 +2408,7 @@ export default function PatientPortalPage() {
         <>
             <div className="relative hidden min-h-screen overflow-hidden bg-[#f8fbff] text-[#020617] md:flex">
                 <PortalBackdropArt />
-                <DesktopSidebar activeTab={mainTab} onTabChange={setTab} patient={patient} />
+                <DesktopSidebar activeTab={mainTab} onTabChange={setTab} patient={patient} onProfileClick={openAccountSettings} />
                 <main className="relative z-10 flex-1">
                     <div className="mx-auto w-full max-w-[1160px] px-8 py-7">
                         {portalScreen === 'main' && (

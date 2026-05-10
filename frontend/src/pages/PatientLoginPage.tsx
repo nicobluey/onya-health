@@ -1,4 +1,4 @@
-import { type CSSProperties, useState } from 'react';
+import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Lock, Mail } from 'lucide-react';
 import { fetchApiJson } from '../lib/api';
 import { HeaderDropdown } from '../components/HeaderDropdown';
@@ -55,13 +55,56 @@ const SCIENCE_FLOATING_CARDS: FloatingScienceCard[] = [
 ];
 
 export default function PatientLoginPage() {
-    const [email, setEmail] = useState('');
+    const initialParams = useMemo(() => new URLSearchParams(window.location.search), []);
+    const initialEmail = String(initialParams.get('email') || '').trim().toLowerCase();
+    const initialMagicToken = String(initialParams.get('magic_token') || '').trim();
+    const [email, setEmail] = useState(initialEmail);
     const [dob, setDob] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [resetSending, setResetSending] = useState(false);
+    const [magicSending, setMagicSending] = useState(false);
+    const [magicAuthenticating, setMagicAuthenticating] = useState(Boolean(initialMagicToken));
     const [error, setError] = useState('');
     const [resetStatus, setResetStatus] = useState('');
+    const [magicStatus, setMagicStatus] = useState('');
+
+    useEffect(() => {
+        if (!initialMagicToken) return;
+        let disposed = false;
+        const authenticateWithMagicToken = async () => {
+            setError('');
+            setMagicStatus('');
+            setMagicAuthenticating(true);
+            try {
+                const { response, payload } = await fetchApiJson('/api/patient/magic-link/consume', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: initialMagicToken }),
+                });
+                if (!response.ok) {
+                    throw new Error(payload.error || 'Magic link is invalid or expired');
+                }
+                const resolvedEmail = String(payload?.patient?.email || initialEmail || '').trim().toLowerCase();
+                if (resolvedEmail) {
+                    window.localStorage.setItem('onya_patient_email', resolvedEmail);
+                }
+                window.localStorage.setItem('onya_patient_token', payload.token || '');
+                window.location.href = '/patient';
+            } catch (errorObject) {
+                if (disposed) return;
+                setError(errorObject instanceof Error ? errorObject.message : 'Magic link is invalid or expired');
+            } finally {
+                if (!disposed) {
+                    setMagicAuthenticating(false);
+                }
+            }
+        };
+        void authenticateWithMagicToken();
+        return () => {
+            disposed = true;
+        };
+    }, [initialEmail, initialMagicToken]);
 
     const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
@@ -129,6 +172,32 @@ export default function PatientLoginPage() {
         }
     };
 
+    const handleSendMagicLink = async () => {
+        setMagicStatus('');
+        setError('');
+        if (!email || !email.includes('@')) {
+            setError('Enter your account email first.');
+            return;
+        }
+
+        try {
+            setMagicSending(true);
+            const { response, payload } = await fetchApiJson('/api/patient/magic-link/request', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email }),
+            });
+            if (!response.ok) {
+                throw new Error(payload.error || 'Unable to send magic link right now.');
+            }
+            setMagicStatus('Magic link sent if this email exists.');
+        } catch (errorObject) {
+            setError(errorObject instanceof Error ? errorObject.message : 'Unable to send magic link right now.');
+        } finally {
+            setMagicSending(false);
+        }
+    };
+
     return (
         <div className="relative min-h-screen overflow-hidden bg-sunlight-50 text-text-primary">
             <div className="science-scene" aria-hidden="true">
@@ -190,7 +259,7 @@ export default function PatientLoginPage() {
                     <section className="rounded-3xl border border-sand-200 bg-white p-6 shadow-[0_24px_42px_-34px_rgba(15,23,42,0.28)] md:p-7">
                         <h2 className="text-3xl leading-tight">Patient login</h2>
                         <p className="mt-2 text-bark-500">
-                            Access your consult activity, profile, billing, and queue status with password or date-of-birth sign-in.
+                            Access your consult activity, profile, billing, and queue status. Magic link is the fastest sign-in option.
                         </p>
 
                         <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
@@ -239,11 +308,21 @@ export default function PatientLoginPage() {
                             </label>
 
                             {error && <p className="text-sm font-medium text-red-600">{error}</p>}
+                            {magicStatus && <p className="text-sm font-medium text-forest-800">{magicStatus}</p>}
                             {resetStatus && <p className="text-sm font-medium text-forest-800">{resetStatus}</p>}
 
                             <button
+                                type="button"
+                                onClick={handleSendMagicLink}
+                                disabled={magicSending || magicAuthenticating}
+                                className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-[#b7dcff] bg-[#eef5ff] text-sm font-semibold text-[#165fad] transition hover:border-[#7dbdff] disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                {magicSending ? 'Sending magic link...' : 'Email me a magic sign-in link'}
+                            </button>
+
+                            <button
                                 type="submit"
-                                disabled={loading}
+                                disabled={loading || magicAuthenticating}
                                 className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary text-sm font-semibold text-white transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-70"
                             >
                                 {loading ? 'Signing in...' : 'Continue to patient portal'}
@@ -253,7 +332,7 @@ export default function PatientLoginPage() {
                             <button
                                 type="button"
                                 onClick={handleSendResetLink}
-                                disabled={resetSending}
+                                disabled={resetSending || magicAuthenticating}
                                 className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-sand-200 bg-white text-sm font-semibold text-bark-700 transition hover:border-secondary disabled:cursor-not-allowed disabled:opacity-60"
                             >
                                 {resetSending ? 'Sending reset link...' : 'Forgot password? Send reset link'}
