@@ -301,3 +301,44 @@
 2. Live domain serves `felicity-profile.webp` from production.
 3. Account and consult tabs now show status chips with requested tone mapping.
 4. Patient profile update supports email + profile fields with token continuity.
+
+## 2026-05-11 - Nutrition card photo + consult UX/state cleanup
+
+### Symptoms
+
+- Felicity photo missing from the `Crafted for you` personal note card.
+- Home hero `Consults on file` implied active consult access for users who have not started nutrition onboarding.
+- Consult history showed `Weight Loss` label instead of nutritionist consult wording.
+- Sidebar bottom profile chip could appear missing on longer Home/Account pages.
+- Some records remained visually stuck at `Awaiting payment confirmation`.
+
+### Root causes
+
+1. `Crafted for you` card did not include a dietitian identity/photo region.
+2. Home hero consult-count block did not gate for not-started nutrition flow.
+3. `consultTitle(...)` did not map `weight_loss` to user-facing nutrition consult copy.
+4. Sidebar layout was not pinned to viewport height, so the bottom profile chip could scroll out of view.
+5. Supabase status mapping inferred `awaiting_payment` too broadly and did not persist updated payment metadata back into `medical_certificate_requests.raw_submission`.
+
+### Files changed
+
+- `frontend/src/weight-loss-reset/components/WeightLossResetDashboard.tsx`
+  - added Felicity/dietitian photo badge to the `Crafted for you` header card.
+- `frontend/src/patient-portal/home/HomeTab.tsx`
+  - home hero now shows locked nutrition upsell copy when plan is not started.
+  - reduced latest-consults heading prominence.
+- `frontend/src/patient-portal/model.ts`
+  - maps `weight_loss`/`nutritionist` service titles to `Nutritionist Consult`.
+- `frontend/src/pages/PatientPortalPage.tsx`
+  - pinned desktop sidebar behavior (`sticky top-0 h-screen`) and adjusted wrapper overflow for persistent bottom profile chip visibility.
+- `backend/lib/storage.js`
+  - `awaiting_payment` inference requires Stripe session id.
+  - persisted `raw_submission` patch during certificate updates so Stripe payment status propagation sticks.
+
+### Verification
+
+1. `npm run build` succeeds.
+2. `Crafted for you` card now renders Felicity profile image/name block.
+3. Home hero shows locked upsell copy for non-started nutrition plan users.
+4. Consult history labels show `Nutritionist Consult` (not `Weight Loss`).
+5. Paid-session updates persist payment metadata and reduce stale awaiting-payment states.

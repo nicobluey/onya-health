@@ -367,7 +367,11 @@ export function statusLabel(status: string) {
 }
 
 export function consultTitle(serviceType: string) {
-  if (serviceType === 'doctor' || !serviceType) return 'Medical Certificate';
+  const normalized = String(serviceType || '').toLowerCase().trim();
+  if (normalized === 'doctor' || !normalized) return 'Medical Certificate';
+  if (normalized === 'weight_loss' || normalized === 'weight-loss' || normalized === 'nutritionist') {
+    return 'Nutritionist Consult';
+  }
   return serviceType
     .split('_')
     .map((word) => word.slice(0, 1).toUpperCase() + word.slice(1))

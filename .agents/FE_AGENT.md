@@ -71,6 +71,8 @@ Dietitian payload (`payload.dietitian`) shape used by UI:
   - `frontend/src/weight-loss-reset/constants.ts`
   - `DEFAULT_DIETITIAN_PROFILE_IMAGE_URL`
 - Production fallback is `/felicity-profile.webp` from `frontend/public`.
+- In the meal-plan dashboard, the "Crafted for you" personal-note card should also render the assigned dietitian photo/name badge.
+- Desktop sidebar profile chip must remain persistent across Home/Consult/Account; keep sidebar pinned (`sticky top-0 h-screen`) so the bottom profile card does not scroll out on long pages.
 
 ## Regression checks (before deploy)
 1. Login and `GET /api/patient/bootstrap` returns patient + dietitian.
@@ -85,3 +87,4 @@ Dietitian payload (`payload.dietitian`) shape used by UI:
    - approved/issued -> green
    - pending review -> yellow
    - awaiting payment -> gray
+10. If nutrition plan is not started, Home hero should show locked nutrition upsell copy instead of implying active consult access.

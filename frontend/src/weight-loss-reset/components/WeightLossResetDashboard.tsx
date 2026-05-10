@@ -911,13 +911,30 @@ export default function WeightLossResetDashboard({
           {mealPlan ? (
             <article className="overflow-hidden rounded-3xl border border-[#cbd5e1] bg-white shadow-[0_20px_42px_-34px_rgba(15,23,42,0.38)]">
               <div className="border-b border-[#dbeeff] bg-gradient-to-r from-[#f8fbff] via-[#f1f8ff] to-white px-4 py-4 sm:px-5">
-                <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.07em] text-[#1f7be6]">
-                  <Sparkles size={14} />
-                  Crafted for you
-                </p>
-                <h3 className="mt-1 text-xl font-semibold tracking-tight text-[#020617]">{personalizedSummary.title}</h3>
-                <p className="mt-2 text-sm text-[#334155]">{personalizedSummary.intro}</p>
-                <p className="mt-1 text-sm text-[#475569]">{personalizedSummary.detail}</p>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.07em] text-[#1f7be6]">
+                      <Sparkles size={14} />
+                      Crafted for you
+                    </p>
+                    <h3 className="mt-1 text-xl font-semibold tracking-tight text-[#020617]">{personalizedSummary.title}</h3>
+                    <p className="mt-2 text-sm text-[#334155]">{personalizedSummary.intro}</p>
+                    <p className="mt-1 text-sm text-[#475569]">{personalizedSummary.detail}</p>
+                  </div>
+                  <div className="inline-flex items-center gap-2 rounded-xl border border-[#cbd5e1] bg-white px-2.5 py-2">
+                    <ProfileAvatar
+                      name={dietitianName}
+                      imageUrl={dietitianImageUrl}
+                      fallbackImageUrl={DEFAULT_DIETITIAN_PROFILE_IMAGE_URL}
+                      alt={`${dietitianName} profile`}
+                      className="h-9 w-9 rounded-lg border border-[#b7dcff] object-cover"
+                    />
+                    <div>
+                      <p className="text-sm font-semibold text-[#020617]">{dietitianName}</p>
+                      <p className="text-xs text-[#475569]">{dietitianCredentials}</p>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="grid gap-4 px-4 py-4 sm:px-5 lg:grid-cols-[1.1fr_0.9fr]">

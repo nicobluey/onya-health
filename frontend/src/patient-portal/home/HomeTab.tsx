@@ -6,6 +6,7 @@ import {
     ClipboardPlus,
     FileText,
     Heart,
+    Lock,
     NotebookPen,
     Plus,
     Stethoscope,
@@ -122,10 +123,12 @@ function EmptySectionState({
 function HomeHero({
     firstNameValue,
     requestCount,
+    hasNutritionAccess,
     onGoToTab,
 }: {
     firstNameValue: string;
     requestCount: number;
+    hasNutritionAccess: boolean;
     onGoToTab: (tab: Exclude<MainTab, 'home'>) => void;
 }) {
     return (
@@ -159,10 +162,26 @@ function HomeHero({
                             <UserRound size={16} />
                             Manage Account
                         </button>
-                        <div className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] px-4 py-3 sm:col-span-2">
-                            <p className="text-xs uppercase tracking-[0.12em] text-[#475569]">Consults on file</p>
-                            <p className="mt-1 text-2xl font-semibold text-[#020617]">{requestCount}</p>
-                        </div>
+                        {hasNutritionAccess ? (
+                            <div className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] px-4 py-3 sm:col-span-2">
+                                <p className="text-xs uppercase tracking-[0.12em] text-[#475569]">Consults on file</p>
+                                <p className="mt-1 text-2xl font-semibold text-[#020617]">{requestCount}</p>
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => onGoToTab('consult')}
+                                className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] px-4 py-3 text-left transition hover:border-[#b7dcff] sm:col-span-2"
+                            >
+                                <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#475569]">
+                                    <Lock size={12} />
+                                    Nutritionist consults
+                                </p>
+                                <p className="mt-1 text-sm font-semibold text-[#020617]">
+                                    Get matched with a nutritionist and achieve your goals today.
+                                </p>
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -294,7 +313,7 @@ function PreviousConsultQueue({
         <section className={`${panelClassName} p-5 sm:p-6`}>
             <div className="flex items-center justify-between gap-3">
                 <div>
-                    <h2 className="text-xl font-semibold text-[#020617]">Latest Consults</h2>
+                    <h2 className="text-lg font-semibold text-[#020617]">Latest Consults</h2>
                     <p className="mt-1 text-sm text-[#475569]">Most recent activity first. Expand if you need older consults.</p>
                 </div>
                 <div className="hidden rounded-full border border-[#cbd5e1] bg-[#f8fbff] px-3 py-1 text-xs font-semibold text-[#475569] sm:block">
@@ -813,6 +832,7 @@ export default function HomeTab({
     };
 }) {
     const desktop = mode === 'desktop';
+    const hasNutritionAccess = weightLossResetCard.cardState !== 'not-started';
     const timelineRequests = useMemo(() => {
         const hasNutritionCard = weightLossResetCard.cardState !== 'not-started';
         if (!hasNutritionCard) return requests;
@@ -854,7 +874,12 @@ export default function HomeTab({
     if (desktop) {
         return (
             <section className="space-y-6">
-                <HomeHero firstNameValue={firstNameValue} requestCount={timelineRequests.length} onGoToTab={onGoToTab} />
+                <HomeHero
+                    firstNameValue={firstNameValue}
+                    requestCount={timelineRequests.length}
+                    hasNutritionAccess={hasNutritionAccess}
+                    onGoToTab={onGoToTab}
+                />
                 <PatientDashboardWeightLossCard
                     cardState={weightLossResetCard.cardState}
                     firstName={firstNameValue}
@@ -889,7 +914,12 @@ export default function HomeTab({
 
     return (
         <section className="space-y-5">
-            <HomeHero firstNameValue={firstNameValue} requestCount={timelineRequests.length} onGoToTab={onGoToTab} />
+            <HomeHero
+                firstNameValue={firstNameValue}
+                requestCount={timelineRequests.length}
+                hasNutritionAccess={hasNutritionAccess}
+                onGoToTab={onGoToTab}
+            />
             <PatientDashboardWeightLossCard
                 cardState={weightLossResetCard.cardState}
                 firstName={firstNameValue}

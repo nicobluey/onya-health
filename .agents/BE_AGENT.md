@@ -80,6 +80,9 @@ When account/profile records are created/updated:
   - `GET /api/patient/bootstrap`
   - `GET /api/patient/me`
   - `GET /api/patient/requests`
+- Additional hardening:
+  - `awaiting_payment` inference now only applies when Stripe session id exists in payment metadata.
+  - Supabase certificate updates now patch `medical_certificate_requests.raw_submission` so Stripe payment status changes are persisted (avoids stale `awaiting_payment` in subsequent reads).
 
 ## Certificate duration cap
 - Duration is hard-capped to 7 days at all pricing/draft points:

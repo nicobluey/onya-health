@@ -199,6 +199,7 @@ function mapSupabaseRowToCertificate(row) {
   if (
     status === 'submitted' &&
     rawSubmission?.payment?.provider === 'stripe' &&
+    rawSubmission?.payment?.stripeSessionId &&
     rawSubmission?.payment?.status &&
     rawSubmission.payment.status !== 'paid'
   ) {
@@ -1240,6 +1241,26 @@ async function updateCertificateSupabase(id, updater) {
 
   if (!patchRows || patchRows.length === 0) {
     return current;
+  }
+
+  const nextRawSubmission =
+    updatedCandidate?.rawSubmission && typeof updatedCandidate.rawSubmission === 'object'
+      ? updatedCandidate.rawSubmission
+      : current.rawSubmission || null;
+  if (nextRawSubmission) {
+    try {
+      await supabaseRequest(`medical_certificate_requests?request_id=eq.${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: {
+          raw_submission: nextRawSubmission,
+        },
+      });
+    } catch (errorObject) {
+      warn('medical_request.raw_submission_patch_failed', {
+        requestId: id,
+        message: errorObject?.message || String(errorObject),
+      });
+    }
   }
 
   const refreshed = await getCertificateByIdSupabase(id);

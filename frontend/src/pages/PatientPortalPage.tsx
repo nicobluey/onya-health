@@ -307,7 +307,7 @@ function DesktopSidebar({
     onProfileClick: () => void;
 }) {
     return (
-        <aside className="hidden md:flex w-[260px] shrink-0 flex-col border-r border-[#cbd5e1] bg-[#f8fbff]/95 backdrop-blur">
+        <aside className="sticky top-0 hidden h-screen w-[260px] shrink-0 flex-col border-r border-[#cbd5e1] bg-[#f8fbff]/95 backdrop-blur md:flex">
             <div className="px-5 pt-5">
                 <a href="/" className="inline-flex items-center" aria-label="Go to home page">
                     <img src="/logo.webp" alt="Onya Health" className="h-10 w-auto object-contain" />
@@ -2519,7 +2519,7 @@ export default function PatientPortalPage() {
 
     return (
         <>
-            <div className="relative hidden min-h-screen overflow-hidden bg-[#f8fbff] text-[#020617] md:flex">
+            <div className="relative hidden min-h-screen overflow-x-hidden bg-[#f8fbff] text-[#020617] md:flex">
                 <PortalBackdropArt />
                 <DesktopSidebar activeTab={mainTab} onTabChange={setTab} patient={patient} onProfileClick={openAccountSettings} />
                 <main className="relative z-10 flex-1">
