@@ -6,7 +6,7 @@ export const UNLIMITED_MONTHLY_PRICE_AUD = 19;
 
 function toWholeDays(value: number) {
   if (!Number.isFinite(value)) return 1;
-  return Math.max(1, Math.floor(value));
+  return Math.min(ONE_OFF_CAP_END_DAY, Math.max(1, Math.floor(value)));
 }
 
 export function getOneOffCertificatePrice(durationDays: number) {
@@ -40,10 +40,6 @@ export function getOneOffPricingBandLabel(durationDays: number) {
     return `${ONE_OFF_MAX_PRICE_DAY}-${ONE_OFF_CAP_END_DAY} day capped price`;
   }
 
-  if (safeDuration > ONE_OFF_CAP_END_DAY) {
-    return `${ONE_OFF_CAP_END_DAY}+ day capped price`;
-  }
-
   return `Day ${safeDuration} linear price`;
 }
 
@@ -51,10 +47,6 @@ export function getOneOffCertificateBandLabel(durationDays: number) {
   const safeDuration = toWholeDays(durationDays);
   if (safeDuration <= 1) {
     return '1 day certificate';
-  }
-
-  if (safeDuration > ONE_OFF_CAP_END_DAY) {
-    return `${ONE_OFF_CAP_END_DAY}+ day certificate`;
   }
 
   return `${safeDuration} day certificate`;

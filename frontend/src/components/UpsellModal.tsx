@@ -6,7 +6,7 @@ import {
     UNLIMITED_MONTHLY_PRICE_AUD,
 } from '../consult-flow/pricing';
 import { Modal, Button } from './UI';
-import { Star, Check } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { ShineButton } from './lightswind/ShineButton';
 
 export function UpsellModal() {
@@ -41,7 +41,6 @@ export function UpsellModal() {
 
                     <div className="mb-4">
                         <div className="flex items-center gap-2 mb-1">
-                            <Star className="text-sunlight-300 fill-sunlight-300" size={18} />
                             <h4 className="font-bold text-lg text-text-primary">{upsell.recommended.title}</h4>
                         </div>
                         <p className="text-text-primary font-medium">{unlimitedPriceText}</p>

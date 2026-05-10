@@ -483,6 +483,7 @@ export default function WeightLossResetDashboard({
   answers,
   displayFirstName,
   dietitian,
+  clinicalContext,
   mealPlan,
   recipes,
   weightLogs,
@@ -499,6 +500,11 @@ export default function WeightLossResetDashboard({
   answers: OnboardingAnswers;
   displayFirstName?: string;
   dietitian?: AssignedDietitianProfile | null;
+  clinicalContext?: {
+    medicalHistory?: string[];
+    allergies?: string[];
+    medications?: string[];
+  } | null;
   mealPlan: MealPlan | null;
   recipes: Recipe[];
   weightLogs: WeightLogEntry[];
@@ -525,6 +531,9 @@ export default function WeightLossResetDashboard({
   const dietitianImageUrl = String(dietitian?.profilePhotoUrl || '').trim() || DEFAULT_DIETITIAN_PROFILE_IMAGE_URL;
   const dietitianCredentials = String(dietitian?.credentials || '').trim() || 'Accredited Dietitian';
   const dietitianBio = String(dietitian?.bio || '').trim() || 'Practical, kind, realistic support.';
+  const contextHistory = Array.isArray(clinicalContext?.medicalHistory) ? clinicalContext.medicalHistory.filter(Boolean) : [];
+  const contextAllergies = Array.isArray(clinicalContext?.allergies) ? clinicalContext.allergies.filter(Boolean) : [];
+  const contextMedications = Array.isArray(clinicalContext?.medications) ? clinicalContext.medications.filter(Boolean) : [];
 
   const recipeMap = useMemo(() => new Map(recipes.map((recipe) => [recipe.id, recipe])), [recipes]);
   const groceryGroups = useMemo(() => buildGroceryListFromMealPlan(mealPlan, recipeMap), [mealPlan, recipeMap]);
@@ -772,6 +781,33 @@ export default function WeightLossResetDashboard({
               <p className="mt-1 text-xs text-[#475569]">
                 Preference-led weekly planning with practical prep guidance. General nutrition support, not medical advice.
               </p>
+            </article>
+
+            <article className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3">
+              <p className="text-sm font-semibold text-[#020617]">Shared clinical context</p>
+              <p className="mt-1 text-xs text-[#475569]">
+                {dietitianName} can use your history, allergies, and medications to keep your plan safer and more practical.
+              </p>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                <div className="rounded-lg border border-[#dbeeff] bg-white px-2 py-1.5 text-center">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#64748b]">History</p>
+                  <p className="mt-0.5 text-sm font-semibold text-[#020617]">{contextHistory.length}</p>
+                </div>
+                <div className="rounded-lg border border-[#dbeeff] bg-white px-2 py-1.5 text-center">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#64748b]">Allergies</p>
+                  <p className="mt-0.5 text-sm font-semibold text-[#020617]">{contextAllergies.length}</p>
+                </div>
+                <div className="rounded-lg border border-[#dbeeff] bg-white px-2 py-1.5 text-center">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#64748b]">Meds</p>
+                  <p className="mt-0.5 text-sm font-semibold text-[#020617]">{contextMedications.length}</p>
+                </div>
+              </div>
+              {(contextAllergies.length > 0 || contextMedications.length > 0) && (
+                <p className="mt-2 text-xs text-[#475569]">
+                  Key flags:{' '}
+                  {[...contextAllergies.slice(0, 2), ...contextMedications.slice(0, 1)].join(', ')}
+                </p>
+              )}
             </article>
 
             <article className="rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3">

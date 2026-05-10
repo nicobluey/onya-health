@@ -51,7 +51,13 @@ Returned API identity contract:
   - `POST /api/patient/account-exists` (email/phone collision guard)
 - Profile update endpoint (authenticated):
   - `POST /api/patient/profile`
-  - supports `fullName`, `dob`, `phone`, `address`, optional `profilePhotoDataUrl`
+  - supports `fullName`, `email`, `dob`, `phone`, `address`, optional `profilePhotoDataUrl`
+  - email-change path:
+    - validates collision before update
+    - updates Supabase auth email
+    - syncs `profiles`/`patients` rows
+    - updates local auth account
+    - returns rotated patient token when email changes
 - Checkout confirmation:
   - `POST /api/checkout/confirm` auto-creates patient account when missing and sends magic-link email after payment.
 
@@ -65,6 +71,22 @@ When account/profile records are created/updated:
 ## Email idempotency rule
 - Doctor review confirmation email sending is constrained to webhook-finalization path (`stripe_webhook`) in `markPaidFromStripeSession(...)` to prevent duplicate sends from multiple payment completion code paths.
 
+## Payment reconciliation rule
+- To reduce stale `awaiting_payment` states, patient API reads now run a bounded reconciliation pass:
+  - fetch up to 5 recent `awaiting_payment` certificates with Stripe session IDs
+  - re-check Stripe session payment status
+  - auto-mark paid via `markPaidFromStripeSession(...)` when Stripe confirms `paid` or `no_payment_required`
+- Reconciliation currently runs on:
+  - `GET /api/patient/bootstrap`
+  - `GET /api/patient/me`
+  - `GET /api/patient/requests`
+
+## Certificate duration cap
+- Duration is hard-capped to 7 days at all pricing/draft points:
+  - `buildDraftCertificate(...)`
+  - `stripePricingFromRequest(...)`
+- This prevents frontend bypass and keeps billing/certificate issuance aligned.
+
 ## Migrations applied for this model
 - `supabase/migrations/20260508_refactor_patient_dietitian_profiles.sql`
 - `supabase/migrations/20260509_add_patient_email_index.sql`
@@ -76,3 +98,4 @@ When account/profile records are created/updated:
 3. Confirm each active patient has a primary assignment or fallback assignment path works.
 4. Verify auth endpoints return `{ patient, dietitian }`.
 5. Smoke test `/api/patient/bootstrap` with a real token.
+6. Smoke test profile email change and ensure returned token can still load `/api/patient/bootstrap`.

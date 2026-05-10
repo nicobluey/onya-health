@@ -292,11 +292,10 @@ export const DatesStep = () => {
         { value: 5, label: '5 days' },
         { value: 6, label: '6 days' },
         { value: 7, label: '7 days' },
-        { value: 8, label: 'More than 7 days' },
     ];
 
     const selectedDuration = durationOptions.find((option) => option.value === durationDays) || durationOptions[0];
-    const durationLabel = durationDays > 7 ? 'More than 7 days' : `${durationDays} day${durationDays > 1 ? 's' : ''}`;
+    const durationLabel = `${Math.min(7, Math.max(1, durationDays))} day${durationDays > 1 ? 's' : ''}`;
     const estimatedOneOffPrice = getOneOffCertificatePrice(durationDays);
     const pricingBandLabel = getOneOffPricingBandLabel(durationDays);
 
@@ -625,7 +624,15 @@ export const DetailsStep = () => {
                 />
             </div>
             {accountCheckError && (
-                <p className="text-xs font-semibold text-red-600">{accountCheckError}</p>
+                <div className="space-y-2">
+                    <p className="text-xs font-semibold text-red-600">{accountCheckError}</p>
+                    <a
+                        href={`/patient-login?email=${encodeURIComponent(details.email.trim().toLowerCase())}`}
+                        className="inline-flex h-9 items-center justify-center rounded-lg border border-border bg-white px-3 text-xs font-semibold text-text-primary"
+                    >
+                        Sign in to continue
+                    </a>
+                </div>
             )}
             <Button fullWidth onClick={handleSubmit} disabled={checkingAccount}>
                 {checkingAccount ? 'Checking your account...' : COPY.steps.details.cta}

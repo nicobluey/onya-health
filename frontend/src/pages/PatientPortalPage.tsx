@@ -214,6 +214,17 @@ function PortalBackdropArt() {
     );
 }
 
+function statusPillClasses(status: string) {
+    const normalized = String(status || '').trim().toLowerCase();
+    if (normalized === 'approved' || normalized === 'closed') return 'border-[#bfe7d0] bg-[#eefaf3] text-[#16784c]';
+    if (normalized === 'awaiting_payment') return 'border-[#cbd5e1] bg-[#f8fafc] text-[#475569]';
+    if (['pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(normalized)) {
+        return 'border-[#f3df9d] bg-[#fff8e8] text-[#8a6700]';
+    }
+    if (normalized === 'denied') return 'border-[#f3c5c4] bg-[#ffe9e8] text-[#a93736]';
+    return 'border-[#cbd5e1] bg-[#f1f8ff] text-[#475569]';
+}
+
 function normalizeBillingInfo(input: unknown): PatientBillingInfo | null {
     if (!input || typeof input !== 'object') return null;
     const value = input as Record<string, unknown>;
@@ -336,8 +347,12 @@ function DesktopSidebar({
                     className="w-full rounded-2xl border border-[#cbd5e1] bg-[#f8fbff] p-3 text-left transition hover:border-[#b7dcff]"
                 >
                     <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#dbeeff] text-sm font-semibold text-[#2e8cff]">
-                            {avatarInitials(patient.fullName)}
+                        <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#dbeeff] text-sm font-semibold text-[#2e8cff]">
+                            {patient.profilePhotoUrl ? (
+                                <img src={patient.profilePhotoUrl} alt={`${patient.fullName || 'Patient'} avatar`} className="h-full w-full object-cover" />
+                            ) : (
+                                avatarInitials(patient.fullName)
+                            )}
                         </div>
                         <div className="min-w-0">
                             <p className="truncate text-sm font-semibold text-[#020617]">{patient.fullName || 'Patient'}</p>
@@ -441,10 +456,17 @@ function QueueBanner({
 function ConsultTab({
     onSelectOption,
     billing,
+    requests,
+    dietitian,
 }: {
     onSelectOption: (optionId: ConsultOptionId) => void;
     billing: PatientBillingInfo | null;
+    requests: PortalRequest[];
+    dietitian: DietitianProfile | null;
 }) {
+    const latestConsults = requests.slice(0, 3);
+    const dietitianName = String(dietitian?.fullName || 'Felicity').trim() || 'Felicity';
+
     return (
         <section className="space-y-5">
             <header>
@@ -520,6 +542,39 @@ function ConsultTab({
                     );
                 })}
             </div>
+
+            <section className={sectionCardClassName()}>
+                <div className="border-b border-[#dbeeff] px-5 py-4">
+                    <h2 className="text-lg font-semibold text-[#020617]">Latest consults</h2>
+                    <p className="mt-1 text-sm text-[#475569]">Recent consult activity, including your recurring nutrition consult.</p>
+                </div>
+                <div className="space-y-3 px-5 py-4">
+                    {latestConsults.length > 0 ? (
+                        latestConsults.map((request) => {
+                            const isNutrition =
+                                String(request.serviceType || '').toLowerCase() === 'weight_loss' ||
+                                String(request.serviceType || '').toLowerCase() === 'weight-loss' ||
+                                String(request.serviceType || '').toLowerCase() === 'nutritionist';
+                            return (
+                                <article key={request.id} className="rounded-2xl border border-[#dbeeff] bg-[#f8fbff] p-3">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <h3 className="text-sm font-semibold text-[#020617]">{consultTitle(request.serviceType)}</h3>
+                                        <span className={`inline-flex rounded-full border px-2 py-1 text-[11px] font-semibold ${statusPillClasses(request.status)}`}>
+                                            {statusLabel(request.status)}
+                                        </span>
+                                    </div>
+                                    {isNutrition && (
+                                        <p className="mt-1 text-xs text-[#475569]">Dietitian: {dietitianName}</p>
+                                    )}
+                                    <p className="mt-1 text-xs text-[#64748b]">Updated {formatDate(request.createdAt)}</p>
+                                </article>
+                            );
+                        })
+                    ) : (
+                        <p className="text-sm text-[#475569]">No consult history yet.</p>
+                    )}
+                </div>
+            </section>
         </section>
     );
 }
@@ -589,6 +644,7 @@ function AccountTab({
     billingActionState: 'idle' | 'opening_portal' | 'cancelling';
     billingError: string;
     onSaveProfile: (payload: {
+        email: string;
         fullName: string;
         dob: string;
         phone: string;
@@ -597,6 +653,7 @@ function AccountTab({
     }) => Promise<void>;
 }) {
     const [fullName, setFullName] = useState(patient.fullName || '');
+    const [email, setEmail] = useState(patient.email || '');
     const [dob, setDob] = useState(patient.dob || '');
     const [phone, setPhone] = useState(patient.phone || '');
     const [address, setAddress] = useState(patient.address || '');
@@ -608,12 +665,13 @@ function AccountTab({
 
     useEffect(() => {
         setFullName(patient.fullName || '');
+        setEmail(patient.email || '');
         setDob(patient.dob || '');
         setPhone(patient.phone || '');
         setAddress(patient.address || '');
         setPhotoPreviewUrl(patient.profilePhotoUrl || '');
         setProfilePhotoDataUrl('');
-    }, [patient.address, patient.dob, patient.fullName, patient.phone, patient.profilePhotoUrl]);
+    }, [patient.address, patient.dob, patient.email, patient.fullName, patient.phone, patient.profilePhotoUrl]);
 
     const handlePhotoSelection = (event: ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -641,9 +699,14 @@ function AccountTab({
             setProfileSaveError('Full name is required.');
             return;
         }
+        if (!email.trim() || !email.includes('@')) {
+            setProfileSaveError('A valid email is required.');
+            return;
+        }
         setSavingProfile(true);
         try {
             await onSaveProfile({
+                email: email.trim(),
                 fullName: fullName.trim(),
                 dob: dob.trim(),
                 phone: phone.trim(),
@@ -702,9 +765,10 @@ function AccountTab({
                         <label className="block">
                             <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-[#64748b]">Email</span>
                             <input
-                                value={patient.email || ''}
-                                disabled
-                                className="h-11 w-full rounded-xl border border-[#cbd5e1] bg-[#eef5ff] px-3 text-sm text-[#475569] outline-none"
+                                type="email"
+                                value={email}
+                                onChange={(event) => setEmail(event.target.value)}
+                                className="h-11 w-full rounded-xl border border-[#cbd5e1] bg-[#f8fbff] px-3 text-sm outline-none focus:border-[#7dbdff]"
                             />
                         </label>
                         <label className="block">
@@ -827,7 +891,9 @@ function AccountTab({
                     {latestRequest ? (
                         <>
                             <h2 className="mt-2 text-lg font-semibold text-[#020617]">{consultTitle(latestRequest.serviceType)}</h2>
-                            <p className="mt-1 text-sm text-[#475569]">{statusLabel(latestRequest.status)}</p>
+                            <span className={`mt-2 inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${statusPillClasses(latestRequest.status)}`}>
+                                {statusLabel(latestRequest.status)}
+                            </span>
                             <p className="mt-1 text-xs text-[#64748b]">Updated {formatDate(latestRequest.createdAt)}</p>
                             {latestRequest.certificatePdfUrl && (
                                 <button
@@ -1679,7 +1745,38 @@ export default function PatientPortalPage() {
     }, [token, checkoutSetupContext, openWeightLossFromRoute]);
 
     const firstNameValue = useMemo(() => firstName(patient.fullName || ''), [patient.fullName]);
-    const latestRequest = useMemo(() => (requests.length > 0 ? requests[0] : null), [requests]);
+    const nutritionConsultRequest = useMemo<PortalRequest | null>(() => {
+        if (weightLossResetCardState === 'not-started') return null;
+        const dietitianName = String(primaryDietitian?.fullName || 'Felicity').trim() || 'Felicity';
+        const generatedAt = String(weightLossResetState.mealPlan?.generatedAt || '').trim() || new Date().toISOString();
+        return {
+            id: `nutrition-${patient.email || 'patient'}`,
+            createdAt: generatedAt,
+            status: 'approved',
+            serviceType: 'weight_loss',
+            purpose: `Weekly nutrition consult with ${dietitianName}`,
+            symptom: '',
+            symptomVisibility: 'private',
+            description: 'Personalised nutrition planning, meal reviews, and ongoing support.',
+            startDate: generatedAt,
+            durationDays: 7,
+            decision: {
+                by: dietitianName,
+                at: generatedAt,
+                notes: 'Recurring nutrition check-in active.',
+            },
+            certificatePdfUrl: null,
+        };
+    }, [patient.email, primaryDietitian?.fullName, weightLossResetCardState, weightLossResetState.mealPlan?.generatedAt]);
+    const timelineRequests = useMemo(() => {
+        if (!nutritionConsultRequest) return requests;
+        const alreadyHasNutrition = requests.some((entry) => {
+            const service = String(entry?.serviceType || '').toLowerCase();
+            return service === 'weight_loss' || service === 'weight-loss' || service === 'nutritionist';
+        });
+        return alreadyHasNutrition ? requests : [nutritionConsultRequest, ...requests];
+    }, [nutritionConsultRequest, requests]);
+    const latestRequest = useMemo(() => (timelineRequests.length > 0 ? timelineRequests[0] : null), [timelineRequests]);
     const selectedConsultOption = useMemo(
         () => CONSULT_OPTIONS.find((item) => item.id === selectedConsultOptionId) || null,
         [selectedConsultOptionId]
@@ -1687,6 +1784,14 @@ export default function PatientPortalPage() {
     const queuedRequest = useMemo(
         () => activeQueuedRequest || requests.find((item) => isQueuedStatus(item.status)) || null,
         [activeQueuedRequest, requests]
+    );
+    const nutritionClinicalContext = useMemo(
+        () => ({
+            medicalHistory: portalData.medicalHistory.map((entry) => entry.title).filter(Boolean),
+            allergies: portalData.allergies.map((entry) => entry.title).filter(Boolean),
+            medications: portalData.medications.map((entry) => entry.title).filter(Boolean),
+        }),
+        [portalData.allergies, portalData.medicalHistory, portalData.medications]
     );
 
     useEffect(() => {
@@ -2064,6 +2169,7 @@ export default function PatientPortalPage() {
     };
 
     const savePatientProfile = async (payload: {
+        email: string;
         fullName: string;
         dob: string;
         phone: string;
@@ -2090,6 +2196,11 @@ export default function PatientPortalPage() {
         const nextPatient = normalizePatientProfile(apiPayload?.patient, patient.email || '');
         setPatient(nextPatient);
         window.localStorage.setItem('onya_patient_email', nextPatient.email || patient.email || '');
+        const nextToken = String(apiPayload?.token || '').trim();
+        if (nextToken) {
+            window.localStorage.setItem('onya_patient_token', nextToken);
+            setToken(nextToken);
+        }
         const nextDietitian = normalizeDietitianProfile(apiPayload?.dietitian);
         if (nextDietitian) {
             setPrimaryDietitian(nextDietitian);
@@ -2275,6 +2386,7 @@ export default function PatientPortalPage() {
                         answers={weightLossResetState.onboardingAnswers}
                         displayFirstName={firstNameValue}
                         dietitian={primaryDietitian}
+                        clinicalContext={nutritionClinicalContext}
                         mealPlan={weightLossResetState.mealPlan}
                         recipes={allWeightLossRecipes}
                         weightLogs={weightLossResetState.weightLogs}
@@ -2315,7 +2427,7 @@ export default function PatientPortalPage() {
                 <HomeTab
                     mode={mode}
                     firstNameValue={firstNameValue}
-                    requests={requests}
+                    requests={timelineRequests}
                     queuedRequest={queuedRequest}
                     patient={patient}
                     dietitian={primaryDietitian}
@@ -2334,6 +2446,7 @@ export default function PatientPortalPage() {
                         currentWeight: latestWeightFromWeightLoss,
                         goalWeight: weightLossResetState.onboardingAnswers.goalWeightKg,
                         progressPercent: weightLossProgressPercent,
+                        generatedAt: weightLossResetState.mealPlan?.generatedAt,
                         onStart: openWeightLossOnboarding,
                         onContinueBooking: openWeightLossOnboarding,
                         onOpen: openWeightLossDashboard,
@@ -2343,7 +2456,7 @@ export default function PatientPortalPage() {
         }
 
         if (mainTab === 'consult') {
-            return <ConsultTab onSelectOption={openConsultOption} billing={billing} />;
+            return <ConsultTab onSelectOption={openConsultOption} billing={billing} requests={timelineRequests} dietitian={primaryDietitian} />;
         }
 
         return (

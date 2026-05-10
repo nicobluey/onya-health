@@ -1,4 +1,4 @@
-import { type CSSProperties, useState } from 'react';
+import { type CSSProperties, useMemo, useState } from 'react';
 import type { ComponentType, FormEvent } from 'react';
 import {
     Check,
@@ -72,8 +72,11 @@ const panelClassName =
 
 function statusTone(status: string) {
     const normalized = String(status || '').toLowerCase();
-    if (isQueuedStatus(status)) return 'bg-[#eef5ff] text-[#2e8cff] border-[#b7dcff]';
-    if (normalized === 'approved' || normalized === 'closed') return 'bg-[#eef5ff] text-[#2e8cff] border-[#b7dcff]';
+    if (normalized === 'approved' || normalized === 'closed') return 'bg-[#eefaf3] text-[#16784c] border-[#bfe7d0]';
+    if (normalized === 'awaiting_payment') return 'bg-[#f8fafc] text-[#475569] border-[#cbd5e1]';
+    if (['pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(normalized)) {
+        return 'bg-[#fff8e8] text-[#8a6700] border-[#f3df9d]';
+    }
     if (normalized === 'denied') return 'bg-[#ffe9e8] text-[#a93736] border-[#f3c5c4]';
     return 'bg-[#f1f8ff] text-[#475569] border-[#cbd5e1]';
 }
@@ -803,17 +806,55 @@ export default function HomeTab({
         currentWeight?: number;
         goalWeight?: number;
         progressPercent: number;
+        generatedAt?: string;
         onStart: () => void;
         onContinueBooking: () => void;
         onOpen: () => void;
     };
 }) {
     const desktop = mode === 'desktop';
+    const timelineRequests = useMemo(() => {
+        const hasNutritionCard = weightLossResetCard.cardState !== 'not-started';
+        if (!hasNutritionCard) return requests;
+        const alreadyHasNutrition = requests.some((entry) => {
+            const service = String(entry?.serviceType || '').toLowerCase();
+            return service === 'weight_loss' || service === 'weight-loss' || service === 'nutritionist';
+        });
+        if (alreadyHasNutrition) return requests;
+
+        const createdAt = String(weightLossResetCard.generatedAt || '').trim() || new Date().toISOString();
+        const nutritionRequest: PortalRequest = {
+            id: `nutrition-${patient.email || 'patient'}`,
+            createdAt,
+            status: 'approved',
+            serviceType: 'weight_loss',
+            purpose: `Weekly nutrition consult with ${dietitian?.fullName || 'Felicity'}`,
+            symptom: '',
+            symptomVisibility: 'private',
+            description: 'Personalised nutrition planning, weekly meal adjustments, and practical prep support.',
+            startDate: createdAt,
+            durationDays: 7,
+            decision: {
+                by: dietitian?.fullName || 'Felicity',
+                at: createdAt,
+                notes: 'Recurring nutrition consult active.',
+            },
+            certificatePdfUrl: null,
+        };
+
+        return [nutritionRequest, ...requests];
+    }, [
+        dietitian?.fullName,
+        patient.email,
+        requests,
+        weightLossResetCard.cardState,
+        weightLossResetCard.generatedAt,
+    ]);
 
     if (desktop) {
         return (
             <section className="space-y-6">
-                <HomeHero firstNameValue={firstNameValue} requestCount={requests.length} onGoToTab={onGoToTab} />
+                <HomeHero firstNameValue={firstNameValue} requestCount={timelineRequests.length} onGoToTab={onGoToTab} />
                 <PatientDashboardWeightLossCard
                     cardState={weightLossResetCard.cardState}
                     firstName={firstNameValue}
@@ -829,7 +870,7 @@ export default function HomeTab({
 
                 <div className="grid gap-6 xl:grid-cols-[1.65fr_1fr]">
                     <div className="space-y-6">
-                        <PreviousConsultQueue requests={requests} onDownloadCertificate={onDownloadCertificate} />
+                        <PreviousConsultQueue requests={timelineRequests} onDownloadCertificate={onDownloadCertificate} />
                         <MedicalRecordsSection
                             data={data}
                             recordTab={recordTab}
@@ -848,7 +889,7 @@ export default function HomeTab({
 
     return (
         <section className="space-y-5">
-            <HomeHero firstNameValue={firstNameValue} requestCount={requests.length} onGoToTab={onGoToTab} />
+            <HomeHero firstNameValue={firstNameValue} requestCount={timelineRequests.length} onGoToTab={onGoToTab} />
             <PatientDashboardWeightLossCard
                 cardState={weightLossResetCard.cardState}
                 firstName={firstNameValue}
@@ -862,7 +903,7 @@ export default function HomeTab({
                 onOpen={weightLossResetCard.onOpen}
             />
             <QueueStatusCard request={queuedRequest} onOpenQueue={onOpenQueue} />
-            <PreviousConsultQueue requests={requests} onDownloadCertificate={onDownloadCertificate} />
+            <PreviousConsultQueue requests={timelineRequests} onDownloadCertificate={onDownloadCertificate} />
             <MedicalRecordsSection
                 data={data}
                 recordTab={recordTab}

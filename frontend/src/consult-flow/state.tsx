@@ -167,7 +167,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
         setDates: (startDate: Date, durationDays: number) =>
             updateState({
                 startDate: normalizeStartDate(startDate),
-                durationDays: Math.max(1, Number(durationDays || 1)),
+                durationDays: Math.min(7, Math.max(1, Number(durationDays || 1))),
             }),
         setUnlimited: (isUnlimited: boolean) =>
             setState((prev) => ({

@@ -7,7 +7,7 @@ export const DEFAULT_DIETITIAN_ID = '9f1f2a68-3b9c-4f2f-8da9-3e7e1c7f1c11';
 const configuredDefaultDietitianImage = String(import.meta.env.VITE_DEFAULT_DIETITIAN_PROFILE_URL || '').trim();
 export const DEFAULT_DIETITIAN_PROFILE_IMAGE_URL =
   configuredDefaultDietitianImage ||
-  'https://wnnexskrehwwqzhiqbuc.supabase.co/storage/v1/object/public/weight-loss-reset-images/dietitians/felicity-profile.webp';
+  '/felicity-profile.webp';
 
 // Backward-compatible aliases while legacy names are phased out across components.
 export const FELICITY_ID = DEFAULT_DIETITIAN_ID;

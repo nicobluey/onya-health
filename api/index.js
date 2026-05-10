@@ -1942,7 +1942,7 @@ function buildDraftCertificate(requestBody) {
   const patient = requestBody.patient || {};
   const consult = requestBody.consult || {};
   const startDate = normalizeCertificateStartDate(consult.startDate);
-  const durationDays = Math.max(1, Number(consult.durationDays || 1));
+  const durationDays = Math.min(7, Math.max(1, Number(consult.durationDays || 1)));
   const isUnlimited = Boolean(consult.isUnlimited);
   const includeCarerCertificate = !isUnlimited && Boolean(consult.includeCarerCertificate);
   const symptomVisibility = String(consult.symptomVisibility || '').trim().toLowerCase() === 'public'
@@ -1971,7 +1971,7 @@ function sanitizeNameForStripe(value) {
 
 function stripePricingFromRequest(body) {
   const isUnlimited = Boolean(body?.consult?.isUnlimited);
-  const durationDays = Math.max(1, Number(body?.consult?.durationDays || 1));
+  const durationDays = Math.min(7, Math.max(1, Number(body?.consult?.durationDays || 1)));
   const includeCarerCertificate = !isUnlimited && Boolean(body?.consult?.includeCarerCertificate);
   const carerCertificateAmount = includeCarerCertificate ? STRIPE_AMOUNT_CARER_CERT_AUD_CENTS : 0;
 
@@ -2952,6 +2952,44 @@ async function markPaidFromStripeSession(session, trigger, req) {
   };
 }
 
+async function reconcileAwaitingPaymentCertificatesForPatient(patientEmail, req) {
+  const email = normalizeEmail(patientEmail);
+  if (!email) return { checked: 0, reconciled: 0 };
+
+  const certificates = await listCertificatesByPatientEmail(email).catch(() => []);
+  const candidates = certificates
+    .filter((certificate) => {
+      const status = String(certificate?.status || '').trim().toLowerCase();
+      const sessionId = String(certificate?.rawSubmission?.payment?.stripeSessionId || '').trim();
+      return status === 'awaiting_payment' && Boolean(sessionId);
+    })
+    .slice(0, 5);
+
+  let reconciled = 0;
+  for (const certificate of candidates) {
+    try {
+      const sessionId = String(certificate?.rawSubmission?.payment?.stripeSessionId || '').trim();
+      if (!sessionId) continue;
+      const session = await fetchStripeCheckoutSession(sessionId);
+      const paymentStatus = String(session?.payment_status || '').trim().toLowerCase();
+      if (!['paid', 'no_payment_required'].includes(paymentStatus)) continue;
+      const result = await markPaidFromStripeSession(session, 'patient_status_reconcile', req);
+      if (result?.updated) reconciled += 1;
+    } catch (errorObject) {
+      error('patient.awaiting_payment_reconcile_failed', {
+        email,
+        certificateId: certificate?.id || null,
+        message: errorObject?.message || String(errorObject),
+      });
+    }
+  }
+
+  return {
+    checked: candidates.length,
+    reconciled,
+  };
+}
+
 function getSupabaseConfig() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
@@ -3601,6 +3639,54 @@ async function upsertSupabasePatientMetadata({ email, fullName, dob, phone, addr
     phone: String(nextMetadata.phone || '').trim(),
     address: String(nextMetadata.address || '').trim(),
     profilePhotoPath: normalizeStoragePath(nextMetadata.profile_photo_path || ''),
+  };
+}
+
+async function updateSupabasePatientEmail({ currentEmail, nextEmail }) {
+  const fromEmail = normalizeEmail(currentEmail);
+  const toEmail = normalizeEmail(nextEmail);
+  if (!fromEmail || !toEmail) return null;
+  if (fromEmail === toEmail) return findSupabasePatientByEmail(fromEmail);
+
+  const config = getSupabaseConfig();
+  if (!config.enabled) return null;
+
+  const existing = await findSupabasePatientByEmail(fromEmail);
+  if (!existing?.id) return null;
+
+  const conflict = await findSupabasePatientByEmail(toEmail);
+  if (conflict?.id && conflict.id !== existing.id) {
+    const err = new Error('Email is already used by another account');
+    err.status = 409;
+    throw err;
+  }
+
+  const user = await getSupabaseAuthUserById(config, existing.id);
+  const metadata = user?.user_metadata && typeof user.user_metadata === 'object'
+    ? user.user_metadata
+    : {};
+  await supabaseAuthAdminRequest(config, `users/${existing.id}`, {
+    method: 'PUT',
+    body: {
+      email: toEmail,
+      email_confirm: true,
+      user_metadata: metadata,
+    },
+  });
+
+  await upsertSupabasePatientProfileRows({
+    userId: existing.id,
+    email: toEmail,
+    fullName: String(metadata?.full_name || existing.fullName || '').trim(),
+    dob: String(metadata?.dob || existing.dob || '').trim(),
+    phone: String(metadata?.phone || existing.phone || '').trim(),
+    address: String(metadata?.address || existing.address || '').trim(),
+    profilePhotoPath: normalizeStoragePath(metadata?.profile_photo_path || existing.profilePhotoPath || ''),
+  });
+
+  return {
+    ...existing,
+    email: toEmail,
   };
 }
 
@@ -4932,6 +5018,7 @@ export default async function handler(req, res) {
       const patient = await requirePatient(req, res);
       if (!patient) return;
 
+      await reconcileAwaitingPaymentCertificatesForPatient(patient.email, req).catch(() => undefined);
       const supabaseConfig = getSupabaseConfig();
       const snapshot = await loadPatientPortalSnapshot(patient.email, { includeBilling: true });
       if (snapshot.patientCertificates.length === 0 && !snapshot.account) {
@@ -4982,6 +5069,7 @@ export default async function handler(req, res) {
       const patient = await requirePatient(req, res);
       if (!patient) return;
 
+      await reconcileAwaitingPaymentCertificatesForPatient(patient.email, req).catch(() => undefined);
       const supabaseConfig = getSupabaseConfig();
       const snapshot = await loadPatientPortalSnapshot(patient.email, { includeBilling: true });
       if (snapshot.patientCertificates.length === 0 && !snapshot.account) {
@@ -5030,6 +5118,7 @@ export default async function handler(req, res) {
       if (!patient) return;
 
       const body = await parseJsonBody(req);
+      const requestedEmail = normalizeEmail(body?.email || patient.email);
       const fullName = String(body?.fullName || '').trim();
       const dob = String(body?.dob || '').trim();
       const phone = String(body?.phone || '').trim();
@@ -5039,6 +5128,10 @@ export default async function handler(req, res) {
 
       if (!fullName) {
         sendJson(res, 400, { error: 'Full name is required' });
+        return;
+      }
+      if (!requestedEmail || !isLikelyPatientEmail(requestedEmail)) {
+        sendJson(res, 400, { error: 'A valid email is required' });
         return;
       }
 
@@ -5059,11 +5152,37 @@ export default async function handler(req, res) {
         return;
       }
 
+      const priorEmail = normalizeEmail(patient.email);
+      let resolvedEmail = priorEmail;
       const supabaseConfig = getSupabaseConfig();
+      if (requestedEmail !== priorEmail) {
+        if (await patientAccountExists(requestedEmail)) {
+          sendJson(res, 409, { error: 'Email is already used by another account' });
+          return;
+        }
+
+        if (supabaseConfig.enabled) {
+          try {
+            await updateSupabasePatientEmail({
+              currentEmail: priorEmail,
+              nextEmail: requestedEmail,
+            });
+          } catch (errorObject) {
+            const statusCode = Number(errorObject?.status || 500);
+            sendJson(res, statusCode === 409 ? 409 : 500, {
+              error: errorObject?.message || 'Unable to update account email right now',
+            });
+            return;
+          }
+        }
+
+        resolvedEmail = requestedEmail;
+      }
+
       if (supabaseConfig.enabled) {
         try {
           await upsertSupabasePatientMetadata({
-            email: patient.email,
+            email: resolvedEmail,
             fullName,
             dob,
             phone,
@@ -5079,7 +5198,8 @@ export default async function handler(req, res) {
       }
 
       const localAccount = await updatePatientAccountProfile({
-        email: patient.email,
+        email: priorEmail,
+        nextEmail: resolvedEmail,
         fullName,
         dob,
         phone,
@@ -5089,11 +5209,12 @@ export default async function handler(req, res) {
 
       await appendAudit({
         type: 'PATIENT_PROFILE_UPDATED',
-        email: patient.email,
+        email: resolvedEmail,
+        previousEmail: priorEmail || null,
       }).catch(() => undefined);
 
       const profilePayload = await resolvePatientProfileByEmail({
-        email: patient.email,
+        email: resolvedEmail,
         latestCertificate: null,
         account: localAccount,
       });
@@ -5102,6 +5223,7 @@ export default async function handler(req, res) {
         ok: true,
         patient: profilePayload.patient,
         dietitian: profilePayload.dietitian,
+        token: resolvedEmail !== priorEmail ? issuePatientToken(resolvedEmail) : null,
       });
       return;
     }
@@ -5690,6 +5812,7 @@ export default async function handler(req, res) {
       const patient = await requirePatient(req, res);
       if (!patient) return;
 
+      await reconcileAwaitingPaymentCertificatesForPatient(patient.email, req).catch(() => undefined);
       const snapshot = await loadPatientPortalSnapshot(patient.email, { includeBilling: false });
 
       sendJson(res, 200, {

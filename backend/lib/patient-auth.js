@@ -212,15 +212,31 @@ export async function authenticatePatientAccount({ email, password }) {
   });
 }
 
-export async function updatePatientAccountProfile({ email, fullName, dob, phone, address, profilePhotoPath }) {
+export async function updatePatientAccountProfile({ email, nextEmail, fullName, dob, phone, address, profilePhotoPath }) {
   const normalizedEmail = normalizeEmail(email);
   if (!normalizedEmail) return null;
+  const normalizedNextEmail = normalizeEmail(nextEmail || normalizedEmail);
 
-  return mutateAuthDb((db) => {
+  const result = await mutateAuthDb((db) => {
     const account = db.accounts.find((entry) => normalizeEmail(entry?.email) === normalizedEmail);
     if (!account) return null;
-
     let hasChanges = false;
+
+    if (normalizedNextEmail && normalizedNextEmail !== normalizedEmail) {
+      const emailConflict = db.accounts.some(
+        (entry) => normalizeEmail(entry?.email) === normalizedNextEmail && entry !== account
+      );
+      if (emailConflict) {
+        return { error: 'EMAIL_IN_USE' };
+      }
+      account.email = normalizedNextEmail;
+      db.resetTokens = db.resetTokens.map((entry) =>
+        normalizeEmail(entry?.email) === normalizedEmail
+          ? { ...entry, email: normalizedNextEmail }
+          : entry
+      );
+      hasChanges = true;
+    }
     if (typeof fullName === 'string' && fullName.trim() && account.fullName !== fullName.trim()) {
       account.fullName = fullName.trim();
       hasChanges = true;
@@ -246,8 +262,16 @@ export async function updatePatientAccountProfile({ email, fullName, dob, phone,
       account.updatedAt = nowIso();
     }
 
-    return toPublicAccount(account);
+    return { account: toPublicAccount(account) };
   });
+
+  if (result?.error === 'EMAIL_IN_USE') {
+    const err = new Error('Email is already used by another account');
+    err.code = 'EMAIL_IN_USE';
+    throw err;
+  }
+
+  return result?.account || null;
 }
 
 export async function setPatientAccountPassword({ email, password }) {
