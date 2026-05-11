@@ -2688,7 +2688,7 @@ export function calculateGoalProgress({
   goalWeight?: number;
   currentWeight?: number;
 }) {
-  if (!startingWeight || !goalWeight || !currentWeight) {
+  if (startingWeight === undefined || goalWeight === undefined || currentWeight === undefined) {
     return 0;
   }
   const start = Number(startingWeight);
@@ -2702,4 +2702,52 @@ export function calculateGoalProgress({
   const progressedDistance = direction > 0 ? current - start : start - current;
   const clamped = Math.max(0, Math.min(totalDistance, progressedDistance));
   return Math.round((clamped / totalDistance) * 100);
+}
+
+function isValidWeightForProgress(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 30 && parsed <= 400;
+}
+
+export function calculateGoalProgressFromHistory({
+  startingWeight,
+  goalWeight,
+  currentWeight,
+  historicalWeights = [],
+}: {
+  startingWeight?: number;
+  goalWeight?: number;
+  currentWeight?: number;
+  historicalWeights?: number[];
+}) {
+  if (!isValidWeightForProgress(goalWeight) || !isValidWeightForProgress(currentWeight)) return 0;
+
+  const goal = Number(goalWeight);
+  const current = Number(currentWeight);
+  const candidates = historicalWeights.filter(isValidWeightForProgress).map((weight) => Number(weight));
+
+  if (isValidWeightForProgress(startingWeight)) {
+    candidates.push(Number(startingWeight));
+  }
+  candidates.push(current);
+
+  if (candidates.length === 0) return 0;
+
+  let inferredStart = isValidWeightForProgress(startingWeight) ? Number(startingWeight) : candidates[0];
+  let direction = goal > inferredStart ? 1 : goal < inferredStart ? -1 : current < goal ? 1 : -1;
+
+  inferredStart = direction > 0 ? Math.min(...candidates) : Math.max(...candidates);
+  if (inferredStart === goal) {
+    const nonGoalCandidates = candidates.filter((weight) => weight !== goal);
+    if (nonGoalCandidates.length > 0) {
+      inferredStart = direction > 0 ? Math.min(...nonGoalCandidates) : Math.max(...nonGoalCandidates);
+      direction = goal > inferredStart ? 1 : -1;
+    }
+  }
+
+  return calculateGoalProgress({
+    startingWeight: inferredStart,
+    goalWeight: goal,
+    currentWeight: current,
+  });
 }

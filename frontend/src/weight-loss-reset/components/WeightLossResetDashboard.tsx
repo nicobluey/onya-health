@@ -31,7 +31,13 @@ import {
   WEIGHT_LOSS_RESET_PROGRAM_NAME,
 } from '../constants';
 import { fetchApiJson } from '../../lib/api';
-import { buildGroceryListFromMealPlan, calculateGoalProgress, getCurrentWeight, getRecipeRequiredEquipment, getSwapCandidates } from '../mealPlanning';
+import {
+  buildGroceryListFromMealPlan,
+  calculateGoalProgressFromHistory,
+  getCurrentWeight,
+  getRecipeRequiredEquipment,
+  getSwapCandidates,
+} from '../mealPlanning';
 import type {
   AssignedDietitianProfile,
   CookingEquipment,
@@ -861,10 +867,11 @@ export default function WeightLossResetDashboard({
   ];
 
   const currentWeight = getCurrentWeight(weightLogs, answers.currentWeightKg);
-  const progressPercent = calculateGoalProgress({
+  const progressPercent = calculateGoalProgressFromHistory({
     startingWeight: answers.currentWeightKg,
     goalWeight: answers.goalWeightKg,
     currentWeight,
+    historicalWeights: weightLogs.map((entry) => Number(entry.weight)),
   });
 
   const weekNumber = (() => {

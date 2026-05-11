@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { DEFAULT_DIETITIAN_ID, DEFAULT_ONBOARDING_ANSWERS, STORAGE_KEYS } from './constants';
-import { calculateGoalProgress } from './mealPlanning';
+import { calculateGoalProgressFromHistory } from './mealPlanning';
 import type {
   CookingEquipment,
   CoreMealType,
@@ -216,12 +216,13 @@ export function useWeightLossResetState() {
   }, [state.weightLogs, state.onboardingAnswers.currentWeightKg]);
 
   const progressPercent = useMemo(() => {
-    return calculateGoalProgress({
+    return calculateGoalProgressFromHistory({
       startingWeight: state.onboardingAnswers.currentWeightKg,
       goalWeight: state.onboardingAnswers.goalWeightKg,
       currentWeight: latestWeight,
+      historicalWeights: state.weightLogs.map((entry) => Number(entry.weight)),
     });
-  }, [state.onboardingAnswers.currentWeightKg, state.onboardingAnswers.goalWeightKg, latestWeight]);
+  }, [state.onboardingAnswers.currentWeightKg, state.onboardingAnswers.goalWeightKg, latestWeight, state.weightLogs]);
 
   const updateOnboardingAnswers = (updates: Partial<OnboardingAnswers>) => {
     setState((current) => ({
