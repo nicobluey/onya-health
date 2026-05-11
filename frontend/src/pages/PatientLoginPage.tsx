@@ -59,7 +59,6 @@ export default function PatientLoginPage() {
     const initialEmail = String(initialParams.get('email') || '').trim().toLowerCase();
     const initialMagicToken = String(initialParams.get('magic_token') || '').trim();
     const [email, setEmail] = useState(initialEmail);
-    const [dob, setDob] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
     const [resetSending, setResetSending] = useState(false);
@@ -115,8 +114,8 @@ export default function PatientLoginPage() {
             return;
         }
 
-        if (!password && !dob) {
-            setError('Enter your date of birth.');
+        if (!password) {
+            setError('Enter your password.');
             return;
         }
 
@@ -127,7 +126,6 @@ export default function PatientLoginPage() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     email,
-                    dob: password ? '' : dob,
                     password: password || undefined,
                 }),
             });
@@ -293,23 +291,21 @@ export default function PatientLoginPage() {
                                 </div>
                             </label>
 
-                            <label className="block">
-                                <span className="mb-2 block text-sm font-medium text-bark-600">Date of birth</span>
-                                <div className="flex items-center gap-2 rounded-xl border border-sand-200 bg-sunlight-50 px-3">
-                                    <Lock size={16} className="text-bark-400" />
-                                    <input
-                                        type="date"
-                                        value={dob}
-                                        onChange={(e) => setDob(e.target.value)}
-                                        className="h-11 w-full bg-transparent outline-none"
-                                        required={!password}
-                                    />
-                                </div>
-                            </label>
-
-                            {error && <p className="text-sm font-medium text-red-600">{error}</p>}
-                            {magicStatus && <p className="text-sm font-medium text-forest-800">{magicStatus}</p>}
-                            {resetStatus && <p className="text-sm font-medium text-forest-800">{resetStatus}</p>}
+                            {error && (
+                                <p className="rounded-xl border border-[#f3c5c4] bg-[#ffe9e8] px-3 py-2 text-sm font-medium text-[#a93736]">
+                                    {error}
+                                </p>
+                            )}
+                            {magicStatus && (
+                                <p className="rounded-xl border border-[#86efac] bg-[#ecfdf3] px-3 py-2 text-sm font-medium text-[#166534]">
+                                    {magicStatus}
+                                </p>
+                            )}
+                            {resetStatus && (
+                                <p className="rounded-xl border border-[#f3df9d] bg-[#fff8e8] px-3 py-2 text-sm font-medium text-[#8a6700]">
+                                    {resetStatus}
+                                </p>
+                            )}
 
                             <button
                                 type="button"

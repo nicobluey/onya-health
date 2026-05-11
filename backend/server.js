@@ -2169,74 +2169,29 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && url.pathname === '/api/patient/login') {
     const body = await parseJsonBody(req);
     const email = normalizeEmail(body.email);
-    const dob = String(body.dob || '').trim();
     const password = String(body.password || '');
 
     if (!email) {
       sendJson(res, 400, { error: 'Email is required' });
       return;
     }
-
-    const certificates = await listCertificates();
-    const patientCertificates = getPatientCertificatesForEmail(certificates, email);
-    const latest = patientCertificates[0] || null;
-
-    if (password) {
-      const account = await authenticatePatientAccount({ email, password });
-      if (!account) {
-        sendJson(res, 401, { error: 'Invalid email or password' });
-        return;
-      }
-
-      if (latest?.certificateDraft) {
-        await updatePatientAccountProfile({
-          email,
-          fullName: latest.certificateDraft.fullName || '',
-          dob: latest.certificateDraft.dob || '',
-          phone: latest.certificateDraft.phone || '',
-        });
-      }
-
-      const token = issuePatientToken(email);
-      sendJson(res, 200, {
-        token,
-        patient: buildPatientIdentity({
-          email,
-          latestCertificate: latest,
-          account,
-        }),
-      });
-      info('patient.login.success', { email, method: 'password' });
+    if (!password) {
+      sendJson(res, 400, { error: 'Password is required. Use a magic sign-in link if needed.' });
       return;
     }
 
-    if (patientCertificates.length === 0) {
-      sendJson(res, 404, { error: 'No patient account found for this email yet' });
+    const account = await authenticatePatientAccount({ email, password });
+    if (!account) {
+      sendJson(res, 401, { error: 'Invalid email or password' });
       return;
     }
-
-    if (latest?.certificateDraft?.dob && !dob) {
-      sendJson(res, 400, { error: 'Date of birth is required for this account' });
-      return;
-    }
-    if (dob && latest?.certificateDraft?.dob && latest.certificateDraft.dob !== dob) {
-      sendJson(res, 401, { error: 'Date of birth did not match our records' });
-      return;
-    }
-
-    await updatePatientAccountProfile({
-      email,
-      fullName: latest?.certificateDraft?.fullName || '',
-      dob: latest?.certificateDraft?.dob || '',
-      phone: latest?.certificateDraft?.phone || '',
-    });
 
     const token = issuePatientToken(email);
     sendJson(res, 200, {
       token,
-      patient: buildPatientIdentity({ email, latestCertificate: latest, account: null }),
+      patient: buildPatientIdentity({ email, latestCertificate: null, account }),
     });
-    info('patient.login.success', { email, method: 'dob' });
+    info('patient.login.success', { email, method: 'password' });
     return;
   }
 

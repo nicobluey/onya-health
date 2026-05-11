@@ -4766,7 +4766,6 @@ export default async function handler(req, res) {
       const loginStartedAt = Date.now();
       const body = await parseJsonBody(req);
       const email = normalizeEmail(body.email);
-      const dob = String(body.dob || '').trim();
       const password = String(body.password || '');
 
       if (!email) {
@@ -4774,91 +4773,54 @@ export default async function handler(req, res) {
         return;
       }
 
+      if (!password) {
+        sendJson(res, 400, { error: 'Password is required. Use a magic sign-in link if needed.' });
+        return;
+      }
+
       const supabaseConfig = getSupabaseConfig();
 
-      if (password) {
-        const authStartedAt = Date.now();
-        let account = null;
-        let localFallbackAttempted = false;
-        if (supabaseConfig.url && supabaseConfig.anonKey) {
-          const supabaseAuth = await authenticatePatientViaSupabase(email, password);
-          account = supabaseAuth.account;
-          if (!account && supabaseAuth.shouldFallbackLocal) {
-            localFallbackAttempted = true;
-            account = await authenticatePatientAccount({ email, password });
-          }
-        } else {
+      const authStartedAt = Date.now();
+      let account = null;
+      let localFallbackAttempted = false;
+      if (supabaseConfig.url && supabaseConfig.anonKey) {
+        const supabaseAuth = await authenticatePatientViaSupabase(email, password);
+        account = supabaseAuth.account;
+        if (!account && supabaseAuth.shouldFallbackLocal) {
           localFallbackAttempted = true;
           account = await authenticatePatientAccount({ email, password });
         }
-        if (!account) {
-          sendJson(res, 401, { error: 'Invalid email or password' });
-          return;
-        }
-
-        const token = issuePatientToken(email);
-        sendJson(res, 200, {
-          token,
-          patient: {
-            fullName: String(account?.fullName || '').trim(),
-            firstName: String(account?.fullName || '').trim().split(/\s+/)[0] || '',
-            lastName: String(account?.fullName || '').trim().split(/\s+/).slice(1).join(' '),
-            email: normalizeEmail(account?.email || email),
-            dob: String(account?.dob || '').trim(),
-            phone: String(account?.phone || '').trim(),
-            address: String(account?.address || '').trim(),
-            profilePhotoPath: normalizeStoragePath(account?.profilePhotoPath || ''),
-            profilePhotoUrl: buildPublicStorageUrl(normalizeStoragePath(account?.profilePhotoPath || ''), PROFILE_IMAGE_BUCKET),
-          },
-          dietitian: buildDietitianFallback(),
-        });
-        info('patient.login.success', {
-          email,
-          method: 'password',
-          authDurationMs: Date.now() - authStartedAt,
-          localFallbackAttempted,
-          totalDurationMs: Date.now() - loginStartedAt,
-        });
-        return;
+      } else {
+        localFallbackAttempted = true;
+        account = await authenticatePatientAccount({ email, password });
       }
 
-      const snapshotStartedAt = Date.now();
-      const patientCertificates = await listCertificatesByPatientEmail(email, {
-        includeRawSubmission: false,
-        limit: 120,
-      });
-      const { latest, latestProfile } = getLatestFromPatientCertificates(patientCertificates);
-      const snapshotDurationMs = Date.now() - snapshotStartedAt;
-      if (patientCertificates.length === 0) {
-        sendJson(res, 404, { error: 'No patient account found for this email yet' });
-        return;
-      }
-
-      if (latestProfile.dob && !dob) {
-        sendJson(res, 400, { error: 'Date of birth is required for this account' });
-        return;
-      }
-      if (dob && latestProfile.dob && latestProfile.dob !== dob) {
-        sendJson(res, 401, { error: 'Date of birth did not match our records' });
+      if (!account) {
+        sendJson(res, 401, { error: 'Invalid email or password' });
         return;
       }
 
       const token = issuePatientToken(email);
-      const profilePayload = await resolvePatientProfileByEmail({
-        email,
-        latestCertificate: latest,
-        account: null,
-      });
       sendJson(res, 200, {
         token,
-        patient: profilePayload.patient,
-        dietitian: profilePayload.dietitian,
+        patient: {
+          fullName: String(account?.fullName || '').trim(),
+          firstName: String(account?.fullName || '').trim().split(/\s+/)[0] || '',
+          lastName: String(account?.fullName || '').trim().split(/\s+/).slice(1).join(' '),
+          email: normalizeEmail(account?.email || email),
+          dob: String(account?.dob || '').trim(),
+          phone: String(account?.phone || '').trim(),
+          address: String(account?.address || '').trim(),
+          profilePhotoPath: normalizeStoragePath(account?.profilePhotoPath || ''),
+          profilePhotoUrl: buildPublicStorageUrl(normalizeStoragePath(account?.profilePhotoPath || ''), PROFILE_IMAGE_BUCKET),
+        },
+        dietitian: buildDietitianFallback(),
       });
       info('patient.login.success', {
         email,
-        method: 'dob',
-        snapshotDurationMs,
-        certificateCount: patientCertificates.length,
+        method: 'password',
+        authDurationMs: Date.now() - authStartedAt,
+        localFallbackAttempted,
         totalDurationMs: Date.now() - loginStartedAt,
       });
       return;

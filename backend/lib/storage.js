@@ -998,7 +998,7 @@ async function listCertificatesByPatientEmailSupabase(email, options = {}) {
 
   const includeRawSubmission = options?.includeRawSubmission !== false;
   const limit = clampPatientCertificateLimit(options?.limit);
-  const medicalFields = [
+  let medicalFields = [
     'request_id',
     'patient_email',
     'patient_full_name',
@@ -1017,7 +1017,7 @@ async function listCertificatesByPatientEmailSupabase(email, options = {}) {
     medicalFields.push('raw_submission');
   }
 
-  const serviceFields = [
+  let serviceFields = [
     'id',
     'submitted_at',
     'created_at',
@@ -1031,13 +1031,41 @@ async function listCertificatesByPatientEmailSupabase(email, options = {}) {
     'decision_reason',
     'assigned_provider_id',
   ];
-  const select = `${serviceFields.join(',')},medical_certificate_requests!inner(${medicalFields.join(',')})`;
+  let rows = [];
+  for (let attempt = 0; attempt < 16; attempt += 1) {
+    const select = `${serviceFields.join(',')},medical_certificate_requests!inner(${medicalFields.join(',')})`;
+    try {
+      rows = await supabaseRequest(
+        `service_requests?select=${select}&medical_certificate_requests.patient_email=eq.${encodeURIComponent(
+          normalizedEmail
+        )}&order=submitted_at.desc,created_at.desc&limit=${limit}`
+      );
+      break;
+    } catch (errorObject) {
+      const status = errorObject?.status;
+      const code = errorObject?.data?.code;
+      const missingColumn = extractMissingColumnName(errorObject?.data?.message || errorObject?.message);
+      const isMissingColumnError =
+        status === 400 &&
+        Boolean(missingColumn) &&
+        (code === 'PGRST204' || code === '42703' || String(errorObject?.message || '').toLowerCase().includes('does not exist'));
 
-  const rows = await supabaseRequest(
-    `service_requests?select=${select}&medical_certificate_requests.patient_email=eq.${encodeURIComponent(
-      normalizedEmail
-    )}&order=submitted_at.desc,created_at.desc&limit=${limit}`
-  );
+      if (isMissingColumnError) {
+        const hadMedicalColumn = medicalFields.includes(missingColumn);
+        const hadServiceColumn = serviceFields.includes(missingColumn);
+        if (hadMedicalColumn) {
+          medicalFields = medicalFields.filter((entry) => entry !== missingColumn);
+        }
+        if (hadServiceColumn) {
+          serviceFields = serviceFields.filter((entry) => entry !== missingColumn);
+        }
+        if (hadMedicalColumn || hadServiceColumn) {
+          continue;
+        }
+      }
+      throw errorObject;
+    }
+  }
   return (rows || []).map(mapSupabaseRowToCertificate);
 }
 
@@ -1079,7 +1107,14 @@ function toMedicalInsert(certificate) {
 function extractMissingColumnName(message) {
   const text = String(message || '');
   const match = text.match(/Could not find the '([^']+)' column/i);
-  return match ? match[1] : null;
+  if (match) return match[1];
+
+  // Postgres runtime error shape, e.g.:
+  // "column medical_certificate_requests_1.patient_dob does not exist"
+  const runtimeMatch = text.match(/column\s+([a-z0-9_]+\.)?([a-z0-9_]+)\s+does not exist/i);
+  if (runtimeMatch?.[2]) return runtimeMatch[2];
+
+  return null;
 }
 
 async function insertMedicalRequestResilient(payload) {

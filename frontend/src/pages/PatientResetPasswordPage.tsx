@@ -110,8 +110,16 @@ export default function PatientResetPasswordPage() {
             </div>
           </label>
 
-          {error && <p className="text-sm font-medium text-red-600">{error}</p>}
-          {success && <p className="text-sm font-medium text-forest-800">{success}</p>}
+          {error && (
+            <p className="rounded-xl border border-[#f3c5c4] bg-[#ffe9e8] px-3 py-2 text-sm font-medium text-[#a93736]">
+              {error}
+            </p>
+          )}
+          {success && (
+            <p className="rounded-xl border border-[#86efac] bg-[#ecfdf3] px-3 py-2 text-sm font-medium text-[#166534]">
+              {success}
+            </p>
+          )}
 
           <button
             type="submit"
