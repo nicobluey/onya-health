@@ -414,3 +414,34 @@
    - `Weekly podcast brief`
    - `Save changes`
    - `Podcast generation timed out. Please tap Regenerate.`
+
+## 2026-05-12 - Compact scientific podcast UI and simplified controls
+
+### Symptoms
+
+- Podcast module was too large and visually heavy.
+- UI included transcript, disclosure text, voice selectors, and regenerate control that were not needed.
+- Playback waveform used static animation instead of reflecting actual audio signal.
+- Podcast script over-emphasized goal-progress and weight values in spoken content.
+
+### Root causes
+
+1. Podcast panel included extra metadata/controls beyond desired playback-only interaction.
+2. Visualizer used decorative CSS bars, not signal-driven analyzer data.
+3. Script builder included explicit weight/progress lines.
+
+### Files changed
+
+- `frontend/src/weight-loss-reset/components/WeightLossResetDashboard.tsx`
+  - narrowed podcast voice profile to a single `happy_female` voice path.
+  - removed transcript block, generated-meta line, disclosure text, and podcast-specific regenerate/voice selector controls.
+  - redesigned podcast panel to a compact player footprint.
+  - added Web Audio analyzer-driven visualizer bars that react to the live audio spectrum.
+  - adjusted generation cache key to include the current script so stale weekly audio is replaced when script content changes.
+  - rewrote podcast script to keep a personal but more scientific tone and removed explicit weight/progress narration.
+
+### Verification
+
+1. `npm run build` succeeds.
+2. Built output includes `Weekly science podcast`.
+3. Removed strings are absent from podcast UI source (`AI Console Transcript`, `Authoritative male`, podcast `Regenerate` control, `Happy female` label).
