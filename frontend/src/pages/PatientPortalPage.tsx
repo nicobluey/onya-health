@@ -520,14 +520,7 @@ function ConsultTab({
                                 </span>
                             </div>
                             <div className="mt-3 flex items-center justify-between">
-                                {live ? (
-                                    <span aria-hidden="true" />
-                                ) : (
-                                    <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-[#b45309] animate-pulse">
-                                        <span className="h-2.5 w-2.5 rounded-full bg-[#f59e0b]" aria-hidden="true" />
-                                        Coming soon
-                                    </p>
-                                )}
+                                <span aria-hidden="true" />
                                 <span className="inline-flex items-center gap-1 text-sm font-semibold text-[#1a3d63] transition group-hover:gap-1.5">
                                     {live ? 'Continue' : 'View details'}
                                     <ChevronRight size={15} />
@@ -1547,10 +1540,6 @@ export default function PatientPortalPage() {
     );
 
     useEffect(() => {
-        void hydrateRecipeCatalogFromServer({ force: true });
-    }, [hydrateRecipeCatalogFromServer, token]);
-
-    useEffect(() => {
         weightLossStateRef.current = weightLossResetState;
     }, [weightLossResetState]);
 
@@ -1626,9 +1615,10 @@ export default function PatientPortalPage() {
     );
 
     useEffect(() => {
-        if (!token) return;
-        void hydrateLatestMealPlanFromServer();
-    }, [hydrateLatestMealPlanFromServer, token]);
+        if (!token || !openWeightLossFromRoute) return;
+        void hydrateRecipeCatalogFromServer({ force: true });
+        void hydrateLatestMealPlanFromServer({ force: true });
+    }, [hydrateLatestMealPlanFromServer, hydrateRecipeCatalogFromServer, openWeightLossFromRoute, token]);
 
     useEffect(() => {
         if (portalScreen !== 'weight-loss-reset') return;

@@ -2562,8 +2562,11 @@ async function loadPatientPortalSnapshot(email, { includeBilling = true } = {}) 
   const normalizedEmail = normalizeEmail(email);
   const shouldUseLeanCertificateQuery = isSupabaseStorageEnabled();
   const certificatesFetchStartedAt = Date.now();
+  const accountPromise = shouldUseLeanCertificateQuery
+    ? Promise.resolve(null)
+    : getPatientAccountByEmail(normalizedEmail);
   const [account, certificates] = await Promise.all([
-    getPatientAccountByEmail(normalizedEmail),
+    accountPromise,
     listCertificatesByPatientEmail(normalizedEmail, {
       includeRawSubmission: !shouldUseLeanCertificateQuery,
       limit: shouldUseLeanCertificateQuery ? 60 : 500,

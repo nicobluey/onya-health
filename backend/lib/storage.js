@@ -59,6 +59,77 @@ const LOCAL_MEAL_PLAN_CACHE_MAX_ENTRIES = Math.max(
 const MEAL_PLAN_CACHE_EVENT_TYPE = 'MEAL_PLAN_CACHE_V1';
 const SHARED_MEAL_PLAN_TEMPLATE_EMAIL = 'mealplan-template@onyahealth.local';
 const ALLOWED_MEAL_RECIPE_GENERATED_BY = new Set(['openai', 'rules']);
+const SUPABASE_CERTIFICATE_SERVICE_FIELDS = [
+  'id',
+  'submitted_at',
+  'created_at',
+  'updated_at',
+  'status',
+  'service_type',
+  'risk_score',
+  'risk_level',
+  'reviewed_at',
+  'denial_reason',
+  'decision_reason',
+  'assigned_provider_id',
+];
+const SUPABASE_CERTIFICATE_MEDICAL_FIELDS = [
+  'request_id',
+  'patient_email',
+  'patient_full_name',
+  'patient_dob',
+  'patient_phone',
+  'patient_address',
+  'symptoms',
+  'consult_reason',
+  'work_or_study_context',
+  'certificate_start_date',
+  'certificate_end_date',
+  'days_requested',
+  'supporting_notes',
+];
+const SUPABASE_CERTIFICATE_OPTIONAL_MEDICAL_FIELDS = ['raw_submission'];
+const supabaseMissingCertificateServiceFields = new Set();
+const supabaseMissingCertificateMedicalFields = new Set();
+const supabaseCertificateServiceFieldLookup = new Set(SUPABASE_CERTIFICATE_SERVICE_FIELDS);
+const supabaseCertificateMedicalFieldLookup = new Set([
+  ...SUPABASE_CERTIFICATE_MEDICAL_FIELDS,
+  ...SUPABASE_CERTIFICATE_OPTIONAL_MEDICAL_FIELDS,
+]);
+
+function getSupabaseCertificateSelectFields(includeRawSubmission) {
+  const serviceFields = SUPABASE_CERTIFICATE_SERVICE_FIELDS.filter(
+    (fieldName) => !supabaseMissingCertificateServiceFields.has(fieldName)
+  );
+  const medicalFields = SUPABASE_CERTIFICATE_MEDICAL_FIELDS.filter(
+    (fieldName) => !supabaseMissingCertificateMedicalFields.has(fieldName)
+  );
+
+  if (includeRawSubmission && !supabaseMissingCertificateMedicalFields.has('raw_submission')) {
+    medicalFields.push('raw_submission');
+  }
+
+  return { serviceFields, medicalFields };
+}
+
+function markSupabaseCertificateFieldMissing(fieldName) {
+  const normalized = String(fieldName || '').trim();
+  if (!normalized) return false;
+
+  if (supabaseCertificateServiceFieldLookup.has(normalized)) {
+    const previousSize = supabaseMissingCertificateServiceFields.size;
+    supabaseMissingCertificateServiceFields.add(normalized);
+    return supabaseMissingCertificateServiceFields.size !== previousSize;
+  }
+
+  if (supabaseCertificateMedicalFieldLookup.has(normalized)) {
+    const previousSize = supabaseMissingCertificateMedicalFields.size;
+    supabaseMissingCertificateMedicalFields.add(normalized);
+    return supabaseMissingCertificateMedicalFields.size !== previousSize;
+  }
+
+  return false;
+}
 
 function pruneSupabaseMealPlannerRecipeByIdCache() {
   const now = Date.now();
@@ -998,39 +1069,11 @@ async function listCertificatesByPatientEmailSupabase(email, options = {}) {
 
   const includeRawSubmission = options?.includeRawSubmission !== false;
   const limit = clampPatientCertificateLimit(options?.limit);
-  let medicalFields = [
-    'request_id',
-    'patient_email',
-    'patient_full_name',
-    'patient_dob',
-    'patient_phone',
-    'patient_address',
-    'symptoms',
-    'consult_reason',
-    'work_or_study_context',
-    'certificate_start_date',
-    'certificate_end_date',
-    'days_requested',
-    'supporting_notes',
-  ];
-  if (includeRawSubmission) {
-    medicalFields.push('raw_submission');
+  let { medicalFields, serviceFields } = getSupabaseCertificateSelectFields(includeRawSubmission);
+  if (medicalFields.length === 0 || serviceFields.length === 0) {
+    return [];
   }
 
-  let serviceFields = [
-    'id',
-    'submitted_at',
-    'created_at',
-    'updated_at',
-    'status',
-    'service_type',
-    'risk_score',
-    'risk_level',
-    'reviewed_at',
-    'denial_reason',
-    'decision_reason',
-    'assigned_provider_id',
-  ];
   let rows = [];
   for (let attempt = 0; attempt < 16; attempt += 1) {
     const select = `${serviceFields.join(',')},medical_certificate_requests!inner(${medicalFields.join(',')})`;
@@ -1059,7 +1102,13 @@ async function listCertificatesByPatientEmailSupabase(email, options = {}) {
         if (hadServiceColumn) {
           serviceFields = serviceFields.filter((entry) => entry !== missingColumn);
         }
-        if (hadMedicalColumn || hadServiceColumn) {
+
+        const cachedMissingField = markSupabaseCertificateFieldMissing(missingColumn);
+        if (hadMedicalColumn || hadServiceColumn || cachedMissingField) {
+          if (medicalFields.length === 0 || serviceFields.length === 0) {
+            rows = [];
+            break;
+          }
           continue;
         }
       }
