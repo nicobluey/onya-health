@@ -74,7 +74,6 @@ const panelClassName =
 function statusTone(status: string) {
     const normalized = String(status || '').toLowerCase();
     if (normalized === 'approved' || normalized === 'closed') return 'bg-[#ecfdf3] text-[#166534] border-[#86efac]';
-    if (normalized === 'awaiting_payment') return 'bg-[#f6fafd] text-[#1a3d63] border-[#b3cfe5]';
     if (['pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(normalized)) {
         return 'bg-[#fff8e8] text-[#8a6700] border-[#f3df9d]';
     }

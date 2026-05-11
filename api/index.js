@@ -1405,6 +1405,23 @@ function isOpenForReview(status) {
   return OPEN_REVIEW_STATUSES.has(String(status || '').toLowerCase());
 }
 
+function isStripePaymentPendingForCertificate(certificate) {
+  const payment = certificate?.rawSubmission?.payment || null;
+  if (!payment || typeof payment !== 'object') return false;
+  if (String(payment.provider || '').trim().toLowerCase() !== 'stripe') return false;
+
+  const paymentStatus = String(payment.status || '').trim().toLowerCase();
+  const stripeSessionId = String(payment.stripeSessionId || '').trim();
+  if (!paymentStatus) {
+    return Boolean(stripeSessionId);
+  }
+  return !isPaidLikePaymentStatus(paymentStatus);
+}
+
+function isCertificateOpenForReview(certificate) {
+  return isOpenForReview(certificate?.status) && !isStripePaymentPendingForCertificate(certificate);
+}
+
 function userHasDoctorRole(user) {
   const metadataRole = String(user?.user_metadata?.role || user?.app_metadata?.role || '').toLowerCase();
   return ['provider', 'doctor', 'admin'].includes(metadataRole);
@@ -2574,7 +2591,7 @@ async function loadPatientPortalSnapshot(email, { includeBilling = true } = {}) 
   ]);
   const certificatesFetchDurationMs = Date.now() - certificatesFetchStartedAt;
   const { patientCertificates, latest } = getLatestFromPatientCertificates(certificates);
-  const queueCount = patientCertificates.filter((item) => isOpenForReview(item.status)).length;
+  const queueCount = patientCertificates.filter((item) => isCertificateOpenForReview(item)).length;
   const billingStartedAt = Date.now();
   const billing = includeBilling ? await resolvePatientBillingProfile(normalizedEmail, certificates) : null;
   const billingFetchDurationMs = includeBilling ? Date.now() - billingStartedAt : 0;
@@ -3221,7 +3238,7 @@ async function markPaidFromStripeSession(session, trigger, req) {
   };
 }
 
-async function reconcileAwaitingPaymentCertificatesForPatient(patientEmail, req) {
+async function reconcilePendingPaymentCertificatesForPatient(patientEmail, req) {
   const email = normalizeEmail(patientEmail);
   if (!email) return { checked: 0, reconciled: 0 };
 
@@ -3230,7 +3247,7 @@ async function reconcileAwaitingPaymentCertificatesForPatient(patientEmail, req)
     .filter((certificate) => {
       const status = String(certificate?.status || '').trim().toLowerCase();
       const sessionId = String(certificate?.rawSubmission?.payment?.stripeSessionId || '').trim();
-      return status === 'awaiting_payment' && Boolean(sessionId);
+      return isOpenForReview(status) && isStripePaymentPendingForCertificate(certificate) && Boolean(sessionId);
     })
     .slice(0, 5);
 
@@ -3245,7 +3262,7 @@ async function reconcileAwaitingPaymentCertificatesForPatient(patientEmail, req)
       const result = await markPaidFromStripeSession(session, 'patient_status_reconcile', req);
       if (result?.updated) reconciled += 1;
     } catch (errorObject) {
-      error('patient.awaiting_payment_reconcile_failed', {
+      error('patient.payment_pending_reconcile_failed', {
         email,
         certificateId: certificate?.id || null,
         message: errorObject?.message || String(errorObject),
@@ -4239,7 +4256,7 @@ export default async function handler(req, res) {
         const certificate = {
           id: certificateId,
           createdAt: new Date().toISOString(),
-          status: 'awaiting_payment',
+          status: 'pending',
           serviceType: body.serviceType || 'doctor',
           risk,
           certificateDraft,
@@ -5219,7 +5236,7 @@ export default async function handler(req, res) {
       const patient = await requirePatient(req, res);
       if (!patient) return;
 
-      void reconcileAwaitingPaymentCertificatesForPatient(patient.email, req).catch((errorObject) => {
+      void reconcilePendingPaymentCertificatesForPatient(patient.email, req).catch((errorObject) => {
         error('patient.bootstrap.payment_reconcile_failed', {
           email: patient.email,
           message: errorObject?.message || String(errorObject),
@@ -5265,7 +5282,7 @@ export default async function handler(req, res) {
       const patient = await requirePatient(req, res);
       if (!patient) return;
 
-      void reconcileAwaitingPaymentCertificatesForPatient(patient.email, req).catch((errorObject) => {
+      void reconcilePendingPaymentCertificatesForPatient(patient.email, req).catch((errorObject) => {
         error('patient.me.payment_reconcile_failed', {
           email: patient.email,
           message: errorObject?.message || String(errorObject),
@@ -6177,7 +6194,7 @@ export default async function handler(req, res) {
       const patient = await requirePatient(req, res);
       if (!patient) return;
 
-      void reconcileAwaitingPaymentCertificatesForPatient(patient.email, req).catch((errorObject) => {
+      void reconcilePendingPaymentCertificatesForPatient(patient.email, req).catch((errorObject) => {
         error('patient.requests.payment_reconcile_failed', {
           email: patient.email,
           message: errorObject?.message || String(errorObject),
@@ -6674,9 +6691,12 @@ export default async function handler(req, res) {
 
       const filtered = items
         .filter((item) => {
+          if (isOpenForReview(item.status) && !isCertificateOpenForReview(item)) {
+            return false;
+          }
           if (!statusFilter) return true;
           if (statusFilter === 'pending') {
-            return isOpenForReview(item.status);
+            return isCertificateOpenForReview(item);
           }
           return item.status === statusFilter;
         })
@@ -6728,7 +6748,7 @@ export default async function handler(req, res) {
         sendJson(res, 404, { error: 'Certificate not found' });
         return;
       }
-      if (!isOpenForReview(current.status)) {
+      if (!isCertificateOpenForReview(current)) {
         sendJson(res, 409, { error: 'Certificate already reviewed', status: current.status });
         return;
       }
@@ -6865,7 +6885,7 @@ export default async function handler(req, res) {
         sendJson(res, 404, { error: 'Certificate not found' });
         return;
       }
-      if (!isOpenForReview(current.status)) {
+      if (!isCertificateOpenForReview(current)) {
         sendJson(res, 409, {
           error: 'Certificate already reviewed',
           status: current.status,
@@ -6987,7 +7007,7 @@ export default async function handler(req, res) {
         sendJson(res, 404, { error: 'Certificate not found' });
         return;
       }
-      if (!isOpenForReview(current.status)) {
+      if (!isCertificateOpenForReview(current)) {
         sendJson(res, 409, {
           error: 'Certificate already reviewed',
           status: current.status,
@@ -6996,7 +7016,7 @@ export default async function handler(req, res) {
       }
 
       const updated = await updateCertificate(certId, (item) => {
-        if (!isOpenForReview(item.status)) return item;
+        if (!isCertificateOpenForReview(item)) return item;
 
         return {
           ...item,

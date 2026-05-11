@@ -197,7 +197,6 @@ function PortalBackdropArt() {
 function statusPillClasses(status: string) {
     const normalized = String(status || '').trim().toLowerCase();
     if (normalized === 'approved' || normalized === 'closed') return 'border-[#86efac] bg-[#ecfdf3] text-[#166534]';
-    if (normalized === 'awaiting_payment') return 'border-[#b3cfe5] bg-[#f6fafd] text-[#1a3d63]';
     if (['pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(normalized)) {
         return 'border-[#f3df9d] bg-[#fff8e8] text-[#8a6700]';
     }

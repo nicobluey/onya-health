@@ -522,6 +522,23 @@ function isOpenForReview(status) {
   return OPEN_REVIEW_STATUSES.has(String(status || '').toLowerCase());
 }
 
+function isStripePaymentPendingForCertificate(certificate) {
+  const payment = certificate?.rawSubmission?.payment || null;
+  if (!payment || typeof payment !== 'object') return false;
+  if (String(payment.provider || '').trim().toLowerCase() !== 'stripe') return false;
+
+  const paymentStatus = String(payment.status || '').trim().toLowerCase();
+  const stripeSessionId = String(payment.stripeSessionId || '').trim();
+  if (!paymentStatus) {
+    return Boolean(stripeSessionId);
+  }
+  return !isPaidLikePaymentStatus(paymentStatus);
+}
+
+function isCertificateOpenForReview(certificate) {
+  return isOpenForReview(certificate?.status) && !isStripePaymentPendingForCertificate(certificate);
+}
+
 function currentEmailProvider() {
   if (String(process.env.SMTP_HOST || '').trim() && String(process.env.SMTP_USER || '').trim() && String(process.env.SMTP_PASS || '').trim()) {
     return 'smtp';
@@ -1958,7 +1975,7 @@ async function handleApi(req, res, url) {
     const certificate = {
       id: certificateId,
       createdAt: new Date().toISOString(),
-      status: 'awaiting_payment',
+      status: 'pending',
       serviceType: body.serviceType || 'doctor',
       risk,
       certificateDraft,
@@ -2418,7 +2435,7 @@ async function handleApi(req, res, url) {
         account,
       }),
       billing,
-      queueCount: patientCertificates.filter((item) => isOpenForReview(item.status)).length,
+      queueCount: patientCertificates.filter((item) => isCertificateOpenForReview(item)).length,
       latestRequest: latest ? patientSummaryFromCertificate(latest) : null,
     });
     return;
@@ -3284,9 +3301,12 @@ async function handleApi(req, res, url) {
 
     const filtered = items
       .filter((item) => {
+        if (isOpenForReview(item.status) && !isCertificateOpenForReview(item)) {
+          return false;
+        }
         if (!statusFilter) return true;
         if (statusFilter === 'pending') {
-          return ['pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(item.status);
+          return isCertificateOpenForReview(item);
         }
         return item.status === statusFilter;
       })
@@ -3462,7 +3482,7 @@ async function handleApi(req, res, url) {
       sendJson(res, 404, { error: 'Certificate not found' });
       return;
     }
-    if (!isOpenForReview(currentCertificate.status)) {
+    if (!isCertificateOpenForReview(currentCertificate)) {
       sendJson(res, 409, {
         error: 'Certificate already reviewed',
         status: currentCertificate.status,
@@ -3538,7 +3558,7 @@ async function handleApi(req, res, url) {
       sendJson(res, 404, { error: 'Certificate not found' });
       return;
     }
-    if (!isOpenForReview(currentCertificate.status)) {
+    if (!isCertificateOpenForReview(currentCertificate)) {
       sendJson(res, 409, {
         error: 'Certificate already reviewed',
         status: currentCertificate.status,
@@ -3547,7 +3567,7 @@ async function handleApi(req, res, url) {
     }
 
     const updated = await updateCertificate(certId, (current) => {
-      if (!isOpenForReview(current.status)) {
+      if (!isCertificateOpenForReview(current)) {
         return current;
       }
 

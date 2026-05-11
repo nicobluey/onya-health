@@ -236,16 +236,24 @@ async function mutateDb(mutator) {
 }
 
 function mapDbToCertificate(item) {
+  const normalizedStatus = normalizeCertificateStatus(item.status, 'submitted');
   return {
     id: item.id,
     createdAt: item.createdAt,
-    status: item.status,
+    status: normalizedStatus,
     serviceType: item.serviceType,
     risk: item.risk,
     certificateDraft: item.certificateDraft,
     rawSubmission: item.rawSubmission,
     decision: item.decision || null,
   };
+}
+
+function normalizeCertificateStatus(status, fallback = 'submitted') {
+  const normalized = String(status || '').trim().toLowerCase();
+  if (!normalized) return fallback;
+  if (normalized === 'awaiting_payment') return 'pending';
+  return normalized;
 }
 
 function extractCertificateEmail(certificate) {
@@ -265,17 +273,7 @@ function mapSupabaseRowToCertificate(row) {
 
   const createdAt = row.submitted_at || row.created_at || new Date().toISOString();
   const rawSubmission = med.raw_submission || null;
-  let status = row.status || 'submitted';
-  // Supabase enum may not include "awaiting_payment"; infer it from payment metadata.
-  if (
-    status === 'submitted' &&
-    rawSubmission?.payment?.provider === 'stripe' &&
-    rawSubmission?.payment?.stripeSessionId &&
-    rawSubmission?.payment?.status &&
-    rawSubmission.payment.status !== 'paid'
-  ) {
-    status = 'awaiting_payment';
-  }
+  let status = normalizeCertificateStatus(row.status || 'submitted', 'submitted');
   if (
     ['submitted', 'pending', 'in_review', 'assigned', 'triaged'].includes(String(status).toLowerCase()) &&
     row.reviewed_at
@@ -305,7 +303,7 @@ function mapSupabaseRowToCertificate(row) {
   return {
     id: row.id,
     createdAt,
-    status,
+    status: normalizeCertificateStatus(status, 'submitted'),
     serviceType: row.service_type || 'doctor',
     risk: {
       score: row.risk_score ?? 0,
@@ -848,8 +846,9 @@ function buildPatientBillingUpsertBody(patientEmail, patch = {}) {
 }
 
 function toSupabaseRequestStatus(status) {
-  if (status === 'pending') return 'submitted';
-  return status;
+  const normalized = normalizeCertificateStatus(status, 'submitted');
+  if (normalized === 'pending') return 'submitted';
+  return normalized;
 }
 
 function toSupabaseRiskLevel(level) {
@@ -861,8 +860,7 @@ function toSupabaseRiskLevel(level) {
 }
 
 function fromSupabaseRequestStatus(status) {
-  if (!status) return 'submitted';
-  return status;
+  return normalizeCertificateStatus(status, 'submitted');
 }
 
 async function supabaseRequest(endpoint, options = {}) {

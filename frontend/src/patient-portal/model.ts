@@ -320,12 +320,11 @@ export function appendRecordEntry(data: PortalProfileData, tab: RecordTab, entry
 
 export function isQueuedStatus(status: string) {
   const normalized = String(status || '').toLowerCase();
-  return ['awaiting_payment', 'pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(normalized);
+  return ['pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(normalized);
 }
 
 export function queueStageIndex(status: string) {
   const normalized = String(status || '').toLowerCase();
-  if (normalized === 'awaiting_payment') return 1;
   if (['pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(normalized)) return 2;
   if (normalized === 'approved' || normalized === 'closed') return 3;
   return 0;
@@ -337,7 +336,6 @@ export function queueEstimatedMinutes(request: PortalRequest | null) {
   if (normalized === 'approved' || normalized === 'closed') return 0;
 
   const ranges: Record<string, [number, number]> = {
-    awaiting_payment: [2, 6],
     pending: [21, 29],
     submitted: [21, 29],
     triaged: [17, 24],
@@ -357,7 +355,6 @@ export function queueEstimatedMinutes(request: PortalRequest | null) {
 
 export function statusLabel(status: string) {
   const normalized = String(status || '').toLowerCase();
-  if (normalized === 'awaiting_payment') return 'Awaiting payment confirmation';
   if (['pending', 'submitted', 'triaged', 'assigned', 'in_review'].includes(normalized)) return 'Pending doctor review';
   if (normalized === 'approved') return 'Approved and issued';
   if (normalized === 'closed') return 'Completed';
