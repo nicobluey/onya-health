@@ -174,8 +174,8 @@ export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
 
                                         <div className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-text-primary shadow-md">
                                             <span className="relative flex h-2.5 w-2.5">
-                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#4A7FA7] opacity-75"></span>
-                                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#1A3D63]"></span>
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#16a34a] opacity-70"></span>
+                                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#16a34a]"></span>
                                             </span>
                                             {`${service.providerPlural} online now`}
                                         </div>

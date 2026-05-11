@@ -49,17 +49,17 @@ const FOOTER_GROUPS: FooterLinkGroup[] = [
 
 export function Footer({ onStartConsult, consultHref = '/doctor' }: FooterProps) {
     return (
-        <section className="w-full bg-bark-900 text-white">
+        <section className="w-full bg-[#1a3d63] text-white">
             <footer className="w-full px-6 pb-8 pt-10 md:px-10 md:pb-10 md:pt-14 lg:px-14">
                 <div>
-                    <div className="flex flex-col gap-8 border-b border-white/20 pb-10 lg:flex-row lg:items-end lg:justify-between">
+                    <div className="flex flex-col gap-8 border-b border-[#b3cfe5]/45 pb-10 lg:flex-row lg:items-end lg:justify-between">
                         <div>
                             <a href="/" className="inline-flex items-center" aria-label="Onya Health home">
                                 <img src="/onya-health-logo.webp" alt="Onya Health" className="h-10 w-auto brightness-0 invert" />
                             </a>
                             <p className="mt-5 max-w-md text-2xl font-semibold leading-snug text-white">
                                 Healthcare that works around your life.
-                                <span className="text-white/70"> Get reviewed online without waiting-room delays.</span>
+                                <span className="text-[#b3cfe5]"> Get reviewed online without waiting-room delays.</span>
                             </p>
                         </div>
 
@@ -84,7 +84,7 @@ export function Footer({ onStartConsult, consultHref = '/doctor' }: FooterProps)
                                     href="https://www.instagram.com"
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-bark-900 transition-transform hover:scale-105"
+                                    className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#f6fafd] text-[#1a3d63] transition-transform hover:scale-105"
                                     aria-label="Follow Onya Health on Instagram"
                                 >
                                     <Instagram size={17} />
@@ -93,14 +93,14 @@ export function Footer({ onStartConsult, consultHref = '/doctor' }: FooterProps)
                                     href="https://www.linkedin.com"
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-bark-900 transition-transform hover:scale-105"
+                                    className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#f6fafd] text-[#1a3d63] transition-transform hover:scale-105"
                                     aria-label="Follow Onya Health on LinkedIn"
                                 >
                                     <Linkedin size={17} />
                                 </a>
                                 <a
                                     href="mailto:hello@onyahealth.com.au"
-                                    className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 text-bark-900 transition-transform hover:scale-105"
+                                    className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#f6fafd] text-[#1a3d63] transition-transform hover:scale-105"
                                     aria-label="Email Onya Health support"
                                 >
                                     <Mail size={17} />
@@ -112,13 +112,13 @@ export function Footer({ onStartConsult, consultHref = '/doctor' }: FooterProps)
                     <div className="grid grid-cols-2 gap-x-6 gap-y-10 py-10 sm:grid-cols-3 lg:grid-cols-4">
                         {FOOTER_GROUPS.map((group) => (
                             <div key={group.title}>
-                                <h3 className="text-xs uppercase tracking-[0.18em] text-white/60">{group.title}</h3>
+                                <h3 className="text-xs uppercase tracking-[0.18em] text-[#b3cfe5]">{group.title}</h3>
                                 <ul className="mt-4 space-y-2.5">
                                     {group.links.map((link) => (
                                         <li key={link.label}>
                                             <a
                                                 href={link.href}
-                                                className="text-sm text-white/90 transition-colors hover:text-white hover:underline"
+                                                className="text-sm text-[#f6fafd] transition-colors hover:text-white hover:underline"
                                             >
                                                 {link.label}
                                             </a>
@@ -129,16 +129,16 @@ export function Footer({ onStartConsult, consultHref = '/doctor' }: FooterProps)
                         ))}
 
                         <div className="col-span-2 sm:col-span-3 lg:col-span-1">
-                            <div className="rounded-2xl border border-white/20 bg-white/5 p-4">
-                                <p className="text-xs uppercase tracking-[0.18em] text-white/60">Clinic access</p>
-                                <p className="mt-2 text-sm text-white/90">
+                            <div className="rounded-2xl border border-[#b3cfe5]/45 bg-[#0a1931]/18 p-4">
+                                <p className="text-xs uppercase tracking-[0.18em] text-[#b3cfe5]">Clinic access</p>
+                                <p className="mt-2 text-sm text-[#f6fafd]">
                                     Online consults available across Australia with secure digital delivery by email.
                                 </p>
                             </div>
                         </div>
                     </div>
 
-                    <div className="flex flex-col gap-4 border-t border-white/20 pt-6 text-sm text-white/65 md:flex-row md:items-end md:justify-between">
+                    <div className="flex flex-col gap-4 border-t border-[#b3cfe5]/45 pt-6 text-sm text-[#b3cfe5] md:flex-row md:items-end md:justify-between">
                         <p className="max-w-xl leading-relaxed">
                             We acknowledge Aboriginal and Torres Strait Islander peoples as the Traditional Custodians of Country throughout Australia and pay respect to Elders past and present.
                         </p>

@@ -762,8 +762,17 @@ export default function HealthTopicLandingPage() {
                         <section className="max-w-7xl mx-auto px-5 md:px-8 pb-10">
                             <div className="rounded-3xl border border-border bg-sunlight-50 p-6 md:p-8">
                                 <h2 className="text-2xl md:text-3xl font-serif font-bold text-text-primary">Need a doctor-reviewed next step?</h2>
+                                <div className="mt-3 flex flex-wrap items-center gap-2">
+                                    <span className="inline-flex items-center rounded-full border border-[#86efac] bg-[#ecfdf3] px-3 py-1 text-xs font-semibold tracking-[0.08em] text-[#166534]">
+                                        <span className="relative mr-2 flex h-2.5 w-2.5">
+                                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#16a34a] opacity-70" />
+                                            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#16a34a]" />
+                                        </span>
+                                        Doctors online now
+                                    </span>
+                                </div>
                                 <p className="mt-3 max-w-3xl text-base leading-relaxed text-text-secondary">
-                                    Doctors online now. Most certificates can be delivered under 30 minutes when clinically appropriate.
+                                    Most certificates can be delivered under 30 minutes when clinically appropriate.
                                 </p>
                                 <div className="mt-6">
                                     <MagneticButton

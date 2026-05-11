@@ -53,8 +53,8 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
                         {view === 'landing' && (
                             <div className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-text-primary shadow-sm">
                                 <span className="relative flex h-2 w-2 shrink-0">
-                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#4A7FA7] opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[#1A3D63]"></span>
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#16a34a] opacity-70"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[#16a34a]"></span>
                                 </span>
                                 <span>{service.slug === 'doctor' ? 'Certificate consults 24/7' : `${service.providerPlural} online`}</span>
                             </div>

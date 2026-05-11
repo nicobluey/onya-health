@@ -986,14 +986,57 @@ async function listCertificatesSupabase() {
   return (rows || []).map(mapSupabaseRowToCertificate);
 }
 
-async function listCertificatesByPatientEmailSupabase(email) {
+function clampPatientCertificateLimit(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 120;
+  return Math.max(1, Math.min(500, Math.round(parsed)));
+}
+
+async function listCertificatesByPatientEmailSupabase(email, options = {}) {
   const normalizedEmail = normalizeEmail(email);
   if (!normalizedEmail) return [];
 
+  const includeRawSubmission = options?.includeRawSubmission !== false;
+  const limit = clampPatientCertificateLimit(options?.limit);
+  const medicalFields = [
+    'request_id',
+    'patient_email',
+    'patient_full_name',
+    'patient_dob',
+    'patient_phone',
+    'patient_address',
+    'symptoms',
+    'consult_reason',
+    'work_or_study_context',
+    'certificate_start_date',
+    'certificate_end_date',
+    'days_requested',
+    'supporting_notes',
+  ];
+  if (includeRawSubmission) {
+    medicalFields.push('raw_submission');
+  }
+
+  const serviceFields = [
+    'id',
+    'submitted_at',
+    'created_at',
+    'updated_at',
+    'status',
+    'service_type',
+    'risk_score',
+    'risk_level',
+    'reviewed_at',
+    'denial_reason',
+    'decision_reason',
+    'assigned_provider_id',
+  ];
+  const select = `${serviceFields.join(',')},medical_certificate_requests!inner(${medicalFields.join(',')})`;
+
   const rows = await supabaseRequest(
-    `service_requests?select=*,medical_certificate_requests!inner(*)&medical_certificate_requests.patient_email=eq.${encodeURIComponent(
+    `service_requests?select=${select}&medical_certificate_requests.patient_email=eq.${encodeURIComponent(
       normalizedEmail
-    )}&order=submitted_at.desc,created_at.desc`
+    )}&order=submitted_at.desc,created_at.desc&limit=${limit}`
   );
   return (rows || []).map(mapSupabaseRowToCertificate);
 }
@@ -2180,9 +2223,9 @@ export async function listCertificates() {
   return listCertificatesLocal();
 }
 
-export async function listCertificatesByPatientEmail(email) {
+export async function listCertificatesByPatientEmail(email, options = {}) {
   if (getSupabaseConfig().enabled) {
-    return listCertificatesByPatientEmailSupabase(email);
+    return listCertificatesByPatientEmailSupabase(email, options);
   }
   return listCertificatesByPatientEmailLocal(email);
 }
