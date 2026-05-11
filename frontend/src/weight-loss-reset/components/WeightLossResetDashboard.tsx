@@ -1557,26 +1557,17 @@ export default function WeightLossResetDashboard({
 
           {mealPlan ? (
             <article className="rounded-[30px] bg-white p-5 shadow-[0_28px_52px_-38px_rgba(10,25,49,0.48)] sm:p-6">
-              <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-start">
+              <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
                 <div>
-                  <h3 className="max-w-[760px] text-3xl font-semibold tracking-[-0.02em] text-[#0a1931]">{personalizedSummary.title}</h3>
-                  <p className="mt-3 max-w-[760px] text-[1.02rem] leading-7 text-[#24496f]">{personalizedSummary.intro}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-[#4a7fa7]">Week at a glance</p>
+                  <h3 className="mt-1 text-2xl font-semibold tracking-[-0.015em] text-[#0a1931]">
+                    Built for consistency, energy, and realistic execution.
+                  </h3>
                   <p className="mt-2 max-w-[760px] text-[0.98rem] leading-7 text-[#2f5d86]">{personalizedSummary.detail}</p>
                 </div>
-
-                <div className="inline-flex items-center gap-3 rounded-2xl bg-[#f4f9fd] px-3.5 py-3 shadow-[0_14px_26px_-20px_rgba(10,25,49,0.5)]">
-                  <ProfileAvatar
-                    name={dietitianName}
-                    imageUrl={dietitianImageUrl}
-                    fallbackImageUrl={DEFAULT_DIETITIAN_PROFILE_IMAGE_URL}
-                    alt={`${dietitianName} profile`}
-                    className="h-16 w-16 rounded-2xl object-cover"
-                  />
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-[#4a7fa7]">Your Dietitian</p>
-                    <p className="text-xl font-semibold leading-none text-[#0a1931]">{dietitianName}</p>
-                    <p className="mt-1 text-sm text-[#1a3d63]">{dietitianCredentials}</p>
-                  </div>
+                <div className="flex flex-wrap gap-2 lg:justify-end">
+                  <p className="rounded-full bg-[#edf4fa] px-3 py-1.5 text-xs font-semibold text-[#1a3d63]">Focus: {focusLabel}</p>
+                  <p className="rounded-full bg-[#edf4fa] px-3 py-1.5 text-xs font-semibold text-[#1a3d63]">Prep day: {answers.prepDay || 'Sunday'}</p>
                 </div>
               </div>
 
