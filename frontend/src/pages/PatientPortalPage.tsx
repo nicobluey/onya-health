@@ -1382,6 +1382,7 @@ export default function PatientPortalPage() {
         setMealPlan,
         replaceMealPlan,
         addWeightLog,
+        updateWeightLog,
         addMessage,
         toggleGroceryItem,
     } = useWeightLossResetState();
@@ -2525,6 +2526,7 @@ export default function PatientPortalPage() {
                         }}
                         onSwapMeal={handleWeightLossSwapMeal}
                         onAddWeightLog={addWeightLog}
+                        onUpdateWeightLog={updateWeightLog}
                         onAddMessage={addMessage}
                         onToggleGroceryItem={toggleGroceryItem}
                     />

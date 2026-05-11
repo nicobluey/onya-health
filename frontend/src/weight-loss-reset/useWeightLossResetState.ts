@@ -286,6 +286,33 @@ export function useWeightLossResetState() {
     }));
   };
 
+  const updateWeightLog = (payload: { id: string; date: string; weight: number; note?: string }) => {
+    const targetId = String(payload.id || '').trim();
+    if (!targetId) return;
+
+    setState((current) => {
+      let didUpdate = false;
+      const nextWeightLogs = current.weightLogs
+        .map((entry) => {
+          if (entry.id !== targetId) return entry;
+          didUpdate = true;
+          return {
+            ...entry,
+            date: payload.date,
+            weight: payload.weight,
+            note: payload.note?.trim() || '',
+          };
+        })
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      if (!didUpdate) return current;
+      return {
+        ...current,
+        weightLogs: nextWeightLogs,
+      };
+    });
+  };
+
   const addMessage = (payload: { role: 'user' | 'system'; text: string }) => {
     const text = payload.text.trim();
     if (!text) return;
@@ -341,6 +368,7 @@ export function useWeightLossResetState() {
     setMealPlan,
     replaceMealPlan,
     addWeightLog,
+    updateWeightLog,
     addMessage,
     toggleGroceryItem,
     resetFlow,

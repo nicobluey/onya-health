@@ -379,3 +379,38 @@
 1. `npm run build` succeeds.
 2. `node --check api/index.js` succeeds.
 3. Dashboard compiles with new podcast UI and TTS request flow.
+
+## 2026-05-11 - Progress entry editing + podcast request timeout hardening
+
+### Symptoms
+
+- Patient could not correct historical weight logs (for example accidental `343 kg` entry).
+- Weekly podcast generation could appear stuck during long-running network requests.
+
+### Root causes
+
+1. Progress tab only supported creating new weight entries; no update path existed in state or UI.
+2. Podcast generation fetch had no explicit timeout boundary, so stalled requests could keep loading state active too long.
+
+### Files changed
+
+- `frontend/src/weight-loss-reset/useWeightLossResetState.ts`
+  - added `updateWeightLog(...)` state action to edit existing entries by id.
+- `frontend/src/pages/PatientPortalPage.tsx`
+  - wired `updateWeightLog` into `WeightLossResetDashboard` props.
+- `frontend/src/weight-loss-reset/components/WeightLossResetDashboard.tsx`
+  - added progress entry edit UX:
+    - edit button on historical entries
+    - form prefill in edit mode
+    - `Save changes` and `Cancel` controls
+  - added high-value confirm guard for unusual inputs (`>250 kg`) to reduce typo mistakes.
+  - added 35-second abort timeout for podcast generation and explicit timeout error messaging.
+
+### Verification
+
+1. `npm run build` succeeds.
+2. `node --check api/index.js` succeeds.
+3. Built client bundle contains:
+   - `Weekly podcast brief`
+   - `Save changes`
+   - `Podcast generation timed out. Please tap Regenerate.`

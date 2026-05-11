@@ -12,6 +12,7 @@ import {
   MessageCircle,
   Microwave,
   MilkOff,
+  PencilLine,
   Pause,
   Play,
   Radio,
@@ -23,6 +24,7 @@ import {
   Weight,
   Wind,
   WheatOff,
+  X,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -724,6 +726,7 @@ export default function WeightLossResetDashboard({
   onUpdatePreferences,
   onSwapMeal,
   onAddWeightLog,
+  onUpdateWeightLog,
   onAddMessage,
   onToggleGroceryItem,
   isGeneratingPlan = false,
@@ -741,6 +744,7 @@ export default function WeightLossResetDashboard({
   onUpdatePreferences: () => void;
   onSwapMeal: (dayIndex: number, mealType: MealType, recipeId: string) => void;
   onAddWeightLog: (payload: { date: string; weight: number; note?: string }) => void;
+  onUpdateWeightLog: (payload: { id: string; date: string; weight: number; note?: string }) => void;
   onAddMessage: (payload: { role: 'user' | 'system'; text: string }) => void;
   onToggleGroceryItem: (itemKey: string) => void;
   isGeneratingPlan?: boolean;
@@ -752,6 +756,7 @@ export default function WeightLossResetDashboard({
   const [weightDate, setWeightDate] = useState(new Date().toISOString().slice(0, 10));
   const [weightValue, setWeightValue] = useState('');
   const [weightNote, setWeightNote] = useState('');
+  const [editingWeightLogId, setEditingWeightLogId] = useState<string | null>(null);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationMessageIndex, setGenerationMessageIndex] = useState(0);
   const [podcastVoiceProfile, setPodcastVoiceProfile] = useState<PodcastVoiceProfile>('happy_female');
@@ -996,12 +1001,15 @@ export default function WeightLossResetDashboard({
       }
 
       try {
+        const controller = new AbortController();
+        const timeoutId = window.setTimeout(() => controller.abort(), 35_000);
         const { response, payload } = await fetchApiJson('/api/patient/meal-plan/podcast', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${activeToken}`,
           },
+          signal: controller.signal,
           body: JSON.stringify({
             voiceProfile: podcastVoiceProfile,
             weekKey: podcastWeekKey,
@@ -1015,6 +1023,8 @@ export default function WeightLossResetDashboard({
               credentials: dietitianCredentials,
             },
           }),
+        }).finally(() => {
+          window.clearTimeout(timeoutId);
         });
 
         if (!response.ok || !payload?.ok || typeof payload?.audioBase64 !== 'string' || !payload.audioBase64.trim()) {
@@ -1039,7 +1049,13 @@ export default function WeightLossResetDashboard({
           disclosure: String(payload?.disclosure || PODCAST_DISCLOSURE_COPY),
         });
       } catch (errorObject) {
-        setPodcastError(errorObject instanceof Error ? errorObject.message : 'Unable to generate this week\'s podcast brief.');
+        const message =
+          errorObject instanceof DOMException && errorObject.name === 'AbortError'
+            ? 'Podcast generation timed out. Please tap Regenerate.'
+            : errorObject instanceof Error
+              ? errorObject.message
+              : 'Unable to generate this week\'s podcast brief.';
+        setPodcastError(message);
         if (manual) {
           setPodcastPayload(null);
         }
@@ -1097,17 +1113,46 @@ export default function WeightLossResetDashboard({
     setPodcastCurrentTimeSec(seconds);
   };
 
+  const resetWeightForm = useCallback(() => {
+    setEditingWeightLogId(null);
+    setWeightDate(new Date().toISOString().slice(0, 10));
+    setWeightValue('');
+    setWeightNote('');
+  }, []);
+
+  const startEditingWeightLog = useCallback((entry: WeightLogEntry) => {
+    const parsedDate = new Date(entry.date);
+    const safeDate = Number.isFinite(parsedDate.getTime()) ? parsedDate.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+    setEditingWeightLogId(entry.id);
+    setWeightDate(safeDate);
+    setWeightValue(String(entry.weight));
+    setWeightNote(entry.note || '');
+    openTab('progress');
+  }, [openTab]);
+
   const submitWeight = (event: FormEvent) => {
     event.preventDefault();
     const numericWeight = Number(weightValue);
-    if (!Number.isFinite(numericWeight) || numericWeight < 30) return;
-    onAddWeightLog({
-      date: new Date(weightDate).toISOString(),
+    if (!Number.isFinite(numericWeight) || numericWeight < 30 || numericWeight > 350) return;
+    const parsedDate = new Date(weightDate);
+    if (!Number.isFinite(parsedDate.getTime())) return;
+    if (numericWeight > 250 && !window.confirm(`You entered ${numericWeight} kg. Save this value?`)) return;
+
+    const payload = {
+      date: parsedDate.toISOString(),
       weight: numericWeight,
       note: weightNote,
-    });
-    setWeightValue('');
-    setWeightNote('');
+    };
+
+    if (editingWeightLogId) {
+      onUpdateWeightLog({
+        id: editingWeightLogId,
+        ...payload,
+      });
+    } else {
+      onAddWeightLog(payload);
+    }
+    resetWeightForm();
     openTab('progress');
   };
 
@@ -1668,7 +1713,14 @@ export default function WeightLossResetDashboard({
       {activeTab === 'progress' && (
         <section ref={progressSectionRef} className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
           <article className="rounded-2xl border border-[#b3cfe5] bg-white p-4 sm:p-5">
-            <h2 className="text-xl font-semibold text-[#0a1931]">Log weight</h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-xl font-semibold text-[#0a1931]">Log weight</h2>
+              {editingWeightLogId ? (
+                <p className="rounded-full border border-[#b3cfe5] bg-[#f6fafd] px-2.5 py-1 text-[11px] font-semibold text-[#1a3d63]">
+                  Editing entry
+                </p>
+              ) : null}
+            </div>
             <form className="mt-4 space-y-3" onSubmit={submitWeight}>
               <label className="block space-y-1">
                 <span className="text-sm font-semibold text-[#1a3d63]">Date</span>
@@ -1687,6 +1739,9 @@ export default function WeightLossResetDashboard({
                   onChange={(event) => setWeightValue(event.target.value)}
                   className="h-10 w-full rounded-xl border border-[#b3cfe5] px-3 text-sm outline-none focus:border-[#1a3d63]"
                   placeholder="e.g. 78.4"
+                  min={30}
+                  max={350}
+                  step={0.1}
                 />
               </label>
               <label className="block space-y-1">
@@ -1697,9 +1752,21 @@ export default function WeightLossResetDashboard({
                   className="min-h-20 w-full rounded-xl border border-[#b3cfe5] px-3 py-2 text-sm outline-none focus:border-[#1a3d63]"
                 />
               </label>
-              <button type="submit" className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#1a3d63] px-4 text-sm font-semibold text-white">
-                Save entry
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="submit" className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#1a3d63] px-4 text-sm font-semibold text-white">
+                  {editingWeightLogId ? 'Save changes' : 'Save entry'}
+                </button>
+                {editingWeightLogId ? (
+                  <button
+                    type="button"
+                    onClick={resetWeightForm}
+                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#b3cfe5] bg-white px-4 text-sm font-semibold text-[#1a3d63]"
+                  >
+                    <X size={14} />
+                    Cancel
+                  </button>
+                ) : null}
+              </div>
             </form>
           </article>
 
@@ -1723,10 +1790,26 @@ export default function WeightLossResetDashboard({
                 </li>
               ) : (
                 weightLogs.slice(0, 12).map((entry) => (
-                  <li key={entry.id} className="rounded-xl border border-[#b3cfe5] bg-[#f6fafd] px-3 py-2">
+                  <li
+                    key={entry.id}
+                    className={`rounded-xl border px-3 py-2 ${
+                      editingWeightLogId === entry.id ? 'border-[#1a3d63] bg-white' : 'border-[#b3cfe5] bg-[#f6fafd]'
+                    }`}
+                  >
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-sm font-semibold text-[#0a1931]">{entry.weight} kg</span>
-                      <span className="text-xs text-[#1a3d63]">{new Date(entry.date).toLocaleDateString('en-AU')}</span>
+                      <div className="inline-flex items-center gap-2">
+                        <span className="text-xs text-[#1a3d63]">{new Date(entry.date).toLocaleDateString('en-AU')}</span>
+                        <button
+                          type="button"
+                          onClick={() => startEditingWeightLog(entry)}
+                          className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#b3cfe5] bg-white px-2 text-[11px] font-semibold text-[#1a3d63]"
+                          aria-label={`Edit weight entry for ${new Date(entry.date).toLocaleDateString('en-AU')}`}
+                        >
+                          <PencilLine size={12} />
+                          Edit
+                        </button>
+                      </div>
                     </div>
                     {entry.note && <p className="mt-1 text-xs text-[#1a3d63]">{entry.note}</p>}
                   </li>
