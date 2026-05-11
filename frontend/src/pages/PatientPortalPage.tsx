@@ -451,7 +451,9 @@ function ConsultTab({
         <section className="space-y-5">
             <header>
                 <h1 className="text-3xl font-semibold tracking-tight text-[#0a1931]">Book a consultation</h1>
-                <p className="mt-1 text-base text-[#1a3d63]">Choose a service to continue. Live services open instantly, others are previewable.</p>
+                <p className="mt-1 text-base text-[#1a3d63]">
+                    Choose a service to continue. <span className="font-semibold text-[#166534]">Live services</span> open instantly, others are previewable.
+                </p>
             </header>
 
             <article className="rounded-2xl border border-[#b3cfe5] bg-white px-4 py-3">
@@ -510,9 +512,16 @@ function ConsultTab({
                                 </span>
                             </div>
                             <div className="mt-3 flex items-center justify-between">
-                                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#4a7fa7]">
-                                    {live ? 'Available now' : 'Preview available'}
-                                </p>
+                                {live ? (
+                                    <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-[#166534]">
+                                        <span className="portal-live-dot h-2.5 w-2.5" aria-hidden="true" />
+                                        Live now
+                                    </p>
+                                ) : (
+                                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#4a7fa7]">
+                                        Preview available
+                                    </p>
+                                )}
                                 <span className="inline-flex items-center gap-1 text-sm font-semibold text-[#1a3d63] transition group-hover:gap-1.5">
                                     {live ? 'Continue' : 'View details'}
                                     <ChevronRight size={15} />

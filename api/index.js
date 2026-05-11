@@ -1829,67 +1829,17 @@ async function resolvePatientProfileByEmail({ email, latestCertificate, account 
       return fallbackResult;
     }
 
-    const [profileRows, primaryAssignmentRows] = await Promise.all([
-      supabaseRestRequest(
-        config,
-        `profiles?id=eq.${encodeURIComponent(patientRow.id)}&select=first_name,last_name,phone,dob&limit=1`,
-        {
-          method: 'GET',
-          prefer: 'return=representation',
-        }
-      ),
-      supabaseRestRequest(
-        config,
-        `patient_dietitians?patient_id=eq.${encodeURIComponent(patientRow.id)}&is_primary=eq.true&select=dietitian_id&limit=1`,
-        {
-          method: 'GET',
-          prefer: 'return=representation',
-        }
-      ),
-    ]);
-    const profileRow = profileRows?.[0] || null;
-
     const accountFullName = String(account?.fullName || '').trim();
     const accountDob = String(account?.dob || '').trim();
     const accountPhone = String(account?.phone || '').trim();
     const accountAddress = String(account?.address || '').trim();
     const accountPhotoPath = normalizeStoragePath(account?.profilePhotoPath || '');
-    const profileName = joinName(profileRow?.first_name, profileRow?.last_name);
-    const patientFullName = String(patientRow.full_name || profileName || accountFullName || fallbackPatient.fullName).trim();
+    const patientFullName = String(patientRow.full_name || accountFullName || fallbackPatient.fullName).trim();
     const patientNameParts = splitFullName(patientFullName);
-    const patientPhone = String(patientRow.phone || profileRow?.phone || accountPhone || fallbackPatient.phone).trim();
-    const patientDob = String(profileRow?.dob || accountDob || fallbackPatient.dob).trim();
+    const patientPhone = String(patientRow.phone || accountPhone || fallbackPatient.phone).trim();
+    const patientDob = String(accountDob || fallbackPatient.dob).trim();
     const patientAddress = String(patientRow.address || accountAddress || fallbackPatient.address || '').trim();
     const patientPhotoPath = normalizeStoragePath(patientRow.profile_photo_path || accountPhotoPath);
-
-    let assignmentRows = primaryAssignmentRows;
-    if (!assignmentRows?.[0]?.dietitian_id) {
-      assignmentRows = await supabaseRestRequest(
-        config,
-        `patient_dietitians?patient_id=eq.${encodeURIComponent(patientRow.id)}&select=dietitian_id&order=assigned_at.asc&limit=1`,
-        {
-          method: 'GET',
-          prefer: 'return=representation',
-        }
-      );
-    }
-
-    let dietitian = fallbackDietitian;
-    const assignedDietitianId = String(assignmentRows?.[0]?.dietitian_id || '').trim();
-    if (assignedDietitianId) {
-      const dietitianRows = await supabaseRestRequest(
-        config,
-        `dietitians?id=eq.${encodeURIComponent(assignedDietitianId)}&is_active=eq.true&select=id,full_name,phone,credentials,bio,profile_photo_path&limit=1`,
-        {
-          method: 'GET',
-          prefer: 'return=representation',
-        }
-      );
-      const assignedDietitian = normalizeDietitianProfile(dietitianRows?.[0] || null);
-      if (assignedDietitian) {
-        dietitian = assignedDietitian;
-      }
-    }
 
     const result = {
       patient: {
@@ -1903,7 +1853,7 @@ async function resolvePatientProfileByEmail({ email, latestCertificate, account 
         profilePhotoPath: patientPhotoPath,
         profilePhotoUrl: buildPublicStorageUrl(patientPhotoPath, PROFILE_IMAGE_BUCKET),
       },
-      dietitian,
+      dietitian: fallbackDietitian,
     };
     setCachedPatientProfile(resolvedEmail, result);
     return result;
@@ -2616,13 +2566,15 @@ async function loadPatientPortalSnapshot(email, { includeBilling = true } = {}) 
     getPatientAccountByEmail(normalizedEmail),
     listCertificatesByPatientEmail(normalizedEmail, {
       includeRawSubmission: !shouldUseLeanCertificateQuery,
-      limit: shouldUseLeanCertificateQuery ? 120 : 500,
+      limit: shouldUseLeanCertificateQuery ? 60 : 500,
     }),
   ]);
   const certificatesFetchDurationMs = Date.now() - certificatesFetchStartedAt;
   const { patientCertificates, latest } = getLatestFromPatientCertificates(certificates);
   const queueCount = patientCertificates.filter((item) => isOpenForReview(item.status)).length;
+  const billingStartedAt = Date.now();
   const billing = includeBilling ? await resolvePatientBillingProfile(normalizedEmail, certificates) : null;
+  const billingFetchDurationMs = includeBilling ? Date.now() - billingStartedAt : 0;
 
   return {
     account,
@@ -2632,6 +2584,7 @@ async function loadPatientPortalSnapshot(email, { includeBilling = true } = {}) 
     billing,
     requests: patientCertificates.map(patientSummaryFromCertificate),
     certificatesFetchDurationMs,
+    billingFetchDurationMs,
   };
 }
 
@@ -5275,11 +5228,13 @@ export default async function handler(req, res) {
         return;
       }
 
+      const profileResolveStartedAt = Date.now();
       const profilePayload = await resolvePatientProfileByEmail({
         email: patient.email,
         latestCertificate: snapshot.latest,
         account: snapshot.account,
       });
+      const profileResolveDurationMs = Date.now() - profileResolveStartedAt;
 
       sendJson(res, 200, {
         patient: profilePayload.patient,
@@ -5295,6 +5250,8 @@ export default async function handler(req, res) {
         requestCount: snapshot.patientCertificates.length,
         queueCount: snapshot.queueCount,
         certificatesFetchDurationMs: snapshot.certificatesFetchDurationMs,
+        billingFetchDurationMs: snapshot.billingFetchDurationMs,
+        profileResolveDurationMs,
         totalDurationMs: Date.now() - patientBootstrapStartedAt,
       });
       return;
@@ -5317,11 +5274,13 @@ export default async function handler(req, res) {
         return;
       }
 
+      const profileResolveStartedAt = Date.now();
       const profilePayload = await resolvePatientProfileByEmail({
         email: patient.email,
         latestCertificate: snapshot.latest,
         account: snapshot.account,
       });
+      const profileResolveDurationMs = Date.now() - profileResolveStartedAt;
 
       sendJson(res, 200, {
         patient: profilePayload.patient,
@@ -5335,6 +5294,8 @@ export default async function handler(req, res) {
         requestCount: snapshot.patientCertificates.length,
         queueCount: snapshot.queueCount,
         certificatesFetchDurationMs: snapshot.certificatesFetchDurationMs,
+        billingFetchDurationMs: snapshot.billingFetchDurationMs,
+        profileResolveDurationMs,
         totalDurationMs: Date.now() - patientMeStartedAt,
       });
       return;
@@ -6229,6 +6190,7 @@ export default async function handler(req, res) {
         email: patient.email,
         requestCount: snapshot.patientCertificates.length,
         certificatesFetchDurationMs: snapshot.certificatesFetchDurationMs,
+        billingFetchDurationMs: snapshot.billingFetchDurationMs,
         totalDurationMs: Date.now() - patientRequestsStartedAt,
       });
       return;
