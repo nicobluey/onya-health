@@ -516,6 +516,20 @@ function estimateSpeechDurationSeconds(script) {
   return Math.max(20, Math.round(words / 2.35));
 }
 
+function buildPodcastScriptHash(script) {
+  const safeScript = sanitizePodcastScript(script);
+  if (!safeScript) return '';
+  return crypto.createHash('sha256').update(safeScript).digest('hex');
+}
+
+function normalizePodcastScriptHash(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 96);
+}
+
 function toDisplayList(items) {
   const safe = (Array.isArray(items) ? items : []).map((item) => String(item || '').trim()).filter(Boolean);
   if (safe.length === 0) return '';
@@ -6359,6 +6373,45 @@ export default async function handler(req, res) {
         });
         return;
       }
+      const scriptHash = buildPodcastScriptHash(script);
+
+      try {
+        const cacheEntries = await listMealPlanGenerationCacheByPatientEmail(patient.email, 72);
+        for (const cacheEntry of cacheEntries) {
+          const weeklyPodcasts = cacheEntry?.bundle?.weeklyPodcasts;
+          if (!weeklyPodcasts || typeof weeklyPodcasts !== 'object' || Array.isArray(weeklyPodcasts)) continue;
+          const cachedPodcast = weeklyPodcasts[weekKey];
+          if (!cachedPodcast || typeof cachedPodcast !== 'object' || Array.isArray(cachedPodcast)) continue;
+          const cachedAudio = String(cachedPodcast.audioBase64 || '').replace(/\s+/g, '').trim();
+          if (!cachedAudio) continue;
+          const cachedHash = normalizePodcastScriptHash(cachedPodcast.scriptHash || cachedPodcast.generationKey);
+          if (scriptHash && cachedHash && cachedHash !== scriptHash) continue;
+
+          sendJson(res, 200, {
+            ok: true,
+            cached: true,
+            weekKey,
+            transcript: String(cachedPodcast.transcript || script || '').trim(),
+            voiceProfile: String(cachedPodcast.voiceProfile || voiceProfile || '').trim() || voiceProfile,
+            voice: String(cachedPodcast.voice || voice || '').trim() || voice,
+            generatedAt: String(cachedPodcast.generatedAt || '').trim() || new Date().toISOString(),
+            estimatedDurationSec: Math.max(
+              0,
+              Number(cachedPodcast.estimatedDurationSec || estimateSpeechDurationSeconds(script) || 0)
+            ),
+            audioMimeType: String(cachedPodcast.audioMimeType || 'audio/mpeg').trim() || 'audio/mpeg',
+            audioBase64: cachedAudio,
+            disclosure: 'This voice is AI-generated and not a human recording.',
+          });
+          return;
+        }
+      } catch (cacheLookupError) {
+        error('meal_plan.podcast_cache_lookup_failed', {
+          email: normalizeEmail(patient.email),
+          weekKey,
+          message: cacheLookupError?.message || String(cacheLookupError),
+        });
+      }
 
       try {
         const ttsResponse = await fetch(OPENAI_TTS_ENDPOINT, {
@@ -6405,16 +6458,61 @@ export default async function handler(req, res) {
         }
 
         const generatedAt = new Date().toISOString();
+        const estimatedDurationSec = estimateSpeechDurationSeconds(script);
+        const podcastCacheEntry = {
+          weekKey,
+          scriptHash: scriptHash || undefined,
+          transcript: script,
+          voiceProfile,
+          voice,
+          generatedAt,
+          estimatedDurationSec,
+          audioMimeType: 'audio/mpeg',
+          audioBase64: audioBuffer.toString('base64'),
+        };
+
+        try {
+          const cacheEntries = await listMealPlanGenerationCacheByPatientEmail(patient.email, 72);
+          const latestEntry = Array.isArray(cacheEntries) ? cacheEntries[0] : null;
+          if (latestEntry?.cacheKey && latestEntry?.intakeHash && latestEntry?.patientEmail) {
+            const existingWeeklyPodcasts =
+              latestEntry.bundle?.weeklyPodcasts && typeof latestEntry.bundle.weeklyPodcasts === 'object'
+                ? latestEntry.bundle.weeklyPodcasts
+                : {};
+            await upsertMealPlanGenerationCache({
+              cacheKey: latestEntry.cacheKey,
+              intakeHash: latestEntry.intakeHash,
+              patientEmail: latestEntry.patientEmail,
+              source: latestEntry.source || 'openai',
+              stage: latestEntry.stage || 'ai_recipes_v3',
+              bundle: {
+                ...latestEntry.bundle,
+                weeklyPodcasts: {
+                  ...existingWeeklyPodcasts,
+                  [weekKey]: podcastCacheEntry,
+                },
+              },
+            });
+          }
+        } catch (cachePersistError) {
+          error('meal_plan.podcast_cache_persist_failed', {
+            email: normalizeEmail(patient.email),
+            weekKey,
+            message: cachePersistError?.message || String(cachePersistError),
+          });
+        }
+
         sendJson(res, 200, {
           ok: true,
+          cached: false,
           weekKey,
           transcript: script,
           voiceProfile,
           voice,
           generatedAt,
-          estimatedDurationSec: estimateSpeechDurationSeconds(script),
+          estimatedDurationSec,
           audioMimeType: 'audio/mpeg',
-          audioBase64: audioBuffer.toString('base64'),
+          audioBase64: podcastCacheEntry.audioBase64,
           disclosure: 'This voice is AI-generated and not a human recording.',
         });
       } catch (errorObject) {
