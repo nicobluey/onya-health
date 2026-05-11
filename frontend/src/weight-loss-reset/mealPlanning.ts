@@ -164,7 +164,11 @@ function getIncludeSnackForAnswers(answers: OnboardingAnswers) {
 }
 
 function normalizeText(value: string) {
-  return value.toLowerCase().trim();
+  return String(value || '')
+    .trim()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 }
 
 function tokenizeCsvLike(input: string) {

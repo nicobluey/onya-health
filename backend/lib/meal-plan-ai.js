@@ -276,7 +276,11 @@ function pickVariedId({ pool, dayIndex, seedOffset = 0, lastId = '' }) {
 }
 
 function normalizeText(value) {
-  return String(value || '').trim().toLowerCase();
+  return String(value || '')
+    .trim()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 }
 
 function containsAny(haystack, needles) {

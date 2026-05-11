@@ -389,6 +389,8 @@ function clampNumberForCache(value, min, max, fallback) {
 function normalizeStringForCache(value, limit = 160) {
   return String(value || '')
     .trim()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .slice(0, limit);
 }
