@@ -182,13 +182,36 @@ type PersonalizedSummary = {
 function normalizeToken(value: string) {
   return String(value || '')
     .trim()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u2010-\u2015]/g, '-')
     .toLowerCase()
-    .replace(/[_\s]+/g, '-');
+    .replace(/[_\s]+/g, '-')
+    .replace(/-+/g, '-');
+}
+
+function normalizeDescriptorText(value: string) {
+  return String(value || '')
+    .trim()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u2010-\u2015]/g, '-')
+    .toLowerCase();
 }
 
 function extractRecipeBadges(recipe: Recipe): RecipeBadge[] {
-  const tags = new Set((recipe.dietaryTags || []).map((tag) => normalizeToken(tag)));
-  const descriptor = `${recipe.title} ${recipe.description || ''} ${(recipe.dietaryTags || []).join(' ')}`.toLowerCase();
+  const source = recipe?.source && typeof recipe.source === 'object' && !Array.isArray(recipe.source)
+    ? recipe.source as Record<string, unknown>
+    : {};
+  const sourceTags = Array.isArray(source.cardTags)
+    ? source.cardTags.map((entry) => String(entry || '').trim()).filter(Boolean)
+    : [];
+  const tags = new Set(
+    [...(recipe.dietaryTags || []), ...sourceTags].map((tag) => normalizeToken(tag)).filter(Boolean)
+  );
+  const descriptor = normalizeDescriptorText(
+    `${recipe.title} ${recipe.description || ''} ${(recipe.dietaryTags || []).join(' ')} ${sourceTags.join(' ')}`
+  );
   const protein = Number(resolveRecipeProtein(recipe) || 0);
 
   const badges: RecipeBadge[] = [];
