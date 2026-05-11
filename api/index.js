@@ -136,7 +136,7 @@ const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || '').trim();
 const OPENAI_TTS_ENDPOINT = 'https://api.openai.com/v1/audio/speech';
 const OPENAI_TTS_MODEL = String(process.env.OPENAI_TTS_MODEL || 'gpt-4o-mini-tts').trim() || 'gpt-4o-mini-tts';
 const OPENAI_TTS_RESPONSE_FORMAT = 'mp3';
-const OPENAI_TTS_MAX_SCRIPT_CHARS = Math.max(700, Number(process.env.OPENAI_TTS_MAX_SCRIPT_CHARS || 1800));
+const OPENAI_TTS_MAX_SCRIPT_CHARS = Math.max(900, Number(process.env.OPENAI_TTS_MAX_SCRIPT_CHARS || 3200));
 const DEFAULT_DIETITIAN_ID = '9f1f2a68-3b9c-4f2f-8da9-3e7e1c7f1c11';
 const DEFAULT_DIETITIAN_NAME = 'Felicity';
 const PATIENT_SUPABASE_RESET_METADATA_KEY = 'onya_patient_password_reset';
@@ -554,20 +554,14 @@ function collectMealPlanHighlightTokens(mealPlan) {
 function buildFallbackPodcastScript({
   answers,
   weekNumber,
-  dietitianName,
   firstName,
   mealPlan,
   mealHighlights,
   focusLabel,
 }) {
   const safeFirstName = String(firstName || answers?.firstName || 'there').trim() || 'there';
-  const safeDietitianName = String(dietitianName || DEFAULT_DIETITIAN_NAME || 'your dietitian').trim() || 'your dietitian';
   const safeFocus = String(focusLabel || answers?.primaryHealthFocus || 'overall nutrition').trim() || 'overall nutrition';
   const mainGoal = String(answers?.mainGoal || '').trim() || 'your goal';
-  const progressPoint =
-    Number.isFinite(Number(answers?.currentWeightKg)) && Number.isFinite(Number(answers?.goalWeightKg))
-      ? `You're moving from ${answers.currentWeightKg} kilograms toward ${answers.goalWeightKg} kilograms with steady weekly habits.`
-      : 'Keep showing up for the small actions this week, because they compound quickly.';
   const dietary = toDisplayList((answers?.dietaryRequirements || []).slice(0, 3));
   const dietaryLine = dietary ? `We kept your meals aligned with ${dietary}.` : 'We kept your meals practical and easy to repeat.';
   const explicitMealHighlights = Array.isArray(mealHighlights)
@@ -580,13 +574,14 @@ function buildFallbackPodcastScript({
 
   return sanitizePodcastScript(
     [
-      `Hi ${safeFirstName}, this is ${safeDietitianName} with your week ${weekNumber || 1} check-in.`,
+      `Hi ${safeFirstName}, welcome to your personal science podcast for week ${weekNumber || 1}.`,
       `Your focus this week is ${safeFocus}, and your plan is designed around ${mainGoal}.`,
       dietaryLine,
       mealLine,
-      'Your body responds to consistency: protein supports lean muscle, fiber supports gut and blood sugar control, and regular meals support stable energy.',
-      progressPoint,
-      'Stay consistent, stay flexible, and message me if you need adjustments this week.',
+      'At a physiology level, consistent protein distribution supports muscle protein synthesis, fiber supports satiety and glycemic control, and predictable meal timing supports metabolic stability.',
+      'At a behavior level, repeatable meals reduce decision fatigue and improve adherence, which is one of the strongest predictors of long-term outcomes.',
+      'This week, monitor your post-meal energy, hunger stability, and recovery quality, then use those signals to guide precise adjustments rather than making random changes.',
+      'Stay consistent, stay flexible, and make small evidence-based refinements across the week.',
     ].join(' ')
   );
 }
@@ -6318,7 +6313,6 @@ export default async function handler(req, res) {
       const safeAnswers = sanitizeOnboardingAnswersForBundle(body?.answers) || {};
       const voiceProfile = normalizePodcastVoiceProfile(body?.voiceProfile);
       const voice = resolvePodcastVoice(voiceProfile);
-      const dietitianName = String(body?.dietitian?.fullName || DEFAULT_DIETITIAN_NAME || 'your dietitian').trim();
       const weekNumber = Math.max(1, Math.min(52, Math.round(Number(body?.weekNumber || 1)) || 1));
       const weekKey = String(body?.weekKey || '').trim().slice(0, 80) || `${getWeekStartIsoKey(new Date())}:week-${weekNumber}`;
       const focusLabel = String(body?.focusLabel || safeAnswers?.primaryHealthFocus || '').trim().slice(0, 120);
@@ -6328,7 +6322,6 @@ export default async function handler(req, res) {
         script = buildFallbackPodcastScript({
           answers: safeAnswers,
           weekNumber,
-          dietitianName,
           firstName: body?.firstName || safeAnswers?.firstName,
           mealPlan: body?.mealPlan,
           mealHighlights: body?.mealHighlights,
@@ -6339,7 +6332,6 @@ export default async function handler(req, res) {
       const fallbackScript = buildFallbackPodcastScript({
         answers: safeAnswers,
         weekNumber,
-        dietitianName,
         firstName: body?.firstName || safeAnswers?.firstName,
         mealPlan: body?.mealPlan,
         mealHighlights: body?.mealHighlights,
@@ -6347,16 +6339,20 @@ export default async function handler(req, res) {
       });
 
       let words = script.split(/\s+/g).filter(Boolean);
-      if (words.length < 75) {
-        script = sanitizePodcastScript(`${script} ${fallbackScript}`);
+      const minimumWords = 170;
+      const maximumWords = 240;
+      const absoluteMinimumWords = 140;
+      while (words.length < minimumWords) {
+        const combined = sanitizePodcastScript(`${script} ${fallbackScript}`);
+        if (combined === script) break;
+        script = combined;
         words = script.split(/\s+/g).filter(Boolean);
       }
-      if (words.length > 110) {
-        script = words.slice(0, 110).join(' ');
+      if (words.length > maximumWords) {
+        script = words.slice(0, maximumWords).join(' ');
         words = script.split(/\s+/g).filter(Boolean);
       }
-
-      if (words.length < 70) {
+      if (words.length < absoluteMinimumWords) {
         sendJson(res, 400, {
           ok: false,
           error: 'Podcast script was too short to render a useful weekly briefing.',

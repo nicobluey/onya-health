@@ -2688,10 +2688,18 @@ export function calculateGoalProgress({
   goalWeight?: number;
   currentWeight?: number;
 }) {
-  if (!startingWeight || !goalWeight || !currentWeight || startingWeight <= goalWeight) {
+  if (!startingWeight || !goalWeight || !currentWeight) {
     return 0;
   }
-  const totalToLose = startingWeight - goalWeight;
-  const lost = Math.max(0, startingWeight - currentWeight);
-  return Math.min(100, Math.round((lost / totalToLose) * 100));
+  const start = Number(startingWeight);
+  const goal = Number(goalWeight);
+  const current = Number(currentWeight);
+  if (!Number.isFinite(start) || !Number.isFinite(goal) || !Number.isFinite(current)) return 0;
+  if (start === goal) return current === goal ? 100 : 0;
+
+  const direction = goal > start ? 1 : -1;
+  const totalDistance = Math.abs(goal - start);
+  const progressedDistance = direction > 0 ? current - start : start - current;
+  const clamped = Math.max(0, Math.min(totalDistance, progressedDistance));
+  return Math.round((clamped / totalDistance) * 100);
 }

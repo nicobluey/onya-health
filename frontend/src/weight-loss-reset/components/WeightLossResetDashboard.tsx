@@ -18,7 +18,6 @@ import {
   RefreshCcw,
   ShoppingCart,
   Shuffle,
-  Sparkles,
   Sprout,
   Weight,
   Wind,
@@ -239,6 +238,55 @@ type PodcastGenerationPayload = {
   audioMimeType: string;
 };
 const PODCAST_VOICE_PROFILE: PodcastVoiceProfile = 'happy_female';
+const PODCAST_CACHE_STORAGE_KEY = 'weightLossReset:podcastCache:v1';
+const PODCAST_CACHE_MAX_ENTRIES = 8;
+
+type CachedPodcastAudio = {
+  generationKey: string;
+  weekKey: string;
+  audioBase64: string;
+  audioMimeType: string;
+  estimatedDurationSec: number;
+  savedAt: string;
+};
+
+function hashText(input: string) {
+  const safe = String(input || '');
+  let hash = 2166136261;
+  for (let index = 0; index < safe.length; index += 1) {
+    hash ^= safe.charCodeAt(index);
+    hash += (hash << 1) + (hash << 4) + (hash << 7) + (hash << 8) + (hash << 24);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function readPodcastCacheMap() {
+  if (typeof window === 'undefined') return {} as Record<string, CachedPodcastAudio>;
+  const raw = window.localStorage.getItem(PODCAST_CACHE_STORAGE_KEY);
+  if (!raw) return {} as Record<string, CachedPodcastAudio>;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, CachedPodcastAudio>;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {} as Record<string, CachedPodcastAudio>;
+    return parsed;
+  } catch {
+    return {} as Record<string, CachedPodcastAudio>;
+  }
+}
+
+function writePodcastCacheMap(map: Record<string, CachedPodcastAudio>) {
+  if (typeof window === 'undefined') return;
+  const entries = Object.values(map).sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime());
+  const trimmed = entries.slice(0, PODCAST_CACHE_MAX_ENTRIES);
+  const payload = trimmed.reduce<Record<string, CachedPodcastAudio>>((accumulator, entry) => {
+    accumulator[entry.generationKey] = entry;
+    return accumulator;
+  }, {});
+  try {
+    window.localStorage.setItem(PODCAST_CACHE_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // Ignore quota/storage errors to avoid blocking the main UX.
+  }
+}
 
 function normalizeToken(value: string) {
   return String(value || '')
@@ -596,21 +644,18 @@ function collectPlannedRecipeTitles(mealPlan: MealPlan | null, recipeMap: Map<st
 
 function buildWeeklyPodcastScript({
   firstName,
-  dietitianName,
   focusLabel,
   personalizedSummary,
   mealPlan,
   recipeMap,
 }: {
   firstName: string;
-  dietitianName: string;
   focusLabel: string;
   personalizedSummary: PersonalizedSummary;
   mealPlan: MealPlan | null;
   recipeMap: Map<string, Recipe>;
 }) {
   const safeFirstName = String(firstName || 'there').trim() || 'there';
-  const safeDietitianName = String(dietitianName || 'your dietitian').trim() || 'your dietitian';
   const focus = String(focusLabel || 'overall nutrition').trim() || 'overall nutrition';
   const recipes = collectPlannedRecipeTitles(mealPlan, recipeMap);
   const mealExampleCopy =
@@ -619,23 +664,34 @@ function buildWeeklyPodcastScript({
       : 'This week\'s meals were selected to keep prep simple while still supporting your nutrition targets.';
   const highlights = personalizedSummary.highlights.slice(0, 2);
   const highlightCopy = highlights.length > 0 ? `Key priorities this week: ${highlights.join(', ')}.` : '';
-  const introLine = `Hi ${safeFirstName}, ${safeDietitianName} here with your weekly evidence-based nutrition brief.`;
+  const introLine = `Hi ${safeFirstName}, welcome to your personal science podcast tailored to your body this week.`;
+  const scienceMechanismLine =
+    'At a physiology level, this plan is structured to support metabolic flexibility, appetite regulation, and better nutrient partitioning through predictable meal composition.';
   const bodyEducationLine =
     'This plan is designed for metabolic stability: consistent protein distribution supports muscle protein synthesis, fiber supports satiety and glycemic control, and regular meal timing helps reduce energy volatility.';
+  const executionLine =
+    'From a behavior perspective, repeatable meals reduce cognitive load and improve adherence, which is one of the strongest predictors of meaningful long-term outcomes.';
+  const digestionLine =
+    'Hydration, fiber diversity, and meal timing together support gut motility and microbiome resilience, which can improve energy consistency and recovery through the week.';
   const progressLine = 'Your weekly target is consistency and repeatability, not perfection, so the plan stays realistic for your routine.';
   const closeLine =
-    `Keep this week realistic, not perfect. If your routine changes, message me and we'll adjust the plan quickly.`;
+    'Stay observant this week: notice hunger stability, post-meal energy, and recovery quality, then use that feedback to refine next week with small targeted adjustments.';
+  const supportLine = 'If your routine changes, we can adjust quickly while preserving your core nutrition structure.';
   const detailsLine = personalizedSummary.detail ? personalizedSummary.detail : '';
 
   return [
     introLine,
     `Your focus this week is ${focus}.`,
     mealExampleCopy,
+    scienceMechanismLine,
     bodyEducationLine,
+    executionLine,
+    digestionLine,
     progressLine,
     highlightCopy,
     detailsLine,
     closeLine,
+    supportLine,
   ]
     .filter(Boolean)
     .join(' ')
@@ -825,7 +881,6 @@ export default function WeightLossResetDashboard({
     () =>
       buildWeeklyPodcastScript({
         firstName: displayFirstName || answers.firstName || 'there',
-        dietitianName,
         focusLabel,
         personalizedSummary,
         mealPlan,
@@ -833,7 +888,6 @@ export default function WeightLossResetDashboard({
       }),
     [
       answers.firstName,
-      dietitianName,
       displayFirstName,
       focusLabel,
       mealPlan,
@@ -841,7 +895,7 @@ export default function WeightLossResetDashboard({
       recipeMap,
     ]
   );
-  const podcastGenerationKey = `${podcastWeekKey}:${weeklyPodcastScript}`;
+  const podcastGenerationKey = `${podcastWeekKey}:${hashText(weeklyPodcastScript)}`;
 
   const swapCandidates = swapTarget
     ? getSwapCandidates({
@@ -952,6 +1006,50 @@ export default function WeightLossResetDashboard({
   useEffect(() => {
     podcastAudioUrlRef.current = podcastAudioUrl;
   }, [podcastAudioUrl]);
+
+  const applyCachedPodcast = useCallback((cached: CachedPodcastAudio) => {
+    if (!cached?.audioBase64) return false;
+    try {
+      const audioUrl = decodeBase64AudioToObjectUrl(cached.audioBase64, cached.audioMimeType || 'audio/mpeg');
+      setPodcastAudioUrl((current) => {
+        if (current) URL.revokeObjectURL(current);
+        return audioUrl;
+      });
+      setPodcastCurrentTimeSec(0);
+      setPodcastDurationSec(Math.max(0, Number(cached.estimatedDurationSec || 0)));
+      setPodcastPayload({
+        generationKey: cached.generationKey,
+        weekKey: cached.weekKey,
+        estimatedDurationSec: Math.max(0, Number(cached.estimatedDurationSec || 0)),
+        audioMimeType: String(cached.audioMimeType || 'audio/mpeg'),
+      });
+      setPodcastError('');
+      return true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!mealPlan || !weeklyPodcastScript || isGeneratingPlan) return;
+    if (podcastPayload?.generationKey === podcastGenerationKey && podcastAudioUrl) return;
+    const cacheMap = readPodcastCacheMap();
+    const cached = cacheMap[podcastGenerationKey];
+    if (!cached) return;
+    const restored = applyCachedPodcast(cached);
+    if (!restored) {
+      delete cacheMap[podcastGenerationKey];
+      writePodcastCacheMap(cacheMap);
+    }
+  }, [
+    applyCachedPodcast,
+    isGeneratingPlan,
+    mealPlan,
+    podcastAudioUrl,
+    podcastGenerationKey,
+    podcastPayload?.generationKey,
+    weeklyPodcastScript,
+  ]);
 
   const resetPodcastBars = useCallback(() => {
     setPodcastBars(Array.from({ length: 24 }, (_, index) => (index % 6 === 0 ? 0.32 : 0.2)));
@@ -1065,6 +1163,13 @@ export default function WeightLossResetDashboard({
       }
 
       try {
+        const cacheMap = readPodcastCacheMap();
+        const cached = cacheMap[podcastGenerationKey];
+        if (cached && applyCachedPodcast(cached)) {
+          setIsGeneratingPodcast(false);
+          return;
+        }
+
         const controller = new AbortController();
         const timeoutId = window.setTimeout(() => controller.abort(), 35_000);
         const { response, payload } = await fetchApiJson('/api/patient/meal-plan/podcast', {
@@ -1082,10 +1187,6 @@ export default function WeightLossResetDashboard({
             mealPlan,
             mealHighlights: collectPlannedRecipeTitles(mealPlan, recipeMap).slice(0, 3),
             script: weeklyPodcastScript,
-            dietitian: {
-              fullName: dietitianName,
-              credentials: dietitianCredentials,
-            },
           }),
         }).finally(() => {
           window.clearTimeout(timeoutId);
@@ -1108,6 +1209,17 @@ export default function WeightLossResetDashboard({
           estimatedDurationSec: Math.max(0, Number(payload?.estimatedDurationSec || 0)),
           audioMimeType: String(payload?.audioMimeType || 'audio/mpeg'),
         });
+        writePodcastCacheMap({
+          ...readPodcastCacheMap(),
+          [podcastGenerationKey]: {
+            generationKey: podcastGenerationKey,
+            weekKey: String(payload?.weekKey || podcastWeekKey),
+            audioBase64: String(payload.audioBase64 || ''),
+            audioMimeType: String(payload?.audioMimeType || 'audio/mpeg'),
+            estimatedDurationSec: Math.max(0, Number(payload?.estimatedDurationSec || 0)),
+            savedAt: new Date().toISOString(),
+          },
+        });
       } catch (errorObject) {
         const message =
           errorObject instanceof DOMException && errorObject.name === 'AbortError'
@@ -1122,9 +1234,8 @@ export default function WeightLossResetDashboard({
       }
     },
     [
+      applyCachedPodcast,
       answers,
-      dietitianCredentials,
-      dietitianName,
       isGeneratingPodcast,
       mealPlan,
       podcastGenerationKey,
@@ -1139,8 +1250,12 @@ export default function WeightLossResetDashboard({
   useEffect(() => {
     if (!mealPlan || isGeneratingPlan) return;
     if (podcastPayload?.generationKey === podcastGenerationKey && podcastAudioUrl) return;
+    const cacheMap = readPodcastCacheMap();
+    const cached = cacheMap[podcastGenerationKey];
+    if (cached && applyCachedPodcast(cached)) return;
     void generateWeeklyPodcast();
   }, [
+    applyCachedPodcast,
     generateWeeklyPodcast,
     isGeneratingPlan,
     mealPlan,
@@ -1276,7 +1391,7 @@ export default function WeightLossResetDashboard({
           </div>
 
           <div className="space-y-3">
-            <article className="rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] p-4">
+            <article className="rounded-2xl border border-[#b3cfe5] bg-white p-4">
               <div className="flex items-start gap-3">
                 <ProfileAvatar
                   name={dietitianName}
@@ -1293,7 +1408,7 @@ export default function WeightLossResetDashboard({
               </div>
             </article>
 
-            <article className="rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] p-3">
+            <article className="rounded-2xl border border-[#b3cfe5] bg-white p-3">
               <div className="flex items-center justify-between text-sm text-[#1a3d63]">
                 <span>Current {currentWeight || '—'} kg</span>
                 <span>Goal {answers.goalWeightKg || '—'} kg</span>
@@ -1403,17 +1518,12 @@ export default function WeightLossResetDashboard({
             <article className="rounded-2xl border border-[#b3cfe5] bg-white p-4 shadow-[0_20px_42px_-34px_rgba(15,23,42,0.38)] sm:p-5">
               <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
                 <div>
-                  <p className="inline-flex items-center gap-2 text-sm font-medium text-[#0a1931]">
-                    <Sparkles size={14} />
-                    Crafted for you
-                  </p>
-
-                  <h3 className="mt-2 text-2xl font-semibold tracking-tight text-[#0a1931]">{personalizedSummary.title}</h3>
+                  <h3 className="text-2xl font-semibold tracking-tight text-[#0a1931]">{personalizedSummary.title}</h3>
                   <p className="mt-2 text-sm leading-6 text-[#1a3d63]">{personalizedSummary.intro}</p>
                   <p className="mt-1 text-sm leading-6 text-[#1a3d63]">{personalizedSummary.detail}</p>
                 </div>
 
-                <div className="inline-flex items-center gap-3 rounded-xl border border-[#b3cfe5] bg-[#f6fafd] px-3 py-2">
+                <div className="inline-flex items-center gap-3 rounded-xl border border-[#b3cfe5] bg-white px-3 py-2">
                   <ProfileAvatar
                     name={dietitianName}
                     imageUrl={dietitianImageUrl}
@@ -1428,26 +1538,26 @@ export default function WeightLossResetDashboard({
                 </div>
               </div>
 
-              <div className="mt-3 rounded-xl border border-[#b3cfe5] bg-[#f6fafd] p-3.5">
-                <p className="text-sm font-semibold text-[#1a3d63]">
-                  A personal note from {dietitianName}
+              <div className="mt-3 rounded-xl border border-[#b3cfe5] bg-white p-3.5">
+                <p className="inline-flex items-center gap-2 rounded-full border border-[#b3cfe5] bg-[#f6fafd] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1a3d63]">
+                  Comment from Felicity
                 </p>
-                <p className="mt-1 text-sm leading-6 text-[#1a3d63]">{personalizedSummary.personalNote}</p>
+                <p className="mt-2 border-l-2 border-[#b3cfe5] pl-3 text-sm leading-6 text-[#1a3d63] italic">{personalizedSummary.personalNote}</p>
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
                 {personalizedSummary.highlights.slice(0, 3).map((highlight) => (
-                  <p key={highlight} className="rounded-full border border-[#b3cfe5] bg-[#f6fafd] px-3 py-1.5 text-xs font-medium text-[#1a3d63]">
+                  <p key={highlight} className="rounded-full border border-[#b3cfe5] bg-white px-3 py-1.5 text-xs font-medium text-[#1a3d63]">
                     {highlight}
                   </p>
                 ))}
               </div>
 
-              <div className="mt-4 rounded-xl border border-[#b3cfe5] bg-[#f6fafd] p-3">
+              <div className="mt-4 rounded-xl border border-[#b3cfe5] bg-white p-3">
                 <div className="flex items-center justify-between gap-2">
                   <p className="inline-flex items-center gap-2 text-sm font-semibold text-[#0a1931]">
                     <AudioLines size={14} />
-                    Weekly science podcast
+                    Personal science podcast tailored to your body
                   </p>
                   <p className="text-xs font-semibold text-[#1a3d63]">
                     {isGeneratingPodcast
@@ -1491,7 +1601,7 @@ export default function WeightLossResetDashboard({
                       aria-label="Weekly podcast playback position"
                     />
                     <div
-                      className="mt-2 grid h-9 items-end gap-1 rounded-md border border-[#b3cfe5] bg-[#f6fafd] px-2"
+                      className="mt-2 grid h-9 items-end gap-1 rounded-md border border-[#b3cfe5] bg-white px-2"
                       style={{ gridTemplateColumns: `repeat(${podcastBars.length}, minmax(0, 1fr))` }}
                       aria-hidden="true"
                     >

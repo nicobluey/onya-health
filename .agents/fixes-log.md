@@ -445,3 +445,42 @@
 1. `npm run build` succeeds.
 2. Built output includes `Weekly science podcast`.
 3. Removed strings are absent from podcast UI source (`AI Console Transcript`, `Authoritative male`, podcast `Regenerate` control, `Happy female` label).
+
+## 2026-05-12 - Weekly podcast caching, 90s target, and progress formula fix
+
+### Symptoms
+
+- Goal progress bars stayed at `0%` for users with weight-gain goals.
+- Weekly podcast regenerated repeatedly instead of being reused.
+- Podcast duration remained around 40-50 seconds instead of ~90 seconds.
+- Meal-plan header still displayed `Crafted for you` and the section leaned too heavily on blue surface fills.
+
+### Root causes
+
+1. Progress math only handled weight-loss direction.
+2. Podcast generation lacked persisted client-side reuse keyed by week/script.
+3. API script word limits were capped for ~40-second output.
+4. Summary card retained older heading copy and heavier blue visual treatment.
+
+### Files changed
+
+- `frontend/src/weight-loss-reset/mealPlanning.ts`
+  - updated `calculateGoalProgress(...)` to support both gain and loss directions with proper clamping.
+- `frontend/src/weight-loss-reset/useWeightLossResetState.ts`
+  - switched dashboard progress calculation to shared `calculateGoalProgress(...)`.
+- `frontend/src/weight-loss-reset/components/WeightLossResetDashboard.tsx`
+  - podcast title updated to `Personal science podcast tailored to your body`.
+  - removed `Crafted for you` label row.
+  - styled Felicity note as a comment-style attached block.
+  - softened blue-heavy surfaces by moving key cards to white backgrounds.
+  - introduced podcast cache (`localStorage`) with hashed generation keys and reuse-on-load behavior.
+  - podcast script rewritten for scientific/personal voice without claiming Felicity as speaker.
+- `api/index.js`
+  - increased TTS script limits and updated word-range normalization for ~90-second output.
+  - fallback podcast script updated for scientific tone without naming Felicity as narrator.
+
+### Verification
+
+1. `npm run build` succeeds.
+2. `node --check api/index.js` succeeds.
+3. Vercel inspect on latest production deployment shows status `Ready`.
