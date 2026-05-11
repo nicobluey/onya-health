@@ -480,6 +480,9 @@ function ConsultTab({
                 {CONSULT_OPTIONS.map((option) => {
                     const Icon = option.icon;
                     const live = option.status === 'available';
+                    const badgeClasses = live
+                        ? 'bg-[#b3cfe5] text-[#1a3d63]'
+                        : 'animate-pulse border border-[#f6d58a] bg-[#fff8e8] text-[#b45309]';
                     return (
                         <button
                             key={option.id}
@@ -504,22 +507,18 @@ function ConsultTab({
                                     <p className="mt-1 text-sm text-[#1a3d63]">{option.subtitle}</p>
                                 </div>
                                 <span
-                                    className={`ml-auto shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${
-                                        live ? 'bg-[#b3cfe5] text-[#1a3d63]' : 'bg-[#f6fafd] text-[#1a3d63]'
-                                    }`}
+                                    className={`ml-auto shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${badgeClasses}`}
                                 >
                                     {option.badge}
                                 </span>
                             </div>
                             <div className="mt-3 flex items-center justify-between">
                                 {live ? (
-                                    <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-[#166534]">
-                                        <span className="portal-live-dot h-2.5 w-2.5" aria-hidden="true" />
-                                        Live now
-                                    </p>
+                                    <span aria-hidden="true" />
                                 ) : (
-                                    <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#4a7fa7]">
-                                        Preview available
+                                    <p className="inline-flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.08em] text-[#b45309] animate-pulse">
+                                        <span className="h-2.5 w-2.5 rounded-full bg-[#f59e0b]" aria-hidden="true" />
+                                        Coming soon
                                     </p>
                                 )}
                                 <span className="inline-flex items-center gap-1 text-sm font-semibold text-[#1a3d63] transition group-hover:gap-1.5">
