@@ -393,6 +393,38 @@ function normalizeStringForCache(value, limit = 160) {
     .slice(0, limit);
 }
 
+const COOKING_EQUIPMENT_ORDER = ['stovetop', 'oven', 'air fryer', 'microwave'];
+const DEFAULT_COOKING_EQUIPMENT = ['stovetop', 'oven', 'microwave'];
+
+function normalizeCookingEquipmentTokenForCache(value) {
+  const normalized = normalizeStringForCache(value, 40).replace(/[_\s]+/g, ' ').trim();
+  if (!normalized) return '';
+  if (normalized === 'stovetop' || normalized === 'stove top' || normalized === 'stove' || normalized === 'hob') return 'stovetop';
+  if (normalized === 'oven') return 'oven';
+  if (normalized === 'air fryer' || normalized === 'airfryer') return 'air fryer';
+  if (normalized === 'microwave' || normalized === 'microwave oven') return 'microwave';
+  return '';
+}
+
+function normalizeCookingEquipmentListForCache(value) {
+  const source = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(/[,\n;|/]+/g)
+      : [];
+  const normalized = [...new Set(
+    source
+      .map((entry) => normalizeCookingEquipmentTokenForCache(entry))
+      .filter(Boolean)
+  )];
+  return COOKING_EQUIPMENT_ORDER.filter((entry) => normalized.includes(entry));
+}
+
+function resolveAvailableEquipmentForCache(value) {
+  const normalized = normalizeCookingEquipmentListForCache(value);
+  return normalized.length > 0 ? normalized : [...DEFAULT_COOKING_EQUIPMENT];
+}
+
 function sanitizeOnboardingAnswersForBundle(answers) {
   if (!answers || typeof answers !== 'object' || Array.isArray(answers)) return null;
   const safeAnswers = answers;
@@ -426,6 +458,7 @@ function sanitizeOnboardingAnswersForBundle(answers) {
       : [],
     dislikes: String(safeAnswers.dislikes || '').trim().slice(0, 320) || undefined,
     cookingSkill: String(safeAnswers.cookingSkill || '').trim().slice(0, 80) || undefined,
+    availableEquipment: resolveAvailableEquipmentForCache(safeAnswers.availableEquipment),
     selectedMealTypes,
     mealsPerDay,
     daysPerWeek: Math.round(clampNumberForCache(safeAnswers.daysPerWeek, 2, 7, 7)),
@@ -451,7 +484,7 @@ function buildMealPlanCacheIdentity({ patientEmail, answers, includeSnack }) {
       ? selectedMealTypes.length
       : Math.max(2, Math.min(3, Math.round(Number(safeAnswers.mealsPerDay || 3))));
   const normalized = {
-    schemaVersion: 'ai_recipes_v3',
+    schemaVersion: 'ai_recipes_v4',
     includeSnack: Boolean(includeSnack),
     age: Math.round(clampNumberForCache(safeAnswers.age, 10, 99, 0)),
     gender: normalizeStringForCache(safeAnswers.gender, 32),
@@ -464,6 +497,7 @@ function buildMealPlanCacheIdentity({ patientEmail, answers, includeSnack }) {
     biggestChallenge: normalizeStringForCache(safeAnswers.biggestChallenge, 160),
     timeframeWeeks: Math.round(clampNumberForCache(safeAnswers.timeframeWeeks, 1, 104, 0)),
     cookingSkill: normalizeStringForCache(safeAnswers.cookingSkill, 40),
+    availableEquipment: resolveAvailableEquipmentForCache(safeAnswers.availableEquipment),
     groceryPreference: normalizeStringForCache(safeAnswers.groceryPreference, 80),
     budgetPreference: normalizeStringForCache(safeAnswers.budgetPreference, 80),
     preferredMealStyle: normalizeStringForCache(safeAnswers.preferredMealStyle, 80),
@@ -675,6 +709,43 @@ function mapRecipeListForClient(recipes, req, options = {}) {
     .filter((recipe) => Boolean(recipe && recipe.id));
 }
 
+function inferRecipeRequiredEquipmentFromText(value) {
+  const text = normalizeStringForCache(value, 2000);
+  if (!text) return [];
+  const inferred = new Set();
+  if (/\bair[-\s]?fry(?:er|ing)?\b/.test(text)) inferred.add('air fryer');
+  if (/\b(oven|preheat|bake|baked|roast|roasted|broil)\b/.test(text)) inferred.add('oven');
+  if (/\bmicrowave|microwavable\b/.test(text)) inferred.add('microwave');
+  if (/\b(stovetop|stove|hob|pan|skillet|saucepan|pot|boil|simmer|saute|stir[-\s]?fry|grill)\b/.test(text)) {
+    inferred.add('stovetop');
+  }
+  return COOKING_EQUIPMENT_ORDER.filter((entry) => inferred.has(entry));
+}
+
+function resolveRecipeRequiredEquipmentForProduct(recipe, source) {
+  const explicit = normalizeCookingEquipmentListForCache(recipe?.requiredEquipment);
+  if (explicit.length > 0) return explicit;
+  const fromSource = normalizeCookingEquipmentListForCache(
+    source?.requiredEquipment ?? source?.required_equipment ?? source?.equipment
+  );
+  if (fromSource.length > 0) return fromSource;
+  return inferRecipeRequiredEquipmentFromText(
+    [
+      recipe?.title || '',
+      recipe?.description || '',
+      ...(Array.isArray(recipe?.instructions) ? recipe.instructions : []),
+    ].join(' ')
+  );
+}
+
+function normalizeInstructionLineForProduct(value) {
+  return String(value || '')
+    .replace(/^step\s*\d+\s*[:.)-]?\s*/i, '')
+    .replace(/^\d+\s*[:.)-]\s*/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function normalizeRecipeForProduct(recipe, { generatedBy = '' } = {}) {
   if (!recipe || typeof recipe !== 'object' || Array.isArray(recipe)) return null;
   const id = String(recipe?.id || '').trim();
@@ -711,14 +782,21 @@ function normalizeRecipeForProduct(recipe, { generatedBy = '' } = {}) {
     }
   }
 
+  const instructions = (Array.isArray(recipe?.instructions) ? recipe.instructions : [])
+    .map((entry) => normalizeInstructionLineForProduct(entry))
+    .filter(Boolean);
+
+  const requiredEquipment = resolveRecipeRequiredEquipmentForProduct(recipe, source);
+
   return {
     ...recipe,
     id,
     title,
     ingredients,
-    instructions: Array.isArray(recipe?.instructions) ? recipe.instructions : [],
+    instructions,
     dietaryTags: Array.isArray(recipe?.dietaryTags) ? recipe.dietaryTags : [],
     allergens: Array.isArray(recipe?.allergens) ? recipe.allergens : [],
+    requiredEquipment,
     imageUrl: imageUrl || undefined,
     source,
   };
@@ -758,6 +836,7 @@ function compactRecipeForCacheBundle(recipe) {
     carbs: normalized.carbs,
     fat: normalized.fat,
     mealType: normalized.mealType,
+    requiredEquipment: normalized.requiredEquipment,
     dietaryTags: normalized.dietaryTags,
     allergens: normalized.allergens,
     prepTimeMinutes: normalized.prepTimeMinutes,

@@ -46,6 +46,7 @@ export const DEFAULT_ONBOARDING_ANSWERS: OnboardingAnswers = {
   allergyChips: [],
   dislikes: '',
   cookingSkill: 'comfortable',
+  availableEquipment: ['stovetop', 'oven', 'microwave'],
   selectedMealTypes: ['breakfast', 'lunch', 'dinner'],
   mealsPerDay: 3,
   daysPerWeek: 7,
@@ -156,6 +157,8 @@ export const GROCERY_PREFERENCE_OPTIONS = [
   'high variety',
   'meal prep friendly',
 ] as const;
+
+export const COOKING_EQUIPMENT_OPTIONS = ['stovetop', 'oven', 'air fryer', 'microwave'] as const;
 
 export const PREFERRED_MEAL_STYLE_OPTIONS = [
   'quick and easy',

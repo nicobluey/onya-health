@@ -633,6 +633,38 @@ function normalizeStringForCache(value, limit = 160) {
     .slice(0, limit);
 }
 
+const COOKING_EQUIPMENT_ORDER = ['stovetop', 'oven', 'air fryer', 'microwave'];
+const DEFAULT_COOKING_EQUIPMENT = ['stovetop', 'oven', 'microwave'];
+
+function normalizeCookingEquipmentTokenForCache(value) {
+  const normalized = normalizeStringForCache(value, 40).replace(/[_\s]+/g, ' ').trim();
+  if (!normalized) return '';
+  if (normalized === 'stovetop' || normalized === 'stove top' || normalized === 'stove' || normalized === 'hob') return 'stovetop';
+  if (normalized === 'oven') return 'oven';
+  if (normalized === 'air fryer' || normalized === 'airfryer') return 'air fryer';
+  if (normalized === 'microwave' || normalized === 'microwave oven') return 'microwave';
+  return '';
+}
+
+function normalizeCookingEquipmentListForCache(value) {
+  const source = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(/[,\n;|/]+/g)
+      : [];
+  const normalized = [...new Set(
+    source
+      .map((entry) => normalizeCookingEquipmentTokenForCache(entry))
+      .filter(Boolean)
+  )];
+  return COOKING_EQUIPMENT_ORDER.filter((entry) => normalized.includes(entry));
+}
+
+function resolveAvailableEquipmentForCache(value) {
+  const normalized = normalizeCookingEquipmentListForCache(value);
+  return normalized.length > 0 ? normalized : [...DEFAULT_COOKING_EQUIPMENT];
+}
+
 function buildMealPlanCacheIdentity({ patientEmail, answers, includeSnack }) {
   const safeAnswers = answers && typeof answers === 'object' ? answers : {};
   const selectedMealTypes = normalizeCoreMealTypesForCache(safeAnswers.selectedMealTypes);
@@ -641,7 +673,7 @@ function buildMealPlanCacheIdentity({ patientEmail, answers, includeSnack }) {
       ? selectedMealTypes.length
       : Math.max(2, Math.min(3, Math.round(Number(safeAnswers.mealsPerDay || 3))));
   const normalized = {
-    schemaVersion: 'ai_recipes_v3',
+    schemaVersion: 'ai_recipes_v4',
     includeSnack: Boolean(includeSnack),
     age: Math.round(clampNumberForCache(safeAnswers.age, 10, 99, 0)),
     gender: normalizeStringForCache(safeAnswers.gender, 32),
@@ -654,6 +686,7 @@ function buildMealPlanCacheIdentity({ patientEmail, answers, includeSnack }) {
     biggestChallenge: normalizeStringForCache(safeAnswers.biggestChallenge, 160),
     timeframeWeeks: Math.round(clampNumberForCache(safeAnswers.timeframeWeeks, 1, 104, 0)),
     cookingSkill: normalizeStringForCache(safeAnswers.cookingSkill, 40),
+    availableEquipment: resolveAvailableEquipmentForCache(safeAnswers.availableEquipment),
     groceryPreference: normalizeStringForCache(safeAnswers.groceryPreference, 80),
     budgetPreference: normalizeStringForCache(safeAnswers.budgetPreference, 80),
     preferredMealStyle: normalizeStringForCache(safeAnswers.preferredMealStyle, 80),

@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import {
   BIGGEST_CHALLENGE_OPTIONS,
+  COOKING_EQUIPMENT_OPTIONS,
   CUISINE_PREFERENCE_OPTIONS,
   DIETARY_REQUIREMENT_OPTIONS,
   FAVORITE_FOOD_OPTIONS,
@@ -38,7 +39,7 @@ import {
   WEIGHT_LOSS_RESET_PRICE_COPY,
   WEIGHT_LOSS_RESET_PROGRAM_NAME,
 } from '../constants';
-import type { AssignedDietitianProfile, CoreMealType, OnboardingAnswers } from '../types';
+import type { AssignedDietitianProfile, CookingEquipment, CoreMealType, OnboardingAnswers } from '../types';
 import ProfileAvatar from './ProfileAvatar';
 
 const inputClassName =
@@ -46,6 +47,12 @@ const inputClassName =
 const textareaClassName =
   'min-h-20 w-full rounded-xl border border-[#b3cfe5] bg-white px-3 py-2 text-sm text-[#0a1931] outline-none transition focus:border-[#1a3d63]';
 const CORE_MEAL_TYPE_ORDER: CoreMealType[] = ['breakfast', 'lunch', 'dinner'];
+const EQUIPMENT_LABELS: Record<CookingEquipment, string> = {
+  stovetop: 'Stovetop',
+  oven: 'Oven',
+  'air fryer': 'Air fryer',
+  microwave: 'Microwave',
+};
 
 const foodOptionIcons: Record<(typeof FAVORITE_FOOD_OPTIONS)[number]['value'], LucideIcon> = {
   apple: Apple,
@@ -105,6 +112,9 @@ function stepValidation(step: number, answers: OnboardingAnswers) {
   }
   if (step === 5) {
     if (!answers.cookingSkill) return 'Please choose your cooking skill level.';
+    if (!Array.isArray(answers.availableEquipment) || answers.availableEquipment.length === 0) {
+      return 'Select at least one available cooking equipment option.';
+    }
     if (!Array.isArray(answers.selectedMealTypes) || answers.selectedMealTypes.length < 2 || answers.selectedMealTypes.length > 3) {
       return 'Choose at least 2 meal types (up to 3): breakfast, lunch, and/or dinner.';
     }
@@ -148,10 +158,15 @@ function buildUnlockMessages(answers: OnboardingAnswers) {
   const allergyLabel = allergies.length > 0 ? toDisplayList(allergies) : 'your listed allergy profile';
   const cuisines = (answers.preferredCuisines || []).map((item) => String(item || '').trim()).filter(Boolean).slice(0, 3);
   const cuisineLabel = cuisines.length > 0 ? toDisplayList(cuisines) : 'your preferred cuisine profile';
+  const availableEquipment = (answers.availableEquipment || [])
+    .map((item) => EQUIPMENT_LABELS[item as CookingEquipment] || String(item || '').trim())
+    .filter(Boolean)
+    .slice(0, 4);
+  const equipmentLabel = availableEquipment.length > 0 ? toDisplayList(availableEquipment) : 'your available kitchen equipment';
   return [
     `Saving your updated intake profile and preferences for ${dietaryLabel}.`,
     `Running dietitian quality checks and filtering for ${allergyLabel}.`,
-    `Aligning meals with ${cuisineLabel} flavours and your selected meal schedule.`,
+    `Aligning meals with ${cuisineLabel} flavours, ${equipmentLabel}, and your selected meal schedule.`,
     'Preparing swap options and syncing your weekly plan across your account.',
   ];
 }
@@ -381,6 +396,18 @@ export default function OnboardingFlow({
     });
   };
 
+  const toggleAvailableEquipment = (equipment: CookingEquipment) => {
+    setAnswers((current) => {
+      const selected = new Set((current.availableEquipment || []).map((entry) => String(entry || '').toLowerCase()));
+      if (selected.has(equipment)) selected.delete(equipment);
+      else selected.add(equipment);
+      return {
+        ...current,
+        availableEquipment: COOKING_EQUIPMENT_OPTIONS.filter((entry) => selected.has(entry)),
+      };
+    });
+  };
+
   const activeFocus = HEALTH_FOCUS_OPTIONS.find((entry) => entry.value === answers.primaryHealthFocus);
   const dietitianExpertLabel = getDietitianExpertLabel(answers.primaryHealthFocus);
   const dietitianName = String(dietitian?.fullName || '').trim() || 'your dietitian';
@@ -390,6 +417,9 @@ export default function OnboardingFlow({
   const selectedFavoriteFoodLabels = FAVORITE_FOOD_OPTIONS.filter((entry) =>
     (answers.favoriteFoods || []).map((value) => value.toLowerCase()).includes(entry.value.toLowerCase())
   ).map((entry) => entry.label);
+  const selectedEquipmentLabels = (answers.availableEquipment || [])
+    .map((item) => EQUIPMENT_LABELS[item] || item)
+    .filter(Boolean);
 
   const completeBooking = async () => {
     try {
@@ -654,6 +684,24 @@ export default function OnboardingFlow({
               </select>
             </label>
 
+            <div className="space-y-1 md:col-span-2">
+              <span className="text-sm font-semibold text-[#1a3d63]">Available cooking equipment</span>
+              <div className="flex flex-wrap gap-2">
+                {COOKING_EQUIPMENT_OPTIONS.map((equipment) => (
+                  <ChoiceButton
+                    key={equipment}
+                    active={(answers.availableEquipment || []).includes(equipment)}
+                    onClick={() => toggleAvailableEquipment(equipment)}
+                  >
+                    {EQUIPMENT_LABELS[equipment]}
+                  </ChoiceButton>
+                ))}
+              </div>
+              <p className="text-xs text-[#1a3d63]">
+                We use this to avoid recipes that require equipment you don&apos;t have.
+              </p>
+            </div>
+
             <div className="space-y-1">
               <span className="text-sm font-semibold text-[#1a3d63]">Meals you want to cook</span>
               <div className="flex flex-wrap gap-2">
@@ -887,6 +935,9 @@ export default function OnboardingFlow({
               </p>
               <p className="mt-1 text-sm text-[#1a3d63]">Dietary: {answers.dietaryRequirements.join(', ')}</p>
               <p className="text-sm text-[#1a3d63]">Meal style: {answers.preferredMealStyle}</p>
+              <p className="text-sm text-[#1a3d63]">
+                Equipment: {selectedEquipmentLabels.join(', ') || 'Not selected yet'}
+              </p>
               <p className="text-sm text-[#1a3d63]">Prep day: {answers.prepDay || 'Sunday'}</p>
               <p className="text-sm text-[#1a3d63]">
                 Favourite foods: {selectedFavoriteFoodLabels.join(', ') || 'No favourite foods selected'}

@@ -164,6 +164,50 @@ const INGREDIENT_TOKEN_STOP_WORDS = new Set([
   'tablespoon',
   'tablespoons',
 ]);
+const COOKING_EQUIPMENT_ORDER = ['stovetop', 'oven', 'air fryer', 'microwave'];
+const INSTRUCTION_ACTION_KEYWORDS = [
+  'mix',
+  'stir',
+  'whisk',
+  'bake',
+  'roast',
+  'grill',
+  'cook',
+  'sear',
+  'boil',
+  'simmer',
+  'saute',
+  'fry',
+  'toast',
+  'chop',
+  'slice',
+  'dice',
+  'marinate',
+  'assemble',
+  'toss',
+  'preheat',
+];
+const VAGUE_INSTRUCTION_PATTERNS = [
+  /\bserve\b/i,
+  /\benjoy\b/i,
+  /\bas desired\b/i,
+  /\bto taste\b/i,
+  /\bcooked through\b/i,
+  /\buntil done\b/i,
+  /\bready to eat\b/i,
+];
+const INGREDIENT_ALIGNMENT_STOP_WORDS = new Set([
+  'salt',
+  'pepper',
+  'oil',
+  'olive',
+  'water',
+  'fresh',
+  'dried',
+  'optional',
+  'extra',
+  'virgin',
+]);
 
 function hashSeed(input) {
   const text = String(input || '');
@@ -238,6 +282,118 @@ function normalizeText(value) {
 function containsAny(haystack, needles) {
   const source = normalizeText(haystack);
   return needles.some((needle) => source.includes(needle));
+}
+
+function normalizeCookingEquipmentToken(value) {
+  const normalized = normalizeText(value).replace(/[_\s]+/g, ' ').trim();
+  if (!normalized) return '';
+  if (normalized === 'stovetop' || normalized === 'stove top' || normalized === 'stove' || normalized === 'hob') return 'stovetop';
+  if (normalized === 'oven') return 'oven';
+  if (normalized === 'air fryer' || normalized === 'airfryer') return 'air fryer';
+  if (normalized === 'microwave' || normalized === 'microwave oven') return 'microwave';
+  return '';
+}
+
+function normalizeCookingEquipmentList(value) {
+  const source = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(/[,\n;|/]+/g)
+      : [];
+  const normalized = [...new Set(
+    source
+      .map((entry) => normalizeCookingEquipmentToken(entry))
+      .filter(Boolean)
+  )];
+  return COOKING_EQUIPMENT_ORDER.filter((entry) => normalized.includes(entry));
+}
+
+function inferEquipmentFromText(value) {
+  const text = normalizeText(value);
+  if (!text) return [];
+  const inferred = new Set();
+  if (/\bair[-\s]?fry(?:er|ing)?\b/.test(text)) inferred.add('air fryer');
+  if (/\b(oven|preheat|bake|baked|roast|roasted|broil)\b/.test(text)) inferred.add('oven');
+  if (/\bmicrowave|microwavable\b/.test(text)) inferred.add('microwave');
+  if (/\b(stovetop|stove|hob|pan|skillet|saucepan|pot|boil|simmer|saute|stir[-\s]?fry|grill)\b/.test(text)) {
+    inferred.add('stovetop');
+  }
+  return COOKING_EQUIPMENT_ORDER.filter((entry) => inferred.has(entry));
+}
+
+function resolveRecipeRequiredEquipment(recipe) {
+  const explicit = normalizeCookingEquipmentList(recipe?.requiredEquipment);
+  if (explicit.length > 0) return explicit;
+  const source = recipe?.source && typeof recipe.source === 'object' && !Array.isArray(recipe.source) ? recipe.source : {};
+  const fromSource = normalizeCookingEquipmentList(source?.requiredEquipment ?? source?.required_equipment ?? source?.equipment);
+  if (fromSource.length > 0) return fromSource;
+  const descriptor = [
+    recipe?.title || '',
+    recipe?.description || '',
+    ...(Array.isArray(recipe?.instructions) ? recipe.instructions : []),
+  ].join(' ');
+  return inferEquipmentFromText(descriptor);
+}
+
+function normalizeInstructionStep(value) {
+  return String(value || '')
+    .replace(/^step\s*\d+\s*[:.)-]?\s*/i, '')
+    .replace(/^\d+\s*[:.)-]\s*/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function recipeInstructionSteps(recipe) {
+  return (Array.isArray(recipe?.instructions) ? recipe.instructions : [])
+    .map((step) => normalizeInstructionStep(step))
+    .filter(Boolean);
+}
+
+function recipeInstructionIngredientCoverage(recipe) {
+  const instructionBlob = recipeInstructionSteps(recipe).join(' ').toLowerCase();
+  if (!instructionBlob) return 0;
+  const tokens = [...ingredientTokenSet(recipe)].filter((token) => token.length >= 4 && !INGREDIENT_ALIGNMENT_STOP_WORDS.has(token)).slice(0, 14);
+  if (tokens.length === 0) return 1;
+  const matched = tokens.reduce((count, token) => (instructionBlob.includes(token) ? count + 1 : count), 0);
+  return matched / tokens.length;
+}
+
+function recipeHasActionableInstructions(recipe, mealType, stage = 1) {
+  const steps = recipeInstructionSteps(recipe);
+  const minimumSteps = mealType === 'snack' ? (stage === 1 ? 2 : 1) : stage === 1 ? 3 : 2;
+  if (steps.length < minimumSteps) return false;
+
+  const longSteps = steps.filter((step) => step.split(/\s+/).filter(Boolean).length >= 6).length;
+  if (stage <= 2 && longSteps < (mealType === 'snack' ? 1 : 2)) return false;
+
+  const actionSteps = steps.filter((step) => INSTRUCTION_ACTION_KEYWORDS.some((keyword) => step.toLowerCase().includes(keyword))).length;
+  if (stage === 1 && actionSteps < Math.min(2, steps.length)) return false;
+
+  const vagueSteps = steps.filter((step) => VAGUE_INSTRUCTION_PATTERNS.some((pattern) => pattern.test(step))).length;
+  if (stage <= 2 && vagueSteps >= Math.ceil(steps.length * 0.6)) return false;
+
+  const containsGenericCookCue = steps.some((step) => /\b(cooked through|until done)\b/i.test(step));
+  const containsTimeOrTempCue = steps.some((step) =>
+    /(\d+\s*(?:-|to)?\s*\d*\s*(?:min|mins|minute|minutes|hour|hours|sec|seconds))|(\d+\s*°\s*[cf])|(\d{2,3}\s*[cf]\b)/i.test(step)
+  );
+  if (stage <= 2 && mealType !== 'snack' && containsGenericCookCue && !containsTimeOrTempCue) return false;
+
+  if (stage <= 2 && recipeInstructionIngredientCoverage(recipe) < 0.34) return false;
+  return true;
+}
+
+function normalizeAvailableEquipmentForAnswers(answers = {}) {
+  const normalized = normalizeCookingEquipmentList(answers?.availableEquipment);
+  return normalized.length > 0 ? normalized : COOKING_EQUIPMENT_ORDER;
+}
+
+function recipeMatchesAvailableEquipment(recipe, availableEquipment, stage = 1) {
+  const required = resolveRecipeRequiredEquipment(recipe);
+  if (required.length === 0) return true;
+  const availableSet = new Set(Array.isArray(availableEquipment) ? availableEquipment : COOKING_EQUIPMENT_ORDER);
+  const hasMissingEquipment = required.some((equipment) => !availableSet.has(equipment));
+  if (!hasMissingEquipment) return true;
+  return stage >= 3;
 }
 
 function modelSupportsReasoningControls(model) {
@@ -381,6 +537,7 @@ function isBreakfastMealCandidate(recipe, stage = 1) {
   if (stage <= 2 && calories > (stage === 1 ? BREAKFAST_MAX_CALORIES_STRICT : BREAKFAST_MAX_CALORIES_RELAXED)) return false;
   if (stage <= 2 && totalMinutes > (stage === 1 ? BREAKFAST_MAX_TOTAL_MINUTES_STRICT : BREAKFAST_MAX_TOTAL_MINUTES_RELAXED)) return false;
   if (stage === 1 && ingredientCount > BREAKFAST_MAX_INGREDIENTS_STRICT) return false;
+  if (stage <= 2 && !recipeHasActionableInstructions(recipe, 'breakfast', stage)) return false;
   return true;
 }
 
@@ -400,6 +557,7 @@ function isMainMealPlanningCandidate(recipe, mealType, stage = 1) {
     if (calories > 0 && calories < minCalories && protein < minProtein) return false;
   }
   if (stage <= 2 && calories > 1200) return false;
+  if (stage <= 2 && !recipeHasActionableInstructions(recipe, mealType, stage)) return false;
   return true;
 }
 
@@ -412,20 +570,30 @@ function prioritizeByCuisine(pool, cuisinePool) {
   return [...new Set([...preferred, ...remaining])];
 }
 
-function buildRelaxedPoolByMealType(recipesById, mealType) {
+function buildRelaxedPoolByMealType(recipesById, mealType, availableEquipment = COOKING_EQUIPMENT_ORDER) {
   const source = [...recipesById.values()].filter((recipe) => recipe.mealType === mealType);
   if (mealType === 'breakfast') {
-    return source.filter((recipe) => isBreakfastMealCandidate(recipe, 2)).map((recipe) => recipe.id);
+    return source
+      .filter((recipe) => isBreakfastMealCandidate(recipe, 2))
+      .filter((recipe) => recipeMatchesAvailableEquipment(recipe, availableEquipment, 2))
+      .map((recipe) => recipe.id);
   }
   if (mealType === 'lunch' || mealType === 'dinner') {
-    return source.filter((recipe) => isMainMealPlanningCandidate(recipe, mealType, 2)).map((recipe) => recipe.id);
+    return source
+      .filter((recipe) => isMainMealPlanningCandidate(recipe, mealType, 2))
+      .filter((recipe) => recipeMatchesAvailableEquipment(recipe, availableEquipment, 2))
+      .map((recipe) => recipe.id);
   }
-  return source.map((recipe) => recipe.id);
+  return source
+    .filter((recipe) => recipeHasActionableInstructions(recipe, 'snack', 2))
+    .filter((recipe) => recipeMatchesAvailableEquipment(recipe, availableEquipment, 2))
+    .map((recipe) => recipe.id);
 }
 
 export function generateFallbackMealPlan({ recipes, includeSnack = false, seedSalt = '', answers = {} }) {
   const uniqueById = new Map();
   const preferredCuisines = normalizeCuisineList(answers?.preferredCuisines);
+  const availableEquipment = normalizeAvailableEquipmentForAnswers(answers);
   const useMealPrepPattern = String(answers?.groceryPreference || '').toLowerCase() === 'meal prep friendly';
   for (const recipe of Array.isArray(recipes) ? recipes : []) {
     const id = String(recipe?.id || '').trim();
@@ -442,6 +610,8 @@ export function generateFallbackMealPlan({ recipes, includeSnack = false, seedSa
       cookTimeMinutes: Number(recipe?.cookTimeMinutes || 0),
       totalTimeMinutes: Number(recipe?.totalTimeMinutes || 0),
       dietaryTags: Array.isArray(recipe?.dietaryTags) ? recipe.dietaryTags : [],
+      instructions: Array.isArray(recipe?.instructions) ? recipe.instructions : [],
+      requiredEquipment: resolveRecipeRequiredEquipment(recipe),
       ingredients: Array.isArray(recipe?.ingredients) ? recipe.ingredients : [],
       source: recipe?.source && typeof recipe.source === 'object' ? recipe.source : {},
     });
@@ -474,7 +644,15 @@ export function generateFallbackMealPlan({ recipes, includeSnack = false, seedSa
         const descriptor = recipeDescriptor(recipe);
         const calories = Number(recipe?.calories || 0);
         const totalMinutes = estimateTotalMinutes(recipe);
-        allowed = !containsAny(descriptor, BREAKFAST_HEAVY_KEYWORDS) && calories <= 550 && totalMinutes <= 45;
+        allowed =
+          !containsAny(descriptor, BREAKFAST_HEAVY_KEYWORDS) &&
+          calories <= 550 &&
+          totalMinutes <= 45 &&
+          recipeHasActionableInstructions(recipe, 'snack', 1);
+      }
+
+      if (allowed && !recipeMatchesAvailableEquipment(recipe, availableEquipment, 1)) {
+        allowed = false;
       }
 
       if (allowed) {
@@ -486,10 +664,10 @@ export function generateFallbackMealPlan({ recipes, includeSnack = false, seedSa
     }
   }
 
-  const relaxedBreakfastPool = buildRelaxedPoolByMealType(uniqueById, 'breakfast');
-  const relaxedLunchPool = buildRelaxedPoolByMealType(uniqueById, 'lunch');
-  const relaxedDinnerPool = buildRelaxedPoolByMealType(uniqueById, 'dinner');
-  const relaxedSnackPool = buildRelaxedPoolByMealType(uniqueById, 'snack');
+  const relaxedBreakfastPool = buildRelaxedPoolByMealType(uniqueById, 'breakfast', availableEquipment);
+  const relaxedLunchPool = buildRelaxedPoolByMealType(uniqueById, 'lunch', availableEquipment);
+  const relaxedDinnerPool = buildRelaxedPoolByMealType(uniqueById, 'dinner', availableEquipment);
+  const relaxedSnackPool = buildRelaxedPoolByMealType(uniqueById, 'snack', availableEquipment);
 
   const breakfastPool = poolByType.breakfast.length > 0
     ? prioritizeByCuisine(poolByType.breakfast, cuisinePoolByType.breakfast)
@@ -938,7 +1116,7 @@ function normalizeGeneratedRecipe(entry, index = 0) {
         ? entry.method
         : tokenizeTextInput(entry?.instructionsText || entry?.directionsText);
   const instructions = instructionsSource
-    .map((step) => truncateText(step, 220))
+    .map((step) => normalizeInstructionStep(truncateText(step, 220)))
     .filter(Boolean)
     .slice(0, 10);
 
@@ -981,6 +1159,12 @@ function normalizeGeneratedRecipe(entry, index = 0) {
   const cardTags = normalizeList(entry?.cardTags, { limit: 10 });
   const collections = normalizeList(entry?.collections, { limit: 8 });
   const estimatedCost = truncateText(entry?.estimatedCost || 'balanced', 18).toLowerCase() || 'balanced';
+  let requiredEquipment = normalizeCookingEquipmentList(entry?.requiredEquipment ?? entry?.required_equipment ?? entry?.equipment);
+  if (requiredEquipment.length === 0) {
+    requiredEquipment = inferEquipmentFromText(
+      [title, description, ...instructions].join(' ')
+    );
+  }
 
   return {
     id: stableId,
@@ -989,6 +1173,7 @@ function normalizeGeneratedRecipe(entry, index = 0) {
     ingredients,
     instructions,
     mealType,
+    requiredEquipment,
     calories,
     protein,
     carbs,
@@ -1105,11 +1290,8 @@ function calculateGeneratedRecipeQuality(recipes) {
     const serves = Number(recipe?.serves || 0);
     if (Number.isFinite(serves) && serves > 0) recipesWithServes += 1;
 
-    const instructions = Array.isArray(recipe?.instructions) ? recipe.instructions : [];
-    const stepsAtLeastEightWords = instructions.filter(
-      (step) => String(step || '').trim().split(/\s+/).filter(Boolean).length >= 8,
-    );
-    if (instructions.length >= 3 && stepsAtLeastEightWords.length >= 2) {
+    const mealType = normalizeMealType(recipe?.mealType) || 'lunch';
+    if (recipeHasActionableInstructions(recipe, mealType, 2)) {
       recipesWithRichInstructions += 1;
     }
 
@@ -1154,6 +1336,7 @@ function buildOnboardingSummary(answers = {}, includeSnack = false) {
   const daysPerWeek = Math.max(2, Math.min(7, Number(answers?.daysPerWeek || 7)));
   const twoMealMode = coreMealTypes.length === 2 && coreMealTypes.includes('breakfast') && coreMealTypes.includes('dinner');
   const groceryPreference = truncateText(answers?.groceryPreference || '', 80).toLowerCase();
+  const availableEquipment = normalizeAvailableEquipmentForAnswers(answers);
   const fastPrepTargetMinutes =
     groceryPreference === 'fastest meals possible'
       ? 22
@@ -1192,6 +1375,7 @@ function buildOnboardingSummary(answers = {}, includeSnack = false) {
       preferredCuisines: normalizeList(answers?.preferredCuisines, { limit: 8, lowercase: true }),
       preferredMealStyle: truncateText(answers?.preferredMealStyle || '', 80).toLowerCase(),
       cookingSkill: truncateText(answers?.cookingSkill || '', 80).toLowerCase(),
+      availableEquipment,
       budgetPreference: truncateText(answers?.budgetPreference || '', 80).toLowerCase(),
       groceryPreference,
       prepDay: truncateText(answers?.prepDay || '', 24),
@@ -1351,6 +1535,7 @@ function compactRecipe(recipe) {
     title: String(recipe?.title || ''),
     description: String(recipe?.description || ''),
     mealType: String(recipe?.mealType || ''),
+    requiredEquipment: resolveRecipeRequiredEquipment(recipe),
     calories: Number.isFinite(Number(recipe?.calories)) ? Number(recipe.calories) : null,
     protein: Number.isFinite(Number(recipe?.protein)) ? Number(recipe.protein) : null,
     carbs: Number.isFinite(Number(recipe?.carbs)) ? Number(recipe.carbs) : null,
@@ -1429,7 +1614,9 @@ function buildRecipeMetaMap(recipes) {
       cookTimeMinutes: Number(recipe?.cookTimeMinutes || 0),
       totalTimeMinutes: Number(recipe?.totalTimeMinutes || 0),
       ingredients: Array.isArray(recipe?.ingredients) ? recipe.ingredients : [],
+      instructions: Array.isArray(recipe?.instructions) ? recipe.instructions : [],
       ingredientTokens: ingredientTokenSet(recipe),
+      requiredEquipment: resolveRecipeRequiredEquipment(recipe),
       serves: parseServesCount(recipe),
       dietaryTags: Array.isArray(recipe?.dietaryTags) ? recipe.dietaryTags : [],
       source: recipe?.source && typeof recipe.source === 'object' ? recipe.source : {},
@@ -1477,6 +1664,7 @@ function calculatePlanQuality(plan, recipeMetaMap, answers = {}) {
   let score = 100;
   const issues = [];
   const criticalIssues = [];
+  const availableEquipment = new Set(normalizeAvailableEquipmentForAnswers(answers));
   const breakfastCounts = new Map();
   const lunchCounts = new Map();
   const dinnerCounts = new Map();
@@ -1502,6 +1690,12 @@ function calculatePlanQuality(plan, recipeMetaMap, answers = {}) {
     }
     if (!isMainMealPlanningCandidate(dinnerMeta, 'dinner', 1)) {
       criticalIssues.push(`Dinner is too light, too sweet, or impractical on ${day?.label || 'a day'}.`);
+    }
+    const hasUnavailableEquipment = [breakfastMeta, lunchMeta, dinnerMeta].some((meta) =>
+      (Array.isArray(meta?.requiredEquipment) ? meta.requiredEquipment : []).some((equipment) => !availableEquipment.has(equipment))
+    );
+    if (hasUnavailableEquipment) {
+      criticalIssues.push(`A meal on ${day?.label || 'a day'} requires unavailable equipment.`);
     }
 
     if (breakfast === lunch || breakfast === dinner || lunch === dinner) {
@@ -1665,6 +1859,7 @@ async function callOpenAiForMealPlan({ answers, recipes, includeSnack, seedSalt 
     'Use the full recipe catalog JSON and the onboarding requirements JSON to plan meals that are realistic for normal weekdays.',
     'Prefer high-protein options when possible and match dietary requirements/allergies.',
     'If preferredCuisines is provided, prioritize those cuisines while still ensuring a complete plan.',
+    'Respect availableEquipment from onboardingAnswers and avoid meals that require unavailable equipment when alternatives exist.',
     'Avoid heavy or long-prep breakfasts unless no practical alternatives exist.',
     'For lunch and dinner, avoid very light snack-like options and avoid dessert-style meals when substantial options exist.',
     'Prefer ingredient overlap across the week so grocery shopping is manageable and meal-prep is realistic.',
@@ -1719,6 +1914,7 @@ async function callOpenAiForPlanRepair({ answers, recipes, includeSnack, seedSal
     'Use only recipe ids from the provided catalog. Never invent ids.',
     'Keep breakfasts practical and avoid heavy long-prep breakfast picks when alternatives exist.',
     'Keep lunch and dinner substantial (not dessert/snack-like) when alternatives exist.',
+    'Respect availableEquipment from onboardingAnswers and avoid meals that require unavailable equipment when alternatives exist.',
     'Increase ingredient overlap where reasonable so the grocery list stays practical.',
     includeSnack ? 'Include one snack id per day in snacks array.' : 'Do not include snacks unless requested.',
     'Output schema:',
@@ -1778,6 +1974,7 @@ async function callOpenAiForGeneratedMeals({ answers, includeSnack, seedSalt }) 
     'Return one valid JSON object only. No markdown.',
     'Safety first: strictly avoid allergens and explicitly disliked foods from intakeProfile.',
     'All recipes must include full ingredient quantities/units and complete numbered cooking steps.',
+    'Respect availableEquipment from intakeProfile.preferences.availableEquipment. Do not require unavailable equipment unless unavoidable.',
     'Prioritize overlapping ingredients across recipes to minimize unique groceries and reduce waste.',
     'Prefer short prep/cook times and practical Australian supermarket ingredients.',
     `Each day must include the required meal types: ${requiredMealsLabel}. Include snack only when requested.`,
@@ -1801,6 +1998,7 @@ async function callOpenAiForGeneratedMeals({ answers, includeSnack, seedSalt }) 
             description: 'string',
             mealType: 'breakfast|lunch|dinner|snack',
             serves: 0,
+            requiredEquipment: ['stovetop|oven|air fryer|microwave'],
             ingredients: [{ name: 'string', quantity: 'string|number', unit: 'string', category: 'protein|produce|grains|dairy|herbs & spices|pantry' }],
             instructions: ['string'],
             calories: 0,
@@ -1829,6 +2027,7 @@ async function callOpenAiForGeneratedMeals({ answers, includeSnack, seedSalt }) 
         'Each ingredient entry must include: name, quantity, unit, category.',
         'Each recipe must include calories and protein as positive numbers.',
         'Each recipe must include a realistic serves value (breakfast/lunch/dinner typically 2-4, snack 4-8).',
+        'Each recipe must include requiredEquipment as an array from: stovetop, oven, air fryer, microwave (empty array allowed for no-cook meals).',
         'At least 60% of recipes should reuse core ingredients from the weekly base pantry/protein set.',
         'Keep prep practical: breakfast mostly <=18 min, lunch/dinner mostly <=35 min total.',
         'No placeholder values like N/A, to taste, as needed, some, handful as quantity.',
@@ -1847,6 +2046,7 @@ async function callOpenAiForGeneratedMeals({ answers, includeSnack, seedSalt }) 
             title: 'High-Protein Overnight Oats',
             mealType: 'breakfast',
             serves: 2,
+            requiredEquipment: [],
             ingredients: [
               { name: 'rolled oats', quantity: 1, unit: 'cup', category: 'grains' },
               { name: 'greek yogurt', quantity: 200, unit: 'g', category: 'dairy' },
@@ -2122,7 +2322,18 @@ export async function generateOpenAiMealPlanWithGeneratedRecipes({ answers, incl
           continue;
         }
         normalized = normalizeGeneratedBundle({ parsed, includeSnack, coreMealTypes });
-        if (normalized) break;
+        if (normalized) {
+          const planQuality = calculatePlanQuality(normalized.mealPlan, buildRecipeMetaMap(normalized.recipes), answers);
+          if (!planQuality.valid) {
+            debugMealPlanAi('generateOpenAiMealPlanWithGeneratedRecipes.fail.plan_quality', {
+              attempt,
+              issues: planQuality.issues,
+            });
+            normalized = null;
+            continue;
+          }
+          break;
+        }
       } catch (errorObject) {
         lastError = errorObject;
         debugMealPlanAi('generateOpenAiMealPlanWithGeneratedRecipes.attempt_error', {

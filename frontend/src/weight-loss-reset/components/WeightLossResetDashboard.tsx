@@ -1,4 +1,4 @@
-import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -21,13 +21,42 @@ import {
   getHealthFocusDisplayLabel,
   WEIGHT_LOSS_RESET_PROGRAM_NAME,
 } from '../constants';
-import { buildGroceryListFromMealPlan, calculateGoalProgress, getCurrentWeight, getSwapCandidates } from '../mealPlanning';
-import type { AssignedDietitianProfile, DietitianMessage, MealPlan, MealType, OnboardingAnswers, Recipe, WeightLogEntry } from '../types';
+import { buildGroceryListFromMealPlan, calculateGoalProgress, getCurrentWeight, getRecipeRequiredEquipment, getSwapCandidates } from '../mealPlanning';
+import type {
+  AssignedDietitianProfile,
+  CookingEquipment,
+  DietitianMessage,
+  MealPlan,
+  MealType,
+  OnboardingAnswers,
+  Recipe,
+  WeightLogEntry,
+} from '../types';
 import ProfileAvatar from './ProfileAvatar';
 
 type DashboardTab = 'overview' | 'meal-plan' | 'grocery' | 'progress' | 'messages';
 type PrimaryMealType = 'breakfast' | 'lunch' | 'dinner';
 const PRIMARY_MEAL_TYPE_ORDER: PrimaryMealType[] = ['breakfast', 'lunch', 'dinner'];
+const EQUIPMENT_LABELS: Record<CookingEquipment, string> = {
+  stovetop: 'Stovetop',
+  oven: 'Oven',
+  'air fryer': 'Air fryer',
+  microwave: 'Microwave',
+};
+
+function formatEquipmentList(recipe: Recipe) {
+  const requiredEquipment = getRecipeRequiredEquipment(recipe);
+  if (requiredEquipment.length === 0) return 'No specific equipment required';
+  return requiredEquipment.map((entry) => EQUIPMENT_LABELS[entry] || entry).join(', ');
+}
+
+function formatInstructionStep(value: string) {
+  return String(value || '')
+    .replace(/^step\s*\d+\s*[:.)-]?\s*/i, '')
+    .replace(/^\d+\s*[:.)-]\s*/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 function resolveCoreMealTypesFromAnswers(answers: OnboardingAnswers): PrimaryMealType[] {
   const fromSelection = Array.isArray(answers?.selectedMealTypes)
@@ -212,6 +241,10 @@ function buildPersonalizedSummary({
   const cuisineLabel = cuisines.length ? toDisplayList(cuisines.slice(0, 3)) : 'your preferred flavour profile';
   const supportAreas = (answers.supportAreas || []).map((item) => String(item || '').trim()).filter(Boolean);
   const supportLabel = supportAreas.length ? toDisplayList(supportAreas.slice(0, 3)) : 'weekly accountability and routine';
+  const availableEquipment = (answers.availableEquipment || [])
+    .map((entry) => EQUIPMENT_LABELS[entry as CookingEquipment] || String(entry || '').trim())
+    .filter(Boolean);
+  const equipmentLabel = availableEquipment.length > 0 ? toDisplayList(availableEquipment.slice(0, 4)) : 'your available kitchen setup';
   const prepDay = answers.prepDay || 'Sunday';
   const preferredStyle = String(answers.preferredMealStyle || '').trim().toLowerCase();
   const styleCopy =
@@ -224,6 +257,7 @@ function buildPersonalizedSummary({
     `Prep day set to ${prepDay}`,
     `Focus: ${getHealthFocusDisplayLabel(answers.primaryHealthFocus)}`,
   ];
+  highlights.push(`Equipment: ${equipmentLabel}`);
   if (supportAreas.length > 0) highlights.push(`Support priorities: ${supportLabel}`);
 
   const personalNote = `Hi ${firstName}, I’ve aligned this plan with your intake form, preferences, and goals. I’ve included meals that should be realistic for your week, with a focus on ${styleCopy}. If anything feels hard to follow or you want changes, message me and I’ll help adjust it.`;
@@ -342,6 +376,7 @@ function MealCard({
   const serves = readRecipeServes(recipe);
   const calories = resolveRecipeCalories(recipe);
   const protein = resolveRecipeProtein(recipe);
+  const equipmentLabel = formatEquipmentList(recipe);
   return (
     <article className="overflow-hidden rounded-2xl border border-[#b3cfe5] bg-white">
       <div className="relative">
@@ -361,6 +396,7 @@ function MealCard({
             {calories || '—'} cal • {protein || '—'}g protein • {buildRecipeTimeMeta(recipe)}
           </p>
           {serves ? <p className="mt-1 text-[11px] text-[#1a3d63]">Serves {serves}</p> : null}
+          <p className="mt-1 text-[11px] text-[#1a3d63]">Equipment: {equipmentLabel}</p>
         </div>
         <div className="flex gap-2">
           <button
@@ -451,13 +487,18 @@ function buildGenerationMessages(answers: OnboardingAnswers) {
   const cuisineLabel = preferredCuisines.length > 0 ? toDisplayList(preferredCuisines) : 'all cuisine styles';
   const favoriteFoods = (answers.favoriteFoods || []).map((entry) => String(entry || '').trim()).filter(Boolean).slice(0, 4);
   const favoriteFoodsLabel = favoriteFoods.length > 0 ? toDisplayList(favoriteFoods) : 'your usual favourite ingredients';
+  const availableEquipment = (answers.availableEquipment || [])
+    .map((entry) => EQUIPMENT_LABELS[entry as CookingEquipment] || String(entry || '').trim())
+    .filter(Boolean)
+    .slice(0, 4);
+  const equipmentLabel = availableEquipment.length > 0 ? toDisplayList(availableEquipment) : 'your available kitchen equipment';
 
   const coreMealTypes = resolveCoreMealTypesFromAnswers(answers);
   const coreMealTypeLabel = toDisplayList(coreMealTypes);
   return [
     `Reading your intake preferences and priorities: ${dietaryLabel}.`,
     `Filtering every meal candidate for ${allergyLabel}.`,
-    `Running dietitian quality checks for portions, macros, and practical steps.`,
+    `Running dietitian quality checks for portions, macros, practical steps, and ${equipmentLabel}.`,
     `Prioritising ${cuisineLabel} meals and ${favoriteFoodsLabel}.`,
     `Matching ${answers.preferredMealStyle} meals across ${coreMealTypeLabel}.`,
     `Balancing calories and protein for your ${answers.primaryHealthFocus || 'weight loss'} focus.`,
@@ -598,6 +639,30 @@ export default function WeightLossResetDashboard({
   );
   const selectedRecipeServes = selectedRecipe ? readRecipeServes(selectedRecipe) : undefined;
   const generationProgressRef = useRef(generationProgress);
+  const mealPlanSectionRef = useRef<HTMLElement | null>(null);
+  const grocerySectionRef = useRef<HTMLElement | null>(null);
+  const progressSectionRef = useRef<HTMLElement | null>(null);
+  const messagesSectionRef = useRef<HTMLElement | null>(null);
+
+  const openTab = useCallback((nextTab: DashboardTab) => {
+    setActiveTab(nextTab);
+    if (typeof window === 'undefined') return;
+    if (!window.matchMedia('(max-width: 1023px)').matches) return;
+
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        const target =
+          nextTab === 'grocery'
+            ? grocerySectionRef.current
+            : nextTab === 'progress'
+              ? progressSectionRef.current
+              : nextTab === 'messages'
+                ? messagesSectionRef.current
+                : mealPlanSectionRef.current;
+        target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  }, []);
 
   useEffect(() => {
     generationProgressRef.current = generationProgress;
@@ -668,7 +733,7 @@ export default function WeightLossResetDashboard({
     });
     setWeightValue('');
     setWeightNote('');
-    setActiveTab('progress');
+    openTab('progress');
   };
 
   const sendMessage = (event: FormEvent) => {
@@ -699,7 +764,7 @@ export default function WeightLossResetDashboard({
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:max-w-[520px]">
               <button
                 type="button"
-                onClick={() => setActiveTab('progress')}
+                onClick={() => openTab('progress')}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#1a3d63] px-4 text-sm font-semibold text-white hover:bg-[#0a1931]"
               >
                 <Weight size={16} />
@@ -707,7 +772,7 @@ export default function WeightLossResetDashboard({
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTab('messages')}
+                onClick={() => openTab('messages')}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#b3cfe5] bg-white px-4 text-sm font-semibold text-[#1a3d63]"
               >
                 <MessageCircle size={16} />
@@ -715,7 +780,7 @@ export default function WeightLossResetDashboard({
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTab('meal-plan')}
+                onClick={() => openTab('meal-plan')}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#b3cfe5] bg-white px-4 text-sm font-semibold text-[#1a3d63]"
               >
                 <Shuffle size={16} />
@@ -723,7 +788,7 @@ export default function WeightLossResetDashboard({
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTab('grocery')}
+                onClick={() => openTab('grocery')}
                 className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#b3cfe5] bg-white px-4 text-sm font-semibold text-[#1a3d63]"
               >
                 <ShoppingCart size={16} />
@@ -773,15 +838,15 @@ export default function WeightLossResetDashboard({
           <ArrowLeft size={13} />
           Back
         </button>
-        <TabButton active={activeTab === 'overview'} label="Overview" onClick={() => setActiveTab('overview')} />
-        <TabButton active={activeTab === 'meal-plan'} label="Meal plan" onClick={() => setActiveTab('meal-plan')} />
-        <TabButton active={activeTab === 'grocery'} label="Grocery list" onClick={() => setActiveTab('grocery')} />
-        <TabButton active={activeTab === 'progress'} label="Progress" onClick={() => setActiveTab('progress')} />
-        <TabButton active={activeTab === 'messages'} label={`Message ${dietitianName}`} onClick={() => setActiveTab('messages')} />
+        <TabButton active={activeTab === 'overview'} label="Overview" onClick={() => openTab('overview')} />
+        <TabButton active={activeTab === 'meal-plan'} label="Meal plan" onClick={() => openTab('meal-plan')} />
+        <TabButton active={activeTab === 'grocery'} label="Grocery list" onClick={() => openTab('grocery')} />
+        <TabButton active={activeTab === 'progress'} label="Progress" onClick={() => openTab('progress')} />
+        <TabButton active={activeTab === 'messages'} label={`Message ${dietitianName}`} onClick={() => openTab('messages')} />
       </nav>
 
       {(activeTab === 'overview' || activeTab === 'meal-plan') && (
-        <section className="space-y-4">
+        <section ref={mealPlanSectionRef} className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-xl font-semibold text-[#0a1931]">Weekly meal plan</h2>
             <div className="flex flex-wrap items-center gap-2">
@@ -992,7 +1057,7 @@ export default function WeightLossResetDashboard({
       )}
 
       {activeTab === 'grocery' && (
-        <section className="space-y-4 rounded-2xl border border-[#b3cfe5] bg-white p-4 sm:p-5">
+        <section ref={grocerySectionRef} className="space-y-4 rounded-2xl border border-[#b3cfe5] bg-white p-4 sm:p-5">
           <h2 className="text-xl font-semibold text-[#0a1931]">Weekly grocery list</h2>
           {groceryGroups.length === 0 ? (
             <p className="rounded-xl border border-dashed border-[#b3cfe5] bg-[#f6fafd] px-3 py-2 text-sm text-[#1a3d63]">
@@ -1076,7 +1141,7 @@ export default function WeightLossResetDashboard({
       )}
 
       {activeTab === 'progress' && (
-        <section className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+        <section ref={progressSectionRef} className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
           <article className="rounded-2xl border border-[#b3cfe5] bg-white p-4 sm:p-5">
             <h2 className="text-xl font-semibold text-[#0a1931]">Log weight</h2>
             <form className="mt-4 space-y-3" onSubmit={submitWeight}>
@@ -1148,7 +1213,7 @@ export default function WeightLossResetDashboard({
       )}
 
       {activeTab === 'messages' && (
-        <section className="rounded-2xl border border-[#b3cfe5] bg-white p-4 sm:p-5">
+        <section ref={messagesSectionRef} className="rounded-2xl border border-[#b3cfe5] bg-white p-4 sm:p-5">
           <h2 className="text-xl font-semibold text-[#0a1931]">Message {dietitianName}</h2>
           <p className="mt-1 text-sm text-[#1a3d63]">
             Send {dietitianName} a note about what you&apos;d like adjusted. In this demo, messages are saved locally until live dietitian messaging is
@@ -1206,6 +1271,7 @@ export default function WeightLossResetDashboard({
             {selectedRecipeServes ? (
               <p className="mt-1 text-sm text-[#1a3d63]">{buildServesExplanation(selectedRecipe)}</p>
             ) : null}
+            <p className="mt-1 text-sm text-[#1a3d63]">Required equipment: {formatEquipmentList(selectedRecipe)}</p>
 
             <section className="mt-4 grid gap-4 md:grid-cols-2">
               <div>
@@ -1215,7 +1281,7 @@ export default function WeightLossResetDashboard({
                     type="button"
                     onClick={() => {
                       setSelectedRecipe(null);
-                      setActiveTab('grocery');
+                      openTab('grocery');
                     }}
                     className="rounded-lg border border-[#b3cfe5] bg-white px-2 py-1 text-xs font-semibold text-[#1a3d63]"
                   >
@@ -1231,11 +1297,14 @@ export default function WeightLossResetDashboard({
               <div>
                 <h4 className="text-sm font-semibold text-[#0a1931]">Instructions</h4>
                 <ol className="mt-2 space-y-1 text-sm text-[#1a3d63]">
-                  {(selectedRecipe.instructions || []).map((instruction, index) => (
+                  {(selectedRecipe.instructions || [])
+                    .map((instruction) => formatInstructionStep(instruction))
+                    .filter(Boolean)
+                    .map((instruction, index) => (
                     <li key={`${selectedRecipe.id}-step-${index}`}>
                       {index + 1}. {instruction}
                     </li>
-                  ))}
+                    ))}
                 </ol>
               </div>
             </section>

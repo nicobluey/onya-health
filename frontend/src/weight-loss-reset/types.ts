@@ -1,5 +1,6 @@
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
 export type CoreMealType = 'breakfast' | 'lunch' | 'dinner';
+export type CookingEquipment = 'stovetop' | 'oven' | 'air fryer' | 'microwave';
 
 export interface Ingredient {
   name: string;
@@ -13,6 +14,7 @@ export interface Recipe {
   title: string;
   description?: string;
   imageUrl?: string;
+  requiredEquipment?: CookingEquipment[];
   serves?: number;
   ingredients: Ingredient[];
   instructions?: string[];
@@ -111,6 +113,7 @@ export interface OnboardingAnswers {
   allergyChips: string[];
   dislikes: string;
   cookingSkill: 'beginner' | 'comfortable' | 'advanced';
+  availableEquipment: CookingEquipment[];
   selectedMealTypes: CoreMealType[];
   mealsPerDay: number;
   daysPerWeek: number;

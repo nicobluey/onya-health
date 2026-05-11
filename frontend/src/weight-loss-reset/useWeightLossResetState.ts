@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { DEFAULT_DIETITIAN_ID, DEFAULT_ONBOARDING_ANSWERS, STORAGE_KEYS } from './constants';
 import type {
+  CookingEquipment,
   CoreMealType,
   DietitianMessage,
   MealPlan,
@@ -82,6 +83,19 @@ function sanitizeSelectedMealTypes(value: unknown): CoreMealType[] {
   return normalized;
 }
 
+const COOKING_EQUIPMENT_SET = new Set<CookingEquipment>(['stovetop', 'oven', 'air fryer', 'microwave']);
+
+function sanitizeAvailableEquipment(value: unknown): CookingEquipment[] {
+  const fallback = [...DEFAULT_ONBOARDING_ANSWERS.availableEquipment];
+  if (!Array.isArray(value)) return fallback;
+  const normalized = [...new Set(
+    value
+      .map((entry) => String(entry || '').trim().toLowerCase())
+      .filter((entry): entry is CookingEquipment => COOKING_EQUIPMENT_SET.has(entry as CookingEquipment))
+  )];
+  return normalized.length > 0 ? normalized : fallback;
+}
+
 function sanitizeOnboardingAnswers(input: Partial<OnboardingAnswers> | null | undefined): OnboardingAnswers {
   const source = input && typeof input === 'object' ? input : {};
   const selectedMealTypes: CoreMealType[] = Array.isArray(source.selectedMealTypes)
@@ -124,6 +138,7 @@ function sanitizeOnboardingAnswers(input: Partial<OnboardingAnswers> | null | un
     supportAreas: sanitizeStringArray(source.supportAreas, DEFAULT_ONBOARDING_ANSWERS.supportAreas),
     allergiesText: String(source.allergiesText || '').trim(),
     dislikes: String(source.dislikes || '').trim(),
+    availableEquipment: sanitizeAvailableEquipment(source.availableEquipment),
   };
 }
 

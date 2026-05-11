@@ -1,4 +1,4 @@
-import { type CSSProperties, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { ComponentType, FormEvent } from 'react';
 import {
     Check,
@@ -187,20 +187,6 @@ function HomeHero({
                 <div className="relative hidden min-h-[260px] lg:block">
                     <div className="overflow-hidden rounded-[1.8rem] border border-[#b3cfe5]">
                         <img src="/HERO.webp" alt="" aria-hidden="true" className="h-[260px] w-full object-cover" />
-                    </div>
-                    <div
-                        className="science-float-card -left-8 -top-5 h-20 w-20"
-                        aria-hidden="true"
-                        style={{ '--science-tilt': '-7deg', '--drift-duration': '20s', '--drift-delay': '0.3s' } as CSSProperties}
-                    >
-                        <img src="/Blue%20Bubbles.webp" alt="" className="h-full w-full object-cover" />
-                    </div>
-                    <div
-                        className="science-float-card is-reverse -bottom-4 right-3 h-24 w-24"
-                        aria-hidden="true"
-                        style={{ '--science-tilt': '8deg', '--drift-duration': '18s', '--drift-delay': '0.8s' } as CSSProperties}
-                    >
-                        <img src="/Blue%20Cells.webp" alt="" className="h-full w-full object-cover" />
                     </div>
                 </div>
             </div>
