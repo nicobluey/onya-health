@@ -481,7 +481,7 @@ function ConsultTab({
                     const Icon = option.icon;
                     const live = option.status === 'available';
                     const badgeClasses = live
-                        ? 'bg-[#b3cfe5] text-[#1a3d63]'
+                        ? 'inline-flex items-center gap-1.5 border border-[#86efac] bg-[#ecfdf3] text-[#166534]'
                         : 'animate-pulse border border-[#f6d58a] bg-[#fff8e8] text-[#b45309]';
                     return (
                         <button
@@ -509,7 +509,14 @@ function ConsultTab({
                                 <span
                                     className={`ml-auto shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${badgeClasses}`}
                                 >
-                                    {option.badge}
+                                    {live ? (
+                                        <>
+                                            <span className="portal-live-dot h-2 w-2" aria-hidden="true" />
+                                            {option.badge}
+                                        </>
+                                    ) : (
+                                        option.badge
+                                    )}
                                 </span>
                             </div>
                             <div className="mt-3 flex items-center justify-between">
