@@ -2,10 +2,14 @@ import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef
 import {
   ArrowLeft,
   ArrowRight,
+  CircleSlash2,
+  CookingPot,
   Dumbbell,
+  Flame,
   Leaf,
   LoaderCircle,
   MessageCircle,
+  Microwave,
   MilkOff,
   RefreshCcw,
   ShoppingCart,
@@ -13,6 +17,7 @@ import {
   Sparkles,
   Sprout,
   Weight,
+  Wind,
   WheatOff,
   type LucideIcon,
 } from 'lucide-react';
@@ -37,17 +42,57 @@ import ProfileAvatar from './ProfileAvatar';
 type DashboardTab = 'overview' | 'meal-plan' | 'grocery' | 'progress' | 'messages';
 type PrimaryMealType = 'breakfast' | 'lunch' | 'dinner';
 const PRIMARY_MEAL_TYPE_ORDER: PrimaryMealType[] = ['breakfast', 'lunch', 'dinner'];
-const EQUIPMENT_LABELS: Record<CookingEquipment, string> = {
-  stovetop: 'Stovetop',
-  oven: 'Oven',
-  'air fryer': 'Air fryer',
-  microwave: 'Microwave',
+const EQUIPMENT_META: Record<CookingEquipment, { label: string; icon: LucideIcon }> = {
+  stovetop: { label: 'Stovetop', icon: CookingPot },
+  oven: { label: 'Oven', icon: Flame },
+  'air fryer': { label: 'Air fryer', icon: Wind },
+  microwave: { label: 'Microwave', icon: Microwave },
 };
 
-function formatEquipmentList(recipe: Recipe) {
+const EQUIPMENT_LABELS: Record<CookingEquipment, string> = {
+  stovetop: EQUIPMENT_META.stovetop.label,
+  oven: EQUIPMENT_META.oven.label,
+  'air fryer': EQUIPMENT_META['air fryer'].label,
+  microwave: EQUIPMENT_META.microwave.label,
+};
+
+function RecipeEquipmentPills({ recipe, compact = false }: { recipe: Recipe; compact?: boolean }) {
   const requiredEquipment = getRecipeRequiredEquipment(recipe);
-  if (requiredEquipment.length === 0) return 'No specific equipment required';
-  return requiredEquipment.map((entry) => EQUIPMENT_LABELS[entry] || entry).join(', ');
+
+  if (requiredEquipment.length === 0) {
+    return (
+      <span
+        className={`inline-flex items-center gap-1 rounded-full border border-[#b3cfe5] bg-[#f6fafd] ${
+          compact ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-[11px]'
+        } font-semibold text-[#1a3d63]`}
+      >
+        <CircleSlash2 size={compact ? 11 : 12} />
+        No specific equipment
+      </span>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {requiredEquipment.map((equipment) => {
+        const meta = EQUIPMENT_META[equipment];
+        if (!meta) return null;
+        const Icon = meta.icon;
+        return (
+          <span
+            key={`${recipe.id}-equipment-${equipment}`}
+            className={`inline-flex items-center gap-1 rounded-full border border-[#b3cfe5] bg-[#f6fafd] ${
+              compact ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-[11px]'
+            } font-semibold text-[#0a1931]`}
+            title={meta.label}
+          >
+            <Icon size={compact ? 11 : 12} />
+            {meta.label}
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 function formatInstructionStep(value: string) {
@@ -399,7 +444,6 @@ function MealCard({
   const serves = readRecipeServes(recipe);
   const calories = resolveRecipeCalories(recipe);
   const protein = resolveRecipeProtein(recipe);
-  const equipmentLabel = formatEquipmentList(recipe);
   return (
     <article className="overflow-hidden rounded-2xl border border-[#b3cfe5] bg-white">
       <div className="relative">
@@ -419,7 +463,10 @@ function MealCard({
             {calories || '—'} cal • {protein || '—'}g protein • {buildRecipeTimeMeta(recipe)}
           </p>
           {serves ? <p className="mt-1 text-[11px] text-[#1a3d63]">Serves {serves}</p> : null}
-          <p className="mt-1 text-[11px] text-[#1a3d63]">Equipment: {equipmentLabel}</p>
+          <div className="mt-1 space-y-1">
+            <p className="text-[11px] text-[#1a3d63]">Equipment</p>
+            <RecipeEquipmentPills recipe={recipe} compact />
+          </div>
         </div>
         <div className="flex gap-2">
           <button
@@ -1294,7 +1341,10 @@ export default function WeightLossResetDashboard({
             {selectedRecipeServes ? (
               <p className="mt-1 text-sm text-[#1a3d63]">{buildServesExplanation(selectedRecipe)}</p>
             ) : null}
-            <p className="mt-1 text-sm text-[#1a3d63]">Required equipment: {formatEquipmentList(selectedRecipe)}</p>
+            <div className="mt-1 space-y-1">
+              <p className="text-sm text-[#1a3d63]">Required equipment</p>
+              <RecipeEquipmentPills recipe={selectedRecipe} />
+            </div>
 
             <section className="mt-4 grid gap-4 md:grid-cols-2">
               <div>
