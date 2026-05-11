@@ -3,7 +3,9 @@ import {
   ArrowLeft,
   ArrowRight,
   AudioLines,
+  CheckCircle2,
   CircleSlash2,
+  Clock3,
   CookingPot,
   Dumbbell,
   Flame,
@@ -19,6 +21,7 @@ import {
   ShoppingCart,
   Shuffle,
   Sprout,
+  Star,
   Weight,
   Wind,
   WheatOff,
@@ -73,7 +76,7 @@ function RecipeEquipmentPills({ recipe, compact = false }: { recipe: Recipe; com
   if (requiredEquipment.length === 0) {
     return (
       <span
-        className={`inline-flex items-center gap-1 rounded-full border border-[#b3cfe5] bg-[#f6fafd] ${
+        className={`inline-flex items-center gap-1 rounded-full bg-[#edf4fa] ${
           compact ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-[11px]'
         } font-semibold text-[#1a3d63]`}
       >
@@ -92,7 +95,7 @@ function RecipeEquipmentPills({ recipe, compact = false }: { recipe: Recipe; com
         return (
           <span
             key={`${recipe.id}-equipment-${equipment}`}
-            className={`inline-flex items-center gap-1 rounded-full border border-[#b3cfe5] bg-[#f6fafd] ${
+            className={`inline-flex items-center gap-1 rounded-full bg-[#edf4fa] ${
               compact ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-[11px]'
             } font-semibold text-[#0a1931]`}
             title={meta.label}
@@ -389,6 +392,14 @@ function buildPersonalizedSummary({
     preferredStyle && preferredStyle !== 'no preference'
       ? preferredStyle
       : 'keeping things simple and sustainable';
+  const normalizedGoal = String(answers.mainGoal || '').trim().toLowerCase();
+  const goalStatement = normalizedGoal
+    ? normalizedGoal.includes('muscle')
+      ? 'helping you build lean muscle while keeping meals realistic for your schedule'
+      : normalizedGoal.includes('loss') || normalizedGoal.includes('fat')
+        ? 'supporting steady fat loss while keeping meals realistic for your schedule'
+        : `supporting ${normalizedGoal} while keeping meals realistic for your schedule`
+    : 'supporting your goals while keeping meals realistic for your schedule';
 
   const highlights = [
     `${answers.preferredMealStyle || 'balanced'} meal style`,
@@ -401,9 +412,9 @@ function buildPersonalizedSummary({
   const personalNote = `Hi ${firstName}, I’ve aligned this plan with your intake form, preferences, and goals. I’ve included meals that should be realistic for your week, with a focus on ${styleCopy}. If anything feels hard to follow or you want changes, message me and I’ll help adjust it.`;
 
   return {
-    title: `${firstName}, your week is crafted around ${answers.mainGoal || 'your goals'}.`,
-    intro: `We prioritised ${dietaryLabel} meals with ${cuisineLabel} influences so every day feels aligned to you.`,
-    detail: `Your plan is built to reduce decision fatigue, keep grocery overlap practical, and support ${supportLabel}.`,
+    title: `Hi ${firstName} — we built this week around ${goalStatement}.`,
+    intro: `You are not starting from scratch. We prioritised ${dietaryLabel} meals with ${cuisineLabel} influences so this week feels calm, practical, and tailored to your body.`,
+    detail: `The structure is intentionally simple: repeatable choices, lighter decision load, and support for ${supportLabel}, so consistency feels easier day to day.`,
     personalNote,
     highlights,
   };
@@ -420,7 +431,7 @@ function RecipeBadgePills({ recipe, compact = false }: { recipe: Recipe; compact
           <span
             key={`${recipe.id}-${badge.key}`}
             title={badge.fullLabel}
-            className={`inline-flex items-center gap-1 rounded-full border border-[#b3cfe5] bg-[#f6fafd] ${
+            className={`inline-flex items-center gap-1 rounded-full bg-[#eaf2f8] ${
               compact ? 'px-2 py-0.5 text-[10px]' : 'px-2.5 py-1 text-[11px]'
             } font-semibold text-[#0a1931]`}
           >
@@ -515,26 +526,34 @@ function MealCard({
   const calories = resolveRecipeCalories(recipe);
   const protein = resolveRecipeProtein(recipe);
   return (
-    <article className="overflow-hidden rounded-2xl border border-[#b3cfe5] bg-white">
-      <div className="relative">
+    <article className="group overflow-hidden rounded-[26px] bg-white shadow-[0_18px_40px_-30px_rgba(10,25,49,0.42)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_30px_54px_-34px_rgba(10,25,49,0.48)]">
+      <div className="relative overflow-hidden">
         {imageUrl ? (
-          <img src={imageUrl} alt={recipe.title} className="h-40 w-full object-cover" loading="lazy" />
+          <img
+            src={imageUrl}
+            alt={recipe.title}
+            className="h-44 w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+            loading="lazy"
+          />
         ) : (
-          <div className="h-40 w-full bg-[#f6fafd]" />
+          <div className="h-44 w-full bg-[#edf4fa]" />
         )}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#0a1931]/24 to-transparent" />
         <div className="absolute left-2 top-2">
           <RecipeBadgePills recipe={recipe} compact />
         </div>
       </div>
-      <div className="space-y-2 p-3">
+      <div className="space-y-2.5 p-4">
         <div>
-          <h4 className="line-clamp-2 text-sm font-semibold text-[#0a1931]">{recipe.title}</h4>
-          <p className="mt-1 text-xs text-[#1a3d63]">
-            {calories || '—'} cal • {protein || '—'}g protein • {buildRecipeTimeMeta(recipe)}
-          </p>
-          {serves ? <p className="mt-1 text-[11px] text-[#1a3d63]">Serves {serves}</p> : null}
-          <div className="mt-1 space-y-1">
-            <p className="text-[11px] text-[#1a3d63]">Equipment</p>
+          <h4 className="line-clamp-2 text-base font-semibold leading-snug text-[#0a1931]">{recipe.title}</h4>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] font-medium text-[#1a3d63]">
+            <span className="rounded-full bg-[#f6fafd] px-2.5 py-1">{calories || '—'} kcal</span>
+            <span className="rounded-full bg-[#f6fafd] px-2.5 py-1">{protein || '—'}g protein</span>
+            <span className="rounded-full bg-[#f6fafd] px-2.5 py-1">{buildRecipeTimeMeta(recipe)}</span>
+            {serves ? <span className="rounded-full bg-[#f6fafd] px-2.5 py-1">Serves {serves}</span> : null}
+          </div>
+          <div className="mt-2 space-y-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#4a7fa7]">Equipment</p>
             <RecipeEquipmentPills recipe={recipe} compact />
           </div>
         </div>
@@ -542,14 +561,14 @@ function MealCard({
           <button
             type="button"
             onClick={onViewDetails}
-            className="inline-flex h-9 flex-1 items-center justify-center rounded-lg border border-[#b3cfe5] bg-white text-xs font-semibold text-[#1a3d63]"
+            className="inline-flex h-9 flex-1 items-center justify-center rounded-xl bg-[#edf4fa] text-xs font-semibold text-[#1a3d63] transition hover:bg-[#e4eff8]"
           >
             View details
           </button>
           <button
             type="button"
             onClick={onSwap}
-            className="inline-flex h-9 flex-1 items-center justify-center rounded-lg bg-[#1a3d63] text-xs font-semibold text-white hover:bg-[#0a1931]"
+            className="inline-flex h-9 flex-1 items-center justify-center rounded-xl bg-[#1a3d63] text-xs font-semibold text-white shadow-[0_10px_18px_-14px_rgba(10,25,49,0.8)] transition hover:bg-[#0a1931]"
           >
             Swap meal
           </button>
@@ -562,12 +581,12 @@ function MealCard({
 function ModalShell({ children, onClose }: { children: ReactNode; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#0a1931]/55 px-4 py-6">
-      <div className="max-h-[90vh] w-full max-w-[760px] overflow-auto rounded-2xl border border-[#b3cfe5] bg-white p-5 shadow-[0_30px_55px_-36px_rgba(15,23,42,0.6)]">
+      <div className="max-h-[90vh] w-full max-w-[760px] overflow-auto rounded-3xl bg-white p-5 shadow-[0_34px_58px_-34px_rgba(15,23,42,0.66)]">
         <div className="mb-4 flex justify-end">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-[#b3cfe5] px-3 py-1 text-xs font-semibold text-[#1a3d63]"
+            className="rounded-xl bg-[#edf4fa] px-3 py-1.5 text-xs font-semibold text-[#1a3d63]"
           >
             Close
           </button>
@@ -591,8 +610,10 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`border-b-2 px-1 py-2 text-sm font-semibold transition ${
-        active ? 'border-[#1a3d63] text-[#1a3d63]' : 'border-transparent text-[#1a3d63] hover:text-[#0a1931]'
+      className={`rounded-full px-3.5 py-2 text-sm font-semibold transition ${
+        active
+          ? 'bg-[#0a1931] text-white shadow-[0_14px_24px_-18px_rgba(10,25,49,0.9)]'
+          : 'text-[#1a3d63] hover:bg-white/70 hover:text-[#0a1931]'
       }`}
     >
       {label}
@@ -1349,23 +1370,35 @@ export default function WeightLossResetDashboard({
   };
 
   return (
-    <section className="space-y-5 font-sans">
-      <header className="rounded-3xl border border-[#b3cfe5] bg-white p-5 shadow-[0_24px_42px_-34px_rgba(15,23,42,0.24)] sm:p-6">
-        <div className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+    <section className="space-y-7 font-[Inter,sans-serif] text-[#0a1931]">
+      <header className="relative overflow-hidden rounded-[34px] bg-gradient-to-br from-white via-[#f6fafd] to-[#f2f8fc] p-5 shadow-[0_30px_56px_-40px_rgba(10,25,49,0.45)] sm:p-7">
+        <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-[#e9dcc9]/55 blur-2xl" />
+        <div className="pointer-events-none absolute left-10 top-20 h-16 w-16 rounded-full bg-white/70 blur-xl" />
+
+        <div className="relative grid gap-5 lg:grid-cols-[1.25fr_0.75fr]">
           <div>
-            <p className="text-sm font-medium text-[#1a3d63]">
-              {WEIGHT_LOSS_RESET_PROGRAM_NAME} • Week {weekNumber} • Focus: {focusLabel}
-            </p>
-            <h1 className="text-3xl font-semibold tracking-tight text-[#0a1931]">Welcome back, {displayFirstName || answers.firstName || 'there'}</h1>
-            <p className="mt-2 text-sm text-[#1a3d63]">
-              Small changes, consistent support. No perfect days required. {dietitianName} can adjust your plan any time.
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-medium text-[#1a3d63]">
+                {WEIGHT_LOSS_RESET_PROGRAM_NAME} • Week {weekNumber} • Focus: {focusLabel}
+              </p>
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#e9dcc9]/80 px-2.5 py-1 text-[11px] font-semibold text-[#0a1931]">
+                <CheckCircle2 size={12} />
+                Reviewed today
+              </span>
+            </div>
+
+            <h1 className="mt-3 max-w-[720px] text-[2.05rem] font-semibold leading-tight tracking-[-0.02em] text-[#0a1931] sm:text-[2.45rem]">
+              {personalizedSummary.title}
+            </h1>
+            <p className="mt-3 max-w-[720px] text-[1rem] leading-7 text-[#24496f] sm:text-[1.06rem]">
+              {personalizedSummary.intro}
             </p>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:max-w-[520px]">
+            <div className="mt-5 grid gap-2.5 sm:grid-cols-2 lg:max-w-[560px]">
               <button
                 type="button"
                 onClick={() => openTab('progress')}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-[#1a3d63] px-4 text-sm font-semibold text-white hover:bg-[#0a1931]"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-[#1a3d63] px-4 text-sm font-semibold text-white shadow-[0_16px_26px_-20px_rgba(10,25,49,0.9)] transition hover:bg-[#0a1931]"
               >
                 <Weight size={16} />
                 Log weight
@@ -1373,7 +1406,7 @@ export default function WeightLossResetDashboard({
               <button
                 type="button"
                 onClick={() => openTab('messages')}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#b3cfe5] bg-white px-4 text-sm font-semibold text-[#1a3d63]"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-white/90 px-4 text-sm font-semibold text-[#1a3d63] shadow-[0_14px_24px_-20px_rgba(10,25,49,0.35)] transition hover:bg-white"
               >
                 <MessageCircle size={16} />
                 Message {dietitianName}
@@ -1381,7 +1414,7 @@ export default function WeightLossResetDashboard({
               <button
                 type="button"
                 onClick={() => openTab('meal-plan')}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#b3cfe5] bg-white px-4 text-sm font-semibold text-[#1a3d63]"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-white/90 px-4 text-sm font-semibold text-[#1a3d63] shadow-[0_14px_24px_-20px_rgba(10,25,49,0.35)] transition hover:bg-white"
               >
                 <Shuffle size={16} />
                 Swap a meal
@@ -1389,7 +1422,7 @@ export default function WeightLossResetDashboard({
               <button
                 type="button"
                 onClick={() => openTab('grocery')}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-[#b3cfe5] bg-white px-4 text-sm font-semibold text-[#1a3d63]"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-white/90 px-4 text-sm font-semibold text-[#1a3d63] shadow-[0_14px_24px_-20px_rgba(10,25,49,0.35)] transition hover:bg-white"
               >
                 <ShoppingCart size={16} />
                 View grocery list
@@ -1398,42 +1431,43 @@ export default function WeightLossResetDashboard({
           </div>
 
           <div className="space-y-3">
-            <article className="rounded-2xl border border-[#b3cfe5] bg-white p-4">
-              <div className="flex items-start gap-3">
+            <article className="rounded-[28px] bg-white/95 p-4 shadow-[0_24px_42px_-30px_rgba(10,25,49,0.45)]">
+              <div className="flex items-start gap-4">
                 <ProfileAvatar
                   name={dietitianName}
                   imageUrl={dietitianImageUrl}
                   fallbackImageUrl={DEFAULT_DIETITIAN_PROFILE_IMAGE_URL}
                   alt={`${dietitianName} profile`}
-                  className="h-16 w-16 rounded-2xl border border-[#b3cfe5] object-cover"
+                  className="h-24 w-24 rounded-3xl object-cover shadow-[0_12px_22px_-16px_rgba(10,25,49,0.65)] sm:h-28 sm:w-28"
                 />
                 <div className="min-w-0">
-                  <p className="text-base font-semibold text-[#0a1931]">{dietitianName}</p>
-                  <p className="text-sm text-[#1a3d63]">{dietitianCredentials}</p>
-                  <p className="mt-1 text-sm text-[#1a3d63]">{dietitianBio}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-[#4a7fa7]">Your Dietitian</p>
+                  <p className="mt-1 text-[1.65rem] font-semibold leading-none text-[#0a1931]">{dietitianName}</p>
+                  <p className="mt-1 text-sm text-[#1a3d63]">{dietitianCredentials}</p>
+                  <p className="mt-2 text-sm leading-6 text-[#2e577f]">{dietitianBio}</p>
                 </div>
               </div>
             </article>
 
-            <article className="rounded-2xl border border-[#b3cfe5] bg-white p-3">
-              <div className="flex items-center justify-between text-sm text-[#1a3d63]">
+            <article className="rounded-3xl bg-white/90 px-4 py-3 shadow-[0_18px_34px_-26px_rgba(10,25,49,0.4)]">
+              <div className="flex items-center justify-between text-base font-medium text-[#1a3d63]">
                 <span>Current {currentWeight || '—'} kg</span>
                 <span>Goal {answers.goalWeightKg || '—'} kg</span>
               </div>
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#b3cfe5]">
-                <div className="h-full rounded-full bg-[#1a3d63]" style={{ width: `${progressPercent}%` }} />
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-[#d8e9f5]">
+                <div className="h-full rounded-full bg-[#1a3d63] transition-[width] duration-500" style={{ width: `${progressPercent}%` }} />
               </div>
-              <p className="mt-1 text-xs font-semibold text-[#1a3d63]">{progressPercent}% toward your goal</p>
+              <p className="mt-2 text-sm font-semibold text-[#1a3d63]">{progressPercent}% toward your goal</p>
             </article>
           </div>
         </div>
       </header>
 
-      <nav className="flex flex-wrap items-center gap-3 border-b border-[#b3cfe5]">
+      <nav className="flex flex-wrap items-center gap-2 rounded-2xl bg-[#eef5fb] p-2">
         <button
           type="button"
           onClick={onBackToHome}
-          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#b3cfe5] bg-white px-2.5 text-xs font-semibold text-[#1a3d63] hover:text-[#0a1931]"
+          className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-white px-3 text-xs font-semibold text-[#1a3d63] shadow-[0_12px_22px_-18px_rgba(10,25,49,0.45)] transition hover:text-[#0a1931]"
         >
           <ArrowLeft size={13} />
           Back
@@ -1448,12 +1482,12 @@ export default function WeightLossResetDashboard({
       {(activeTab === 'overview' || activeTab === 'meal-plan') && (
         <section ref={mealPlanSectionRef} className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-xl font-semibold text-[#0a1931]">Weekly meal plan</h2>
+            <h2 className="text-[1.75rem] font-semibold tracking-[-0.02em] text-[#0a1931]">Weekly meal plan</h2>
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={onUpdatePreferences}
-                className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#b3cfe5] bg-white px-3 text-xs font-semibold text-[#1a3d63]"
+                className="inline-flex h-10 items-center gap-2 rounded-xl bg-white px-3.5 text-xs font-semibold text-[#1a3d63] shadow-[0_14px_24px_-20px_rgba(10,25,49,0.42)]"
               >
                 Update intake preferences
               </button>
@@ -1461,7 +1495,7 @@ export default function WeightLossResetDashboard({
                 type="button"
                 onClick={onRegeneratePlan}
                 disabled={isGeneratingPlan}
-                className="inline-flex h-9 items-center gap-2 rounded-lg border border-[#b3cfe5] bg-white px-3 text-xs font-semibold text-[#1a3d63] disabled:cursor-not-allowed disabled:opacity-70"
+                className="inline-flex h-10 items-center gap-2 rounded-xl bg-white px-3.5 text-xs font-semibold text-[#1a3d63] shadow-[0_14px_24px_-20px_rgba(10,25,49,0.42)] disabled:cursor-not-allowed disabled:opacity-70"
               >
                 <RefreshCcw size={14} />
                 {isGeneratingPlan ? 'Refreshing plan...' : 'Refresh weekly plan'}
@@ -1470,7 +1504,7 @@ export default function WeightLossResetDashboard({
           </div>
 
           {!mealPlan && (
-            <article className="rounded-2xl border border-dashed border-[#b3cfe5] bg-[#f6fafd] p-5 text-sm text-[#1a3d63]">
+            <article className="rounded-3xl bg-white p-6 text-sm text-[#1a3d63] shadow-[0_24px_40px_-32px_rgba(10,25,49,0.5)]">
               Weekly meals are not generated yet.
               <button
                 type="button"
@@ -1485,7 +1519,7 @@ export default function WeightLossResetDashboard({
           )}
 
           {isGeneratingPlan ? (
-            <article className="rounded-3xl border border-[#b3cfe5] bg-gradient-to-br from-[#f6fafd] via-[#f6fafd] to-white p-4 sm:p-5">
+            <article className="rounded-3xl bg-[#f5f9fc] p-5 shadow-[0_24px_42px_-34px_rgba(10,25,49,0.42)]">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <p className="inline-flex items-center gap-2 text-sm font-semibold text-[#0a1931]">
@@ -1494,7 +1528,7 @@ export default function WeightLossResetDashboard({
                   </p>
                   <p className="mt-1 text-sm text-[#1a3d63]">{generationMessages[generationMessageIndex]}</p>
                 </div>
-                <p className="rounded-full border border-[#b3cfe5] bg-white px-3 py-1 text-xs font-semibold text-[#0a1931]">
+                <p className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#0a1931] shadow-[0_10px_20px_-16px_rgba(10,25,49,0.45)]">
                   {generationPercent}%
                 </p>
               </div>
@@ -1507,10 +1541,10 @@ export default function WeightLossResetDashboard({
                   return (
                     <p
                       key={stage.label}
-                      className={`rounded-xl border px-2.5 py-1.5 text-xs font-semibold ${
+                      className={`rounded-xl px-2.5 py-1.5 text-xs font-semibold ${
                         completed
-                          ? 'border-[#b3cfe5] bg-white text-[#0a1931]'
-                          : 'border-[#b3cfe5] bg-[#f6fafd] text-[#4a7fa7]'
+                          ? 'bg-white text-[#0a1931]'
+                          : 'bg-[#eaf2f9] text-[#4a7fa7]'
                       }`}
                     >
                       {stage.label}
@@ -1522,51 +1556,54 @@ export default function WeightLossResetDashboard({
           ) : null}
 
           {mealPlan ? (
-            <article className="rounded-2xl border border-[#b3cfe5] bg-white p-4 shadow-[0_20px_42px_-34px_rgba(15,23,42,0.38)] sm:p-5">
-              <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
+            <article className="rounded-[30px] bg-white p-5 shadow-[0_28px_52px_-38px_rgba(10,25,49,0.48)] sm:p-6">
+              <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-start">
                 <div>
-                  <h3 className="text-2xl font-semibold tracking-tight text-[#0a1931]">{personalizedSummary.title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-[#1a3d63]">{personalizedSummary.intro}</p>
-                  <p className="mt-1 text-sm leading-6 text-[#1a3d63]">{personalizedSummary.detail}</p>
+                  <h3 className="max-w-[760px] text-3xl font-semibold tracking-[-0.02em] text-[#0a1931]">{personalizedSummary.title}</h3>
+                  <p className="mt-3 max-w-[760px] text-[1.02rem] leading-7 text-[#24496f]">{personalizedSummary.intro}</p>
+                  <p className="mt-2 max-w-[760px] text-[0.98rem] leading-7 text-[#2f5d86]">{personalizedSummary.detail}</p>
                 </div>
 
-                <div className="inline-flex items-center gap-3 rounded-xl border border-[#b3cfe5] bg-white px-3 py-2">
+                <div className="inline-flex items-center gap-3 rounded-2xl bg-[#f4f9fd] px-3.5 py-3 shadow-[0_14px_26px_-20px_rgba(10,25,49,0.5)]">
                   <ProfileAvatar
                     name={dietitianName}
                     imageUrl={dietitianImageUrl}
                     fallbackImageUrl={DEFAULT_DIETITIAN_PROFILE_IMAGE_URL}
                     alt={`${dietitianName} profile`}
-                    className="h-14 w-14 rounded-xl border border-[#b3cfe5] object-cover"
+                    className="h-16 w-16 rounded-2xl object-cover"
                   />
                   <div>
-                    <p className="text-xl leading-none text-[#0a1931]">{dietitianName}</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-[#4a7fa7]">Your Dietitian</p>
+                    <p className="text-xl font-semibold leading-none text-[#0a1931]">{dietitianName}</p>
                     <p className="mt-1 text-sm text-[#1a3d63]">{dietitianCredentials}</p>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-3 rounded-xl border border-[#b3cfe5] bg-white p-3.5">
-                <p className="inline-flex items-center gap-2 rounded-full border border-[#b3cfe5] bg-[#f6fafd] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#1a3d63]">
+              <div className="mt-5 rounded-3xl bg-[#f8f1e7] p-4 shadow-[inset_0_0_0_1px_rgba(180,151,112,0.15)] sm:p-5">
+                <p className="inline-flex items-center gap-2 rounded-full bg-white/75 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-[#7b5a33]">
+                  <Star size={12} />
                   Comment from Felicity
                 </p>
-                <p className="mt-2 border-l-2 border-[#b3cfe5] pl-3 text-sm leading-6 text-[#1a3d63] italic">{personalizedSummary.personalNote}</p>
+                <p className="mt-3 border-l-2 border-[#cba978] pl-4 text-[1rem] leading-7 text-[#533f29] italic">{personalizedSummary.personalNote}</p>
+                <p className="mt-2 pl-4 text-sm font-medium text-[#7b5a33]">Felicity</p>
               </div>
 
-              <div className="mt-3 flex flex-wrap gap-2">
+              <div className="mt-4 flex flex-wrap gap-2">
                 {personalizedSummary.highlights.slice(0, 3).map((highlight) => (
-                  <p key={highlight} className="rounded-full border border-[#b3cfe5] bg-white px-3 py-1.5 text-xs font-medium text-[#1a3d63]">
+                  <p key={highlight} className="rounded-full bg-[#edf4fa] px-3 py-1.5 text-xs font-semibold text-[#1a3d63]">
                     {highlight}
                   </p>
                 ))}
               </div>
 
-              <div className="mt-4 rounded-xl border border-[#b3cfe5] bg-white p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="inline-flex items-center gap-2 text-sm font-semibold text-[#0a1931]">
-                    <AudioLines size={14} />
+              <div className="mt-5 rounded-[28px] bg-gradient-to-br from-[#102a47] via-[#163356] to-[#1a3d63] p-4 text-white shadow-[0_24px_48px_-34px_rgba(10,25,49,0.9)] sm:p-5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="inline-flex items-center gap-2 text-sm font-semibold text-[#e3eef8]">
+                    <AudioLines size={15} />
                     Personal science podcast tailored to your body
                   </p>
-                  <p className="text-xs font-semibold text-[#1a3d63]">
+                  <p className="text-xs font-semibold text-[#c7dcf0]">
                     {isGeneratingPodcast
                       ? 'Generating...'
                       : `${formatDurationClock(podcastCurrentTimeSec)} / ${formatDurationClock(
@@ -1575,12 +1612,16 @@ export default function WeightLossResetDashboard({
                   </p>
                 </div>
 
-                <div className="mt-2 flex items-center gap-3 rounded-lg border border-[#b3cfe5] bg-white p-2.5">
+                <p className="mt-1 text-sm leading-6 text-[#c7dcf0]">
+                  A weekly evidence-led audio briefing built once per week and tailored to your current nutrition plan, routines, and goals.
+                </p>
+
+                <div className="mt-3 flex items-center gap-3 rounded-2xl bg-white/10 p-3">
                   <button
                     type="button"
                     onClick={() => void togglePodcastPlayback()}
                     disabled={!podcastAudioUrl || isGeneratingPodcast}
-                    className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#1a3d63] text-white disabled:cursor-not-allowed disabled:opacity-55"
+                    className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white text-[#0a1931] shadow-[0_12px_24px_-16px_rgba(255,255,255,0.4)] disabled:cursor-not-allowed disabled:opacity-55"
                     aria-label={isPodcastPlaying ? 'Pause weekly podcast brief' : 'Play weekly podcast brief'}
                   >
                     {isGeneratingPodcast ? (
@@ -1604,18 +1645,18 @@ export default function WeightLossResetDashboard({
                       )}
                       onChange={(event) => onPodcastSeek(Number(event.target.value))}
                       disabled={!podcastAudioUrl}
-                      className="h-1.5 w-full accent-[#1a3d63]"
+                      className="h-1.5 w-full accent-[#cddff1]"
                       aria-label="Weekly podcast playback position"
                     />
                     <div
-                      className="mt-2 grid h-9 items-end gap-1 rounded-md border border-[#b3cfe5] bg-white px-2"
+                      className="mt-3 grid h-10 items-end gap-1 rounded-xl bg-white/8 px-2.5"
                       style={{ gridTemplateColumns: `repeat(${podcastBars.length}, minmax(0, 1fr))` }}
                       aria-hidden="true"
                     >
                       {podcastBars.map((barLevel, index) => (
                         <span
                           key={`podcast-visualizer-${index}`}
-                          className="rounded-sm bg-[#1a3d63] transition-[height] duration-75 ease-linear"
+                          className="rounded-sm bg-[#c4dbef] transition-[height] duration-75 ease-linear"
                           style={{ height: `${Math.round(5 + barLevel * 24)}px` }}
                         />
                       ))}
@@ -1641,7 +1682,7 @@ export default function WeightLossResetDashboard({
                 />
 
                 {podcastError ? (
-                  <p className="mt-2 rounded-lg border border-[#f3c5c4] bg-[#ffe9e8] px-2.5 py-2 text-xs text-[#a93736]">
+                  <p className="mt-3 rounded-xl bg-[#ffe9e8] px-3 py-2 text-xs text-[#a93736]">
                     {podcastError}
                   </p>
                 ) : null}
@@ -1650,29 +1691,37 @@ export default function WeightLossResetDashboard({
           ) : null}
 
           {mealPlan?.prepDayPlan ? (
-            <article className="rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] p-4">
+            <article className="rounded-[30px] bg-white p-5 shadow-[0_24px_44px_-34px_rgba(10,25,49,0.45)]">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-base font-semibold text-[#0a1931]">{mealPlan.prepDayPlan.title}</h3>
-                <p className="rounded-full border border-[#b3cfe5] bg-white px-3 py-1 text-xs font-semibold text-[#1a3d63]">
+                <h3 className="text-lg font-semibold text-[#0a1931]">{mealPlan.prepDayPlan.title}</h3>
+                <p className="inline-flex items-center gap-1 rounded-full bg-[#e9dcc9]/75 px-3 py-1 text-xs font-semibold text-[#0a1931]">
+                  <Clock3 size={12} />
                   {mealPlan.prepDayPlan.prepDay || answers.prepDay || 'Sunday'} • ~{formatMinutesLabel(mealPlan.prepDayPlan.totalPrepMinutes)}
                 </p>
               </div>
 
               {mealPlan.prepDayPlan.sharedIngredients.length > 0 ? (
-                <div className="mt-3 rounded-xl border border-[#b3cfe5] bg-white p-3">
-                  <p className="text-xs font-semibold text-[#1a3d63]">Shared ingredients</p>
-                  <p className="mt-1 text-sm text-[#1a3d63]">
-                    {mealPlan.prepDayPlan.sharedIngredients.slice(0, 14).join(', ')}
-                  </p>
+                <div className="mt-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.09em] text-[#4a7fa7]">Shared ingredients</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {mealPlan.prepDayPlan.sharedIngredients.slice(0, 18).map((ingredient) => (
+                      <span key={ingredient} className="rounded-full bg-[#edf4fa] px-3 py-1.5 text-xs font-semibold text-[#1a3d63]">
+                        {ingredient}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               ) : null}
 
-              <div className="mt-3 rounded-xl border border-[#b3cfe5] bg-white p-3">
-                <p className="text-xs font-semibold text-[#1a3d63]">Step by step</p>
-                <ol className="mt-2 space-y-1 text-sm text-[#1a3d63]">
+              <div className="mt-4 rounded-2xl bg-[#f5f9fc] p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.09em] text-[#4a7fa7]">Prep timeline</p>
+                <ol className="mt-3 space-y-2.5 text-sm text-[#1a3d63]">
                   {mealPlan.prepDayPlan.steps.map((step, index) => (
-                    <li key={`prep-step-${index}`}>
-                      {index + 1}. {step}
+                    <li key={`prep-step-${index}`} className="flex gap-3">
+                      <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-xs font-semibold text-[#1a3d63]">
+                        {index + 1}
+                      </span>
+                      <span className="leading-6">{step}</span>
                     </li>
                   ))}
                 </ol>
@@ -1681,21 +1730,21 @@ export default function WeightLossResetDashboard({
           ) : null}
 
           {mealPlan?.days.map((day) => (
-            <article key={day.dayIndex} className="rounded-2xl border border-[#b3cfe5] bg-white p-4">
+            <article key={day.dayIndex} className="rounded-[30px] bg-white p-5 shadow-[0_24px_44px_-36px_rgba(10,25,49,0.44)]">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-lg font-semibold text-[#0a1931]">{day.label}</h3>
-                <p className="text-xs text-[#1a3d63]">
+                <h3 className="text-xl font-semibold text-[#0a1931]">{day.label}</h3>
+                <p className="rounded-full bg-[#edf4fa] px-3 py-1 text-xs font-semibold text-[#1a3d63]">
                   {day.totals?.calories || '—'} cal • {day.totals?.protein || '—'}g protein
                 </p>
               </div>
 
-              <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 {visibleCoreMealTypes.map((mealType) => {
                   const recipeId = day.meals[mealType];
                   const recipe = recipeId ? recipeMap.get(recipeId) : null;
                   if (!recipe) {
                     return (
-                      <div key={mealType} className="rounded-2xl border border-dashed border-[#b3cfe5] bg-[#f6fafd] p-4 text-xs text-[#1a3d63]">
+                      <div key={mealType} className="rounded-2xl bg-[#f5f9fc] p-4 text-xs text-[#1a3d63]">
                         {mealType}
                         <p className="mt-1">No recipe available for this slot.</p>
                       </div>
@@ -1739,15 +1788,15 @@ export default function WeightLossResetDashboard({
       )}
 
       {activeTab === 'grocery' && (
-        <section ref={grocerySectionRef} className="space-y-4 rounded-2xl border border-[#b3cfe5] bg-white p-4 sm:p-5">
+        <section ref={grocerySectionRef} className="space-y-4 rounded-[30px] bg-white p-5 shadow-[0_24px_46px_-36px_rgba(10,25,49,0.44)] sm:p-6">
           <h2 className="text-xl font-semibold text-[#0a1931]">Weekly grocery list</h2>
           {groceryGroups.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-[#b3cfe5] bg-[#f6fafd] px-3 py-2 text-sm text-[#1a3d63]">
+            <p className="rounded-2xl bg-[#f5f9fc] px-3 py-2 text-sm text-[#1a3d63]">
               Grocery ingredients will appear after your weekly meal plan is generated.
             </p>
           ) : (
             <div className="space-y-4">
-              <article className="rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] p-3">
+              <article className="rounded-2xl bg-[#f5f9fc] p-3.5">
                 <h3 className="text-sm font-semibold text-[#0a1931]">How quantities are calculated</h3>
                 <p className="mt-1 text-xs text-[#1a3d63]">
                   Weekly quantities are estimated by recipe usage count and serving size. Example: if a recipe serves 4 and is used in 2 meals,
@@ -1756,14 +1805,14 @@ export default function WeightLossResetDashboard({
               </article>
 
               {groceryRecipeSummaries.length > 0 && (
-                <article className="rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] p-3">
+                <article className="rounded-2xl bg-[#f5f9fc] p-3.5">
                   <h3 className="text-sm font-semibold text-[#0a1931]">Meals included in this week</h3>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {groceryRecipeSummaries.map((entry) => {
                       return (
                         <div
                           key={`grocery-recipe-${entry.key}`}
-                          className="inline-flex max-w-[280px] items-center gap-2 rounded-full border border-[#b3cfe5] bg-white px-2 py-1"
+                          className="inline-flex max-w-[280px] items-center gap-2 rounded-full bg-white px-2 py-1 shadow-[0_10px_20px_-16px_rgba(10,25,49,0.4)]"
                           title={entry.title}
                         >
                           <img
@@ -1774,7 +1823,7 @@ export default function WeightLossResetDashboard({
                           />
                           <span className="truncate text-xs text-[#1a3d63]">{entry.title}</span>
                           {entry.count > 1 ? (
-                            <span className="rounded-full bg-[#f6fafd] px-1.5 py-0.5 text-[10px] font-semibold text-[#1a3d63]">
+                            <span className="rounded-full bg-[#edf4fa] px-1.5 py-0.5 text-[10px] font-semibold text-[#1a3d63]">
                               x{entry.count}
                             </span>
                           ) : null}
@@ -1785,11 +1834,11 @@ export default function WeightLossResetDashboard({
                 </article>
               )}
 
-              <article className="rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] p-3">
+              <article className="rounded-2xl bg-[#f5f9fc] p-3.5">
                 <h3 className="text-sm font-semibold text-[#0a1931]">Total ingredients across all selected meals</h3>
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   {groceryGroups.map((group) => (
-                    <article key={`grocery-total-${group.category}`} className="rounded-xl border border-[#b3cfe5] bg-white p-3">
+                    <article key={`grocery-total-${group.category}`} className="rounded-xl bg-white p-3 shadow-[0_12px_24px_-18px_rgba(10,25,49,0.38)]">
                       <h4 className="text-xs font-semibold text-[#1a3d63]">{group.category}</h4>
                       <ul className="mt-2 space-y-2">
                         {group.items.map((item) => {
@@ -1824,11 +1873,11 @@ export default function WeightLossResetDashboard({
 
       {activeTab === 'progress' && (
         <section ref={progressSectionRef} className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-          <article className="rounded-2xl border border-[#b3cfe5] bg-white p-4 sm:p-5">
+          <article className="rounded-[30px] bg-white p-5 shadow-[0_24px_46px_-36px_rgba(10,25,49,0.44)] sm:p-6">
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-xl font-semibold text-[#0a1931]">Log weight</h2>
               {editingWeightLogId ? (
-                <p className="rounded-full border border-[#b3cfe5] bg-[#f6fafd] px-2.5 py-1 text-[11px] font-semibold text-[#1a3d63]">
+                <p className="rounded-full bg-[#edf4fa] px-2.5 py-1 text-[11px] font-semibold text-[#1a3d63]">
                   Editing entry
                 </p>
               ) : null}
@@ -1840,7 +1889,7 @@ export default function WeightLossResetDashboard({
                   type="date"
                   value={weightDate}
                   onChange={(event) => setWeightDate(event.target.value)}
-                  className="h-10 w-full rounded-xl border border-[#b3cfe5] px-3 text-sm outline-none focus:border-[#1a3d63]"
+                  className="h-10 w-full rounded-xl bg-[#f5f9fc] px-3 text-sm outline-none ring-1 ring-[#d5e4f1] focus:ring-[#1a3d63]"
                 />
               </label>
               <label className="block space-y-1">
@@ -1849,7 +1898,7 @@ export default function WeightLossResetDashboard({
                   type="number"
                   value={weightValue}
                   onChange={(event) => setWeightValue(event.target.value)}
-                  className="h-10 w-full rounded-xl border border-[#b3cfe5] px-3 text-sm outline-none focus:border-[#1a3d63]"
+                  className="h-10 w-full rounded-xl bg-[#f5f9fc] px-3 text-sm outline-none ring-1 ring-[#d5e4f1] focus:ring-[#1a3d63]"
                   placeholder="e.g. 78.4"
                   min={30}
                   max={350}
@@ -1861,7 +1910,7 @@ export default function WeightLossResetDashboard({
                 <textarea
                   value={weightNote}
                   onChange={(event) => setWeightNote(event.target.value)}
-                  className="min-h-20 w-full rounded-xl border border-[#b3cfe5] px-3 py-2 text-sm outline-none focus:border-[#1a3d63]"
+                  className="min-h-20 w-full rounded-xl bg-[#f5f9fc] px-3 py-2 text-sm outline-none ring-1 ring-[#d5e4f1] focus:ring-[#1a3d63]"
                 />
               </label>
               <div className="flex flex-wrap items-center gap-2">
@@ -1872,7 +1921,7 @@ export default function WeightLossResetDashboard({
                   <button
                     type="button"
                     onClick={resetWeightForm}
-                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-[#b3cfe5] bg-white px-4 text-sm font-semibold text-[#1a3d63]"
+                    className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#edf4fa] px-4 text-sm font-semibold text-[#1a3d63]"
                   >
                     <X size={14} />
                     Cancel
@@ -1882,7 +1931,7 @@ export default function WeightLossResetDashboard({
             </form>
           </article>
 
-          <article className="rounded-2xl border border-[#b3cfe5] bg-white p-4 sm:p-5">
+          <article className="rounded-[30px] bg-white p-5 shadow-[0_24px_46px_-36px_rgba(10,25,49,0.44)] sm:p-6">
             <div className="flex items-center justify-between gap-2">
               <div>
                 <h2 className="text-xl font-semibold text-[#0a1931]">Progress to goal</h2>
@@ -1890,22 +1939,22 @@ export default function WeightLossResetDashboard({
                   Current {currentWeight || '—'} kg • Goal {answers.goalWeightKg || '—'} kg
                 </p>
               </div>
-              <div className="rounded-full border border-[#b3cfe5] bg-[#f6fafd] px-3 py-1 text-sm font-semibold text-[#1a3d63]">{progressPercent}%</div>
+              <div className="rounded-full bg-[#edf4fa] px-3 py-1 text-sm font-semibold text-[#1a3d63]">{progressPercent}%</div>
             </div>
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#b3cfe5]">
               <div className="h-full rounded-full bg-[#1a3d63]" style={{ width: `${progressPercent}%` }} />
             </div>
             <ul className="mt-4 space-y-2">
               {weightLogs.length === 0 ? (
-                <li className="rounded-xl border border-dashed border-[#b3cfe5] bg-[#f6fafd] px-3 py-2 text-sm text-[#1a3d63]">
+                <li className="rounded-xl bg-[#f5f9fc] px-3 py-2 text-sm text-[#1a3d63]">
                   No entries yet. Add your first weight log above.
                 </li>
               ) : (
                 weightLogs.slice(0, 12).map((entry) => (
                   <li
                     key={entry.id}
-                    className={`rounded-xl border px-3 py-2 ${
-                      editingWeightLogId === entry.id ? 'border-[#1a3d63] bg-white' : 'border-[#b3cfe5] bg-[#f6fafd]'
+                    className={`rounded-xl px-3 py-2 shadow-[inset_0_0_0_1px_rgba(179,207,229,0.5)] ${
+                      editingWeightLogId === entry.id ? 'bg-white' : 'bg-[#f5f9fc]'
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -1915,7 +1964,7 @@ export default function WeightLossResetDashboard({
                         <button
                           type="button"
                           onClick={() => startEditingWeightLog(entry)}
-                          className="inline-flex h-7 items-center gap-1 rounded-lg border border-[#b3cfe5] bg-white px-2 text-[11px] font-semibold text-[#1a3d63]"
+                          className="inline-flex h-7 items-center gap-1 rounded-lg bg-white px-2 text-[11px] font-semibold text-[#1a3d63] shadow-[0_12px_20px_-16px_rgba(10,25,49,0.46)]"
                           aria-label={`Edit weight entry for ${new Date(entry.date).toLocaleDateString('en-AU')}`}
                         >
                           <PencilLine size={12} />
@@ -1933,13 +1982,13 @@ export default function WeightLossResetDashboard({
       )}
 
       {activeTab === 'messages' && (
-        <section ref={messagesSectionRef} className="rounded-2xl border border-[#b3cfe5] bg-white p-4 sm:p-5">
+        <section ref={messagesSectionRef} className="rounded-[30px] bg-white p-5 shadow-[0_24px_46px_-36px_rgba(10,25,49,0.44)] sm:p-6">
           <h2 className="text-xl font-semibold text-[#0a1931]">Message {dietitianName}</h2>
           <p className="mt-1 text-sm text-[#1a3d63]">
             Send {dietitianName} a note about what you&apos;d like adjusted. In this demo, messages are saved locally until live dietitian messaging is
             connected.
           </p>
-          <div className="mt-4 space-y-2 rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] p-3">
+          <div className="mt-4 space-y-2 rounded-2xl bg-[#f5f9fc] p-3.5">
             {sortedMessages.length === 0 ? (
               <p className="text-sm text-[#1a3d63]">Ask for meal adjustments, motivation support, grocery planning, or progress check-ins.</p>
             ) : (
@@ -1947,11 +1996,13 @@ export default function WeightLossResetDashboard({
                 <article
                   key={message.id}
                   className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${
-                    message.role === 'user' ? 'ml-auto bg-[#1a3d63] text-white' : 'bg-white text-[#1a3d63] border border-[#b3cfe5]'
+                    message.role === 'user'
+                      ? 'ml-auto bg-[#1a3d63] text-white shadow-[0_16px_24px_-18px_rgba(10,25,49,0.9)]'
+                      : 'bg-white text-[#1a3d63] shadow-[0_12px_22px_-18px_rgba(10,25,49,0.36)]'
                   }`}
                 >
                   <p>{message.text}</p>
-                  <p className={`mt-1 text-[11px] ${message.role === 'user' ? 'text-sunlight-100' : 'text-[#1a3d63]'}`}>
+                  <p className={`mt-1 text-[11px] ${message.role === 'user' ? 'text-white/70' : 'text-[#1a3d63]'}`}>
                     {new Date(message.createdAt).toLocaleString('en-AU')}
                   </p>
                 </article>
@@ -1963,7 +2014,7 @@ export default function WeightLossResetDashboard({
               value={messageInput}
               onChange={(event) => setMessageInput(event.target.value)}
               placeholder={`Type your note for ${dietitianName}`}
-              className="h-10 flex-1 rounded-xl border border-[#b3cfe5] px-3 text-sm outline-none focus:border-[#1a3d63]"
+              className="h-10 flex-1 rounded-xl bg-[#f5f9fc] px-3 text-sm outline-none ring-1 ring-[#d5e4f1] focus:ring-[#1a3d63]"
             />
             <button type="submit" className="inline-flex h-10 items-center gap-2 rounded-xl bg-[#1a3d63] px-4 text-sm font-semibold text-white">
               Send
@@ -2006,7 +2057,7 @@ export default function WeightLossResetDashboard({
                       setSelectedRecipe(null);
                       openTab('grocery');
                     }}
-                    className="rounded-lg border border-[#b3cfe5] bg-white px-2 py-1 text-xs font-semibold text-[#1a3d63]"
+                    className="rounded-lg bg-[#edf4fa] px-2.5 py-1 text-xs font-semibold text-[#1a3d63]"
                   >
                     View on grocery list
                   </button>
@@ -2063,23 +2114,23 @@ export default function WeightLossResetDashboard({
               Alternatives are matched to your dietary preferences and allergy settings where possible.
             </p>
             {swapCandidates.length === 0 ? (
-              <p className="mt-4 rounded-xl border border-dashed border-[#b3cfe5] bg-[#f6fafd] px-3 py-2 text-sm text-[#1a3d63]">
+              <p className="mt-4 rounded-xl bg-[#f5f9fc] px-3 py-2 text-sm text-[#1a3d63]">
                 No suitable swaps were found for this meal right now.
               </p>
             ) : (
               <div className="mt-4 grid gap-3 md:grid-cols-2">
                 {swapCandidates.map((recipe) => (
-                  <article key={recipe.id} className="rounded-xl border border-[#b3cfe5] bg-[#f6fafd] p-3">
+                  <article key={recipe.id} className="rounded-2xl bg-[#f5f9fc] p-3">
                     <div className="flex items-start gap-3">
                       {resolveRecipeImageUrl(recipe) ? (
                         <img
                           src={resolveRecipeImageUrl(recipe)}
                           alt={recipe.title}
-                          className="h-14 w-14 shrink-0 rounded-lg border border-[#b3cfe5] object-cover"
+                          className="h-14 w-14 shrink-0 rounded-xl object-cover"
                           loading="lazy"
                         />
                       ) : (
-                        <div className="h-14 w-14 shrink-0 rounded-lg border border-[#b3cfe5] bg-[#f6fafd]" />
+                        <div className="h-14 w-14 shrink-0 rounded-xl bg-[#eaf2f9]" />
                       )}
                       <div className="min-w-0">
                         <p className="line-clamp-2 text-sm font-semibold text-[#0a1931]">{recipe.title}</p>
@@ -2107,7 +2158,7 @@ export default function WeightLossResetDashboard({
         </ModalShell>
       )}
 
-      <footer className="rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] px-4 py-3 text-xs text-[#1a3d63]">
+      <footer className="rounded-3xl bg-[#edf4fa] px-4 py-3 text-xs text-[#1a3d63]">
         This is general nutrition support, not medical advice. For urgent or complex conditions, seek care from an appropriate healthcare
         professional.
       </footer>
