@@ -1,7 +1,8 @@
-import { type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, type FormEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
+  AudioLines,
   CircleSlash2,
   CookingPot,
   Dumbbell,
@@ -11,6 +12,9 @@ import {
   MessageCircle,
   Microwave,
   MilkOff,
+  Pause,
+  Play,
+  Radio,
   RefreshCcw,
   ShoppingCart,
   Shuffle,
@@ -26,6 +30,7 @@ import {
   getHealthFocusDisplayLabel,
   WEIGHT_LOSS_RESET_PROGRAM_NAME,
 } from '../constants';
+import { fetchApiJson } from '../../lib/api';
 import { buildGroceryListFromMealPlan, calculateGoalProgress, getCurrentWeight, getRecipeRequiredEquipment, getSwapCandidates } from '../mealPlanning';
 import type {
   AssignedDietitianProfile,
@@ -223,6 +228,21 @@ type PersonalizedSummary = {
   personalNote: string;
   highlights: string[];
 };
+
+type PodcastVoiceProfile = 'happy_female' | 'authoritative_male';
+
+type PodcastGenerationPayload = {
+  weekKey: string;
+  transcript: string;
+  voiceProfile: PodcastVoiceProfile;
+  voice: string;
+  generatedAt: string;
+  estimatedDurationSec: number;
+  audioMimeType: string;
+  disclosure: string;
+};
+
+const PODCAST_DISCLOSURE_COPY = 'This voice is AI-generated and not a human recording.';
 
 function normalizeToken(value: string) {
   return String(value || '')
@@ -537,6 +557,120 @@ function toDisplayList(items: string[]) {
   return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
 }
 
+function getWeekStartIsoKey(date = new Date()) {
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0);
+  const day = (normalized.getDay() + 6) % 7;
+  normalized.setDate(normalized.getDate() - day);
+  const year = normalized.getFullYear();
+  const month = String(normalized.getMonth() + 1).padStart(2, '0');
+  const dayOfMonth = String(normalized.getDate()).padStart(2, '0');
+  return `${year}-${month}-${dayOfMonth}`;
+}
+
+function formatDurationClock(totalSeconds: number) {
+  const safe = Math.max(0, Math.floor(Number(totalSeconds || 0)));
+  const minutes = Math.floor(safe / 60);
+  const seconds = safe % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function collectPlannedRecipeTitles(mealPlan: MealPlan | null, recipeMap: Map<string, Recipe>) {
+  if (!mealPlan || !Array.isArray(mealPlan.days)) return [] as string[];
+  const seen = new Set<string>();
+  const titles: string[] = [];
+
+  for (const day of mealPlan.days) {
+    const ids = [day.meals.breakfast, day.meals.lunch, day.meals.dinner, ...(day.meals.snacks || [])];
+    for (const recipeId of ids) {
+      if (!recipeId) continue;
+      const recipe = recipeMap.get(recipeId);
+      const title = String(recipe?.title || '').trim();
+      if (!title) continue;
+      const key = title.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      titles.push(title);
+      if (titles.length >= 4) return titles;
+    }
+  }
+
+  return titles;
+}
+
+function buildWeeklyPodcastScript({
+  firstName,
+  dietitianName,
+  focusLabel,
+  progressPercent,
+  currentWeight,
+  goalWeight,
+  personalizedSummary,
+  mealPlan,
+  recipeMap,
+}: {
+  firstName: string;
+  dietitianName: string;
+  focusLabel: string;
+  progressPercent: number;
+  currentWeight?: number;
+  goalWeight?: number;
+  personalizedSummary: PersonalizedSummary;
+  mealPlan: MealPlan | null;
+  recipeMap: Map<string, Recipe>;
+}) {
+  const safeFirstName = String(firstName || 'there').trim() || 'there';
+  const safeDietitianName = String(dietitianName || 'your dietitian').trim() || 'your dietitian';
+  const focus = String(focusLabel || 'overall nutrition').trim() || 'overall nutrition';
+  const goalWeightCopy =
+    Number.isFinite(Number(goalWeight)) && Number.isFinite(Number(currentWeight))
+      ? `You're currently ${currentWeight} kilograms and building toward ${goalWeight} kilograms.`
+      : 'You are building momentum with small habits that compound over time.';
+  const recipes = collectPlannedRecipeTitles(mealPlan, recipeMap);
+  const mealExampleCopy =
+    recipes.length >= 2
+      ? `This week includes ${recipes.slice(0, 2).join(' and ')}, chosen to keep your meals practical and satisfying.`
+      : 'This week\'s meals were selected to keep prep simple while still supporting your nutrition targets.';
+  const highlights = personalizedSummary.highlights.slice(0, 2);
+  const highlightCopy = highlights.length > 0 ? `Key priorities this week: ${highlights.join(', ')}.` : '';
+  const introLine = `Hi ${safeFirstName}, it's ${safeDietitianName} with your weekly nutrition podcast check-in.`;
+  const bodyEducationLine =
+    `Your body responds best to consistency: steady protein protects lean muscle, fiber supports gut and blood sugar balance, and regular meals help energy and appetite stay stable.`;
+  const progressLine =
+    progressPercent > 0
+      ? `You are now ${progressPercent}% of the way to your goal, and that progress is meaningful.`
+      : 'Progress starts with consistent execution, and this plan is designed to make that easier for you.';
+  const closeLine =
+    `Keep this week realistic, not perfect. If your routine changes, message me and we'll adjust the plan quickly.`;
+  const detailsLine = personalizedSummary.detail ? personalizedSummary.detail : '';
+
+  return [
+    introLine,
+    `Your focus this week is ${focus}.`,
+    goalWeightCopy,
+    mealExampleCopy,
+    bodyEducationLine,
+    progressLine,
+    highlightCopy,
+    detailsLine,
+    closeLine,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function decodeBase64AudioToObjectUrl(base64Audio: string, mimeType: string) {
+  const binary = window.atob(base64Audio);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  const blob = new Blob([bytes], { type: mimeType || 'audio/mpeg' });
+  return URL.createObjectURL(blob);
+}
+
 function buildGenerationMessages(answers: OnboardingAnswers) {
   const normalizedDietary = (answers.dietaryRequirements || [])
     .map((item) => String(item || '').trim().toLowerCase())
@@ -620,6 +754,14 @@ export default function WeightLossResetDashboard({
   const [weightNote, setWeightNote] = useState('');
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationMessageIndex, setGenerationMessageIndex] = useState(0);
+  const [podcastVoiceProfile, setPodcastVoiceProfile] = useState<PodcastVoiceProfile>('happy_female');
+  const [podcastPayload, setPodcastPayload] = useState<PodcastGenerationPayload | null>(null);
+  const [podcastAudioUrl, setPodcastAudioUrl] = useState('');
+  const [podcastError, setPodcastError] = useState('');
+  const [isGeneratingPodcast, setIsGeneratingPodcast] = useState(false);
+  const [isPodcastPlaying, setIsPodcastPlaying] = useState(false);
+  const [podcastCurrentTimeSec, setPodcastCurrentTimeSec] = useState(0);
+  const [podcastDurationSec, setPodcastDurationSec] = useState(0);
   const dietitianName = String(dietitian?.fullName || '').trim() || 'Your dietitian';
   const dietitianImageUrl = String(dietitian?.profilePhotoUrl || '').trim() || DEFAULT_DIETITIAN_PROFILE_IMAGE_URL;
   const dietitianCredentials = String(dietitian?.credentials || '').trim() || 'Accredited Dietitian';
@@ -692,6 +834,35 @@ export default function WeightLossResetDashboard({
     if (!Number.isFinite(referenceMs)) return 1;
     return Math.max(1, Math.floor((referenceMs - generatedAtMs) / (7 * 24 * 60 * 60 * 1000)) + 1);
   })();
+  const currentWeekKey = getWeekStartIsoKey(new Date());
+  const podcastWeekKey = `${currentWeekKey}:week-${weekNumber}`;
+  const podcastVoiceLabel = podcastVoiceProfile === 'authoritative_male' ? 'Authoritative male voice' : 'Happy female voice';
+  const weeklyPodcastScript = useMemo(
+    () =>
+      buildWeeklyPodcastScript({
+        firstName: displayFirstName || answers.firstName || 'there',
+        dietitianName,
+        focusLabel,
+        progressPercent,
+        currentWeight,
+        goalWeight: answers.goalWeightKg,
+        personalizedSummary,
+        mealPlan,
+        recipeMap,
+      }),
+    [
+      answers.firstName,
+      answers.goalWeightKg,
+      currentWeight,
+      dietitianName,
+      displayFirstName,
+      focusLabel,
+      mealPlan,
+      personalizedSummary,
+      progressPercent,
+      recipeMap,
+    ]
+  );
 
   const swapCandidates = swapTarget
     ? getSwapCandidates({
@@ -713,6 +884,8 @@ export default function WeightLossResetDashboard({
   const grocerySectionRef = useRef<HTMLElement | null>(null);
   const progressSectionRef = useRef<HTMLElement | null>(null);
   const messagesSectionRef = useRef<HTMLElement | null>(null);
+  const podcastAudioRef = useRef<HTMLAudioElement | null>(null);
+  const podcastAudioUrlRef = useRef('');
 
   const openTab = useCallback((nextTab: DashboardTab) => {
     setActiveTab(nextTab);
@@ -791,6 +964,138 @@ export default function WeightLossResetDashboard({
       window.clearInterval(messageTimer);
     };
   }, [generationMessages.length, isGeneratingPlan]);
+
+  useEffect(() => {
+    podcastAudioUrlRef.current = podcastAudioUrl;
+  }, [podcastAudioUrl]);
+
+  useEffect(() => {
+    return () => {
+      if (podcastAudioUrlRef.current) {
+        URL.revokeObjectURL(podcastAudioUrlRef.current);
+      }
+    };
+  }, []);
+
+  const generateWeeklyPodcast = useCallback(
+    async ({ manual = false }: { manual?: boolean } = {}) => {
+      if (!mealPlan || !weeklyPodcastScript) return;
+      if (isGeneratingPodcast) return;
+      const activeToken = window.localStorage.getItem('onya_patient_token') || '';
+      if (!activeToken) {
+        setPodcastError('Please sign in again to generate this week\'s podcast brief.');
+        return;
+      }
+
+      setIsGeneratingPodcast(true);
+      setPodcastError('');
+      setIsPodcastPlaying(false);
+      if (podcastAudioRef.current) {
+        podcastAudioRef.current.pause();
+        podcastAudioRef.current.currentTime = 0;
+      }
+
+      try {
+        const { response, payload } = await fetchApiJson('/api/patient/meal-plan/podcast', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${activeToken}`,
+          },
+          body: JSON.stringify({
+            voiceProfile: podcastVoiceProfile,
+            weekKey: podcastWeekKey,
+            weekNumber,
+            answers,
+            mealPlan,
+            mealHighlights: collectPlannedRecipeTitles(mealPlan, recipeMap).slice(0, 3),
+            script: weeklyPodcastScript,
+            dietitian: {
+              fullName: dietitianName,
+              credentials: dietitianCredentials,
+            },
+          }),
+        });
+
+        if (!response.ok || !payload?.ok || typeof payload?.audioBase64 !== 'string' || !payload.audioBase64.trim()) {
+          throw new Error(String(payload?.error || '').trim() || 'Unable to generate this week\'s podcast brief.');
+        }
+
+        const audioUrl = decodeBase64AudioToObjectUrl(payload.audioBase64, String(payload?.audioMimeType || 'audio/mpeg'));
+        setPodcastAudioUrl((current) => {
+          if (current) URL.revokeObjectURL(current);
+          return audioUrl;
+        });
+        setPodcastCurrentTimeSec(0);
+        setPodcastDurationSec(Math.max(0, Number(payload?.estimatedDurationSec || 0)));
+        setPodcastPayload({
+          weekKey: String(payload?.weekKey || podcastWeekKey),
+          transcript: String(payload?.transcript || weeklyPodcastScript),
+          voiceProfile: podcastVoiceProfile,
+          voice: String(payload?.voice || ''),
+          generatedAt: String(payload?.generatedAt || new Date().toISOString()),
+          estimatedDurationSec: Math.max(0, Number(payload?.estimatedDurationSec || 0)),
+          audioMimeType: String(payload?.audioMimeType || 'audio/mpeg'),
+          disclosure: String(payload?.disclosure || PODCAST_DISCLOSURE_COPY),
+        });
+      } catch (errorObject) {
+        setPodcastError(errorObject instanceof Error ? errorObject.message : 'Unable to generate this week\'s podcast brief.');
+        if (manual) {
+          setPodcastPayload(null);
+        }
+      } finally {
+        setIsGeneratingPodcast(false);
+      }
+    },
+    [
+      answers,
+      dietitianCredentials,
+      dietitianName,
+      isGeneratingPodcast,
+      mealPlan,
+      podcastVoiceProfile,
+      podcastWeekKey,
+      recipeMap,
+      weekNumber,
+      weeklyPodcastScript,
+    ]
+  );
+
+  useEffect(() => {
+    if (!mealPlan || isGeneratingPlan) return;
+    if (podcastPayload?.weekKey === podcastWeekKey && podcastPayload.voiceProfile === podcastVoiceProfile && podcastAudioUrl) return;
+    void generateWeeklyPodcast({ manual: false });
+  }, [
+    generateWeeklyPodcast,
+    isGeneratingPlan,
+    mealPlan,
+    podcastAudioUrl,
+    podcastPayload?.voiceProfile,
+    podcastPayload?.weekKey,
+    podcastVoiceProfile,
+    podcastWeekKey,
+  ]);
+
+  const togglePodcastPlayback = async () => {
+    const audio = podcastAudioRef.current;
+    if (!audio || !podcastAudioUrl) return;
+    if (audio.paused) {
+      try {
+        await audio.play();
+      } catch (errorObject) {
+        setPodcastError(errorObject instanceof Error ? errorObject.message : 'Unable to start audio playback.');
+      }
+      return;
+    }
+    audio.pause();
+  };
+
+  const onPodcastSeek = (seconds: number) => {
+    const audio = podcastAudioRef.current;
+    if (!audio) return;
+    audio.currentTime = seconds;
+    setPodcastCurrentTimeSec(seconds);
+  };
 
   const submitWeight = (event: FormEvent) => {
     event.preventDefault();
@@ -1033,6 +1338,156 @@ export default function WeightLossResetDashboard({
                     {highlight}
                   </p>
                 ))}
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] p-3.5 sm:p-4">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div>
+                    <p className="inline-flex items-center gap-2 text-sm font-semibold text-[#0a1931]">
+                      <AudioLines size={14} />
+                      Weekly podcast brief
+                    </p>
+                    <p className="mt-1 text-xs text-[#1a3d63]">
+                      Week {weekNumber} voice briefing tailored to your current goals and meal plan.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPodcastVoiceProfile('happy_female')}
+                      className={`inline-flex h-8 items-center gap-1 rounded-full border px-3 text-xs font-semibold ${
+                        podcastVoiceProfile === 'happy_female'
+                          ? 'border-[#1a3d63] bg-[#1a3d63] text-white'
+                          : 'border-[#b3cfe5] bg-white text-[#1a3d63]'
+                      }`}
+                    >
+                      Happy female
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPodcastVoiceProfile('authoritative_male')}
+                      className={`inline-flex h-8 items-center gap-1 rounded-full border px-3 text-xs font-semibold ${
+                        podcastVoiceProfile === 'authoritative_male'
+                          ? 'border-[#1a3d63] bg-[#1a3d63] text-white'
+                          : 'border-[#b3cfe5] bg-white text-[#1a3d63]'
+                      }`}
+                    >
+                      Authoritative male
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void generateWeeklyPodcast({ manual: true })}
+                      disabled={isGeneratingPodcast || isGeneratingPlan}
+                      className="inline-flex h-8 items-center gap-1 rounded-full border border-[#b3cfe5] bg-white px-3 text-xs font-semibold text-[#1a3d63] disabled:cursor-not-allowed disabled:opacity-70"
+                    >
+                      <RefreshCcw size={12} />
+                      Regenerate
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-3 rounded-xl border border-[#b3cfe5] bg-white p-3">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => void togglePodcastPlayback()}
+                      disabled={!podcastAudioUrl || isGeneratingPodcast}
+                      className="inline-flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#1a3d63] text-white disabled:cursor-not-allowed disabled:opacity-55"
+                      aria-label={isPodcastPlaying ? 'Pause weekly podcast brief' : 'Play weekly podcast brief'}
+                    >
+                      {isGeneratingPodcast ? (
+                        <LoaderCircle size={21} className="animate-spin" />
+                      ) : isPodcastPlaying ? (
+                        <Pause size={21} />
+                      ) : (
+                        <Play size={21} className="translate-x-[1px]" />
+                      )}
+                    </button>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="inline-flex items-center gap-1 text-sm font-semibold text-[#0a1931]">
+                          <Radio size={13} />
+                          {isGeneratingPodcast ? 'Generating your briefing...' : podcastVoiceLabel}
+                        </p>
+                        <p className="text-xs font-medium text-[#1a3d63]">
+                          {formatDurationClock(podcastCurrentTimeSec)} /{' '}
+                          {formatDurationClock(
+                            podcastDurationSec || Math.max(0, Math.round(Number(podcastPayload?.estimatedDurationSec || 0)))
+                          )}
+                        </p>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={Math.max(1, Number(podcastDurationSec || podcastPayload?.estimatedDurationSec || 1))}
+                        step={1}
+                        value={Math.min(
+                          Math.max(0, Math.round(podcastCurrentTimeSec)),
+                          Math.max(1, Number(podcastDurationSec || podcastPayload?.estimatedDurationSec || 1))
+                        )}
+                        onChange={(event) => onPodcastSeek(Number(event.target.value))}
+                        disabled={!podcastAudioUrl}
+                        className="mt-2 h-1.5 w-full accent-[#1a3d63]"
+                        aria-label="Weekly podcast playback position"
+                      />
+                      <div className="audio-wave mt-2 min-h-[56px] rounded-lg border border-[#b3cfe5] bg-[#f6fafd] px-1.5" aria-hidden="true">
+                        {Array.from({ length: 36 }).map((_, index) => (
+                          <span
+                            key={`podcast-wave-${index}`}
+                            style={
+                              {
+                                '--wave-height': `${14 + ((index * 11) % 24)}px`,
+                                '--wave-duration': `${0.9 + ((index % 6) * 0.08)}s`,
+                                '--wave-delay': `${(index % 8) * 0.05}s`,
+                                animationPlayState: isPodcastPlaying || isGeneratingPodcast ? 'running' : 'paused',
+                              } as CSSProperties
+                            }
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <audio
+                    ref={podcastAudioRef}
+                    src={podcastAudioUrl}
+                    preload="metadata"
+                    onLoadedMetadata={(event) => {
+                      const audio = event.currentTarget;
+                      setPodcastDurationSec(Number.isFinite(audio.duration) ? Math.max(0, Math.round(audio.duration)) : 0);
+                    }}
+                    onTimeUpdate={(event) => {
+                      setPodcastCurrentTimeSec(Math.max(0, event.currentTarget.currentTime || 0));
+                    }}
+                    onPlay={() => setIsPodcastPlaying(true)}
+                    onPause={() => setIsPodcastPlaying(false)}
+                    onEnded={() => setIsPodcastPlaying(false)}
+                    className="hidden"
+                  />
+                </div>
+
+                <article className="mt-3 rounded-xl border border-[#1a3d63] bg-[#0a1931] p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#b3cfe5]">AI Console Transcript</p>
+                  <p className="mt-1.5 text-sm leading-6 text-[#f6fafd]">
+                    {podcastPayload?.transcript || weeklyPodcastScript}
+                    <span className="ml-1 animate-pulse text-[#b3cfe5]">|</span>
+                  </p>
+                </article>
+
+                <p className="mt-2 text-xs text-[#1a3d63]">
+                  {podcastPayload?.disclosure || PODCAST_DISCLOSURE_COPY}
+                </p>
+                {podcastPayload?.weekKey === podcastWeekKey ? (
+                  <p className="mt-1 text-[11px] text-[#4a7fa7]">
+                    Generated for {podcastWeekKey} with {podcastPayload.voice || 'selected voice'}.
+                  </p>
+                ) : null}
+                {podcastError ? (
+                  <p className="mt-2 rounded-lg border border-[#f3c5c4] bg-[#ffe9e8] px-2.5 py-2 text-xs text-[#a93736]">
+                    {podcastError}
+                  </p>
+                ) : null}
               </div>
             </article>
           ) : null}

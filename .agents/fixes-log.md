@@ -342,3 +342,40 @@
 3. Home hero shows locked upsell copy for non-started nutrition plan users.
 4. Consult history labels show `Nutritionist Consult` (not `Weight Loss`).
 5. Paid-session updates persist payment metadata and reduce stale awaiting-payment states.
+
+## 2026-05-11 - Weekly dietitian podcast section with OpenAI TTS
+
+### Symptoms
+
+- Weight-loss dashboard had no weekly audio coaching section.
+- Users could not get a deeply personal narrated weekly plan check-in.
+- No integrated disclosure for AI-generated voice output.
+
+### Root causes
+
+1. The meal-plan experience had no TTS generation route in the patient API.
+2. Dashboard lacked weekly podcast UI state, generation triggers, and playback controls.
+3. No voice-profile mapping existed for preferred tone variants (happy female / authoritative male).
+
+### Files changed
+
+- `api/index.js`
+  - added `POST /api/patient/meal-plan/podcast` authenticated route.
+  - uses existing `OPENAI_API_KEY` and sets default TTS model to `gpt-4o-mini-tts`.
+  - validates/normalizes script length to weekly-brief target range (~40 seconds).
+  - maps voice profiles:
+    - `happy_female` -> `marin`
+    - `authoritative_male` -> `cedar`
+  - returns transcript, audio payload, duration estimate, and AI-voice disclosure text.
+- `frontend/src/weight-loss-reset/components/WeightLossResetDashboard.tsx`
+  - added weekly podcast card inside the meal-plan "Crafted for you" section.
+  - added voice profile controls, regenerate control, prominent play/pause button, progress scrubber, duration timer.
+  - reused existing `audio-wave` visuals and added console-style transcript block for the AI briefing text.
+  - auto-generates weekly podcast when meal plan is present and refreshes with weekly key + selected voice.
+  - shows explicit disclosure that the voice is AI-generated.
+
+### Verification
+
+1. `npm run build` succeeds.
+2. `node --check api/index.js` succeeds.
+3. Dashboard compiles with new podcast UI and TTS request flow.

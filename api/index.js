@@ -132,6 +132,11 @@ const MEAL_PLAN_IMAGE_PROXY_SIGNING_SECRET =
 const MEAL_PLAN_IMAGE_PROXY_PATH = '/api/patient/meal-plan/recipe-image';
 const WEIGHT_LOSS_IMAGE_BUCKET = String(process.env.WEIGHT_LOSS_IMAGE_BUCKET || 'weight-loss-reset-images').trim();
 const PROFILE_IMAGE_BUCKET = String(process.env.PATIENT_PROFILE_IMAGE_BUCKET || WEIGHT_LOSS_IMAGE_BUCKET).trim();
+const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || '').trim();
+const OPENAI_TTS_ENDPOINT = 'https://api.openai.com/v1/audio/speech';
+const OPENAI_TTS_MODEL = String(process.env.OPENAI_TTS_MODEL || 'gpt-4o-mini-tts').trim() || 'gpt-4o-mini-tts';
+const OPENAI_TTS_RESPONSE_FORMAT = 'mp3';
+const OPENAI_TTS_MAX_SCRIPT_CHARS = Math.max(700, Number(process.env.OPENAI_TTS_MAX_SCRIPT_CHARS || 1800));
 const DEFAULT_DIETITIAN_ID = '9f1f2a68-3b9c-4f2f-8da9-3e7e1c7f1c11';
 const DEFAULT_DIETITIAN_NAME = 'Felicity';
 const PATIENT_SUPABASE_RESET_METADATA_KEY = 'onya_patient_password_reset';
@@ -476,6 +481,114 @@ function sanitizeOnboardingAnswersForBundle(answers) {
       ? safeAnswers.supportAreas.map((entry) => String(entry || '').trim()).filter(Boolean).slice(0, 16)
       : [],
   };
+}
+
+function normalizePodcastVoiceProfile(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'authoritative_male') return 'authoritative_male';
+  return 'happy_female';
+}
+
+function resolvePodcastVoice(profile) {
+  return profile === 'authoritative_male' ? 'cedar' : 'marin';
+}
+
+function resolvePodcastInstructions(profile) {
+  if (profile === 'authoritative_male') {
+    return 'Speak with calm authority, clear pacing, and confident but supportive delivery. Keep a human bedside manner.';
+  }
+  return 'Speak with a warm, happy, reassuring tone. Keep the pacing natural, encouraging, and personal.';
+}
+
+function sanitizePodcastScript(value) {
+  return String(value || '')
+    .replace(/[\u0000-\u001f]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, OPENAI_TTS_MAX_SCRIPT_CHARS);
+}
+
+function estimateSpeechDurationSeconds(script) {
+  const words = sanitizePodcastScript(script)
+    .split(/\s+/g)
+    .filter(Boolean).length;
+  if (!words) return 0;
+  return Math.max(20, Math.round(words / 2.35));
+}
+
+function toDisplayList(items) {
+  const safe = (Array.isArray(items) ? items : []).map((item) => String(item || '').trim()).filter(Boolean);
+  if (safe.length === 0) return '';
+  if (safe.length === 1) return safe[0];
+  if (safe.length === 2) return `${safe[0]} and ${safe[1]}`;
+  return `${safe.slice(0, -1).join(', ')}, and ${safe[safe.length - 1]}`;
+}
+
+function getWeekStartIsoKey(date = new Date()) {
+  const normalized = new Date(date);
+  normalized.setHours(0, 0, 0, 0);
+  const day = (normalized.getDay() + 6) % 7;
+  normalized.setDate(normalized.getDate() - day);
+  const year = normalized.getFullYear();
+  const month = String(normalized.getMonth() + 1).padStart(2, '0');
+  const dayOfMonth = String(normalized.getDate()).padStart(2, '0');
+  return `${year}-${month}-${dayOfMonth}`;
+}
+
+function collectMealPlanHighlightTokens(mealPlan) {
+  if (!mealPlan || typeof mealPlan !== 'object' || !Array.isArray(mealPlan.days)) return [];
+  const picks = [];
+  for (const day of mealPlan.days) {
+    const ids = [day?.meals?.breakfast, day?.meals?.lunch, day?.meals?.dinner, ...(Array.isArray(day?.meals?.snacks) ? day.meals.snacks : [])];
+    for (const recipeId of ids) {
+      const token = String(recipeId || '').trim();
+      if (!token) continue;
+      if (picks.includes(token)) continue;
+      picks.push(token);
+      if (picks.length >= 3) return picks;
+    }
+  }
+  return picks;
+}
+
+function buildFallbackPodcastScript({
+  answers,
+  weekNumber,
+  dietitianName,
+  firstName,
+  mealPlan,
+  mealHighlights,
+  focusLabel,
+}) {
+  const safeFirstName = String(firstName || answers?.firstName || 'there').trim() || 'there';
+  const safeDietitianName = String(dietitianName || DEFAULT_DIETITIAN_NAME || 'your dietitian').trim() || 'your dietitian';
+  const safeFocus = String(focusLabel || answers?.primaryHealthFocus || 'overall nutrition').trim() || 'overall nutrition';
+  const mainGoal = String(answers?.mainGoal || '').trim() || 'your goal';
+  const progressPoint =
+    Number.isFinite(Number(answers?.currentWeightKg)) && Number.isFinite(Number(answers?.goalWeightKg))
+      ? `You're moving from ${answers.currentWeightKg} kilograms toward ${answers.goalWeightKg} kilograms with steady weekly habits.`
+      : 'Keep showing up for the small actions this week, because they compound quickly.';
+  const dietary = toDisplayList((answers?.dietaryRequirements || []).slice(0, 3));
+  const dietaryLine = dietary ? `We kept your meals aligned with ${dietary}.` : 'We kept your meals practical and easy to repeat.';
+  const explicitMealHighlights = Array.isArray(mealHighlights)
+    ? mealHighlights.map((item) => String(item || '').trim()).filter(Boolean).slice(0, 4)
+    : [];
+  const mealTokens = explicitMealHighlights.length > 0 ? explicitMealHighlights : collectMealPlanHighlightTokens(mealPlan);
+  const mealLine = mealTokens.length > 0
+    ? `Your week includes ${toDisplayList(mealTokens.slice(0, 2))} as anchors for consistency.`
+    : 'Your week has structured meal anchors to reduce decision fatigue.';
+
+  return sanitizePodcastScript(
+    [
+      `Hi ${safeFirstName}, this is ${safeDietitianName} with your week ${weekNumber || 1} check-in.`,
+      `Your focus this week is ${safeFocus}, and your plan is designed around ${mainGoal}.`,
+      dietaryLine,
+      mealLine,
+      'Your body responds to consistency: protein supports lean muscle, fiber supports gut and blood sugar control, and regular meals support stable energy.',
+      progressPoint,
+      'Stay consistent, stay flexible, and message me if you need adjustments this week.',
+    ].join(' ')
+  );
 }
 
 function buildMealPlanCacheIdentity({ patientEmail, answers, includeSnack }) {
@@ -6185,6 +6298,137 @@ export default async function handler(req, res) {
           generatedBy: 'openai',
           stage: 'ai_recipes_v3',
           error: 'Unable to generate meals right now.',
+        });
+      }
+      return;
+    }
+
+    if (req.method === 'POST' && routePath === 'patient/meal-plan/podcast') {
+      const patient = await requirePatient(req, res);
+      if (!patient) return;
+      if (!OPENAI_API_KEY) {
+        sendJson(res, 500, {
+          ok: false,
+          error: 'OpenAI API key is not configured on the server.',
+        });
+        return;
+      }
+
+      const body = await parseJsonBody(req);
+      const safeAnswers = sanitizeOnboardingAnswersForBundle(body?.answers) || {};
+      const voiceProfile = normalizePodcastVoiceProfile(body?.voiceProfile);
+      const voice = resolvePodcastVoice(voiceProfile);
+      const dietitianName = String(body?.dietitian?.fullName || DEFAULT_DIETITIAN_NAME || 'your dietitian').trim();
+      const weekNumber = Math.max(1, Math.min(52, Math.round(Number(body?.weekNumber || 1)) || 1));
+      const weekKey = String(body?.weekKey || '').trim().slice(0, 80) || `${getWeekStartIsoKey(new Date())}:week-${weekNumber}`;
+      const focusLabel = String(body?.focusLabel || safeAnswers?.primaryHealthFocus || '').trim().slice(0, 120);
+
+      let script = sanitizePodcastScript(body?.script);
+      if (!script) {
+        script = buildFallbackPodcastScript({
+          answers: safeAnswers,
+          weekNumber,
+          dietitianName,
+          firstName: body?.firstName || safeAnswers?.firstName,
+          mealPlan: body?.mealPlan,
+          mealHighlights: body?.mealHighlights,
+          focusLabel,
+        });
+      }
+
+      const fallbackScript = buildFallbackPodcastScript({
+        answers: safeAnswers,
+        weekNumber,
+        dietitianName,
+        firstName: body?.firstName || safeAnswers?.firstName,
+        mealPlan: body?.mealPlan,
+        mealHighlights: body?.mealHighlights,
+        focusLabel,
+      });
+
+      let words = script.split(/\s+/g).filter(Boolean);
+      if (words.length < 75) {
+        script = sanitizePodcastScript(`${script} ${fallbackScript}`);
+        words = script.split(/\s+/g).filter(Boolean);
+      }
+      if (words.length > 110) {
+        script = words.slice(0, 110).join(' ');
+        words = script.split(/\s+/g).filter(Boolean);
+      }
+
+      if (words.length < 70) {
+        sendJson(res, 400, {
+          ok: false,
+          error: 'Podcast script was too short to render a useful weekly briefing.',
+        });
+        return;
+      }
+
+      try {
+        const ttsResponse = await fetch(OPENAI_TTS_ENDPOINT, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${OPENAI_API_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: OPENAI_TTS_MODEL,
+            voice,
+            input: script,
+            instructions: resolvePodcastInstructions(voiceProfile),
+            response_format: OPENAI_TTS_RESPONSE_FORMAT,
+          }),
+        });
+
+        if (!ttsResponse.ok) {
+          const errorText = await ttsResponse.text();
+          let errorPayload = null;
+          try {
+            errorPayload = errorText ? JSON.parse(errorText) : null;
+          } catch {
+            errorPayload = null;
+          }
+          const message =
+            String(errorPayload?.error?.message || '').trim() ||
+            `OpenAI TTS request failed (${ttsResponse.status}).`;
+          sendJson(res, 502, {
+            ok: false,
+            error: message,
+          });
+          return;
+        }
+
+        const audioArrayBuffer = await ttsResponse.arrayBuffer();
+        const audioBuffer = Buffer.from(audioArrayBuffer);
+        if (!audioBuffer.length) {
+          sendJson(res, 502, {
+            ok: false,
+            error: 'OpenAI returned an empty audio payload.',
+          });
+          return;
+        }
+
+        const generatedAt = new Date().toISOString();
+        sendJson(res, 200, {
+          ok: true,
+          weekKey,
+          transcript: script,
+          voiceProfile,
+          voice,
+          generatedAt,
+          estimatedDurationSec: estimateSpeechDurationSeconds(script),
+          audioMimeType: 'audio/mpeg',
+          audioBase64: audioBuffer.toString('base64'),
+          disclosure: 'This voice is AI-generated and not a human recording.',
+        });
+      } catch (errorObject) {
+        error('meal_plan.podcast_generation_failed', {
+          email: normalizeEmail(patient.email),
+          message: errorObject?.message || String(errorObject),
+        });
+        sendJson(res, 500, {
+          ok: false,
+          error: 'Unable to generate the weekly podcast right now.',
         });
       }
       return;
