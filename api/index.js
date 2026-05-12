@@ -1293,6 +1293,12 @@ async function loadPatientGeneratedRecipeCatalog({
   };
 }
 
+function isRulesFallbackCacheEntry(entry) {
+  const source = String(entry?.source || '').trim().toLowerCase();
+  const stage = String(entry?.stage || '').trim().toLowerCase();
+  return source === 'rules' || stage.startsWith('rules_');
+}
+
 function buildPatientPasswordResetUrl(req, token) {
   const encodedToken = encodeURIComponent(String(token || '').trim());
   const configuredPath = String(PATIENT_PASSWORD_RESET_PATH || '').trim();
@@ -5933,7 +5939,8 @@ export default async function handler(req, res) {
           return null;
         }) : null;
 
-        if (!hydrated) {
+        const selectedEntryIsRulesFallback = isRulesFallbackCacheEntry(selectedEntry);
+        if (!hydrated || selectedEntryIsRulesFallback) {
           const cacheEntries = await listMealPlanGenerationCacheByPatientEmail(patient.email, 48).catch((cacheError) => {
             error('meal_plan.latest_cache_list_failed', {
               email: normalizeEmail(patient.email),
@@ -5947,6 +5954,9 @@ export default async function handler(req, res) {
               selectedEntry &&
               String(cacheEntry.cacheKey || '').trim() === String(selectedEntry.cacheKey || '').trim()
             ) {
+              continue;
+            }
+            if (selectedEntryIsRulesFallback && isRulesFallbackCacheEntry(cacheEntry)) {
               continue;
             }
             // Fall back to the newest hydration-valid cache entry when the latest row is incomplete.
@@ -6049,7 +6059,13 @@ export default async function handler(req, res) {
             return null;
           });
           const hydratedUserCache = userCached ? await hydrateMealPlanBundleFromCacheEntry(userCached) : null;
-          if (hydratedUserCache?.mealPlan && Array.isArray(hydratedUserCache.recipes) && hydratedUserCache.recipes.length > 0) {
+          const userCacheIsRulesFallback = isRulesFallbackCacheEntry(userCached);
+          if (
+            hydratedUserCache?.mealPlan &&
+            Array.isArray(hydratedUserCache.recipes) &&
+            hydratedUserCache.recipes.length > 0 &&
+            !userCacheIsRulesFallback
+          ) {
             const cachedStage = String(userCached?.stage || 'ai_recipes_v3');
             const cachedGeneratedBy =
               String(userCached?.source || '').trim().toLowerCase() === 'rules' || cachedStage.startsWith('rules_')
@@ -6086,7 +6102,13 @@ export default async function handler(req, res) {
             return null;
           });
           const hydratedSharedCache = sharedCached ? await hydrateMealPlanBundleFromCacheEntry(sharedCached) : null;
-          if (hydratedSharedCache?.mealPlan && Array.isArray(hydratedSharedCache.recipes) && hydratedSharedCache.recipes.length > 0) {
+          const sharedCacheIsRulesFallback = isRulesFallbackCacheEntry(sharedCached);
+          if (
+            hydratedSharedCache?.mealPlan &&
+            Array.isArray(hydratedSharedCache.recipes) &&
+            hydratedSharedCache.recipes.length > 0 &&
+            !sharedCacheIsRulesFallback
+          ) {
             const sharedCachedStage = String(sharedCached?.stage || 'ai_recipes_v3');
             const sharedCachedGeneratedBy =
               String(sharedCached?.source || '').trim().toLowerCase() === 'rules' || sharedCachedStage.startsWith('rules_')
