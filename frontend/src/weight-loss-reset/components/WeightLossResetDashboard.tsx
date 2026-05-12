@@ -69,6 +69,48 @@ const EQUIPMENT_LABELS: Record<CookingEquipment, string> = {
   'air fryer': EQUIPMENT_META['air fryer'].label,
   microwave: EQUIPMENT_META.microwave.label,
 };
+const LOCAL_AI_MEAL_FALLBACKS: Record<MealType, string[]> = {
+  breakfast: [
+    '/meal-fallbacks/breakfast-1.webp',
+    '/meal-fallbacks/breakfast-2.webp',
+    '/meal-fallbacks/breakfast-3.webp',
+    '/meal-fallbacks/breakfast-4.webp',
+  ],
+  lunch: [
+    '/meal-fallbacks/lunch-1.webp',
+    '/meal-fallbacks/lunch-2.webp',
+    '/meal-fallbacks/lunch-3.webp',
+    '/meal-fallbacks/lunch-4.webp',
+  ],
+  dinner: [
+    '/meal-fallbacks/dinner-1.webp',
+    '/meal-fallbacks/dinner-2.webp',
+    '/meal-fallbacks/dinner-3.webp',
+    '/meal-fallbacks/dinner-4.webp',
+  ],
+  snack: [
+    '/meal-fallbacks/snack-1.webp',
+    '/meal-fallbacks/snack-2.webp',
+    '/meal-fallbacks/snack-3.webp',
+    '/meal-fallbacks/snack-4.webp',
+  ],
+};
+const LOCAL_AI_MEAL_FALLBACK_POOL = [
+  ...LOCAL_AI_MEAL_FALLBACKS.breakfast,
+  ...LOCAL_AI_MEAL_FALLBACKS.lunch,
+  ...LOCAL_AI_MEAL_FALLBACKS.dinner,
+  ...LOCAL_AI_MEAL_FALLBACKS.snack,
+];
+
+function hashTextToUnsignedInt(value: string) {
+  const text = String(value || '');
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
 
 function RecipeEquipmentPills({ recipe, compact = false }: { recipe: Recipe; compact?: boolean }) {
   const requiredEquipment = getRecipeRequiredEquipment(recipe);
@@ -452,6 +494,7 @@ function isConcreteRecipeImage(url: string) {
   if (!/^https?:\/\//i.test(value)) return false;
   try {
     const parsed = new URL(value);
+    if (String(parsed.hostname || '').trim().toLowerCase().includes('dietitiansaustralia.org.au')) return false;
     if (parsed.pathname === '/api/patient/meal-plan/recipe-image') return true;
     if (/\.(?:webp|png|jpe?g|gif|avif)$/i.test(parsed.pathname.toLowerCase())) return true;
     const format = String(parsed.searchParams.get('fm') || parsed.searchParams.get('format') || '').trim().toLowerCase();
@@ -467,7 +510,14 @@ function resolveRecipeImageUrl(recipe: Recipe) {
   if (isConcreteRecipeImage(candidate)) return candidate;
   const sourceCandidate = String(recipe?.source?.image_url || recipe?.source?.imageUrl || '').trim();
   if (isConcreteRecipeImage(sourceCandidate)) return sourceCandidate;
-  return '';
+  const normalizedMealType = String(recipe?.mealType || '').trim().toLowerCase();
+  const pool = normalizedMealType === 'breakfast' || normalizedMealType === 'lunch' || normalizedMealType === 'dinner' || normalizedMealType === 'snack'
+    ? LOCAL_AI_MEAL_FALLBACKS[normalizedMealType as MealType]
+    : LOCAL_AI_MEAL_FALLBACK_POOL;
+  if (!Array.isArray(pool) || pool.length === 0) return '';
+  const seed = `${recipe?.id || ''}|${recipe?.title || ''}|${normalizedMealType}`;
+  const index = hashTextToUnsignedInt(seed) % pool.length;
+  return String(pool[index] || '').trim();
 }
 
 function formatMinutesLabel(totalMinutes: number) {
@@ -1557,26 +1607,17 @@ export default function WeightLossResetDashboard({
 
           {mealPlan ? (
             <article className="rounded-[30px] bg-white p-5 shadow-[0_28px_52px_-38px_rgba(10,25,49,0.48)] sm:p-6">
-              <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-start">
+              <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-center">
                 <div>
-                  <h3 className="max-w-[760px] text-3xl font-semibold tracking-[-0.02em] text-[#0a1931]">{personalizedSummary.title}</h3>
-                  <p className="mt-3 max-w-[760px] text-[1.02rem] leading-7 text-[#24496f]">{personalizedSummary.intro}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-[#4a7fa7]">Week at a glance</p>
+                  <h3 className="mt-1 text-2xl font-semibold tracking-[-0.015em] text-[#0a1931]">
+                    Built for consistency, energy, and realistic execution.
+                  </h3>
                   <p className="mt-2 max-w-[760px] text-[0.98rem] leading-7 text-[#2f5d86]">{personalizedSummary.detail}</p>
                 </div>
-
-                <div className="inline-flex items-center gap-3 rounded-2xl bg-[#f4f9fd] px-3.5 py-3 shadow-[0_14px_26px_-20px_rgba(10,25,49,0.5)]">
-                  <ProfileAvatar
-                    name={dietitianName}
-                    imageUrl={dietitianImageUrl}
-                    fallbackImageUrl={DEFAULT_DIETITIAN_PROFILE_IMAGE_URL}
-                    alt={`${dietitianName} profile`}
-                    className="h-16 w-16 rounded-2xl object-cover"
-                  />
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-[#4a7fa7]">Your Dietitian</p>
-                    <p className="text-xl font-semibold leading-none text-[#0a1931]">{dietitianName}</p>
-                    <p className="mt-1 text-sm text-[#1a3d63]">{dietitianCredentials}</p>
-                  </div>
+                <div className="flex flex-wrap gap-2 lg:justify-end">
+                  <p className="rounded-full bg-[#edf4fa] px-3 py-1.5 text-xs font-semibold text-[#1a3d63]">Focus: {focusLabel}</p>
+                  <p className="rounded-full bg-[#edf4fa] px-3 py-1.5 text-xs font-semibold text-[#1a3d63]">Prep day: {answers.prepDay || 'Sunday'}</p>
                 </div>
               </div>
 

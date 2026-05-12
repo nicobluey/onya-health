@@ -10,6 +10,7 @@ const LOCAL_MEAL_PLANNER_RECIPES_PATH = path.resolve(
   'public',
   'weight-loss-reset-recipes.json'
 );
+const ENABLE_LOCAL_LEGACY_RECIPE_FALLBACK = String(process.env.ENABLE_LOCAL_LEGACY_RECIPE_FALLBACK || '0').trim() === '1';
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
@@ -39,6 +40,7 @@ const EMPTY_DB = {
 let writeQueue = Promise.resolve();
 const patientIdCache = new Map();
 let cachedLocalMealPlannerRecipes = null;
+let localLegacyRecipeFallbackWarningLogged = false;
 const supabaseMealPlannerRecipeByIdCache = new Map();
 const PATIENT_ID_CACHE_TTL_MS = Math.max(
   60_000,
@@ -1593,6 +1595,15 @@ async function listMealPlannerRecipesByIdsSupabase(recipeIds = []) {
 }
 
 async function listMealPlannerRecipesLocal() {
+  if (!ENABLE_LOCAL_LEGACY_RECIPE_FALLBACK) {
+    if (!localLegacyRecipeFallbackWarningLogged) {
+      warn('meal_planner_recipes.local_fallback_disabled');
+      localLegacyRecipeFallbackWarningLogged = true;
+    }
+    cachedLocalMealPlannerRecipes = [];
+    return [];
+  }
+
   if (Array.isArray(cachedLocalMealPlannerRecipes) && cachedLocalMealPlannerRecipes.length > 0) {
     return cachedLocalMealPlannerRecipes;
   }

@@ -1458,8 +1458,7 @@ export function getSwapCandidates({
   const withFallback = strict.length >= limit ? strict : buildCandidatePool({ recipes, mealType, answers, stage: 2 });
   const loose = withFallback.length >= limit ? withFallback : buildCandidatePool({ recipes, mealType, answers, stage: 3 });
   const filtered = loose.filter((recipe) => recipe.id !== currentRecipe?.id);
-  const withConcreteImages = filtered.filter((recipe) => hasConcreteImage(recipe));
-  let candidatePool = withConcreteImages;
+  let candidatePool = filtered;
 
   if (candidatePool.length < limit) {
     const criticalRequirements = normalizeRequirements(answers.dietaryRequirements).filter((requirement) =>
@@ -1468,17 +1467,13 @@ export function getSwapCandidates({
     const allergyTerms = extractAllergyTerms(answers);
     const broadFallback = recipes
       .filter((recipe) => recipe.id !== currentRecipe?.id)
-      .filter((recipe) => hasConcreteImage(recipe))
       .filter((recipe) => recipePassesEquipmentAvailability(recipe, answers, 2))
       .filter((recipe) => recipePassesAllergyCheck(recipe, allergyTerms))
       .filter((recipe) => recipeMatchesDietaryRequirements(recipe, criticalRequirements))
       .sort((a, b) => {
         const typeA = a.mealType === mealType ? 2 : mealType === 'snack' && a.mealType === 'breakfast' ? 1 : 0;
         const typeB = b.mealType === mealType ? 2 : mealType === 'snack' && b.mealType === 'breakfast' ? 1 : 0;
-        const imageA = hasConcreteImage(a) ? 1 : 0;
-        const imageB = hasConcreteImage(b) ? 1 : 0;
         return (
-          imageB - imageA ||
           typeB - typeA ||
           recipePreferenceScore(b, answers) - recipePreferenceScore(a, answers) ||
           a.title.localeCompare(b.title)
@@ -1498,7 +1493,13 @@ export function getSwapCandidates({
   if (!currentRecipe) {
     return candidatePool
       .map((recipe) => ({ recipe, hasImage: hasConcreteImage(recipe) }))
-      .sort((a, b) => Number(b.hasImage) - Number(a.hasImage) || a.recipe.title.localeCompare(b.recipe.title))
+      .sort((a, b) => {
+        const imageDelta = Number(b.hasImage) - Number(a.hasImage);
+        if (imageDelta !== 0) return imageDelta;
+        const typeA = a.recipe.mealType === mealType ? 2 : mealType === 'snack' && a.recipe.mealType === 'breakfast' ? 1 : 0;
+        const typeB = b.recipe.mealType === mealType ? 2 : mealType === 'snack' && b.recipe.mealType === 'breakfast' ? 1 : 0;
+        return typeB - typeA || a.recipe.title.localeCompare(b.recipe.title);
+      })
       .slice(0, limit)
       .map((entry) => entry.recipe);
   }

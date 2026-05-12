@@ -323,6 +323,11 @@ function setCors(res, req) {
 
 function sendJson(res, statusCode, payload) {
   setCors(res);
+  if (!res.getHeader('Cache-Control')) {
+    res.setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+  }
   res.status(statusCode).json(payload);
 }
 
@@ -719,6 +724,8 @@ function isWebpHttpImage(value) {
   if (!/^https?:\/\//i.test(candidate)) return false;
   try {
     const parsed = new URL(candidate);
+    const hostname = String(parsed.hostname || '').trim().toLowerCase();
+    if (hostname.includes('dietitiansaustralia.org.au')) return false;
     const pathname = String(parsed.pathname || '').toLowerCase();
     const extensionMatch = pathname.match(/\.([a-z0-9]+)$/i);
     if (extensionMatch && SUPPORTED_RECIPE_HTTP_IMAGE_EXTENSIONS.has(String(extensionMatch[1] || '').toLowerCase())) {
