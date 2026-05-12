@@ -6330,12 +6330,6 @@ export default async function handler(req, res) {
       const weekNumber = Math.max(1, Math.min(52, Math.round(Number(body?.weekNumber || 1)) || 1));
       const weekKey = String(body?.weekKey || '').trim().slice(0, 80) || `${getWeekStartIsoKey(new Date())}:week-${weekNumber}`;
       const focusLabel = String(body?.focusLabel || safeAnswers?.primaryHealthFocus || '').trim().slice(0, 120);
-      const includeSnack = Boolean(body?.includeSnack);
-      const cacheIdentity = buildMealPlanCacheIdentity({
-        patientEmail: patient.email,
-        answers: safeAnswers,
-        includeSnack,
-      });
 
       let script = sanitizePodcastScript(body?.script);
       if (!script) {
@@ -6380,36 +6374,10 @@ export default async function handler(req, res) {
         return;
       }
       const scriptHash = buildPodcastScriptHash(script);
-      let userMealPlanCacheEntry = null;
-      let latestMealPlanCacheEntry = null;
 
       try {
-        userMealPlanCacheEntry = await getMealPlanGenerationCache(cacheIdentity.userCacheKey).catch((cacheReadError) => {
-          error('meal_plan.podcast_cache_direct_read_failed', {
-            email: normalizeEmail(patient.email),
-            cacheKey: cacheIdentity.userCacheKey,
-            message: cacheReadError?.message || String(cacheReadError),
-          });
-          return null;
-        });
-
-        const candidates = [];
-        if (userMealPlanCacheEntry) candidates.push(userMealPlanCacheEntry);
-        latestMealPlanCacheEntry = await getLatestMealPlanGenerationCacheByPatientEmail(patient.email).catch((cacheReadError) => {
-          error('meal_plan.podcast_cache_latest_read_failed', {
-            email: normalizeEmail(patient.email),
-            message: cacheReadError?.message || String(cacheReadError),
-          });
-          return null;
-        });
-        if (
-          latestMealPlanCacheEntry &&
-          (!userMealPlanCacheEntry || latestMealPlanCacheEntry.cacheKey !== userMealPlanCacheEntry.cacheKey)
-        ) {
-          candidates.push(latestMealPlanCacheEntry);
-        }
-
-        for (const cacheEntry of candidates) {
+        const cacheEntries = await listMealPlanGenerationCacheByPatientEmail(patient.email, 72);
+        for (const cacheEntry of cacheEntries) {
           const weeklyPodcasts = cacheEntry?.bundle?.weeklyPodcasts;
           if (!weeklyPodcasts || typeof weeklyPodcasts !== 'object' || Array.isArray(weeklyPodcasts)) continue;
           const cachedPodcast = weeklyPodcasts[weekKey];
@@ -6504,7 +6472,8 @@ export default async function handler(req, res) {
         };
 
         try {
-          const latestEntry = userMealPlanCacheEntry || latestMealPlanCacheEntry;
+          const cacheEntries = await listMealPlanGenerationCacheByPatientEmail(patient.email, 72);
+          const latestEntry = Array.isArray(cacheEntries) ? cacheEntries[0] : null;
           if (latestEntry?.cacheKey && latestEntry?.intakeHash && latestEntry?.patientEmail) {
             const existingWeeklyPodcasts =
               latestEntry.bundle?.weeklyPodcasts && typeof latestEntry.bundle.weeklyPodcasts === 'object'
