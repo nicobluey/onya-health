@@ -1439,28 +1439,19 @@ export function getSwapCandidates({
   limit?: number;
 }) {
   const hasConcreteImage = (recipe: Recipe) => {
-    const candidates = [
-      String(recipe?.imageUrl || '').trim(),
-      String(recipe?.source?.image_url || recipe?.source?.imageUrl || '').trim(),
-    ].filter(Boolean);
-    if (candidates.length === 0) return false;
-
-    const candidate = candidates.find((entry) => entry.includes('/api/patient/meal-plan/recipe-image')) || candidates[0];
-    if (/^data:image\/(?:webp|png|jpe?g|gif|avif);base64,/i.test(candidate)) return true;
+    const candidate = String(recipe?.imageUrl || '').trim();
+    if (!candidate) return false;
+    if (/^data:image\/webp;base64,/i.test(candidate)) return true;
     if (candidate.includes('/api/patient/meal-plan/recipe-image')) return true;
     if (!/^https?:\/\//i.test(candidate)) return false;
     try {
       const parsed = new URL(candidate);
       if (parsed.pathname === '/api/patient/meal-plan/recipe-image') return true;
-      if (/\.(?:webp|png|jpe?g|gif|avif)$/i.test(parsed.pathname.toLowerCase())) return true;
-      const format = String(parsed.searchParams.get('fm') || parsed.searchParams.get('format') || '')
-        .trim()
-        .toLowerCase();
-      if (/^(?:webp|png|jpe?g|gif|avif)$/.test(format)) return true;
+      if (parsed.pathname.toLowerCase().endsWith('.webp')) return true;
     } catch {
       return false;
     }
-    return /(?:^|[?&])(fm|format)=(?:webp|png|jpe?g|gif|avif)(?:&|$)/i.test(candidate);
+    return /(?:^|[?&])(fm|format)=webp(?:&|$)/i.test(candidate);
   };
 
   const strict = buildCandidatePool({ recipes, mealType, answers, stage: 1 });
@@ -1468,7 +1459,7 @@ export function getSwapCandidates({
   const loose = withFallback.length >= limit ? withFallback : buildCandidatePool({ recipes, mealType, answers, stage: 3 });
   const filtered = loose.filter((recipe) => recipe.id !== currentRecipe?.id);
   const withConcreteImages = filtered.filter((recipe) => hasConcreteImage(recipe));
-  let candidatePool = withConcreteImages.length > 0 ? withConcreteImages : filtered;
+  let candidatePool = withConcreteImages;
 
   if (candidatePool.length < limit) {
     const criticalRequirements = normalizeRequirements(answers.dietaryRequirements).filter((requirement) =>
@@ -1477,6 +1468,7 @@ export function getSwapCandidates({
     const allergyTerms = extractAllergyTerms(answers);
     const broadFallback = recipes
       .filter((recipe) => recipe.id !== currentRecipe?.id)
+      .filter((recipe) => hasConcreteImage(recipe))
       .filter((recipe) => recipePassesEquipmentAvailability(recipe, answers, 2))
       .filter((recipe) => recipePassesAllergyCheck(recipe, allergyTerms))
       .filter((recipe) => recipeMatchesDietaryRequirements(recipe, criticalRequirements))
