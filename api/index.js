@@ -323,17 +323,11 @@ function setCors(res, req) {
 
 function sendJson(res, statusCode, payload) {
   setCors(res);
-  const requestHeaders = res?.req?.headers;
-  if (requestHeaders && typeof requestHeaders === 'object') {
-    delete requestHeaders['if-none-match'];
-    delete requestHeaders['if-modified-since'];
-  }
   if (!res.getHeader('Cache-Control')) {
     res.setHeader('Cache-Control', 'private, no-store, max-age=0, must-revalidate');
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
   }
-  res.setHeader('ETag', `W/"no-cache-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}"`);
   res.status(statusCode).json(payload);
 }
 
