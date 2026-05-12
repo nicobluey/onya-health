@@ -845,7 +845,7 @@ async function getRecipeImageFallbackPool() {
     return recipeImageFallbackCache;
   }
 
-  const allPersistedRecipes = await listMealPlannerRecipes({ includeNonGenerated: true }).catch((errorObject) => {
+  const allPersistedRecipes = await listMealPlannerRecipes().catch((errorObject) => {
     error('meal_plan.image_fallback_catalog_load_failed', {
       message: errorObject?.message || String(errorObject),
     });
