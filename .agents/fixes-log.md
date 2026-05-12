@@ -1,5 +1,50 @@
 # Fixes Log
 
+## 2026-05-13 - Generated recipe image persistence + storage URL hardening
+
+### Symptoms
+
+- Most generated meals were missing images in dashboard cards and swap modals.
+- Some meals showed mismatched visuals after repeated cache hydration cycles.
+- Meal payloads felt sluggish due large inline image data when present.
+
+### Root causes
+
+1. `meal_planner_recipes` upsert logic wrote `image_url: null` when cache-derived recipe payloads omitted image fields, which clobbered previously correct stored images.
+2. Cache bundle compaction dropped recipe image fields completely, increasing chance of null-image upserts during historical recipe backfills.
+3. Generated image data URIs were not consistently normalized into storage URLs, causing heavier payloads and inconsistent rendering paths.
+
+### Files changed
+
+- `backend/lib/storage.js`
+  - changed recipe mapping to avoid null-writing `image_url` when image is absent
+  - added image-preservation merge logic in Supabase upsert path
+  - added storage upload pipeline for recipe `data:image/...` payloads to Supabase bucket
+  - syncs `source.image_url`/`source.imageUrl` with resolved stored URL
+- `api/index.js`
+  - cache recipe compaction now keeps HTTP image URL (`imageUrl`) in bundle payload when available
+- `scripts/backfill-generated-recipe-images.mjs`
+  - new script for DB stats + bulk backfill of missing generated recipe images
+  - converts existing data-URI images into storage URLs
+  - updates `meal_planner_recipes.image_url` and `source` image fields
+- `package.json`
+  - added:
+    - `nutrition:images:stats`
+    - `nutrition:images:backfill`
+- `.agents/README.md`, `.agents/BE_AGENT.md`
+  - documented mandatory production alias deployment policy and meal DB/image architecture constraints
+
+### Verification
+
+1. `node scripts/backfill-generated-recipe-images.mjs` reports current totals and missing-image counts.
+2. Upsert path now preserves existing `image_url` when incoming row lacks image payload.
+3. Data-URI images are uploaded to Supabase storage and rewritten as public URL references.
+4. Production backfill run result:
+   - total generated recipes: `287`
+   - missing generated images: `0`
+   - generated data-URI images: `0`
+   - APD image URLs present: `0`
+
 ## 2026-05-11 - Account/profile editing, magic-link-first auth, and duplicate email trigger hardening
 
 ### Symptoms

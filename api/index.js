@@ -938,6 +938,8 @@ function compactRecipeForCacheBundle(recipe) {
   const source = normalized.source && typeof normalized.source === 'object' && !Array.isArray(normalized.source)
     ? { ...normalized.source }
     : {};
+  const imageCandidate = String(normalized.imageUrl || '').trim();
+  const imageUrl = /^https?:\/\//i.test(imageCandidate) ? imageCandidate : '';
   delete source.image_url;
   delete source.imageUrl;
   delete source.imagePrompt;
@@ -956,6 +958,7 @@ function compactRecipeForCacheBundle(recipe) {
     requiredEquipment: normalized.requiredEquipment,
     dietaryTags: normalized.dietaryTags,
     allergens: normalized.allergens,
+    imageUrl: imageUrl || undefined,
     prepTimeMinutes: normalized.prepTimeMinutes,
     cookTimeMinutes: normalized.cookTimeMinutes,
     totalTimeMinutes: normalized.totalTimeMinutes,

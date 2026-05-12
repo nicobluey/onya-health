@@ -22,7 +22,9 @@
     "sitemap:generate": "node scripts/generate-sitemap.mjs",
     "nutrition:dietitians:scrape": "node scripts/scrape-dietitians-australia-recipes.mjs",
     "nutrition:dietitians:build": "node scripts/build-meal-planner-recipes-from-dietitians.mjs",
-    "nutrition:supabase:sync": "node scripts/sync-meal-planner-recipes-to-supabase.mjs --reset"
+    "nutrition:supabase:sync": "node scripts/sync-meal-planner-recipes-to-supabase.mjs --reset",
+    "nutrition:images:stats": "node scripts/backfill-generated-recipe-images.mjs",
+    "nutrition:images:backfill": "node scripts/backfill-generated-recipe-images.mjs --backfill"
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",

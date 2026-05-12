@@ -27,6 +27,23 @@ Backend profile identity must come from database tables and support many dietiti
 - DB stores path only (for example `dietitians/felicity-profile.webp`).
 - API derives public URL via Supabase storage public URL builder.
 - patient profile photos are uploaded by API from data-url payloads and stored in Supabase Storage; DB stores only `profile_photo_path`.
+- Meal recipe images are storage URLs in `meal_planner_recipes.image_url`; do not keep base64 image blobs in table rows.
+
+## Meal-plan recipe model (production)
+
+- `meal_planner_recipes` is the single source of truth for generated recipes used by weekly plans and swap candidates.
+- Generated catalog eligibility is constrained to:
+  - `is_active = true`
+  - `generated_by IN ('openai','rules')`
+- `source` JSON is metadata only; image rendering should rely on `image_url` (public storage URL).
+- Upsert rule: never overwrite an existing `image_url` with `null`/empty when a cache payload omits image fields.
+
+## Deployment policy (mandatory)
+
+- For live releases, deployment is incomplete until aliases are set to:
+  - `onyahealth.com.au`
+  - `www.onyahealth.com.au`
+  - `onya-health.vercel.app`
 
 ## Active server resolution path
 Main resolver:

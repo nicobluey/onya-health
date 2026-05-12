@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { warn } from './logger.js';
 
@@ -11,6 +12,21 @@ const LOCAL_MEAL_PLANNER_RECIPES_PATH = path.resolve(
   'weight-loss-reset-recipes.json'
 );
 const ENABLE_LOCAL_LEGACY_RECIPE_FALLBACK = String(process.env.ENABLE_LOCAL_LEGACY_RECIPE_FALLBACK || '0').trim() === '1';
+const MEAL_RECIPE_IMAGE_BUCKET = String(
+  process.env.MEAL_RECIPE_IMAGE_BUCKET || process.env.WEIGHT_LOSS_IMAGE_BUCKET || 'weight-loss-reset-images'
+).trim();
+const MAX_MEAL_RECIPE_IMAGE_BYTES = Math.max(
+  64_000,
+  Number(process.env.MAX_MEAL_RECIPE_IMAGE_BYTES || 8 * 1024 * 1024)
+);
+const SUPPORTED_MEAL_RECIPE_IMAGE_MIME_TO_EXTENSION = {
+  'image/webp': 'webp',
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/gif': 'gif',
+  'image/avif': 'avif',
+};
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
@@ -28,6 +44,119 @@ function getSupabaseConfig() {
     key,
     enabled: Boolean(url && key),
   };
+}
+
+function normalizeStoragePath(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return raw.replace(/^\/+/, '');
+}
+
+function buildPublicStorageUrl(pathValue, bucket = MEAL_RECIPE_IMAGE_BUCKET) {
+  const normalizedPath = normalizeStoragePath(pathValue);
+  if (!normalizedPath) return '';
+  if (/^https?:\/\//i.test(normalizedPath)) return normalizedPath;
+
+  const config = getSupabaseConfig();
+  if (!config.url) return '';
+  const encodedPath = normalizedPath
+    .split('/')
+    .map((part) => encodeURIComponent(part))
+    .join('/');
+  const encodedBucket = encodeURIComponent(String(bucket || MEAL_RECIPE_IMAGE_BUCKET).trim());
+  return `${config.url}/storage/v1/object/public/${encodedBucket}/${encodedPath}`;
+}
+
+function parseSupportedRecipeDataImageUri(value) {
+  const candidate = String(value || '').trim();
+  if (!candidate) return null;
+  const match = candidate.match(/^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\r\n]+)$/i);
+  if (!match) return null;
+  const mime = String(match[1] || '').trim().toLowerCase();
+  if (!SUPPORTED_MEAL_RECIPE_IMAGE_MIME_TO_EXTENSION[mime]) return null;
+  const body = String(match[2] || '').replace(/\s+/g, '');
+  if (!body) return null;
+  return { mime, body };
+}
+
+function normalizeStorageObjectPathSegment(value, fallback = 'recipe') {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 96);
+  return normalized || fallback;
+}
+
+async function uploadBufferToSupabaseStorage({
+  config,
+  bucket,
+  objectPath,
+  contentType,
+  bodyBuffer,
+}) {
+  const response = await fetch(
+    `${config.url}/storage/v1/object/${encodeURIComponent(String(bucket || '').trim())}/${objectPath
+      .split('/')
+      .map((part) => encodeURIComponent(part))
+      .join('/')}`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: config.key,
+        Authorization: `Bearer ${config.key}`,
+        'Content-Type': contentType || 'application/octet-stream',
+        'x-upsert': 'true',
+      },
+      body: bodyBuffer,
+    }
+  );
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`Storage upload failed (${response.status}) ${text || ''}`.trim());
+  }
+}
+
+async function persistRecipeImageDataUriToStorage(row = {}, sourceRecord = {}) {
+  const candidate = String(
+    row?.image_url || row?.imageUrl || sourceRecord?.image_url || sourceRecord?.imageUrl || ''
+  ).trim();
+  if (!candidate) return '';
+  if (/^https?:\/\//i.test(candidate)) return candidate;
+
+  const parsed = parseSupportedRecipeDataImageUri(candidate);
+  if (!parsed) return '';
+  const config = getSupabaseConfig();
+  if (!config.enabled) return '';
+
+  const buffer = Buffer.from(parsed.body, 'base64');
+  if (!buffer.length) return '';
+  if (buffer.length > MAX_MEAL_RECIPE_IMAGE_BYTES) {
+    warn('meal_planner_recipes.image_payload_too_large', {
+      recipeId: String(row?.id || '').trim(),
+      bytes: buffer.length,
+      maxBytes: MAX_MEAL_RECIPE_IMAGE_BYTES,
+    });
+    return '';
+  }
+
+  const extension = SUPPORTED_MEAL_RECIPE_IMAGE_MIME_TO_EXTENSION[parsed.mime] || 'webp';
+  const safeRecipeId = normalizeStorageObjectPathSegment(row?.id, 'recipe');
+  const hash = createHash('sha1').update(buffer).digest('hex').slice(0, 14);
+  const objectPath = `meal-planner/recipes/${safeRecipeId}-${hash}.${extension}`;
+
+  await uploadBufferToSupabaseStorage({
+    config,
+    bucket: MEAL_RECIPE_IMAGE_BUCKET,
+    objectPath,
+    contentType: parsed.mime || 'application/octet-stream',
+    bodyBuffer: buffer,
+  });
+
+  return buildPublicStorageUrl(objectPath, MEAL_RECIPE_IMAGE_BUCKET);
 }
 
 const EMPTY_DB = {
@@ -593,6 +722,8 @@ function mapMealPlannerRecipeToSupabaseRecord(recipe = {}) {
   const carbs = toFiniteNumberOrUndefined(normalized.carbs);
   const fat = toFiniteNumberOrUndefined(normalized.fat);
   const source = normalizeRecipeSource(normalized.source);
+  const sourceImageCandidate = String(source.image_url || source.imageUrl || '').trim();
+  const normalizedImageUrl = String(normalized.imageUrl || sourceImageCandidate || '').trim() || undefined;
   const sourceProvider = normalizeSourceProviderValue(
     normalized.sourceProvider || source.provider || source.origin || source.generator || source.label || ''
   );
@@ -618,13 +749,15 @@ function mapMealPlannerRecipeToSupabaseRecord(recipe = {}) {
       (totalTimeMinutes !== undefined && totalTimeMinutes > 0 ? `${Math.round(totalTimeMinutes)} min` : undefined),
     generatedBy: source.generatedBy || generatedBy || undefined,
     provider: source.provider || sourceProvider || (generatedBy === 'openai' ? 'openai' : generatedBy === 'rules' ? 'rules-generated' : undefined),
+    image_url: normalizedImageUrl || undefined,
+    imageUrl: normalizedImageUrl || undefined,
   };
 
   return {
     id: normalized.id,
     title: normalized.title,
     description: normalized.description || null,
-    image_url: normalized.imageUrl || null,
+    image_url: normalizedImageUrl || undefined,
     ingredients: Array.isArray(normalized.ingredients) ? normalized.ingredients : [],
     instructions: Array.isArray(normalized.instructions) ? normalized.instructions : [],
     calories: calories === undefined ? null : Math.round(calories),
@@ -1635,6 +1768,46 @@ async function listMealPlannerRecipesByIdsLocal(recipeIds = []) {
   return normalizedIds.map((id) => byId.get(id)).filter(Boolean);
 }
 
+function resolveImageFromSourceRecord(sourceRecord = {}) {
+  if (!sourceRecord || typeof sourceRecord !== 'object' || Array.isArray(sourceRecord)) return '';
+  return String(sourceRecord.image_url || sourceRecord.imageUrl || '').trim();
+}
+
+async function listMealPlannerRecipeImageByIdsSupabase(recipeIds = []) {
+  const normalizedIds = normalizeRecipeIdList(recipeIds, 1200);
+  if (normalizedIds.length === 0) return new Map();
+
+  const results = new Map();
+  const chunkSize = 120;
+  for (let index = 0; index < normalizedIds.length; index += chunkSize) {
+    const chunk = normalizedIds.slice(index, index + chunkSize);
+    if (chunk.length === 0) continue;
+    const escaped = chunk.map((id) => `"${id.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`);
+    const inFilter = `(${escaped.join(',')})`;
+    const rows = await supabaseRequest(
+      `meal_planner_recipes?select=id,image_url,source&id=in.${encodeURIComponent(inFilter)}&limit=${Math.max(
+        chunk.length,
+        1
+      )}`,
+      {
+        method: 'GET',
+        prefer: 'return=representation',
+      }
+    ).catch(() => []);
+
+    for (const row of Array.isArray(rows) ? rows : []) {
+      const id = String(row?.id || '').trim();
+      if (!id) continue;
+      const source = row?.source && typeof row.source === 'object' && !Array.isArray(row.source) ? row.source : {};
+      const imageUrl = String(row?.image_url || resolveImageFromSourceRecord(source) || '').trim();
+      if (!imageUrl) continue;
+      results.set(id, imageUrl);
+    }
+  }
+
+  return results;
+}
+
 async function upsertMealPlannerRecipesSupabase(recipes = []) {
   let rows = Array.isArray(recipes)
     ? recipes
@@ -1642,6 +1815,44 @@ async function upsertMealPlannerRecipesSupabase(recipes = []) {
         .filter((row) => row && row.id && row.title)
     : [];
   if (rows.length === 0) return 0;
+
+  const existingImagesById = await listMealPlannerRecipeImageByIdsSupabase(rows.map((row) => row.id)).catch(() => new Map());
+
+  for (const row of rows) {
+    const sourceRecord =
+      row?.source && typeof row.source === 'object' && !Array.isArray(row.source)
+        ? { ...row.source }
+        : {};
+    let nextImageUrl = String(row?.image_url || row?.imageUrl || resolveImageFromSourceRecord(sourceRecord) || '').trim();
+
+    if (nextImageUrl) {
+      try {
+        const uploadedImageUrl = await persistRecipeImageDataUriToStorage(row, sourceRecord);
+        if (uploadedImageUrl) nextImageUrl = uploadedImageUrl;
+      } catch (errorObject) {
+        warn('meal_planner_recipes.image_storage_upload_failed', {
+          recipeId: String(row?.id || '').trim(),
+          message: errorObject?.message || String(errorObject),
+        });
+      }
+    }
+
+    if (!nextImageUrl) {
+      const existingImageUrl = String(existingImagesById.get(String(row?.id || '').trim()) || '').trim();
+      if (existingImageUrl) nextImageUrl = existingImageUrl;
+    }
+
+    if (nextImageUrl) {
+      row.image_url = nextImageUrl;
+      sourceRecord.image_url = nextImageUrl;
+      sourceRecord.imageUrl = nextImageUrl;
+    } else {
+      delete row.image_url;
+      delete sourceRecord.image_url;
+      delete sourceRecord.imageUrl;
+    }
+    row.source = sourceRecord;
+  }
 
   for (let attempt = 0; attempt < 12; attempt += 1) {
     try {
