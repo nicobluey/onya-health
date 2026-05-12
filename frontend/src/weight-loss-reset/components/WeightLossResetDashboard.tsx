@@ -470,6 +470,15 @@ function resolveRecipeImageUrl(recipe: Recipe) {
   return '';
 }
 
+function getRecipeMealTypeLabel(recipe: Recipe) {
+  const value = String(recipe?.mealType || '').trim().toLowerCase();
+  if (value === 'breakfast') return 'Breakfast';
+  if (value === 'lunch') return 'Lunch';
+  if (value === 'dinner') return 'Dinner';
+  if (value === 'snack') return 'Snack';
+  return 'Meal';
+}
+
 function formatMinutesLabel(totalMinutes: number) {
   const value = Math.max(0, Math.round(Number(totalMinutes || 0)));
   if (!value) return 'n/a';
@@ -536,7 +545,18 @@ function MealCard({
             loading="lazy"
           />
         ) : (
-          <div className="h-44 w-full bg-[#edf4fa]" />
+          <div className="relative h-44 w-full overflow-hidden bg-gradient-to-br from-[#d7e6f2] via-[#e5eff7] to-[#f4f8fb]">
+            <div className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-white/50 blur-xl" />
+            <div className="pointer-events-none absolute -bottom-10 -left-8 h-32 w-32 rounded-full bg-[#b7d0e4]/60 blur-xl" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="inline-flex h-12 w-12 items-center justify-center rounded-full bg-white/85 text-[#1a3d63] shadow-[0_10px_22px_-16px_rgba(10,25,49,0.55)]">
+                <CookingPot size={22} />
+              </span>
+            </div>
+            <p className="absolute bottom-3 left-3 rounded-full bg-white/85 px-2.5 py-1 text-[11px] font-semibold text-[#1a3d63]">
+              {getRecipeMealTypeLabel(recipe)}
+            </p>
+          </div>
         )}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#0a1931]/24 to-transparent" />
         <div className="absolute left-2 top-2">

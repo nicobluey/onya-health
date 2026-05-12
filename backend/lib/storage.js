@@ -1508,8 +1508,7 @@ async function upsertPatientBillingSupabase(patientEmail, patch = {}) {
   return mapSupabaseRowToPatientBilling(row || body);
 }
 
-async function listMealPlannerRecipesSupabase(options = {}) {
-  const includeNonGenerated = Boolean(options?.includeNonGenerated);
+async function listMealPlannerRecipesSupabase() {
   const baseColumns = [
     'id',
     'title',
@@ -1536,8 +1535,8 @@ async function listMealPlannerRecipesSupabase(options = {}) {
   ];
   let columns = [...baseColumns];
   let rows = [];
-  let useIsActiveFilter = !includeNonGenerated;
-  let useGeneratedByFilter = !includeNonGenerated;
+  let useIsActiveFilter = true;
+  let useGeneratedByFilter = true;
 
   for (let attempt = 0; attempt < 8; attempt += 1) {
     try {
@@ -1590,7 +1589,7 @@ async function listMealPlannerRecipesSupabase(options = {}) {
   const recipes = Array.isArray(rows) ? rows.map(mapRecipeRecordToMealPlannerRecipe) : [];
   const normalizedRecipes = recipes
     .filter((recipe) => recipe.id && recipe.title && Array.isArray(recipe.ingredients))
-    .filter((recipe) => (includeNonGenerated ? true : isMealPlannerRecipeEligible(recipe)));
+    .filter((recipe) => isMealPlannerRecipeEligible(recipe));
   for (const recipe of normalizedRecipes) {
     setCachedSupabaseMealPlannerRecipeById(recipe);
   }
@@ -2426,9 +2425,9 @@ export async function upsertPatientBillingByEmail(email, patch = {}) {
   return upsertPatientBillingLocal(email, patch);
 }
 
-export async function listMealPlannerRecipes(options = {}) {
+export async function listMealPlannerRecipes() {
   if (getSupabaseConfig().enabled) {
-    return listMealPlannerRecipesSupabase(options);
+    return listMealPlannerRecipesSupabase();
   }
   return listMealPlannerRecipesLocal();
 }
