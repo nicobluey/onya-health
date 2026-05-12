@@ -1536,7 +1536,7 @@ async function listMealPlannerRecipesSupabase(options = {}) {
   ];
   let columns = [...baseColumns];
   let rows = [];
-  let useIsActiveFilter = !includeNonGenerated;
+  let useIsActiveFilter = true;
   let useGeneratedByFilter = !includeNonGenerated;
 
   for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -1590,7 +1590,7 @@ async function listMealPlannerRecipesSupabase(options = {}) {
   const recipes = Array.isArray(rows) ? rows.map(mapRecipeRecordToMealPlannerRecipe) : [];
   const normalizedRecipes = recipes
     .filter((recipe) => recipe.id && recipe.title && Array.isArray(recipe.ingredients))
-    .filter((recipe) => (includeNonGenerated ? true : isMealPlannerRecipeEligible(recipe)));
+    .filter((recipe) => (includeNonGenerated ? recipe.isActive !== false : isMealPlannerRecipeEligible(recipe)));
   for (const recipe of normalizedRecipes) {
     setCachedSupabaseMealPlannerRecipeById(recipe);
   }
