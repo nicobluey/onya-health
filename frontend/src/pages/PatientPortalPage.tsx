@@ -1369,6 +1369,10 @@ export default function PatientPortalPage() {
     const requestedProgram = initialSearchParams.get('program')?.toLowerCase() || '';
     const initialEmailChangeToken = String(initialSearchParams.get('email_change_token') || '').trim();
     const openWeightLossFromRoute = requestedProgram === 'weight-loss-reset' || requestedProgram === 'nutritionist';
+    const [isDesktopViewport, setIsDesktopViewport] = useState(() => {
+        if (typeof window === 'undefined') return true;
+        return window.matchMedia('(min-width: 768px)').matches;
+    });
     const [mainTab, setMainTab] = useState<MainTab>('home');
     const {
         state: weightLossResetState,
@@ -1505,6 +1509,19 @@ export default function PatientPortalPage() {
         if (!portalDataReady) return;
         safeLocalStorageSetItem(profileStorageKey, JSON.stringify(portalData));
     }, [portalDataReady, portalData, profileStorageKey]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined') return undefined;
+        const mediaQuery = window.matchMedia('(min-width: 768px)');
+        const syncViewport = () => setIsDesktopViewport(mediaQuery.matches);
+        syncViewport();
+        if (typeof mediaQuery.addEventListener === 'function') {
+            mediaQuery.addEventListener('change', syncViewport);
+            return () => mediaQuery.removeEventListener('change', syncViewport);
+        }
+        mediaQuery.addListener(syncViewport);
+        return () => mediaQuery.removeListener(syncViewport);
+    }, []);
 
     const hydrateRecipeCatalogFromServer = useCallback(
         async ({ force = false } = {}) => {
@@ -2647,31 +2664,35 @@ export default function PatientPortalPage() {
         );
     }
 
-    return (
-        <>
-            <div className="relative hidden min-h-screen bg-[#f6fafd] text-[#0a1931] md:flex">
+    if (isDesktopViewport) {
+        return (
+            <div className="relative min-h-screen bg-[#f6fafd] text-[#0a1931]">
                 <PortalBackdropArt />
-                <DesktopSidebar activeTab={mainTab} onTabChange={setTab} patient={patient} onProfileClick={openAccountSettings} />
-                <main className="relative z-10 flex-1">
-                    <div className="mx-auto w-full max-w-[1160px] px-8 py-7">
-                        {portalScreen === 'main' && (
-                            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#b3cfe5] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#1a3d63]">
-                                <Home size={14} />
-                                {MAIN_TABS.find((tab) => tab === mainTab)?.toUpperCase()}
-                            </div>
-                        )}
-                        {renderPortalContent('desktop')}
-                    </div>
-                </main>
+                <div className="relative flex min-h-screen">
+                    <DesktopSidebar activeTab={mainTab} onTabChange={setTab} patient={patient} onProfileClick={openAccountSettings} />
+                    <main className="relative z-10 flex-1">
+                        <div className="mx-auto w-full max-w-[1160px] px-8 py-7">
+                            {portalScreen === 'main' && (
+                                <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#b3cfe5] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#1a3d63]">
+                                    <Home size={14} />
+                                    {MAIN_TABS.find((tab) => tab === mainTab)?.toUpperCase()}
+                                </div>
+                            )}
+                            {renderPortalContent('desktop')}
+                        </div>
+                    </main>
+                </div>
             </div>
+        );
+    }
 
-            <div className={`relative min-h-screen overflow-hidden bg-[#f6fafd] text-[#0a1931] md:hidden ${portalScreen === 'main' ? 'pb-28' : 'pb-6'}`}>
-                <PortalBackdropArt />
-                <MobileTopBar activeTab={mainTab} onHome={openPortalHome} />
-                <main className="relative z-10 px-4 py-5">{renderPortalContent('mobile')}</main>
-                {portalScreen === 'main' && queuedRequest && <QueueBanner request={queuedRequest} onTap={openQueuedScreen} />}
-                {portalScreen === 'main' && <MobileBottomNav activeTab={mainTab} onTabChange={setTab} />}
-            </div>
-        </>
+    return (
+        <div className={`relative min-h-screen overflow-hidden bg-[#f6fafd] text-[#0a1931] ${portalScreen === 'main' ? 'pb-28' : 'pb-6'}`}>
+            <PortalBackdropArt />
+            <MobileTopBar activeTab={mainTab} onHome={openPortalHome} />
+            <main className="relative z-10 px-4 py-5">{renderPortalContent('mobile')}</main>
+            {portalScreen === 'main' && queuedRequest && <QueueBanner request={queuedRequest} onTap={openQueuedScreen} />}
+            {portalScreen === 'main' && <MobileBottomNav activeTab={mainTab} onTabChange={setTab} />}
+        </div>
     );
 }
