@@ -1536,6 +1536,7 @@ export default function PatientPortalPage() {
             try {
                 const { response, payload } = await fetchApiJson('/api/patient/meal-plan/catalog?limit=420&includeDataImages=1', {
                     method: 'GET',
+                    cache: 'no-store',
                     headers: {
                         Authorization: `Bearer ${activeToken}`,
                     },
@@ -1573,6 +1574,7 @@ export default function PatientPortalPage() {
             try {
                 const { response, payload } = await fetchApiJson('/api/patient/meal-plan/latest?includeDataImages=1', {
                     method: 'GET',
+                    cache: 'no-store',
                     headers: {
                         Authorization: `Bearer ${activeToken}`,
                     },
