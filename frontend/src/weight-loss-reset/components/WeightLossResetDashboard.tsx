@@ -69,48 +69,6 @@ const EQUIPMENT_LABELS: Record<CookingEquipment, string> = {
   'air fryer': EQUIPMENT_META['air fryer'].label,
   microwave: EQUIPMENT_META.microwave.label,
 };
-const LOCAL_AI_MEAL_FALLBACKS: Record<MealType, string[]> = {
-  breakfast: [
-    '/meal-fallbacks/breakfast-1.webp',
-    '/meal-fallbacks/breakfast-2.webp',
-    '/meal-fallbacks/breakfast-3.webp',
-    '/meal-fallbacks/breakfast-4.webp',
-  ],
-  lunch: [
-    '/meal-fallbacks/lunch-1.webp',
-    '/meal-fallbacks/lunch-2.webp',
-    '/meal-fallbacks/lunch-3.webp',
-    '/meal-fallbacks/lunch-4.webp',
-  ],
-  dinner: [
-    '/meal-fallbacks/dinner-1.webp',
-    '/meal-fallbacks/dinner-2.webp',
-    '/meal-fallbacks/dinner-3.webp',
-    '/meal-fallbacks/dinner-4.webp',
-  ],
-  snack: [
-    '/meal-fallbacks/snack-1.webp',
-    '/meal-fallbacks/snack-2.webp',
-    '/meal-fallbacks/snack-3.webp',
-    '/meal-fallbacks/snack-4.webp',
-  ],
-};
-const LOCAL_AI_MEAL_FALLBACK_POOL = [
-  ...LOCAL_AI_MEAL_FALLBACKS.breakfast,
-  ...LOCAL_AI_MEAL_FALLBACKS.lunch,
-  ...LOCAL_AI_MEAL_FALLBACKS.dinner,
-  ...LOCAL_AI_MEAL_FALLBACKS.snack,
-];
-
-function hashTextToUnsignedInt(value: string) {
-  const text = String(value || '');
-  let hash = 2166136261;
-  for (let index = 0; index < text.length; index += 1) {
-    hash ^= text.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
 
 function RecipeEquipmentPills({ recipe, compact = false }: { recipe: Recipe; compact?: boolean }) {
   const requiredEquipment = getRecipeRequiredEquipment(recipe);
@@ -510,14 +468,28 @@ function resolveRecipeImageUrl(recipe: Recipe) {
   if (isConcreteRecipeImage(candidate)) return candidate;
   const sourceCandidate = String(recipe?.source?.image_url || recipe?.source?.imageUrl || '').trim();
   if (isConcreteRecipeImage(sourceCandidate)) return sourceCandidate;
-  const normalizedMealType = String(recipe?.mealType || '').trim().toLowerCase();
-  const pool = normalizedMealType === 'breakfast' || normalizedMealType === 'lunch' || normalizedMealType === 'dinner' || normalizedMealType === 'snack'
-    ? LOCAL_AI_MEAL_FALLBACKS[normalizedMealType as MealType]
-    : LOCAL_AI_MEAL_FALLBACK_POOL;
-  if (!Array.isArray(pool) || pool.length === 0) return '';
-  const seed = `${recipe?.id || ''}|${recipe?.title || ''}|${normalizedMealType}`;
-  const index = hashTextToUnsignedInt(seed) % pool.length;
-  return String(pool[index] || '').trim();
+  return '';
+}
+
+function RecipeImagePlaceholder({
+  className,
+  compact = false,
+  label = 'Image pending',
+}: {
+  className: string;
+  compact?: boolean;
+  label?: string;
+}) {
+  return (
+    <div className={`${className} flex items-center justify-center bg-[radial-gradient(circle_at_30%_20%,#f6fafd_0%,#e8f1f8_45%,#d8e6f1_100%)]`}>
+      <div className="flex flex-col items-center gap-1 text-[#1a3d63]/75">
+        <span className={`inline-flex items-center justify-center rounded-full bg-white/85 ${compact ? 'h-8 w-8' : 'h-12 w-12'}`}>
+          <CookingPot size={compact ? 14 : 20} />
+        </span>
+        {label ? <span className={compact ? 'text-[10px] font-medium' : 'text-xs font-medium'}>{label}</span> : null}
+      </div>
+    </div>
+  );
 }
 
 function formatMinutesLabel(totalMinutes: number) {
@@ -586,7 +558,7 @@ function MealCard({
             loading="lazy"
           />
         ) : (
-          <div className="h-44 w-full bg-[#edf4fa]" />
+          <RecipeImagePlaceholder className="h-44 w-full" />
         )}
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#0a1931]/24 to-transparent" />
         <div className="absolute left-2 top-2">
@@ -1856,12 +1828,18 @@ export default function WeightLossResetDashboard({
                           className="inline-flex max-w-[280px] items-center gap-2 rounded-full bg-white px-2 py-1 shadow-[0_10px_20px_-16px_rgba(10,25,49,0.4)]"
                           title={entry.title}
                         >
-                          <img
-                            src={entry.imageUrl}
-                            alt={entry.title}
-                            className="h-6 w-6 shrink-0 rounded-full object-cover"
-                            loading="lazy"
-                          />
+                          {entry.imageUrl ? (
+                            <img
+                              src={entry.imageUrl}
+                              alt={entry.title}
+                              className="h-6 w-6 shrink-0 rounded-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#edf4fa] text-[#1a3d63]/70">
+                              <CookingPot size={12} />
+                            </span>
+                          )}
                           <span className="truncate text-xs text-[#1a3d63]">{entry.title}</span>
                           {entry.count > 1 ? (
                             <span className="rounded-full bg-[#edf4fa] px-1.5 py-0.5 text-[10px] font-semibold text-[#1a3d63]">
@@ -2070,7 +2048,7 @@ export default function WeightLossResetDashboard({
             {resolveRecipeImageUrl(selectedRecipe) ? (
               <img src={resolveRecipeImageUrl(selectedRecipe)} alt={selectedRecipe.title} className="h-56 w-full rounded-2xl object-cover" />
             ) : (
-              <div className="h-56 w-full rounded-2xl bg-[#f6fafd]" />
+              <RecipeImagePlaceholder className="h-56 w-full rounded-2xl" label="Recipe image generating" />
             )}
             <h3 className="mt-4 text-2xl font-semibold text-[#0a1931]">{selectedRecipe.title}</h3>
             <RecipeBadgePills recipe={selectedRecipe} />
@@ -2171,7 +2149,7 @@ export default function WeightLossResetDashboard({
                           loading="lazy"
                         />
                       ) : (
-                        <div className="h-14 w-14 shrink-0 rounded-xl bg-[#eaf2f9]" />
+                        <RecipeImagePlaceholder className="h-14 w-14 shrink-0 rounded-xl" compact label="" />
                       )}
                       <div className="min-w-0">
                         <p className="line-clamp-2 text-sm font-semibold text-[#0a1931]">{recipe.title}</p>
