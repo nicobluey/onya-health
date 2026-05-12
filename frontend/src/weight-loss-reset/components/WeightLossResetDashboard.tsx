@@ -69,48 +69,6 @@ const EQUIPMENT_LABELS: Record<CookingEquipment, string> = {
   'air fryer': EQUIPMENT_META['air fryer'].label,
   microwave: EQUIPMENT_META.microwave.label,
 };
-const LOCAL_AI_MEAL_FALLBACKS: Record<MealType, string[]> = {
-  breakfast: [
-    '/meal-fallbacks/breakfast-1.webp',
-    '/meal-fallbacks/breakfast-2.webp',
-    '/meal-fallbacks/breakfast-3.webp',
-    '/meal-fallbacks/breakfast-4.webp',
-  ],
-  lunch: [
-    '/meal-fallbacks/lunch-1.webp',
-    '/meal-fallbacks/lunch-2.webp',
-    '/meal-fallbacks/lunch-3.webp',
-    '/meal-fallbacks/lunch-4.webp',
-  ],
-  dinner: [
-    '/meal-fallbacks/dinner-1.webp',
-    '/meal-fallbacks/dinner-2.webp',
-    '/meal-fallbacks/dinner-3.webp',
-    '/meal-fallbacks/dinner-4.webp',
-  ],
-  snack: [
-    '/meal-fallbacks/snack-1.webp',
-    '/meal-fallbacks/snack-2.webp',
-    '/meal-fallbacks/snack-3.webp',
-    '/meal-fallbacks/snack-4.webp',
-  ],
-};
-const LOCAL_AI_MEAL_FALLBACK_POOL = [
-  ...LOCAL_AI_MEAL_FALLBACKS.breakfast,
-  ...LOCAL_AI_MEAL_FALLBACKS.lunch,
-  ...LOCAL_AI_MEAL_FALLBACKS.dinner,
-  ...LOCAL_AI_MEAL_FALLBACKS.snack,
-];
-
-function hashTextToUnsignedInt(value: string) {
-  const text = String(value || '');
-  let hash = 2166136261;
-  for (let index = 0; index < text.length; index += 1) {
-    hash ^= text.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
 
 function RecipeEquipmentPills({ recipe, compact = false }: { recipe: Recipe; compact?: boolean }) {
   const requiredEquipment = getRecipeRequiredEquipment(recipe);
@@ -510,14 +468,7 @@ function resolveRecipeImageUrl(recipe: Recipe) {
   if (isConcreteRecipeImage(candidate)) return candidate;
   const sourceCandidate = String(recipe?.source?.image_url || recipe?.source?.imageUrl || '').trim();
   if (isConcreteRecipeImage(sourceCandidate)) return sourceCandidate;
-  const normalizedMealType = String(recipe?.mealType || '').trim().toLowerCase();
-  const pool = normalizedMealType === 'breakfast' || normalizedMealType === 'lunch' || normalizedMealType === 'dinner' || normalizedMealType === 'snack'
-    ? LOCAL_AI_MEAL_FALLBACKS[normalizedMealType as MealType]
-    : LOCAL_AI_MEAL_FALLBACK_POOL;
-  if (!Array.isArray(pool) || pool.length === 0) return '';
-  const seed = `${recipe?.id || ''}|${recipe?.title || ''}|${normalizedMealType}`;
-  const index = hashTextToUnsignedInt(seed) % pool.length;
-  return String(pool[index] || '').trim();
+  return '';
 }
 
 function getRecipeMealTypeLabel(recipe: Recipe) {
