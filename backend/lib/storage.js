@@ -1590,7 +1590,7 @@ async function listMealPlannerRecipesSupabase(options = {}) {
   const recipes = Array.isArray(rows) ? rows.map(mapRecipeRecordToMealPlannerRecipe) : [];
   const normalizedRecipes = recipes
     .filter((recipe) => recipe.id && recipe.title && Array.isArray(recipe.ingredients))
-    .filter((recipe) => isMealPlannerRecipeEligible(recipe));
+    .filter((recipe) => (includeNonGenerated ? recipe.isActive !== false : isMealPlannerRecipeEligible(recipe)));
   for (const recipe of normalizedRecipes) {
     setCachedSupabaseMealPlannerRecipeById(recipe);
   }
