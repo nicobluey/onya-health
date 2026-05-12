@@ -10,7 +10,7 @@ const OPENAI_GENERATED_RECIPES_TIMEOUT_MS = Math.max(
 const OPENAI_MEAL_IMAGE_TIMEOUT_MS = Math.max(3000, Number(process.env.OPENAI_MEAL_IMAGE_TIMEOUT_MS || 15000));
 const OPENAI_MAX_GENERATED_RECIPE_IMAGES = Math.max(
   0,
-  Math.min(24, Number(process.env.OPENAI_MAX_GENERATED_RECIPE_IMAGES || 20)),
+  Math.min(12, Number(process.env.OPENAI_MAX_GENERATED_RECIPE_IMAGES || 8)),
 );
 const OPENAI_MEAL_PLAN_MAX_OUTPUT_TOKENS = Math.max(
   1600,
@@ -2388,6 +2388,7 @@ export async function generateOpenAiMealPlanWithGeneratedRecipes({ answers, incl
         imageCoverage,
         recipeCount: normalized.recipes.length,
       });
+      return null;
     }
     return {
       ...normalized,

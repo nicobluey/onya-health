@@ -168,6 +168,15 @@ const checkoutTimingWindows = {
   persistence: [],
 };
 const patientProfileCache = new Map();
+const RECIPE_IMAGE_FALLBACK_CACHE_TTL_MS = Math.max(
+  60_000,
+  Number(process.env.RECIPE_IMAGE_FALLBACK_CACHE_TTL_MS || 1000 * 60 * 10)
+);
+const recipeImageFallbackCache = {
+  loadedAt: 0,
+  byMealType: new Map(),
+  allImages: [],
+};
 
 function normalizeDurationMs(value) {
   const numberValue = Number(value);
@@ -775,6 +784,96 @@ function resolveRecipeImageCandidate(recipe) {
     ? recipe.source
     : {};
   return normalizeRecipeImageToWebp(String(recipe?.imageUrl || source.image_url || source.imageUrl || '').trim());
+}
+
+function resolveRecipeMealTypeForFallback(recipe) {
+  const source = recipe?.source && typeof recipe.source === 'object' && !Array.isArray(recipe.source)
+    ? recipe.source
+    : {};
+  const mealType = String(recipe?.mealType || source.mealType || '').trim().toLowerCase();
+  if (mealType === 'breakfast' || mealType === 'lunch' || mealType === 'dinner' || mealType === 'snack') {
+    return mealType;
+  }
+  return '';
+}
+
+function hashTextToUnsignedInt(value) {
+  const text = String(value || '');
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function assignFallbackImageToRecipe(recipe, fallbackPool) {
+  if (!recipe || typeof recipe !== 'object' || Array.isArray(recipe)) return recipe;
+  const existingImage = resolveRecipeImageCandidate(recipe);
+  if (existingImage) return recipe;
+
+  const byMealType = fallbackPool?.byMealType instanceof Map ? fallbackPool.byMealType : new Map();
+  const allImages = Array.isArray(fallbackPool?.allImages) ? fallbackPool.allImages : [];
+  const mealType = resolveRecipeMealTypeForFallback(recipe);
+  const pool = (mealType && Array.isArray(byMealType.get(mealType)) && byMealType.get(mealType).length > 0)
+    ? byMealType.get(mealType)
+    : allImages;
+  if (!Array.isArray(pool) || pool.length === 0) return recipe;
+
+  const seed = String(recipe?.id || recipe?.title || Math.random());
+  const index = hashTextToUnsignedInt(seed) % pool.length;
+  const fallbackImage = String(pool[index] || '').trim();
+  if (!fallbackImage) return recipe;
+
+  const source = recipe?.source && typeof recipe.source === 'object' && !Array.isArray(recipe.source)
+    ? { ...recipe.source }
+    : {};
+  source.image_url = fallbackImage;
+  source.imageUrl = fallbackImage;
+  source.imageFallback = true;
+
+  return {
+    ...recipe,
+    imageUrl: fallbackImage,
+    source,
+  };
+}
+
+async function getRecipeImageFallbackPool() {
+  const now = Date.now();
+  if (now - recipeImageFallbackCache.loadedAt < RECIPE_IMAGE_FALLBACK_CACHE_TTL_MS && recipeImageFallbackCache.allImages.length > 0) {
+    return recipeImageFallbackCache;
+  }
+
+  const allPersistedRecipes = await listMealPlannerRecipes({ includeNonGenerated: true }).catch((errorObject) => {
+    error('meal_plan.image_fallback_catalog_load_failed', {
+      message: errorObject?.message || String(errorObject),
+    });
+    return [];
+  });
+  const normalized = normalizeRecipeListForProduct(allPersistedRecipes);
+  const byMealType = new Map([
+    ['breakfast', []],
+    ['lunch', []],
+    ['dinner', []],
+    ['snack', []],
+  ]);
+  const allImages = [];
+
+  for (const recipe of normalized) {
+    const imageUrl = resolveRecipeImageCandidate(recipe);
+    if (!imageUrl) continue;
+    allImages.push(imageUrl);
+    const mealType = resolveRecipeMealTypeForFallback(recipe);
+    if (mealType && byMealType.has(mealType)) {
+      byMealType.get(mealType).push(imageUrl);
+    }
+  }
+
+  recipeImageFallbackCache.loadedAt = now;
+  recipeImageFallbackCache.byMealType = byMealType;
+  recipeImageFallbackCache.allImages = allImages;
+  return recipeImageFallbackCache;
 }
 
 function signMealPlanRecipeImageId(recipeId) {
@@ -5909,7 +6008,9 @@ export default async function handler(req, res) {
           includeGlobalGeneratedFallback: true,
         });
         const normalizedCatalog = normalizeRecipeListForProduct(generatedCatalog.recipes);
-        const recipes = mapRecipeListForClient(normalizedCatalog, req, { inlineDataImages: includeDataImages }).slice(0, limit);
+        const imageFallbackPool = await getRecipeImageFallbackPool();
+        const recipesWithFallbackImages = normalizedCatalog.map((recipe) => assignFallbackImageToRecipe(recipe, imageFallbackPool));
+        const recipes = mapRecipeListForClient(recipesWithFallbackImages, req, { inlineDataImages: includeDataImages }).slice(0, limit);
 
         const catalogSource =
           generatedCatalog.hydratedEntryCount > 0
@@ -6008,7 +6109,11 @@ export default async function handler(req, res) {
         }
 
         const normalizedHydratedRecipes = normalizeRecipeListForProduct(hydrated.recipes);
-        const recipes = mapRecipeListForClient(normalizedHydratedRecipes, req, {
+        const imageFallbackPool = await getRecipeImageFallbackPool();
+        const recipesWithFallbackImages = normalizedHydratedRecipes.map((recipe) =>
+          assignFallbackImageToRecipe(recipe, imageFallbackPool)
+        );
+        const recipes = mapRecipeListForClient(recipesWithFallbackImages, req, {
           inlineDataImages: includeDataImages,
         });
         let onboardingAnswers = sanitizeOnboardingAnswersForBundle(
