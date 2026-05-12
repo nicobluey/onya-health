@@ -93,6 +93,7 @@ function isConcreteRecipeImageUrl(url: string) {
     if (!/^https?:\/\//i.test(value)) return false;
     try {
         const parsed = new URL(value);
+        if (String(parsed.hostname || '').trim().toLowerCase().includes('dietitiansaustralia.org.au')) return false;
         if (parsed.pathname === '/api/patient/meal-plan/recipe-image') return true;
         if (/\.(?:webp|png|jpe?g|gif|avif)$/i.test(parsed.pathname.toLowerCase())) return true;
         const format = String(parsed.searchParams.get('fm') || parsed.searchParams.get('format') || '').trim().toLowerCase();
@@ -144,7 +145,7 @@ function mergeRecipeCatalog(existing: Recipe[], incoming: Recipe[]): Recipe[] {
             ? nextImage
             : isConcreteRecipeImageUrl(baseImage)
               ? baseImage
-              : nextImage || baseImage;
+              : '';
 
         const mergedSource: Record<string, unknown> = {
             ...baseSource,
@@ -154,6 +155,9 @@ function mergeRecipeCatalog(existing: Recipe[], incoming: Recipe[]): Recipe[] {
         if (chosenImage) {
             mergedSource.image_url = chosenImage;
             mergedSource.imageUrl = chosenImage;
+        } else {
+            delete mergedSource.image_url;
+            delete mergedSource.imageUrl;
         }
 
         return {

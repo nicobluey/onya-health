@@ -36,6 +36,8 @@ function isWebpHttpImage(value) {
   if (!/^https?:\/\//i.test(candidate)) return false;
   try {
     const parsed = new URL(candidate);
+    const hostname = String(parsed.hostname || '').trim().toLowerCase();
+    if (hostname.includes('dietitiansaustralia.org.au')) return false;
     const path = parsed.pathname.toLowerCase();
     if (path.endsWith('.webp')) return true;
     return /(?:^|[?&])(fm|format)=webp(?:&|$)/i.test(candidate);

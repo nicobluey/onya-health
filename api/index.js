@@ -744,6 +744,8 @@ function isWebpHttpImage(value) {
   if (!/^https?:\/\//i.test(candidate)) return false;
   try {
     const parsed = new URL(candidate);
+    const hostname = String(parsed.hostname || '').trim().toLowerCase();
+    if (hostname.includes('dietitiansaustralia.org.au')) return false;
     const pathname = String(parsed.pathname || '').toLowerCase();
     const extensionMatch = pathname.match(/\.([a-z0-9]+)$/i);
     if (extensionMatch && SUPPORTED_RECIPE_HTTP_IMAGE_EXTENSIONS.has(String(extensionMatch[1] || '').toLowerCase())) {
