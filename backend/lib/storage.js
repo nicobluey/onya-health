@@ -56,14 +56,6 @@ const LOCAL_MEAL_PLAN_CACHE_MAX_ENTRIES = Math.max(
   25,
   Number(process.env.LOCAL_MEAL_PLAN_CACHE_MAX_ENTRIES || 500),
 );
-const MAX_WEEKLY_PODCAST_CACHE_ENTRIES = Math.max(
-  1,
-  Math.min(24, Number(process.env.MAX_WEEKLY_PODCAST_CACHE_ENTRIES || 8))
-);
-const MAX_WEEKLY_PODCAST_AUDIO_BASE64_CHARS = Math.max(
-  250_000,
-  Number(process.env.MAX_WEEKLY_PODCAST_AUDIO_BASE64_CHARS || 6_000_000)
-);
 const MEAL_PLAN_CACHE_EVENT_TYPE = 'MEAL_PLAN_CACHE_V1';
 const SHARED_MEAL_PLAN_TEMPLATE_EMAIL = 'mealplan-template@onyahealth.local';
 const ALLOWED_MEAL_RECIPE_GENERATED_BY = new Set(['openai', 'rules']);
@@ -766,65 +758,6 @@ function normalizeOnboardingAnswersForCache(answers) {
   };
 }
 
-function normalizeWeeklyPodcastScriptHash(value) {
-  const normalized = String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, '')
-    .slice(0, 96);
-  return normalized || undefined;
-}
-
-function normalizeWeeklyPodcastCacheEntry(entry, fallbackWeekKey = '') {
-  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
-  const source = entry;
-  const weekKey = String(source.weekKey || fallbackWeekKey || '').trim().slice(0, 96);
-  const audioBase64 = String(source.audioBase64 || '').replace(/\s+/g, '').trim();
-  if (!weekKey || !audioBase64) return null;
-  if (audioBase64.length > MAX_WEEKLY_PODCAST_AUDIO_BASE64_CHARS) return null;
-
-  const generatedAt = source.generatedAt ? String(source.generatedAt) : new Date().toISOString();
-  const duration = Number(source.estimatedDurationSec || source.durationSec || 0);
-  const normalizedDuration = Number.isFinite(duration)
-    ? Math.max(0, Math.min(3600, Math.round(duration)))
-    : 0;
-
-  return {
-    weekKey,
-    scriptHash: normalizeWeeklyPodcastScriptHash(source.scriptHash || source.generationKey),
-    generationKey: String(source.generationKey || '').trim().slice(0, 180) || undefined,
-    transcript: String(source.transcript || '').trim().slice(0, 12_000) || undefined,
-    voiceProfile: String(source.voiceProfile || '').trim().slice(0, 60) || undefined,
-    voice: String(source.voice || '').trim().slice(0, 60) || undefined,
-    audioMimeType: String(source.audioMimeType || 'audio/mpeg').trim().slice(0, 80) || 'audio/mpeg',
-    audioBase64,
-    estimatedDurationSec: normalizedDuration,
-    generatedAt,
-  };
-}
-
-function normalizeWeeklyPodcastCacheMap(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
-  const entries = [];
-  for (const [weekKey, entry] of Object.entries(value)) {
-    const normalized = normalizeWeeklyPodcastCacheEntry(entry, weekKey);
-    if (!normalized) continue;
-    entries.push(normalized);
-  }
-  if (entries.length === 0) return undefined;
-
-  entries.sort((left, right) =>
-    String(right.generatedAt || '').localeCompare(String(left.generatedAt || ''))
-  );
-
-  const output = {};
-  for (const entry of entries.slice(0, MAX_WEEKLY_PODCAST_CACHE_ENTRIES)) {
-    if (output[entry.weekKey]) continue;
-    output[entry.weekKey] = entry;
-  }
-  return Object.keys(output).length > 0 ? output : undefined;
-}
-
 function normalizeMealPlanGenerationBundle(bundle) {
   if (!bundle || typeof bundle !== 'object' || Array.isArray(bundle)) return null;
   const mealPlan = bundle.mealPlan && typeof bundle.mealPlan === 'object' && !Array.isArray(bundle.mealPlan) ? bundle.mealPlan : null;
@@ -840,16 +773,12 @@ function normalizeMealPlanGenerationBundle(bundle) {
   const onboardingAnswers = normalizeOnboardingAnswersForCache(
     bundle.onboardingAnswers || bundle.onboarding_answers || bundle.answers || null
   );
-  const weeklyPodcasts = normalizeWeeklyPodcastCacheMap(
-    bundle.weeklyPodcasts || bundle.weekly_podcasts || null
-  );
   if (!mealPlan || recipeIds.length === 0) return null;
   return {
     mealPlan,
     recipeIds,
     recipes,
     onboardingAnswers,
-    weeklyPodcasts,
   };
 }
 
