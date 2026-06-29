@@ -13,13 +13,13 @@
     <loc>https://www.onyahealth.com.au/caretaker</loc>
   </url>
   <url>
+    <loc>https://www.onyahealth.com.au/contact</loc>
+  </url>
+  <url>
     <loc>https://www.onyahealth.com.au/doctor</loc>
   </url>
   <url>
     <loc>https://www.onyahealth.com.au/fair-work-medical-certificates</loc>
-  </url>
-  <url>
-    <loc>https://www.onyahealth.com.au/health</loc>
   </url>
   <url>
     <loc>https://www.onyahealth.com.au/health/ankle-sprain-recovery-time</loc>
@@ -172,19 +172,37 @@
     <loc>https://www.onyahealth.com.au/health/work-sick-leave-certificate-online</loc>
   </url>
   <url>
+    <loc>https://www.onyahealth.com.au/medical-certificate-carers-leave</loc>
+  </url>
+  <url>
+    <loc>https://www.onyahealth.com.au/medical-certificate-doctor</loc>
+  </url>
+  <url>
+    <loc>https://www.onyahealth.com.au/medical-certificate-university</loc>
+  </url>
+  <url>
+    <loc>https://www.onyahealth.com.au/medical-certificate-work</loc>
+  </url>
+  <url>
     <loc>https://www.onyahealth.com.au/nutritionist</loc>
   </url>
   <url>
-    <loc>https://www.onyahealth.com.au/patient</loc>
+    <loc>https://www.onyahealth.com.au/patient-login</loc>
   </url>
   <url>
-    <loc>https://www.onyahealth.com.au/patient-login</loc>
+    <loc>https://www.onyahealth.com.au/privacy</loc>
   </url>
   <url>
     <loc>https://www.onyahealth.com.au/psychologist</loc>
   </url>
   <url>
     <loc>https://www.onyahealth.com.au/student</loc>
+  </url>
+  <url>
+    <loc>https://www.onyahealth.com.au/terms</loc>
+  </url>
+  <url>
+    <loc>https://www.onyahealth.com.au/trust</loc>
   </url>
   <url>
     <loc>https://www.onyahealth.com.au/verify</loc>

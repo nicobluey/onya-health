@@ -884,6 +884,38 @@ function toPositiveNumber(value, { min = 0, max = 5000, precision = 0 } = {}) {
   return Math.round(bounded * scale) / scale;
 }
 
+function roundToNearest(value, step = 50) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.round(numeric / step) * step;
+}
+
+function estimateDailyEnergyRange(answers = {}, coreMealTypes = CORE_MEAL_TYPES) {
+  const mealCount = Array.isArray(coreMealTypes) && coreMealTypes.length > 0 ? coreMealTypes.length : 3;
+  const gender = String(answers?.gender || '').trim().toLowerCase();
+  const isFemale = /\b(female|woman|women|f)\b/.test(gender);
+  const age = toPositiveNumber(answers?.age, { min: 16, max: 90 }) || 40;
+  const heightCm = toPositiveNumber(answers?.heightCm, { min: 120, max: 240 }) || 170;
+  const currentWeightKg = toPositiveNumber(answers?.currentWeightKg, { min: 35, max: 320, precision: 1 }) || 85;
+  const sexAdjustment = isFemale ? -161 : 5;
+  const estimatedBmr = 10 * currentWeightKg + 6.25 * heightCm - 5 * age + sexAdjustment;
+  const estimatedTdee = estimatedBmr * 1.35;
+  const baseFloor = mealCount <= 2 ? (isFemale ? 1100 : 1300) : (isFemale ? 1200 : 1500);
+  const profileFloor = Math.max(baseFloor, estimatedBmr * 0.65, estimatedTdee - 1400);
+  const minDailyCalories = Math.max(baseFloor, roundToNearest(profileFloor, 50));
+  const maxDailyCalories = Math.max(
+    minDailyCalories + 450,
+    roundToNearest(Math.max(estimatedTdee + 300, mealCount <= 2 ? 2200 : 2800), 50),
+  );
+
+  return {
+    minDailyCalories,
+    maxDailyCalories,
+    estimatedBmr: Math.round(estimatedBmr),
+    estimatedTdee: Math.round(estimatedTdee),
+  };
+}
+
 function normalizeList(values, { limit = 12, lowercase = false } = {}) {
   if (!Array.isArray(values)) return [];
   const output = [];
@@ -1669,6 +1701,8 @@ function calculatePlanQuality(plan, recipeMetaMap, answers = {}) {
   const issues = [];
   const criticalIssues = [];
   const availableEquipment = new Set(normalizeAvailableEquipmentForAnswers(answers));
+  const coreMealTypes = resolveCoreMealTypesFromMealsPerDay(answers?.mealsPerDay, answers?.selectedMealTypes);
+  const energyRange = estimateDailyEnergyRange(answers, coreMealTypes);
   const breakfastCounts = new Map();
   const lunchCounts = new Map();
   const dinnerCounts = new Map();
@@ -1712,13 +1746,15 @@ function calculatePlanQuality(plan, recipeMetaMap, answers = {}) {
     dinnerCounts.set(dinner, (dinnerCounts.get(dinner) || 0) + 1);
 
     const dailyCalories = Number(breakfastMeta.calories || 0) + Number(lunchMeta.calories || 0) + Number(dinnerMeta.calories || 0);
-    if (dailyCalories > 2400) {
+    if (dailyCalories > energyRange.maxDailyCalories) {
       score -= 6;
       issues.push(`Daily energy is too high on ${day?.label || 'a day'}.`);
     }
-    if (dailyCalories > 0 && dailyCalories < 900) {
+    if (dailyCalories > 0 && dailyCalories < energyRange.minDailyCalories) {
       score -= 10;
-      issues.push(`Daily energy is likely too low on ${day?.label || 'a day'}.`);
+      criticalIssues.push(
+        `Daily energy is likely too low on ${day?.label || 'a day'} (${Math.round(dailyCalories)} kcal; minimum ${energyRange.minDailyCalories} kcal).`,
+      );
     }
   }
 
@@ -1970,6 +2006,7 @@ async function callOpenAiForGeneratedMeals({ answers, includeSnack, seedSalt }) 
   const requiredMealsLabel = coreMealTypes.length > 0 ? coreMealTypes.join(', ') : CORE_MEAL_TYPES.join(', ');
   const recipeCountMin = Number(onboarding?.generationConstraints?.targetRecipeCountMin || 8);
   const recipeCountMax = Number(onboarding?.generationConstraints?.targetRecipeCountMax || 12);
+  const energyRange = estimateDailyEnergyRange(answers, coreMealTypes);
 
   const systemPrompt = [
     'You are an Accredited Practising Dietitian (APD) and meal-planning specialist.',
@@ -1982,6 +2019,8 @@ async function callOpenAiForGeneratedMeals({ answers, includeSnack, seedSalt }) 
     'Prioritize overlapping ingredients across recipes to minimize unique groceries and reduce waste.',
     'Prefer short prep/cook times and practical Australian supermarket ingredients.',
     `Each day must include the required meal types: ${requiredMealsLabel}. Include snack only when requested.`,
+    `Daily assigned meals must total at least ${energyRange.minDailyCalories} kcal and should generally stay below ${energyRange.maxDailyCalories} kcal.`,
+    'Use realistic one-person meal assignments; recipes may serve more than one for leftovers, but the daily plan is for one patient.',
     'Every meal id in days must reference an id present in recipes.',
     'Keep output concise and avoid unnecessary metadata.',
   ].join('\n');
@@ -1993,6 +2032,7 @@ async function callOpenAiForGeneratedMeals({ answers, includeSnack, seedSalt }) 
       includeSnack,
       seedSalt,
       intakeProfile: onboarding,
+      energyTargets: energyRange,
       outputSchema: {
         notes: ['short string'],
         recipes: [
@@ -2156,6 +2196,7 @@ function normalizeGeneratedBundle({ parsed, includeSnack, coreMealTypes = CORE_M
     });
     return null;
   }
+  const notes = normalizeList(parsed?.notes, { limit: 6 }).filter(Boolean);
   const minVarietyPerRequiredType = 1;
   const hasLowVariety = requiredCoreMealTypes.some((mealType) => {
     const count = (recipesByMealType[mealType] || []).length;
@@ -2197,7 +2238,6 @@ function normalizeGeneratedBundle({ parsed, includeSnack, coreMealTypes = CORE_M
     return null;
   }
 
-  const notes = normalizeList(parsed?.notes, { limit: 6 }).filter(Boolean);
   const caloriesCoverage =
     normalizedRecipes.length > 0
       ? normalizedRecipes.filter((recipe) => Number.isFinite(Number(recipe?.calories || 0)) && Number(recipe?.calories || 0) > 0).length /
@@ -2340,7 +2380,11 @@ export async function generateOpenAiMealPlanWithGeneratedRecipes({ answers, incl
             const hasFatalIssue = issues.some((issue) => {
               const message = String(issue || '').toLowerCase();
               if (!message) return false;
-              return message.includes('missing recipe metadata') || message.includes('requires unavailable equipment');
+              return (
+                message.includes('missing recipe metadata') ||
+                message.includes('requires unavailable equipment') ||
+                message.includes('daily energy is likely too low')
+              );
             });
             if (!hasFatalIssue) {
               normalized.mealPlan.notes = [

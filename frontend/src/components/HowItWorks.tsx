@@ -25,7 +25,7 @@ const GENERIC_TIMELINE_STEPS: TimelineStep[] = [
         key: 'doctor',
         title: 'Human doctors that deliver',
         description:
-            'A registered Australian doctor reviews your pre-consult and chats with you if needed. Once approved, your documentation is delivered instantly by email.',
+            'A registered Australian doctor reviews your pre-consult and chats with you if needed. If clinically appropriate, your documentation is delivered by email.',
     },
 ];
 

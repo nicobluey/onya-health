@@ -35,18 +35,18 @@ const USE_CASES: UseCaseConfig[] = [
         key: 'doctor',
         path: '/doctor',
         aliases: ['/medical-certificate-doctor'],
-        title: 'Medical certificates from $9 delivered instantly',
-        subtitle: 'Complete a short online form, receive doctor review, and get digital delivery if approved.',
+        title: 'Request a medical certificate online',
+        subtitle: 'Complete a short online form for Australian doctor review. Certificates are issued digitally where clinically appropriate.',
         heroImage: '/Medical Certificate Landing.webp',
         heroObjectClass: 'object-[64%_44%] md:object-[52%_44%]',
         heroImageAlt: 'Doctor reviewing an online medical certificate request',
         cardTitle: 'Doctor certificates',
-        cardBody: 'Doctor-reviewed certificate requests with instant digital delivery if approved.',
+        cardBody: 'Doctor-reviewed certificate requests with digital delivery where clinically appropriate.',
         cardCta: 'Book now',
         cardImageClass: 'object-[62%_44%]',
         purposeParam: null,
-        metaTitle: 'Medical Certificates from $9 Delivered Instantly | Onya Health',
-        metaDescription: 'Medical certificates from $9 delivered instantly online ($9.71 for 1 day), then linearly scaled up to $29.71 for 5-7 days. Or choose All Access at $19/month. Doctor-reviewed in Australia.',
+        metaTitle: 'Request a Medical Certificate Online | $9.71 for 1 Day | Onya Health',
+        metaDescription: 'Request a medical certificate online for $9.71 for 1 day, then linearly scaled up to $29.71 for 5-7 days. Australian doctor review required; issued where clinically appropriate.',
     },
     {
         key: 'student',
@@ -63,7 +63,7 @@ const USE_CASES: UseCaseConfig[] = [
         cardImageClass: 'object-[50%_42%]',
         purposeParam: 'university',
         metaTitle: 'Student Medical Certificates | $9.71 for 1 Day | Onya Health',
-        metaDescription: 'Online student medical certificates at $9.71 for 1 day with doctor review and instant digital delivery if approved.',
+        metaDescription: 'Request an online student medical certificate for $9.71 for 1 day with Australian doctor review and digital delivery where clinically appropriate.',
     },
     {
         key: 'caretaker',
@@ -80,7 +80,7 @@ const USE_CASES: UseCaseConfig[] = [
         cardImageClass: 'object-[52%_46%]',
         purposeParam: 'carers-leave',
         metaTitle: 'Carer Medical Certificates | $9.71 for 1 Day | Onya Health',
-        metaDescription: 'Online carer leave certificates at $9.71 for 1 day with secure doctor-reviewed outcomes and instant digital delivery if approved.',
+        metaDescription: 'Request an online carer leave certificate for $9.71 for 1 day with secure Australian doctor review and digital delivery where clinically appropriate.',
     },
     {
         key: 'work',
@@ -97,7 +97,7 @@ const USE_CASES: UseCaseConfig[] = [
         cardImageClass: 'object-[66%_42%]',
         purposeParam: 'work',
         metaTitle: 'Work Medical Certificates | $9.71 for 1 Day | Onya Health',
-        metaDescription: 'Online work medical certificates at $9.71 for 1 day with doctor review and instant digital delivery if approved.',
+        metaDescription: 'Request an online work medical certificate for $9.71 for 1 day with Australian doctor review and digital delivery where clinically appropriate.',
     },
 ];
 
@@ -184,7 +184,7 @@ export default function MedicalCertificateUseCasePage() {
                             </span>
                         </div>
                         <p className="mx-auto mt-2 max-w-2xl text-xs font-medium text-white/90">
-                            Medical certificates from $9 delivered instantly online ($9.71 for 1 day).
+                            $9.71 for a 1-day certificate request. Doctor review is required and certificates are issued only where clinically appropriate.
                         </p>
                     </div>
                 </section>

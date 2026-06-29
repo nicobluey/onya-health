@@ -38,6 +38,18 @@ function normalizeRegistrationNumber(value) {
   return String(value || '').trim().toUpperCase();
 }
 
+function normalizeProviderNumber(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function normalizeApprovalStatus(value, source = '') {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (['approved', 'pending', 'rejected'].includes(normalized)) return normalized;
+  const normalizedSource = String(source || '').trim().toLowerCase();
+  if (normalizedSource.includes('signup')) return 'pending';
+  return 'approved';
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -119,6 +131,8 @@ function toPublicAccount(account) {
     fullName: String(account.fullName || ''),
     providerType: normalizeProviderType(account.providerType),
     registrationNumber: normalizeRegistrationNumber(account.registrationNumber),
+    providerNumber: normalizeProviderNumber(account.providerNumber),
+    approvalStatus: normalizeApprovalStatus(account.approvalStatus, account.source),
     source: String(account.source || ''),
     createdAt: String(account.createdAt || ''),
     updatedAt: String(account.updatedAt || ''),
@@ -145,9 +159,16 @@ export function validateDoctorPassword(password) {
   return null;
 }
 
+export function isDoctorAccountApproved(account) {
+  return normalizeApprovalStatus(account?.approvalStatus, account?.source) === 'approved';
+}
+
 export async function listDoctorEmails() {
   const db = await readAuthDbRaw();
-  const emails = db.accounts.map((entry) => normalizeEmail(entry.email)).filter(Boolean);
+  const emails = db.accounts
+    .filter((entry) => isDoctorAccountApproved(toPublicAccount(entry)))
+    .map((entry) => normalizeEmail(entry.email))
+    .filter(Boolean);
   return Array.from(new Set(emails));
 }
 
@@ -165,6 +186,8 @@ export async function createDoctorAccount({
   fullName = '',
   providerType = '',
   registrationNumber = '',
+  providerNumber = '',
+  approvalStatus = '',
   source = 'local',
 }) {
   const normalizedEmail = normalizeEmail(email);
@@ -193,6 +216,8 @@ export async function createDoctorAccount({
       fullName: String(fullName || '').trim(),
       providerType: normalizeProviderType(providerType),
       registrationNumber: normalizeRegistrationNumber(registrationNumber),
+      providerNumber: normalizeProviderNumber(providerNumber),
+      approvalStatus: normalizeApprovalStatus(approvalStatus, source),
       source: String(source || 'local'),
       passwordHash: hashPassword(password),
       createdAt: timestamp,
@@ -219,6 +244,8 @@ export async function upsertDoctorAccount({
   fullName = '',
   providerType = '',
   registrationNumber = '',
+  providerNumber = '',
+  approvalStatus = '',
   source = 'local',
   password,
 }) {
@@ -244,6 +271,8 @@ export async function upsertDoctorAccount({
         fullName: String(fullName || '').trim(),
         providerType: normalizeProviderType(providerType),
         registrationNumber: normalizeRegistrationNumber(registrationNumber),
+        providerNumber: normalizeProviderNumber(providerNumber),
+        approvalStatus: normalizeApprovalStatus(approvalStatus, source),
         source: String(source || 'local'),
         passwordHash: typeof password === 'string' && password ? hashPassword(password) : '',
         createdAt: timestamp,
@@ -271,6 +300,16 @@ export async function upsertDoctorAccount({
       account.registrationNumber = normalizedRegistrationNumber;
       changed = true;
     }
+    const normalizedProviderNumber = normalizeProviderNumber(providerNumber);
+    if (normalizedProviderNumber && account.providerNumber !== normalizedProviderNumber) {
+      account.providerNumber = normalizedProviderNumber;
+      changed = true;
+    }
+    const normalizedApprovalStatus = approvalStatus ? normalizeApprovalStatus(approvalStatus, source || account.source) : '';
+    if (normalizedApprovalStatus && normalizeApprovalStatus(account.approvalStatus, account.source) !== normalizedApprovalStatus) {
+      account.approvalStatus = normalizedApprovalStatus;
+      changed = true;
+    }
     const nextSource = String(source || '').trim();
     if (nextSource && account.source !== nextSource) {
       account.source = nextSource;
@@ -285,6 +324,26 @@ export async function upsertDoctorAccount({
       account.updatedAt = timestamp;
     }
 
+    return toPublicAccount(account);
+  });
+}
+
+export async function setDoctorAccountApprovalStatus({ email, approvalStatus, providerNumber = '' }) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return null;
+  const normalizedApprovalStatus = normalizeApprovalStatus(approvalStatus);
+  const normalizedProviderNumber = normalizeProviderNumber(providerNumber);
+
+  return mutateAuthDb((db) => {
+    const account = db.accounts.find((entry) => normalizeEmail(entry?.email) === normalizedEmail);
+    if (!account) return null;
+
+    const timestamp = nowIso();
+    account.approvalStatus = normalizedApprovalStatus;
+    if (normalizedProviderNumber) {
+      account.providerNumber = normalizedProviderNumber;
+    }
+    account.updatedAt = timestamp;
     return toPublicAccount(account);
   });
 }

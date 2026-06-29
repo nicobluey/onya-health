@@ -7,6 +7,7 @@
     <title>Onya Health | Healthcare Made for You</title>
     <meta name="description" content="Online healthcare in Australia that feels simpler, safer, and more connected." />
     <meta name="theme-color" content="#1A3D63" />
+    <link rel="canonical" href="https://www.onyahealth.com.au/" />
 
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Onya Health" />
@@ -27,9 +28,53 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" as="image" href="/HERO.webp" fetchpriority="high">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      .static-crawl-content {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 48px 20px;
+        font-family: Inter, system-ui, sans-serif;
+        color: #0A1931;
+        line-height: 1.6;
+      }
+      .static-crawl-content h1,
+      .static-crawl-content h2 {
+        line-height: 1.15;
+      }
+      .static-crawl-content a {
+        color: #1A3D63;
+        font-weight: 700;
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <main class="static-crawl-content">
+        <h1>Onya Health online healthcare and medical certificate requests</h1>
+        <p>
+          Onya Health helps people in Australia request online healthcare support, including medical certificate consults,
+          patient portal access, and digital care workflows. Medical certificate requests are reviewed by Australian
+          doctors and certificates are issued only where clinically appropriate.
+        </p>
+        <h2>Important Onya Health pages</h2>
+        <ul>
+          <li><a href="/doctor">Request a medical certificate online</a></li>
+          <li><a href="/work">Work medical certificate requests</a></li>
+          <li><a href="/student">Student medical certificate requests</a></li>
+          <li><a href="/caretaker">Carer leave certificate requests</a></li>
+          <li><a href="/patient-login">Patient login</a></li>
+          <li><a href="/privacy">Privacy Policy</a></li>
+          <li><a href="/terms">Terms and Conditions</a></li>
+          <li><a href="/trust">Trust and Safety</a></li>
+          <li><a href="/blog">Health articles</a></li>
+          <li><a href="/verify">Verify a certificate</a></li>
+        </ul>
+        <p>
+          Pricing starts at $9.71 for a 1-day certificate request and scales up to $29.71 for 5-7 days.
+          Review times vary with demand and clinical complexity.
+        </p>
+      </main>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

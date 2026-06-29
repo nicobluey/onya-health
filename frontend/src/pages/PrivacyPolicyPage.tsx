@@ -92,6 +92,7 @@ const POLICY_SECTIONS: PolicySection[] = [
         title: '9. Retention',
         paragraphs: [
             'We retain information only for as long as reasonably required for service delivery, clinical record obligations, legal compliance, dispute resolution, and operational integrity.',
+            'Patient health records are generally retained for at least 7 years after a patient leaves the practice. For child patients, records are retained until the patient turns 25.',
         ],
     },
     {

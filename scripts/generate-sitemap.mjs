@@ -15,12 +15,18 @@ const staticRoutes = [
   '/nutritionist',
   '/psychologist',
   '/patient-login',
-  '/patient',
   '/verify',
   '/about',
+  '/contact',
   '/blog',
-  '/health',
+  '/privacy',
+  '/terms',
+  '/trust',
   '/fair-work-medical-certificates',
+  '/medical-certificate-doctor',
+  '/medical-certificate-work',
+  '/medical-certificate-university',
+  '/medical-certificate-carers-leave',
 ];
 
 function normalize(route) {

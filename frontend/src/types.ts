@@ -36,6 +36,15 @@ export interface UserDetails {
     address: string;
 }
 
+export interface CarerCertificateDetails {
+    fullName: string;
+    dob: string;
+    relationship: string;
+    startDate: string;
+    endDate: string;
+    email?: string;
+}
+
 export interface BookingState {
     step: BookingStep;
     purpose: CertificatePurpose | null;
@@ -47,6 +56,7 @@ export interface BookingState {
     durationDays: number;
     isUnlimited: boolean; // false = one-off, true = subscription
     includeCarerCertificate: boolean;
+    carerCertificateDetails: CarerCertificateDetails;
     details: UserDetails;
     showUpsell: boolean; // Logic flag to trigger modal
     view?: 'landing' | 'booking';

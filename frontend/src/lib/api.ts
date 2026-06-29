@@ -55,7 +55,12 @@ async function parseJsonOrThrow(response: Response) {
 }
 
 export async function fetchApiJson(path: string, init?: RequestInit) {
-  const response = await fetch(`${getApiBase()}${path}`, init);
+  let response: Response;
+  try {
+    response = await fetch(`${getApiBase()}${path}`, init);
+  } catch {
+    throw new Error("We couldn't connect to Onya Health right now. Please check your connection and try again.");
+  }
   const payload = await parseJsonOrThrow(response);
   return { response, payload };
 }

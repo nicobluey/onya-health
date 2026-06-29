@@ -3,6 +3,7 @@ export const ONE_OFF_MAX_PRICE_AUD = 29.71;
 export const ONE_OFF_MAX_PRICE_DAY = 5;
 export const ONE_OFF_CAP_END_DAY = 7;
 export const UNLIMITED_MONTHLY_PRICE_AUD = 19;
+export const CARER_CERT_ADDON_PRICE_AUD = 4.95;
 
 function toWholeDays(value: number) {
   if (!Number.isFinite(value)) return 1;

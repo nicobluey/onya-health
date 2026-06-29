@@ -1,5 +1,65 @@
 # Fixes Log
 
+## 2026-06-29 - Launch bug batch: docs, pricing, auth, doctor approval, SEO, and meal-plan safety
+
+### Symptoms
+
+- Public certificate pricing and copy were inconsistent (`from $9`, instant-certificate implications, and outdated Stripe cent defaults).
+- Carer's certificate add-on lacked required certificate details and was priced too close to a standalone certificate.
+- Patient auth/account checks and password reset could surface raw `fetch failed`/500 behavior.
+- Sending a patient-to-doctor message could be followed by a portal logout.
+- Public doctor self-signup granted practitioner access without admin approval.
+- Doctor reset email failure blocked recovery diagnostics.
+- Homepage/body content was weak for non-JavaScript crawlers.
+- Dietitian meal-plan generation could accept very low daily calories for high-body-weight profiles.
+- Project docs referenced unused FE/BE agent files.
+
+### Root causes
+
+1. Pricing/copy constants drifted between frontend display, checkout helpers, env defaults, and landing metadata.
+2. Carer add-on state existed as a boolean only, without a typed detail payload or server validation.
+3. Several auth/email routes let downstream lookup or email-provider failures bubble into user-visible failures.
+4. Public doctor signup returned a token immediately and notification recipient lookup included all local doctor accounts.
+5. Meal-plan quality checks used fixed low calorie floors rather than profile-informed thresholds.
+6. Vite client rendering left important crawlable text mostly inside JavaScript-rendered routes.
+7. Legacy `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` duplicated active workflow guidance.
+
+### Files changed
+
+- `AGENTS.md`, `SKILL.md`, `SKILLS.md`, `PLANS.md`, `DESIGN.md`, `backend/README.md`
+- `.agents/README.md`
+- removed `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md`
+- `api/index.js`, `backend/server.js`
+- `backend/lib/doctor-auth.js`, `backend/lib/meal-plan-ai.js`
+- `frontend/src/components/FlowSteps.tsx`
+- `frontend/src/consult-flow/pricing.ts`, `frontend/src/consult-flow/state.tsx`
+- `frontend/src/lib/api.ts`, `frontend/src/types.ts`
+- `frontend/src/pages/MedicalCertificateUseCasePage.tsx`
+- `frontend/src/pages/CertificateCampaignPage.tsx`
+- `frontend/src/pages/PatientPortalPage.tsx`
+- `frontend/src/pages/PrivacyPolicyPage.tsx`
+- `frontend/src/components/HowItWorks.tsx`
+- `frontend/src/weight-loss-reset/mealPlanning.ts`
+- `frontend/public/doctor/login/index.html`, `frontend/public/doctor/queue/index.html`
+- `backend/doctor-portal/login.html`, `backend/doctor-portal/queue.html`
+- `frontend/index.html`, `frontend/public/sitemap.xml`
+- `scripts/generate-sitemap.mjs`
+
+### Verification
+
+1. `npm run build` passed.
+2. `npm run lint` passed.
+3. `npm audit --audit-level=high` passed with `0` vulnerabilities after package updates.
+4. `node --check api/index.js backend/server.js backend/lib/doctor-auth.js backend/lib/meal-plan-ai.js` passed.
+5. `npm run sitemap:generate` generated 70 URLs.
+6. Local backend smoke test with temporary auth storage confirmed:
+   - pending doctor login returns `403`;
+   - admin doctor login returns a token;
+   - admin approval endpoint returns `approved`;
+   - approved doctor login returns a token and provider number;
+   - `/api/patient/account-exists` returns controlled `200`.
+7. Grep checks found no remaining `from $9`, `$10`, or instant-certificate phrasing in active frontend/API/backend source.
+
 ## 2026-05-13 - Generated recipe image persistence + storage URL hardening
 
 ### Symptoms

@@ -201,7 +201,7 @@
           </div>
         </div>
         <h1>Doctor portal</h1>
-        <p>Sign in to review certificates. New doctors can create an account below.</p>
+        <p>Sign in to review certificates. New doctor accounts require admin approval before portal access.</p>
       </section>
 
       <div class="tabs" id="tabs">
@@ -234,6 +234,9 @@
 
           <label for="signup-registration">Registration number</label>
           <input id="signup-registration" name="registrationNumber" type="text" placeholder="MED1234567" required />
+
+          <label for="signup-provider-number">Provider number</label>
+          <input id="signup-provider-number" name="providerNumber" type="text" placeholder="1234561A" required />
 
           <label for="signup-email">Doctor email</label>
           <input id="signup-email" name="email" type="email" autocomplete="username" required />
@@ -268,7 +271,7 @@
       </section>
 
       <div class="foot">
-        Every signed-up doctor is automatically included in certificate notification emails.
+        New doctor accounts are reviewed before they can access certificate requests.
       </div>
     </main>
 
@@ -338,8 +341,13 @@
 
         try {
           const data = await submitJson('/api/doctor/register', payload);
-          localStorage.setItem('onyaDoctorToken', data.token);
-          window.location.href = '/doctor/queue';
+          if (data.token) {
+            localStorage.setItem('onyaDoctorToken', data.token);
+            window.location.href = '/doctor/queue';
+            return;
+          }
+          event.currentTarget.reset();
+          setStatus('signup-status', 'Account request received. An admin must approve it before you can sign in.');
         } catch (error) {
           setStatus('signup-status', error.message || 'Unable to create account', true);
         } finally {
@@ -382,6 +390,10 @@
             token: payload.token,
             password: payload.password,
           });
+          if (data.approvalRequired || !data.token) {
+            setStatus('reset-status', data.message || 'Password updated. Your account still needs admin approval before portal access.');
+            return;
+          }
           localStorage.setItem('onyaDoctorToken', data.token);
           window.location.href = '/doctor/queue';
         } catch (error) {

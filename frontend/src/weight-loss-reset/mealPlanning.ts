@@ -163,6 +163,41 @@ function getIncludeSnackForAnswers(answers: OnboardingAnswers) {
   return getPlannedMealsPerDay(answers?.mealsPerDay || 3) >= 4;
 }
 
+function toPositiveNumber(value: unknown, { min = 0, max = 5000, precision = 0 } = {}) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric <= 0) return undefined;
+  const bounded = Math.min(max, Math.max(min, numeric));
+  if (precision <= 0) return Math.round(bounded);
+  const scale = 10 ** precision;
+  return Math.round(bounded * scale) / scale;
+}
+
+function roundToNearest(value: number, step = 50) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.round(value / step) * step;
+}
+
+function estimateDailyEnergyRange(answers: OnboardingAnswers, coreMealTypes: CoreMealType[]) {
+  const mealCount = Array.isArray(coreMealTypes) && coreMealTypes.length > 0 ? coreMealTypes.length : 3;
+  const gender = String(answers.gender || '').trim().toLowerCase();
+  const isFemale = /\b(female|woman|women|f)\b/.test(gender);
+  const age = toPositiveNumber(answers.age, { min: 16, max: 90 }) || 40;
+  const heightCm = toPositiveNumber(answers.heightCm, { min: 120, max: 240 }) || 170;
+  const currentWeightKg = toPositiveNumber(answers.currentWeightKg, { min: 35, max: 320, precision: 1 }) || 85;
+  const sexAdjustment = isFemale ? -161 : 5;
+  const estimatedBmr = 10 * currentWeightKg + 6.25 * heightCm - 5 * age + sexAdjustment;
+  const estimatedTdee = estimatedBmr * 1.35;
+  const baseFloor = mealCount <= 2 ? (isFemale ? 1100 : 1300) : (isFemale ? 1200 : 1500);
+  const profileFloor = Math.max(baseFloor, estimatedBmr * 0.65, estimatedTdee - 1400);
+  const minDailyCalories = Math.max(baseFloor, roundToNearest(profileFloor, 50));
+  const maxDailyCalories = Math.max(
+    minDailyCalories + 450,
+    roundToNearest(Math.max(estimatedTdee + 300, mealCount <= 2 ? 2200 : 2800), 50),
+  );
+
+  return { minDailyCalories, maxDailyCalories };
+}
+
 function normalizeText(value: string) {
   return String(value || '')
     .trim()
@@ -1028,6 +1063,7 @@ function evaluateGeneratedPlanQuality({
   poolSizes,
   coreMealTypes,
   availableEquipment,
+  answers,
 }: {
   days: MealPlanDay[];
   recipeMap: Map<string, Recipe>;
@@ -1035,11 +1071,13 @@ function evaluateGeneratedPlanQuality({
   poolSizes: Record<'breakfast' | 'lunch' | 'dinner', number>;
   coreMealTypes: Array<'breakfast' | 'lunch' | 'dinner'>;
   availableEquipment: CookingEquipment[];
+  answers: OnboardingAnswers;
 }): PlanQualityCheckResult {
   let score = 100;
   const issues: string[] = [];
   const criticalIssues: string[] = [];
   const availableEquipmentSet = new Set(availableEquipment);
+  const energyRange = estimateDailyEnergyRange(answers, coreMealTypes);
   const needsBreakfast = coreMealTypes.includes('breakfast');
   const needsLunch = coreMealTypes.includes('lunch');
   const needsDinner = coreMealTypes.includes('dinner');
@@ -1102,15 +1140,15 @@ function evaluateGeneratedPlanQuality({
     }
 
     const totals = calculateDayTotals(day, recipeMap);
-    const maxDailyCalories = coreMealTypes.length <= 2 ? 1900 : 2400;
-    const minDailyCalories = coreMealTypes.length <= 2 ? 700 : 900;
-    if ((totals.calories || 0) > maxDailyCalories) {
+    if ((totals.calories || 0) > energyRange.maxDailyCalories) {
       score -= 6;
       issues.push(`Daily energy looks high on ${day.label}.`);
     }
-    if ((totals.calories || 0) > 0 && (totals.calories || 0) < minDailyCalories) {
+    if ((totals.calories || 0) > 0 && (totals.calories || 0) < energyRange.minDailyCalories) {
       score -= 10;
-      issues.push(`Daily energy looks too low on ${day.label}.`);
+      criticalIssues.push(
+        `Daily energy looks too low on ${day.label} (${Math.round(totals.calories || 0)} kcal; minimum ${energyRange.minDailyCalories} kcal).`,
+      );
     }
   }
 
@@ -1381,6 +1419,7 @@ export function generateMealPlan({
       poolSizes,
       coreMealTypes,
       availableEquipment,
+      answers,
     });
 
     if (quality.score > bestScore) {

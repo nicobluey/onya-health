@@ -6,10 +6,12 @@ import { Button, SelectableCard, Input } from './UI';
 import { AnimatePresence, motion } from 'framer-motion';
 import { getServiceForPath } from '../consult-flow/services';
 import {
+    CARER_CERT_ADDON_PRICE_AUD,
     formatAud,
     getOneOffCertificateBandLabel,
     getOneOffCertificatePrice,
     getOneOffPricingBandLabel,
+    ONE_OFF_BASE_PRICE_AUD,
     UNLIMITED_MONTHLY_PRICE_AUD,
 } from '../consult-flow/pricing';
 import { fetchApiJson } from '../lib/api';
@@ -24,10 +26,13 @@ const fade = {
     transition: { duration: 0.3 }
 };
 
-const CARER_CERT_UPSELL_DOLLARS = Math.max(
-    0,
-    Number(import.meta.env.VITE_CARER_CERT_UPSELL_DOLLARS || 10)
-);
+const configuredCarerAddonPrice = Number(import.meta.env.VITE_CARER_CERT_UPSELL_DOLLARS || '');
+const CARER_CERT_UPSELL_DOLLARS =
+    Number.isFinite(configuredCarerAddonPrice) &&
+    configuredCarerAddonPrice > 0 &&
+    configuredCarerAddonPrice < ONE_OFF_BASE_PRICE_AUD
+        ? configuredCarerAddonPrice
+        : CARER_CERT_ADDON_PRICE_AUD;
 
 type EmailAccountCheckState = 'idle' | 'checking' | 'available' | 'exists' | 'error';
 
@@ -38,6 +43,21 @@ function normalizeEmailInput(value: string) {
 function isLikelyEmail(value: string) {
     const normalized = normalizeEmailInput(value);
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized);
+}
+
+function formatDateInputValue(value: Date | string | null | undefined) {
+    if (!value) return '';
+    const date = value instanceof Date ? new Date(value) : new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toISOString().slice(0, 10);
+}
+
+function getCertificateEndDateInputValue(startDate: Date | null, durationDays: number) {
+    if (!startDate) return '';
+    const date = new Date(startDate);
+    if (Number.isNaN(date.getTime())) return '';
+    date.setDate(date.getDate() + Math.max(1, Number(durationDays || 1)) - 1);
+    return formatDateInputValue(date);
 }
 
 export const PurposeStep = () => {
@@ -759,6 +779,8 @@ export const CheckoutStep = () => {
         isUnlimited,
         includeCarerCertificate,
         setCarerCertificate,
+        carerCertificateDetails,
+        setCarerCertificateDetails,
         purpose,
         symptom,
         symptomVisibility,
@@ -770,6 +792,7 @@ export const CheckoutStep = () => {
     } = useBooking();
     const [submitting, setSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState('');
+    const [carerDetailsErrors, setCarerDetailsErrors] = useState<Record<string, string>>({});
     const showCarerUpsell = !isUnlimited;
     const baseAmount = isUnlimited ? UNLIMITED_MONTHLY_PRICE_AUD : getOneOffCertificatePrice(durationDays);
     const carerAddonAmount = showCarerUpsell && includeCarerCertificate ? CARER_CERT_UPSELL_DOLLARS : 0;
@@ -780,8 +803,45 @@ export const CheckoutStep = () => {
         warmCheckoutPath();
     }, []);
 
+    const validateCarerDetails = () => {
+        if (!showCarerUpsell || !includeCarerCertificate) {
+            setCarerDetailsErrors({});
+            return true;
+        }
+
+        const nextErrors: Record<string, string> = {};
+        const normalized = {
+            fullName: carerCertificateDetails.fullName.trim(),
+            dob: carerCertificateDetails.dob.trim(),
+            relationship: carerCertificateDetails.relationship.trim(),
+            startDate: carerCertificateDetails.startDate.trim(),
+            endDate: carerCertificateDetails.endDate.trim(),
+            email: String(carerCertificateDetails.email || '').trim(),
+        };
+
+        if (!normalized.fullName) nextErrors.fullName = 'Carer name is required';
+        if (!normalized.dob) nextErrors.dob = 'Carer date of birth is required';
+        if (!normalized.relationship) nextErrors.relationship = 'Relationship or caring context is required';
+        if (!normalized.startDate) nextErrors.startDate = 'Certificate start date is required';
+        if (!normalized.endDate) nextErrors.endDate = 'Certificate end date is required';
+        if (normalized.startDate && normalized.endDate && normalized.endDate < normalized.startDate) {
+            nextErrors.endDate = 'End date must be on or after the start date';
+        }
+        if (normalized.email && !isLikelyEmail(normalized.email)) {
+            nextErrors.email = 'Enter a valid email or leave this blank';
+        }
+
+        setCarerDetailsErrors(nextErrors);
+        return Object.keys(nextErrors).length === 0;
+    };
+
     const handleCheckout = async () => {
         setSubmitError('');
+        if (!validateCarerDetails()) {
+            setSubmitError('Please complete the carer certificate details before payment.');
+            return;
+        }
+
         setSubmitting(true);
 
         try {
@@ -818,6 +878,17 @@ export const CheckoutStep = () => {
                         durationDays,
                         isUnlimited,
                         includeCarerCertificate: showCarerUpsell ? includeCarerCertificate : false,
+                        carerCertificateDetails:
+                            showCarerUpsell && includeCarerCertificate
+                                ? {
+                                      fullName: carerCertificateDetails.fullName.trim(),
+                                      dob: carerCertificateDetails.dob.trim(),
+                                      relationship: carerCertificateDetails.relationship.trim(),
+                                      startDate: carerCertificateDetails.startDate.trim(),
+                                      endDate: carerCertificateDetails.endDate.trim(),
+                                      email: String(carerCertificateDetails.email || '').trim(),
+                                  }
+                                : null,
                     }
                 }),
             });
@@ -880,7 +951,20 @@ export const CheckoutStep = () => {
                         </div>
                         <button
                             type="button"
-                            onClick={() => setCarerCertificate(!includeCarerCertificate)}
+                            onClick={() => {
+                                const nextEnabled = !includeCarerCertificate;
+                                setCarerCertificate(nextEnabled);
+                                if (nextEnabled) {
+                                    setCarerCertificateDetails({
+                                        startDate: carerCertificateDetails.startDate || formatDateInputValue(startDate),
+                                        endDate:
+                                            carerCertificateDetails.endDate ||
+                                            getCertificateEndDateInputValue(startDate, durationDays),
+                                    });
+                                } else {
+                                    setCarerDetailsErrors({});
+                                }
+                            }}
                             className={`inline-flex h-8 w-14 items-center rounded-full border transition ${
                                 includeCarerCertificate ? 'border-primary bg-primary' : 'border-border bg-sand-100'
                             }`}
@@ -894,6 +978,65 @@ export const CheckoutStep = () => {
                             />
                         </button>
                     </div>
+                </div>
+            )}
+
+            {showCarerUpsell && includeCarerCertificate && (
+                <div className="space-y-4 rounded-xl border border-border bg-white p-4">
+                    <div>
+                        <p className="font-semibold text-text-primary">Carer certificate details</p>
+                        <p className="mt-1 text-sm text-text-secondary">
+                            These details are required so the additional certificate can be reviewed accurately.
+                        </p>
+                    </div>
+                    <Input
+                        label="Carer full legal name"
+                        value={carerCertificateDetails.fullName}
+                        onChange={(event) => setCarerCertificateDetails({ fullName: event.target.value })}
+                        error={carerDetailsErrors.fullName}
+                        required
+                    />
+                    <Input
+                        label="Carer date of birth"
+                        type="date"
+                        value={carerCertificateDetails.dob}
+                        onChange={(event) => setCarerCertificateDetails({ dob: event.target.value })}
+                        error={carerDetailsErrors.dob}
+                        required
+                    />
+                    <Input
+                        label="Relationship or caring context"
+                        value={carerCertificateDetails.relationship}
+                        onChange={(event) => setCarerCertificateDetails({ relationship: event.target.value })}
+                        error={carerDetailsErrors.relationship}
+                        placeholder="e.g. parent, partner, child under your care"
+                        required
+                    />
+                    <div className="grid gap-3 sm:grid-cols-2">
+                        <Input
+                            label="Certificate start date"
+                            type="date"
+                            value={carerCertificateDetails.startDate}
+                            onChange={(event) => setCarerCertificateDetails({ startDate: event.target.value })}
+                            error={carerDetailsErrors.startDate}
+                            required
+                        />
+                        <Input
+                            label="Certificate end date"
+                            type="date"
+                            value={carerCertificateDetails.endDate}
+                            onChange={(event) => setCarerCertificateDetails({ endDate: event.target.value })}
+                            error={carerDetailsErrors.endDate}
+                            required
+                        />
+                    </div>
+                    <Input
+                        label="Carer/patient email (optional)"
+                        type="email"
+                        value={carerCertificateDetails.email || ''}
+                        onChange={(event) => setCarerCertificateDetails({ email: event.target.value })}
+                        error={carerDetailsErrors.email}
+                    />
                 </div>
             )}
 

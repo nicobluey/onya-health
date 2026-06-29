@@ -24,10 +24,13 @@ import {
   authenticateDoctorAccount,
   createDoctorAccount,
   getDoctorAccountByEmail,
+  isDoctorAccountApproved,
   isLikelyEmail as isLikelyDoctorEmail,
   issueDoctorPasswordResetToken,
   listDoctorEmails,
   resetDoctorPasswordWithToken,
+  setDoctorAccountApprovalStatus,
+  upsertDoctorAccount,
 } from './lib/doctor-auth.js';
 import { calculateRisk } from './lib/risk.js';
 import { buildCertificatePdf } from './lib/pdf.js';
@@ -99,6 +102,16 @@ const DOCTOR_NOTIFICATION_EMAILS_CONFIGURED = (process.env.DOCTOR_NOTIFICATION_E
   .split(',')
   .map((item) => item.trim())
   .filter(Boolean);
+const ADMIN_DOCTOR_EMAILS = new Set(
+  [
+    process.env.ADMIN_DOCTOR_EMAILS || '',
+    process.env.DOCTOR_LOGIN_EMAIL || 'doctor@onyahealth.com',
+  ]
+    .join(',')
+    .split(',')
+    .map((item) => normalizeEmail(item))
+    .filter(Boolean)
+);
 const STRIPE_SECRET_KEY = String(process.env.STRIPE_SECRET_KEY || '');
 const STRIPE_WEBHOOK_SECRET = String(process.env.STRIPE_WEBHOOK_SECRET || '');
 const STRIPE_PRICE_PRODUCT_SINGLE_DAY = process.env.STRIPE_PRICE_PRODUCT_SINGLE_DAY || 'prod_U3xUNjNVkYYxdi';
@@ -106,17 +119,20 @@ const STRIPE_PRICE_PRODUCT_MULTI_DAY_ONE_OFF = process.env.STRIPE_PRICE_PRODUCT_
 const STRIPE_PRICE_PRODUCT_MULTI_DAY_RECURRING = process.env.STRIPE_PRICE_PRODUCT_MULTI_DAY_RECURRING || 'prod_U3xTbAyYCjVi3J';
 const CERTIFICATE_TIME_ZONE = process.env.CERTIFICATE_TIME_ZONE || 'Australia/Brisbane';
 
-const STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS || 970);
-const STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS || 1500);
+const STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS || 971);
+const STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS || 2971);
 const STRIPE_AMOUNT_RECURRING_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_RECURRING_AUD_CENTS || 1900);
 const STRIPE_MULTI_DAY_MIN_DAYS = Math.max(
   2,
   Number(process.env.STRIPE_MULTI_DAY_MIN_DAYS || 2)
 );
-const STRIPE_AMOUNT_CARER_CERT_AUD_CENTS = Math.max(
-  0,
-  Number(process.env.STRIPE_AMOUNT_CARER_CERT_AUD_CENTS || 1000)
-);
+const configuredCarerCertificateAmountCents = Number(process.env.STRIPE_AMOUNT_CARER_CERT_AUD_CENTS || '');
+const STRIPE_AMOUNT_CARER_CERT_AUD_CENTS =
+  Number.isFinite(configuredCarerCertificateAmountCents) &&
+  configuredCarerCertificateAmountCents > 0 &&
+  configuredCarerCertificateAmountCents < STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS
+    ? configuredCarerCertificateAmountCents
+    : 495;
 const STRIPE_SUBSCRIPTION_CACHE_TTL_MS = Math.max(
   15_000,
   Number(process.env.STRIPE_SUBSCRIPTION_CACHE_TTL_MS || 60_000)
@@ -338,7 +354,7 @@ function sanitizeNameForStripe(value) {
 
 function stripePricingFromRequest(body) {
   const isUnlimited = Boolean(body?.consult?.isUnlimited);
-  const durationDays = Math.max(1, Number(body?.consult?.durationDays || 1));
+  const durationDays = Math.min(7, Math.max(1, Number(body?.consult?.durationDays || 1)));
   const includeCarerCertificate = !isUnlimited && Boolean(body?.consult?.includeCarerCertificate);
   const carerCertificateAmount = includeCarerCertificate ? STRIPE_AMOUNT_CARER_CERT_AUD_CENTS : 0;
 
@@ -371,7 +387,13 @@ function stripePricingFromRequest(body) {
     };
   }
 
-  const baseUnitAmount = STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS;
+  const linearRangeDays = 5 - 1;
+  const cappedDuration = Math.min(durationDays, 5);
+  const baseUnitAmount =
+    linearRangeDays <= 0
+      ? STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS
+      : STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS +
+        Math.round(((cappedDuration - 1) * (STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS - STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS)) / linearRangeDays);
   return {
     mode: 'payment',
     baseUnitAmount,
@@ -475,9 +497,12 @@ function buildDraftCertificate(requestBody) {
   const patient = requestBody.patient || {};
   const consult = requestBody.consult || {};
   const startDate = normalizeCertificateStartDate(consult.startDate);
-  const durationDays = Math.max(1, Number(consult.durationDays || 1));
+  const durationDays = Math.min(7, Math.max(1, Number(consult.durationDays || 1)));
   const isUnlimited = Boolean(consult.isUnlimited);
   const includeCarerCertificate = !isUnlimited && Boolean(consult.includeCarerCertificate);
+  const carerCertificateDetails = includeCarerCertificate
+    ? normalizeCarerCertificateDetails(consult.carerCertificateDetails || consult.carer || {})
+    : null;
   const symptomVisibility = String(consult.symptomVisibility || '').trim().toLowerCase() === 'public'
     ? 'public'
     : 'private';
@@ -495,7 +520,43 @@ function buildDraftCertificate(requestBody) {
     startDate,
     durationDays,
     includeCarerCertificate,
+    carerCertificateDetails,
   };
+}
+
+function normalizeCarerCertificateDetails(details) {
+  const source = details && typeof details === 'object' ? details : {};
+  return {
+    fullName: String(source.fullName || source.name || '').trim(),
+    dob: String(source.dob || source.dateOfBirth || '').trim(),
+    relationship: String(source.relationship || source.caringContext || source.context || '').trim(),
+    startDate: String(source.startDate || source.certificateStartDate || '').trim(),
+    endDate: String(source.endDate || source.certificateEndDate || '').trim(),
+    email: normalizeEmail(source.email || ''),
+  };
+}
+
+function validateCarerCertificateDetails(details) {
+  const errors = [];
+  const normalized = normalizeCarerCertificateDetails(details);
+  if (!normalized.fullName) errors.push('Carer full name is required');
+  if (!normalized.dob) errors.push('Carer date of birth is required');
+  if (!normalized.relationship) errors.push('Relationship or caring context is required');
+  if (!normalized.startDate) errors.push('Carer certificate start date is required');
+  if (!normalized.endDate) errors.push('Carer certificate end date is required');
+  if (normalized.startDate && !/^\d{4}-\d{2}-\d{2}$/.test(normalized.startDate)) {
+    errors.push('Carer certificate start date must use YYYY-MM-DD');
+  }
+  if (normalized.endDate && !/^\d{4}-\d{2}-\d{2}$/.test(normalized.endDate)) {
+    errors.push('Carer certificate end date must use YYYY-MM-DD');
+  }
+  if (normalized.startDate && normalized.endDate && normalized.endDate < normalized.startDate) {
+    errors.push('Carer certificate end date must be on or after the start date');
+  }
+  if (normalized.email && !isLikelyPatientEmail(normalized.email)) {
+    errors.push('Carer email must be valid when supplied');
+  }
+  return { valid: errors.length === 0, errors, details: normalized };
 }
 
 function doctorPayloadFromRequest(cert) {
@@ -574,6 +635,14 @@ async function requireDoctor(req, res) {
     sendJson(res, 401, { error: 'Unauthorized' });
     return null;
   }
+  if (isDoctorAdminEmail(payload.email)) {
+    return payload;
+  }
+  const profile = await resolveDoctorProfile(payload.email);
+  if (!doctorProfileHasApproval(profile, payload.email)) {
+    sendJson(res, 403, { error: 'Doctor account is pending admin approval.' });
+    return null;
+  }
   return payload;
 }
 
@@ -588,6 +657,23 @@ async function requirePatient(req, res) {
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
+}
+
+function normalizeProviderNumber(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function normalizeApprovalStatus(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return ['approved', 'pending', 'rejected'].includes(normalized) ? normalized : 'pending';
+}
+
+function isDoctorAdminEmail(email) {
+  return ADMIN_DOCTOR_EMAILS.has(normalizeEmail(email));
+}
+
+function doctorProfileHasApproval(profile, email = '') {
+  return isDoctorAdminEmail(email || profile?.email) || isDoctorAccountApproved(profile);
 }
 
 function normalizeCoreMealTypesForCache(value) {
@@ -1742,6 +1828,32 @@ async function patientAccountExists(email) {
   return Boolean(account);
 }
 
+async function patientAccountExistsByEmailOrPhone({ email, phone }) {
+  const normalizedEmail = normalizeEmail(email);
+  if (normalizedEmail && await patientAccountExists(normalizedEmail)) {
+    return { exists: true, reason: 'email', email: normalizedEmail };
+  }
+
+  const normalizedPhone = String(phone || '').replace(/\D+/g, '');
+  if (normalizedPhone.length < 6) {
+    return { exists: false, reason: '', email: '' };
+  }
+
+  const certificates = await listCertificates();
+  const match = certificates.find((certificate) => {
+    const draft = certificate?.certificateDraft || {};
+    return String(draft.phone || '').replace(/\D+/g, '') === normalizedPhone;
+  });
+  if (!match) {
+    return { exists: false, reason: '', email: '' };
+  }
+  return {
+    exists: true,
+    reason: 'phone',
+    email: normalizeEmail(match?.certificateDraft?.email || ''),
+  };
+}
+
 async function handleApi(req, res, url) {
   setCors(res, req);
 
@@ -1906,11 +2018,24 @@ async function handleApi(req, res, url) {
     const requestedUiMode = body?.uiMode === 'embedded' ? 'embedded' : 'hosted';
     const patient = body.patient || {};
     const certificateDraft = buildDraftCertificate(body);
+    if (certificateDraft.includeCarerCertificate) {
+      const carerValidation = validateCarerCertificateDetails(certificateDraft.carerCertificateDetails);
+      if (!carerValidation.valid) {
+        sendJson(res, 400, {
+          error: `Carer certificate details incomplete: ${carerValidation.errors.join(', ')}`,
+          code: 'CARER_CERTIFICATE_DETAILS_REQUIRED',
+          details: carerValidation.errors,
+        });
+        return;
+      }
+      certificateDraft.carerCertificateDetails = carerValidation.details;
+    }
     body.consult = {
       ...(body?.consult || {}),
       startDate: certificateDraft.startDate,
       durationDays: certificateDraft.durationDays,
       includeCarerCertificate: certificateDraft.includeCarerCertificate,
+      carerCertificateDetails: certificateDraft.carerCertificateDetails,
     };
 
     if (!isStripeEnabled()) {
@@ -2055,6 +2180,42 @@ async function handleApi(req, res, url) {
       sessionId: session.id,
       clientSecret: session.client_secret || null,
       uiMode: requestedUiMode,
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/patient/account-exists') {
+    const body = await parseJsonBody(req);
+    const email = normalizeEmail(body?.email);
+    const phone = String(body?.phone || '').trim();
+    if (!email && !phone) {
+      sendJson(res, 400, { error: 'email or phone is required' });
+      return;
+    }
+
+    let result = { exists: false, reason: '', email: '' };
+    try {
+      result = await patientAccountExistsByEmailOrPhone({ email, phone });
+    } catch (errorObject) {
+      error('patient.account_exists.lookup_failed', {
+        email,
+        hasPhone: Boolean(phone),
+        message: errorObject?.message || String(errorObject),
+      });
+      sendJson(res, 200, {
+        ok: false,
+        exists: false,
+        reason: 'lookup_unavailable',
+        matchedEmail: '',
+        message: "We couldn't verify account status right now. You can continue and we'll check again.",
+      });
+      return;
+    }
+    sendJson(res, 200, {
+      ok: true,
+      exists: Boolean(result.exists),
+      reason: result.reason,
+      matchedEmail: result.email || '',
     });
     return;
   }
@@ -2320,6 +2481,7 @@ async function handleApi(req, res, url) {
       return;
     }
 
+    try {
     let resetPayload = await issuePasswordResetToken(email, PATIENT_PASSWORD_RESET_TTL_MS);
     if (!resetPayload) {
       const certificates = await listCertificates();
@@ -2390,6 +2552,17 @@ async function handleApi(req, res, url) {
       message: 'If an account exists for this email, a reset link has been sent.',
     });
     return;
+    } catch (errorObject) {
+      error('patient.password_reset.request_failed', {
+        email,
+        message: errorObject?.message || String(errorObject),
+      });
+      sendJson(res, 200, {
+        ok: false,
+        message: 'If an account exists for this email, a reset link has been sent.',
+      });
+      return;
+    }
   }
 
   if (req.method === 'POST' && url.pathname === '/api/patient/password/reset/confirm') {
@@ -3032,21 +3205,35 @@ async function handleApi(req, res, url) {
       message,
     });
 
-    await sendEmail({
-      to: recipients,
-      subject: `Patient message for request ${certId}`,
-      html: patientMessageEmail.html,
-      text: patientMessageEmail.text,
-    });
+    let emailSent = false;
+    try {
+      await sendEmail({
+        to: recipients,
+        subject: `Patient message for request ${certId}`,
+        html: patientMessageEmail.html,
+        text: patientMessageEmail.text,
+      });
+      emailSent = true;
+    } catch (errorObject) {
+      error('patient.message.email_failed', {
+        certificateId: certId,
+        patientEmail: normalizeEmail(patient.email),
+        message: errorObject?.message || String(errorObject),
+      });
+    }
 
     info('patient.message.sent', {
       certificateId: certId,
       patientEmail: normalizeEmail(patient.email),
       provider: currentEmailProvider(),
       recipients,
+      emailSent,
     });
 
-    sendJson(res, 200, { message: 'Message sent to doctor' });
+    sendJson(res, 200, {
+      message: emailSent ? 'Message sent to doctor' : 'Message saved; doctor notification email is pending',
+      emailSent,
+    });
     return;
   }
 
@@ -3061,6 +3248,7 @@ async function handleApi(req, res, url) {
     )
       .trim()
       .toUpperCase();
+    const providerNumber = normalizeProviderNumber(body.providerNumber || body.medicareProviderNumber || '');
 
     if (!isLikelyDoctorEmail(email)) {
       sendJson(res, 400, { error: 'A valid email is required' });
@@ -3083,6 +3271,8 @@ async function handleApi(req, res, url) {
         fullName,
         providerType,
         registrationNumber,
+        providerNumber,
+        approvalStatus: 'pending',
         source: 'portal-signup',
       });
     } catch (errorObject) {
@@ -3100,6 +3290,7 @@ async function handleApi(req, res, url) {
     await appendAudit({
       type: 'DOCTOR_ACCOUNT_CREATED',
       email,
+      approvalStatus: 'pending',
     });
 
     try {
@@ -3120,15 +3311,16 @@ async function handleApi(req, res, url) {
       });
     }
 
-    const token = issueDoctorToken(email);
     info('doctor.register.success', { email });
     sendJson(res, 201, {
-      token,
+      approvalRequired: true,
       doctor: {
         email,
         name: account.fullName || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
         providerType: account.providerType || providerType,
         registrationNumber: account.registrationNumber || registrationNumber,
+        providerNumber: account.providerNumber || providerNumber,
+        approvalStatus: account.approvalStatus || 'pending',
       },
     });
     return;
@@ -3151,16 +3343,23 @@ async function handleApi(req, res, url) {
         resetUrl,
         expiresMinutes: String(Math.round(DOCTOR_PASSWORD_RESET_TTL_MS / (1000 * 60))),
       });
-      await sendEmail({
-        to: email,
-        subject: 'Reset your doctor portal password',
-        html: resetEmail.html,
-        text: resetEmail.text,
-      });
-      await appendAudit({
-        type: 'DOCTOR_PASSWORD_RESET_REQUESTED',
-        email,
-      });
+      try {
+        await sendEmail({
+          to: email,
+          subject: 'Reset your doctor portal password',
+          html: resetEmail.html,
+          text: resetEmail.text,
+        });
+        await appendAudit({
+          type: 'DOCTOR_PASSWORD_RESET_REQUESTED',
+          email,
+        });
+      } catch (errorObject) {
+        error('doctor.password_reset.dispatch_failed', {
+          email,
+          message: errorObject?.message || String(errorObject),
+        });
+      }
       info('doctor.password_reset.requested', {
         email,
         provider: currentEmailProvider(),
@@ -3206,8 +3405,24 @@ async function handleApi(req, res, url) {
       email: account.email,
     });
 
-    const tokenValue = issueDoctorToken(account.email);
     info('doctor.password_reset.completed', { email: account.email });
+    if (!doctorProfileHasApproval(account, account.email)) {
+      sendJson(res, 200, {
+        approvalRequired: true,
+        message: 'Password updated. Your doctor account still needs admin approval before portal access.',
+        doctor: {
+          email: account.email,
+          name: account.fullName || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
+          providerType: account.providerType || '',
+          registrationNumber: account.registrationNumber || '',
+          providerNumber: account.providerNumber || '',
+          approvalStatus: account.approvalStatus || 'pending',
+        },
+      });
+      return;
+    }
+
+    const tokenValue = issueDoctorToken(account.email);
     sendJson(res, 200, {
       token: tokenValue,
       doctor: {
@@ -3215,6 +3430,8 @@ async function handleApi(req, res, url) {
         name: account.fullName || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
         providerType: account.providerType || '',
         registrationNumber: account.registrationNumber || '',
+        providerNumber: account.providerNumber || '',
+        approvalStatus: account.approvalStatus || 'approved',
       },
     });
     return;
@@ -3226,26 +3443,39 @@ async function handleApi(req, res, url) {
     const password = String(body.password || '');
 
     let doctorIdentity = null;
+    let pendingApproval = false;
     if (validateDoctorCredentials(email, password)) {
       doctorIdentity = {
         email,
         name: process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
         providerType: '',
         registrationNumber: '',
+        providerNumber: '',
+        approvalStatus: 'approved',
       };
     } else {
       const account = await authenticateDoctorAccount({ email, password });
       if (account?.email) {
-        doctorIdentity = {
-          email: account.email,
-          name: account.fullName || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
-          providerType: account.providerType || '',
-          registrationNumber: account.registrationNumber || '',
-        };
+        if (!doctorProfileHasApproval(account, account.email)) {
+          pendingApproval = true;
+        } else {
+          doctorIdentity = {
+            email: account.email,
+            name: account.fullName || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
+            providerType: account.providerType || '',
+            registrationNumber: account.registrationNumber || '',
+            providerNumber: account.providerNumber || '',
+            approvalStatus: account.approvalStatus || 'approved',
+          };
+        }
       }
     }
 
     if (!doctorIdentity) {
+      if (pendingApproval) {
+        sendJson(res, 403, { error: 'Doctor account is pending admin approval.' });
+        return;
+      }
       sendJson(res, 401, { error: 'Invalid credentials' });
       return;
     }
@@ -3259,6 +3489,8 @@ async function handleApi(req, res, url) {
         name: doctorIdentity.name,
         providerType: doctorIdentity.providerType || '',
         registrationNumber: doctorIdentity.registrationNumber || '',
+        providerNumber: doctorIdentity.providerNumber || '',
+        approvalStatus: doctorIdentity.approvalStatus || 'approved',
       },
     });
     return;
@@ -3275,6 +3507,8 @@ async function handleApi(req, res, url) {
         fullName: String(profile?.fullName || '').trim(),
         providerType: String(profile?.providerType || '').trim(),
         registrationNumber: String(profile?.registrationNumber || '').trim().toUpperCase(),
+        providerNumber: normalizeProviderNumber(profile?.providerNumber || ''),
+        approvalStatus: profile?.approvalStatus || (isDoctorAdminEmail(doctor.email) ? 'approved' : 'pending'),
       },
     });
     return;
@@ -3292,6 +3526,7 @@ async function handleApi(req, res, url) {
     )
       .trim()
       .toUpperCase();
+    const providerNumber = normalizeProviderNumber(body.providerNumber || body.medicareProviderNumber || '');
 
     if (!providerType) {
       sendJson(res, 400, { error: 'Provider type is required' });
@@ -3307,6 +3542,7 @@ async function handleApi(req, res, url) {
       fullName,
       providerType,
       registrationNumber,
+      providerNumber,
       source: 'portal-profile',
     });
 
@@ -3320,6 +3556,63 @@ async function handleApi(req, res, url) {
         )
           .trim()
           .toUpperCase(),
+        providerNumber: normalizeProviderNumber(updated?.providerNumber || providerNumber || ''),
+        approvalStatus: updated?.approvalStatus || 'approved',
+      },
+    });
+    return;
+  }
+
+  const doctorApprovalMatch = url.pathname.match(/^\/api\/doctor\/accounts\/([^/]+)\/approval$/);
+  if (req.method === 'POST' && doctorApprovalMatch) {
+    const doctor = await requireDoctor(req, res);
+    if (!doctor) return;
+    if (!isDoctorAdminEmail(doctor.email)) {
+      sendJson(res, 403, { error: 'Only an admin doctor can approve doctor accounts.' });
+      return;
+    }
+
+    const targetEmail = normalizeEmail(decodeURIComponent(doctorApprovalMatch[1] || ''));
+    const body = await parseJsonBody(req);
+    const requestedApprovalStatus = String(body.approvalStatus || body.status || '').trim().toLowerCase();
+    if (!['approved', 'pending', 'rejected'].includes(requestedApprovalStatus)) {
+      sendJson(res, 400, { error: 'approvalStatus must be approved, pending, or rejected' });
+      return;
+    }
+    const approvalStatus = normalizeApprovalStatus(requestedApprovalStatus);
+    const providerNumber = normalizeProviderNumber(body.providerNumber || body.medicareProviderNumber || '');
+    if (!targetEmail) {
+      sendJson(res, 400, { error: 'Doctor email is required' });
+      return;
+    }
+
+    const account = await getDoctorAccountByEmail(targetEmail);
+    if (!account?.email) {
+      sendJson(res, 404, { error: 'Doctor account not found' });
+      return;
+    }
+
+    const updated = await setDoctorAccountApprovalStatus({
+      email: targetEmail,
+      approvalStatus,
+      providerNumber,
+    });
+
+    await appendAudit({
+      type: 'DOCTOR_ACCOUNT_APPROVAL_UPDATED',
+      email: targetEmail,
+      by: normalizeEmail(doctor.email),
+      approvalStatus,
+    });
+
+    sendJson(res, 200, {
+      doctor: {
+        email: updated?.email || targetEmail,
+        fullName: updated?.fullName || '',
+        providerType: updated?.providerType || '',
+        registrationNumber: updated?.registrationNumber || '',
+        providerNumber: updated?.providerNumber || '',
+        approvalStatus: updated?.approvalStatus || approvalStatus,
       },
     });
     return;

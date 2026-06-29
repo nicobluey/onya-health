@@ -85,6 +85,10 @@
               <label for="profile-registration">Registration number</label>
               <input id="profile-registration" name="registrationNumber" type="text" placeholder="MED1234567" required />
             </div>
+            <div>
+              <label for="profile-provider-number">Provider number</label>
+              <input id="profile-provider-number" name="providerNumber" type="text" placeholder="1234561A" required />
+            </div>
           </div>
           <div class="profile-actions">
             <button id="profile-save" class="primary-btn" type="submit">Save profile</button>
@@ -158,6 +162,7 @@
         document.getElementById('profile-name').value = doctor.fullName || '';
         document.getElementById('profile-provider-type').value = doctor.providerType || '';
         document.getElementById('profile-registration').value = doctor.registrationNumber || '';
+        document.getElementById('profile-provider-number').value = doctor.providerNumber || '';
       }
 
       profileForm.addEventListener('submit', async (event) => {
@@ -183,6 +188,7 @@
           document.getElementById('profile-name').value = data?.doctor?.fullName || payload.fullName || '';
           document.getElementById('profile-provider-type').value = data?.doctor?.providerType || payload.providerType || '';
           document.getElementById('profile-registration').value = data?.doctor?.registrationNumber || payload.registrationNumber || '';
+          document.getElementById('profile-provider-number').value = data?.doctor?.providerNumber || payload.providerNumber || '';
         } catch (error) {
           setProfileStatus(error.message || 'Failed to update profile.', true);
         } finally {

@@ -2341,7 +2341,8 @@ export default function PatientPortalPage() {
     };
 
     const sendMessageToDoctor = async () => {
-        if (!queuedRequest || !token) return;
+        const activeToken = token || window.localStorage.getItem('onya_patient_token') || '';
+        if (!queuedRequest || !activeToken) return;
         const message = window.prompt('Message for the doctor');
         if (!message || !message.trim()) return;
 
@@ -2352,7 +2353,7 @@ export default function PatientPortalPage() {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        Authorization: `Bearer ${token}`,
+                        Authorization: `Bearer ${activeToken}`,
                     },
                     body: JSON.stringify({ message }),
                 }
@@ -2360,7 +2361,7 @@ export default function PatientPortalPage() {
             if (!response.ok) {
                 throw new Error(payload.error || 'Unable to send message');
             }
-            window.alert('Message sent to doctor.');
+            window.alert(String(payload.message || 'Message sent to doctor.'));
         } catch (errorObject) {
             window.alert(errorObject instanceof Error ? errorObject.message : 'Unable to send message');
         }

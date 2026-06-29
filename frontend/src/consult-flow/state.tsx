@@ -1,6 +1,14 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, type ReactNode } from 'react';
-import type { BookingState, BookingStep, CertificatePurpose, Symptom, SymptomVisibility, UserDetails } from '../types';
+import type {
+    BookingState,
+    BookingStep,
+    CarerCertificateDetails,
+    CertificatePurpose,
+    Symptom,
+    SymptomVisibility,
+    UserDetails,
+} from '../types';
 
 interface BookingContextType extends BookingState {
     setPurpose: (p: CertificatePurpose) => void;
@@ -11,6 +19,7 @@ interface BookingContextType extends BookingState {
     setDates: (start: Date, duration: number) => void;
     setUnlimited: (unlimited: boolean) => void;
     setCarerCertificate: (enabled: boolean) => void;
+    setCarerCertificateDetails: (details: Partial<CarerCertificateDetails>) => void;
     setDetails: (d: Partial<UserDetails>) => void;
     nextStep: () => void;
     prevStep: () => void;
@@ -97,6 +106,14 @@ export function BookingProvider({ children }: { children: ReactNode }) {
         durationDays: 1,
         isUnlimited: false,
         includeCarerCertificate: false,
+        carerCertificateDetails: {
+            fullName: '',
+            dob: '',
+            relationship: '',
+            startDate: '',
+            endDate: '',
+            email: '',
+        },
         details: {
             fullName: '',
             dob: '',
@@ -176,6 +193,14 @@ export function BookingProvider({ children }: { children: ReactNode }) {
                 includeCarerCertificate: isUnlimited ? false : prev.includeCarerCertificate,
             })),
         setCarerCertificate: (includeCarerCertificate: boolean) => updateState({ includeCarerCertificate }),
+        setCarerCertificateDetails: (carerCertificateDetails: Partial<CarerCertificateDetails>) =>
+            setState((prev) => ({
+                ...prev,
+                carerCertificateDetails: {
+                    ...prev.carerCertificateDetails,
+                    ...carerCertificateDetails,
+                },
+            })),
         setDetails: (details: Partial<UserDetails>) => setState(prev => ({ ...prev, details: { ...prev.details, ...details } })),
         nextStep,
         prevStep,

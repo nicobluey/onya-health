@@ -11,10 +11,26 @@ This folder tracks production incidents, regressions, and applied fixes so futur
   - `onya-health.vercel.app`
 - If alias assignment fails, treat deploy as incomplete and resolve before closing work.
 
-## Agent references
+## Markdown Context Tree
 
-- `FE_AGENT.md`: frontend implementation contract and regression checks.
-- `BE_AGENT.md`: backend/data-model contract, migration references, and API expectations.
+Use this tree before substantial work so the active context is clear. The old FE/BE agent split has been removed; use `SKILLS.md` workflows plus the touched source files instead.
+
+```text
+.
+|-- AGENTS.md              # Root briefing: commands, architecture, validation, deployment policy
+|-- SKILL.md               # Always-read coding guardrails
+|-- SKILLS.md              # Repeatable workflows by task type
+|-- PLANS.md               # Living plan, file map, bug batch, verification state
+|-- DESIGN.md              # Onya visual system, assets, copy and layout rules
+|-- backend/README.md      # Backend/API operational notes
+|-- .agents/
+|   |-- README.md          # Deployment policy, incident-log policy, data architecture notes
+|   |-- design-language.md # Historical design language notes
+|   `-- fixes-log.md       # Production bug/regression history
+`-- docs/
+    |-- REPO_STRUCTURE.md
+    `-- ai-landing-image-prompts.md
+```
 
 ## Meal-Plan Database Architecture (Current)
 

@@ -96,7 +96,7 @@ const LANDING_CONFIGS: Record<string, LandingConfig> = {
         purposeParam: 'work',
         metaTitle: 'Work Medical Certificate Online | OnyaHealth',
         metaDescription:
-            'Work medical certificates from $9 delivered instantly online ($9.71 for 1 day), then linearly scaled up to $29.71 for 5-7 days with Australian doctor review.',
+            'Work medical certificate requests start at $9.71 for 1 day, then linearly scale up to $29.71 for 5-7 days with Australian doctor review.',
         heroHeadline: 'Online Work Medical Certificates Reviewed by Australian Doctors',
         heroSubheadline:
             'Fast, secure medical certificates for sick leave and work absences without needing to visit a clinic.',
@@ -157,7 +157,7 @@ const LANDING_CONFIGS: Record<string, LandingConfig> = {
         purposeParam: 'university',
         metaTitle: 'University Medical Certificate Online | OnyaHealth',
         metaDescription:
-            'University medical certificates from $9 delivered instantly online ($9.71 for 1 day), then linearly scaled up to $29.71 for 5-7 days with doctor review.',
+            'University medical certificate requests start at $9.71 for 1 day, then linearly scale up to $29.71 for 5-7 days with doctor review.',
         heroHeadline: 'Online University Medical Certificates for Illness or Assessment Impact',
         heroSubheadline:
             'Fast, secure medical certificates for classes, exams, and assessment-related illness.',
@@ -218,7 +218,7 @@ const LANDING_CONFIGS: Record<string, LandingConfig> = {
         purposeParam: 'carers-leave',
         metaTitle: "Carer's Leave Certificate Online | OnyaHealth",
         metaDescription:
-            "Carer's leave certificates from $9 delivered instantly online ($9.71 for 1 day), then linearly scaled up to $29.71 for 5-7 days with Australian doctor review.",
+            "Carer's leave certificate requests start at $9.71 for 1 day, then linearly scale up to $29.71 for 5-7 days with Australian doctor review.",
         heroHeadline: "Online Carer's Leave Certificates Reviewed by Australian Doctors",
         heroSubheadline:
             'Fast, secure certificates when you need leave to care for someone under your care.',

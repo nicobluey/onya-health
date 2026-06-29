@@ -21,10 +21,12 @@ import {
   authenticateDoctorAccount,
   createDoctorAccount,
   getDoctorAccountByEmail,
+  isDoctorAccountApproved,
   isLikelyEmail as isLikelyDoctorEmail,
   issueDoctorPasswordResetToken,
   listDoctorEmails,
   resetDoctorPasswordWithToken,
+  setDoctorAccountApprovalStatus,
   upsertDoctorAccount,
 } from '../backend/lib/doctor-auth.js';
 import { calculateRisk } from '../backend/lib/risk.js';
@@ -79,6 +81,16 @@ const DOCTOR_NOTIFICATION_EMAILS_CONFIGURED = (process.env.DOCTOR_NOTIFICATION_E
   .split(',')
   .map((item) => item.trim())
   .filter(Boolean);
+const ADMIN_DOCTOR_EMAILS = new Set(
+  [
+    process.env.ADMIN_DOCTOR_EMAILS || '',
+    process.env.DOCTOR_LOGIN_EMAIL || 'doctor@onyahealth.com',
+  ]
+    .join(',')
+    .split(',')
+    .map((item) => normalizeEmail(item))
+    .filter(Boolean)
+);
 
 const STRIPE_SECRET_KEY = String(process.env.STRIPE_SECRET_KEY || '');
 const STRIPE_WEBHOOK_SECRET = String(process.env.STRIPE_WEBHOOK_SECRET || '');
@@ -89,13 +101,16 @@ const STRIPE_PRICE_PRODUCT_MULTI_DAY_RECURRING =
   process.env.STRIPE_PRICE_PRODUCT_MULTI_DAY_RECURRING || 'prod_U3xTbAyYCjVi3J';
 const CERTIFICATE_TIME_ZONE = process.env.CERTIFICATE_TIME_ZONE || 'Australia/Brisbane';
 
-const STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS || 1121);
-const STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS || 2711);
-const STRIPE_AMOUNT_RECURRING_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_RECURRING_AUD_CENTS || 1917);
-const STRIPE_AMOUNT_CARER_CERT_AUD_CENTS = Math.max(
-  0,
-  Number(process.env.STRIPE_AMOUNT_CARER_CERT_AUD_CENTS || 1000)
-);
+const STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS || 971);
+const STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS || 2971);
+const STRIPE_AMOUNT_RECURRING_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_RECURRING_AUD_CENTS || 1900);
+const configuredCarerCertificateAmountCents = Number(process.env.STRIPE_AMOUNT_CARER_CERT_AUD_CENTS || '');
+const STRIPE_AMOUNT_CARER_CERT_AUD_CENTS =
+  Number.isFinite(configuredCarerCertificateAmountCents) &&
+  configuredCarerCertificateAmountCents > 0 &&
+  configuredCarerCertificateAmountCents < STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS
+    ? configuredCarerCertificateAmountCents
+    : 495;
 const STRIPE_SUBSCRIPTION_CACHE_TTL_MS = Math.max(
   15_000,
   Number(process.env.STRIPE_SUBSCRIPTION_CACHE_TTL_MS || 60_000)
@@ -350,6 +365,23 @@ function getAppBaseUrl(req) {
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
+}
+
+function normalizeProviderNumber(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
+function normalizeApprovalStatus(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return ['approved', 'pending', 'rejected'].includes(normalized) ? normalized : 'pending';
+}
+
+function isDoctorAdminEmail(email) {
+  return ADMIN_DOCTOR_EMAILS.has(normalizeEmail(email));
+}
+
+function doctorProfileHasApproval(profile, email = '') {
+  return isDoctorAdminEmail(email || profile?.email) || isDoctorAccountApproved(profile);
 }
 
 function normalizePhoneForLookup(value) {
@@ -1585,6 +1617,14 @@ async function requireDoctor(req, res) {
     sendJson(res, 401, { error: 'Unauthorized' });
     return null;
   }
+  if (isDoctorAdminEmail(payload.email)) {
+    return payload;
+  }
+  const profile = await resolveDoctorProfile(payload.email);
+  if (!doctorProfileHasApproval(profile, payload.email)) {
+    sendJson(res, 403, { error: 'Doctor account is pending admin approval.' });
+    return null;
+  }
   return payload;
 }
 
@@ -2139,6 +2179,8 @@ async function resolveDoctorProfile(email) {
     fullName: supabaseDoctor.fullName || '',
     providerType: supabaseDoctor.providerType || '',
     registrationNumber: supabaseDoctor.registrationNumber || '',
+    providerNumber: supabaseDoctor.providerNumber || '',
+    approvalStatus: supabaseDoctor.approvalStatus || 'pending',
     source: 'supabase',
   });
   return account;
@@ -2216,6 +2258,9 @@ function buildDraftCertificate(requestBody) {
   const durationDays = Math.min(7, Math.max(1, Number(consult.durationDays || 1)));
   const isUnlimited = Boolean(consult.isUnlimited);
   const includeCarerCertificate = !isUnlimited && Boolean(consult.includeCarerCertificate);
+  const carerCertificateDetails = includeCarerCertificate
+    ? normalizeCarerCertificateDetails(consult.carerCertificateDetails || consult.carer || {})
+    : null;
   const symptomVisibility = String(consult.symptomVisibility || '').trim().toLowerCase() === 'public'
     ? 'public'
     : 'private';
@@ -2233,7 +2278,43 @@ function buildDraftCertificate(requestBody) {
     startDate,
     durationDays,
     includeCarerCertificate,
+    carerCertificateDetails,
   };
+}
+
+function normalizeCarerCertificateDetails(details) {
+  const source = details && typeof details === 'object' ? details : {};
+  return {
+    fullName: String(source.fullName || source.name || '').trim(),
+    dob: String(source.dob || source.dateOfBirth || '').trim(),
+    relationship: String(source.relationship || source.caringContext || source.context || '').trim(),
+    startDate: String(source.startDate || source.certificateStartDate || '').trim(),
+    endDate: String(source.endDate || source.certificateEndDate || '').trim(),
+    email: normalizeEmail(source.email || ''),
+  };
+}
+
+function validateCarerCertificateDetails(details) {
+  const errors = [];
+  const normalized = normalizeCarerCertificateDetails(details);
+  if (!normalized.fullName) errors.push('Carer full name is required');
+  if (!normalized.dob) errors.push('Carer date of birth is required');
+  if (!normalized.relationship) errors.push('Relationship or caring context is required');
+  if (!normalized.startDate) errors.push('Carer certificate start date is required');
+  if (!normalized.endDate) errors.push('Carer certificate end date is required');
+  if (normalized.startDate && !/^\d{4}-\d{2}-\d{2}$/.test(normalized.startDate)) {
+    errors.push('Carer certificate start date must use YYYY-MM-DD');
+  }
+  if (normalized.endDate && !/^\d{4}-\d{2}-\d{2}$/.test(normalized.endDate)) {
+    errors.push('Carer certificate end date must use YYYY-MM-DD');
+  }
+  if (normalized.startDate && normalized.endDate && normalized.endDate < normalized.startDate) {
+    errors.push('Carer certificate end date must be on or after the start date');
+  }
+  if (normalized.email && !isLikelyPatientEmail(normalized.email)) {
+    errors.push('Carer email must be valid when supplied');
+  }
+  return { valid: errors.length === 0, errors, details: normalized };
 }
 
 function sanitizeNameForStripe(value) {
@@ -2275,7 +2356,13 @@ function stripePricingFromRequest(body) {
     };
   }
 
-  const baseUnitAmount = STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS;
+  const linearRangeDays = 5 - 1;
+  const cappedDuration = Math.min(durationDays, 5);
+  const baseUnitAmount =
+    linearRangeDays <= 0
+      ? STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS
+      : STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS +
+        Math.round(((cappedDuration - 1) * (STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS - STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS)) / linearRangeDays);
   return {
     mode: 'payment',
     baseUnitAmount,
@@ -3575,7 +3662,15 @@ async function supabaseRestRequest(config, endpoint, options = {}) {
   return data;
 }
 
-async function registerDoctorAccount({ email, password, fullName, providerType, registrationNumber }) {
+async function registerDoctorAccount({
+  email,
+  password,
+  fullName,
+  providerType,
+  registrationNumber,
+  providerNumber = '',
+  approvalStatus = 'pending',
+}) {
   const config = getSupabaseConfig();
   if (!config.enabled) {
     const err = new Error('Doctor registration requires Supabase service role configuration');
@@ -3596,6 +3691,9 @@ async function registerDoctorAccount({ email, password, fullName, providerType, 
           full_name: fullName || '',
           provider_type: String(providerType || '').trim(),
           registration_number: String(registrationNumber || '').trim().toUpperCase(),
+          provider_number: normalizeProviderNumber(providerNumber),
+          approval_status: normalizeApprovalStatus(approvalStatus),
+          provider_approved: normalizeApprovalStatus(approvalStatus) === 'approved',
         },
       },
     });
@@ -3698,6 +3796,11 @@ async function authenticateDoctorViaSupabase(email, password) {
     fullName: String(loginData?.user?.user_metadata?.full_name || '').trim(),
     providerType: String(loginData?.user?.user_metadata?.provider_type || '').trim(),
     registrationNumber: String(loginData?.user?.user_metadata?.registration_number || '').trim().toUpperCase(),
+    providerNumber: normalizeProviderNumber(loginData?.user?.user_metadata?.provider_number),
+    approvalStatus:
+      loginData?.user?.user_metadata?.provider_approved === true
+        ? 'approved'
+        : normalizeApprovalStatus(loginData?.user?.user_metadata?.approval_status),
     source: 'supabase',
   };
 }
@@ -3718,6 +3821,11 @@ async function findSupabaseDoctorByEmail(email) {
     fullName: String(match?.user_metadata?.full_name || '').trim(),
     providerType: String(match?.user_metadata?.provider_type || '').trim(),
     registrationNumber: String(match?.user_metadata?.registration_number || '').trim().toUpperCase(),
+    providerNumber: normalizeProviderNumber(match?.user_metadata?.provider_number),
+    approvalStatus:
+      match?.user_metadata?.provider_approved === true
+        ? 'approved'
+        : normalizeApprovalStatus(match?.user_metadata?.approval_status),
   };
 }
 
@@ -3736,7 +3844,14 @@ async function updateSupabaseDoctorPasswordByEmail(email, password) {
   return doctor;
 }
 
-async function upsertSupabaseDoctorMetadata({ email, fullName = '', providerType = '', registrationNumber = '' }) {
+async function upsertSupabaseDoctorMetadata({
+  email,
+  fullName = '',
+  providerType = '',
+  registrationNumber = '',
+  providerNumber = '',
+  approvalStatus = '',
+}) {
   const existing = await findSupabaseDoctorByEmail(email);
   if (!existing?.id) return null;
 
@@ -3756,6 +3871,13 @@ async function upsertSupabaseDoctorMetadata({ email, fullName = '', providerType
     )
       .trim()
       .toUpperCase(),
+    provider_number: normalizeProviderNumber(providerNumber || currentMetadata?.provider_number || ''),
+    approval_status: approvalStatus
+      ? normalizeApprovalStatus(approvalStatus)
+      : normalizeApprovalStatus(currentMetadata?.approval_status),
+    provider_approved: approvalStatus
+      ? normalizeApprovalStatus(approvalStatus) === 'approved'
+      : currentMetadata?.provider_approved === true,
   };
 
   const changed = JSON.stringify(currentMetadata) !== JSON.stringify(nextMetadata);
@@ -3771,6 +3893,8 @@ async function upsertSupabaseDoctorMetadata({ email, fullName = '', providerType
     fullName: String(nextMetadata.full_name || '').trim(),
     providerType: String(nextMetadata.provider_type || '').trim(),
     registrationNumber: String(nextMetadata.registration_number || '').trim().toUpperCase(),
+    providerNumber: normalizeProviderNumber(nextMetadata.provider_number),
+    approvalStatus: nextMetadata.provider_approved === true ? 'approved' : normalizeApprovalStatus(nextMetadata.approval_status),
   };
 }
 
@@ -4350,11 +4474,24 @@ export default async function handler(req, res) {
         const requestedUiMode = body?.uiMode === 'embedded' ? 'embedded' : 'hosted';
         const patient = body?.patient || {};
         const certificateDraft = buildDraftCertificate(body);
+        if (certificateDraft.includeCarerCertificate) {
+          const carerValidation = validateCarerCertificateDetails(certificateDraft.carerCertificateDetails);
+          if (!carerValidation.valid) {
+            sendJson(res, 400, {
+              error: `Carer certificate details incomplete: ${carerValidation.errors.join(', ')}`,
+              code: 'CARER_CERTIFICATE_DETAILS_REQUIRED',
+              details: carerValidation.errors,
+            });
+            return;
+          }
+          certificateDraft.carerCertificateDetails = carerValidation.details;
+        }
         body.consult = {
           ...(body?.consult || {}),
           startDate: certificateDraft.startDate,
           durationDays: certificateDraft.durationDays,
           includeCarerCertificate: certificateDraft.includeCarerCertificate,
+          carerCertificateDetails: certificateDraft.carerCertificateDetails,
         };
 
         if (!patient.fullName || !patient.email) {
@@ -4574,7 +4711,24 @@ export default async function handler(req, res) {
         return;
       }
 
-      const result = await patientAccountExistsByEmailOrPhone({ email, phone });
+      let result = { exists: false, reason: '', email: '' };
+      try {
+        result = await patientAccountExistsByEmailOrPhone({ email, phone });
+      } catch (errorObject) {
+        error('patient.account_exists.lookup_failed', {
+          email,
+          hasPhone: Boolean(phone),
+          message: errorObject?.message || String(errorObject),
+        });
+        sendJson(res, 200, {
+          ok: false,
+          exists: false,
+          reason: 'lookup_unavailable',
+          matchedEmail: '',
+          message: "We couldn't verify account status right now. You can continue and we'll check again.",
+        });
+        return;
+      }
       sendJson(res, 200, {
         ok: true,
         exists: Boolean(result.exists),
@@ -5112,6 +5266,7 @@ export default async function handler(req, res) {
         return;
       }
 
+      try {
       const supabaseConfig = getSupabaseConfig();
       let canIssueReset = false;
       let resetTokenMode = supabaseConfig.enabled ? 'supabase' : 'local';
@@ -5285,6 +5440,17 @@ export default async function handler(req, res) {
         message: 'If an account exists for this email, a reset link has been sent.',
       });
       return;
+      } catch (errorObject) {
+        error('patient.password_reset.request_failed', {
+          email,
+          message: errorObject?.message || String(errorObject),
+        });
+        sendJson(res, 200, {
+          ok: false,
+          message: 'If an account exists for this email, a reset link has been sent.',
+        });
+        return;
+      }
     }
 
     if (req.method === 'POST' && routePath === 'patient/password/reset/confirm') {
@@ -6628,21 +6794,35 @@ export default async function handler(req, res) {
         message,
       });
 
-      await sendEmail({
-        to: recipients,
-        subject: `Patient message for request ${certId}`,
-        html: patientMessageEmail.html,
-        text: patientMessageEmail.text,
-      });
+      let emailSent = false;
+      try {
+        await sendEmail({
+          to: recipients,
+          subject: `Patient message for request ${certId}`,
+          html: patientMessageEmail.html,
+          text: patientMessageEmail.text,
+        });
+        emailSent = true;
+      } catch (errorObject) {
+        error('patient.message.email_failed', {
+          certificateId: certId,
+          patientEmail: normalizeEmail(patient.email),
+          message: errorObject?.message || String(errorObject),
+        });
+      }
 
       info('patient.message.sent', {
         certificateId: certId,
         patientEmail: normalizeEmail(patient.email),
         provider: currentEmailProvider(),
         recipients,
+        emailSent,
       });
 
-      sendJson(res, 200, { message: 'Message sent to doctor' });
+      sendJson(res, 200, {
+        message: emailSent ? 'Message sent to doctor' : 'Message saved; doctor notification email is pending',
+        emailSent,
+      });
       return;
     }
 
@@ -6692,6 +6872,7 @@ export default async function handler(req, res) {
       )
         .trim()
         .toUpperCase();
+      const providerNumber = normalizeProviderNumber(body.providerNumber || body.medicareProviderNumber || '');
 
       if (!isLikelyDoctorEmail(email)) {
         sendJson(res, 400, { error: 'A valid email is required' });
@@ -6714,6 +6895,8 @@ export default async function handler(req, res) {
           fullName,
           providerType,
           registrationNumber,
+          providerNumber,
+          approvalStatus: 'pending',
         });
       }
 
@@ -6725,6 +6908,8 @@ export default async function handler(req, res) {
           fullName,
           providerType,
           registrationNumber,
+          providerNumber,
+          approvalStatus: 'pending',
           source: supabaseConfig.enabled ? 'supabase-signup' : 'portal-signup',
         });
       } catch (errorObject) {
@@ -6760,17 +6945,19 @@ export default async function handler(req, res) {
       await appendAudit({
         type: 'DOCTOR_ACCOUNT_CREATED',
         email,
+        approvalStatus: 'pending',
       });
 
-      const token = issueDoctorToken(email);
       info('doctor.register.success', { email });
       sendJson(res, 201, {
-        token,
+        approvalRequired: true,
         doctor: {
           email,
           name: account.fullName || fullName || email,
           providerType: account.providerType || providerType,
           registrationNumber: account.registrationNumber || registrationNumber,
+          providerNumber: account.providerNumber || providerNumber,
+          approvalStatus: account.approvalStatus || 'pending',
         },
       });
       return;
@@ -6880,8 +7067,24 @@ export default async function handler(req, res) {
         email: account.email,
       });
 
-      const authToken = issueDoctorToken(account.email);
       info('doctor.password_reset.completed', { email: account.email });
+      if (!doctorProfileHasApproval(account, account.email)) {
+        sendJson(res, 200, {
+          approvalRequired: true,
+          message: 'Password updated. Your doctor account still needs admin approval before portal access.',
+          doctor: {
+            email: account.email,
+            name: account.fullName || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
+            providerType: account.providerType || '',
+            registrationNumber: account.registrationNumber || '',
+            providerNumber: account.providerNumber || '',
+            approvalStatus: account.approvalStatus || 'pending',
+          },
+        });
+        return;
+      }
+
+      const authToken = issueDoctorToken(account.email);
       sendJson(res, 200, {
         token: authToken,
         doctor: {
@@ -6889,6 +7092,8 @@ export default async function handler(req, res) {
           name: account.fullName || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
           providerType: account.providerType || '',
           registrationNumber: account.registrationNumber || '',
+          providerNumber: account.providerNumber || '',
+          approvalStatus: account.approvalStatus || 'approved',
         },
       });
       return;
@@ -6900,32 +7105,47 @@ export default async function handler(req, res) {
       const password = String(body.password || '');
 
       let authenticatedDoctor = null;
+      let pendingApproval = false;
       if (validateDoctorCredentials(email, password)) {
         authenticatedDoctor = {
           email,
           name: process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
           providerType: '',
           registrationNumber: '',
+          providerNumber: '',
+          approvalStatus: 'approved',
         };
       } else {
         const localAuth = await authenticateDoctorAccount({ email, password });
         if (localAuth?.email) {
-          authenticatedDoctor = {
-            email: localAuth.email,
-            name: localAuth.fullName || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
-            providerType: localAuth.providerType || '',
-            registrationNumber: localAuth.registrationNumber || '',
-          };
+          if (!doctorProfileHasApproval(localAuth, localAuth.email)) {
+            pendingApproval = true;
+          } else {
+            authenticatedDoctor = {
+              email: localAuth.email,
+              name: localAuth.fullName || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
+              providerType: localAuth.providerType || '',
+              registrationNumber: localAuth.registrationNumber || '',
+              providerNumber: localAuth.providerNumber || '',
+              approvalStatus: localAuth.approvalStatus || 'approved',
+            };
+          }
         }
 
         const supabaseAuth = await authenticateDoctorViaSupabase(email, password);
         if (!authenticatedDoctor && supabaseAuth?.email) {
-          authenticatedDoctor = {
-            email: supabaseAuth.email,
-            name: supabaseAuth.fullName || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
-            providerType: supabaseAuth.providerType || '',
-            registrationNumber: supabaseAuth.registrationNumber || '',
-          };
+          if (!doctorProfileHasApproval(supabaseAuth, supabaseAuth.email)) {
+            pendingApproval = true;
+          } else {
+            authenticatedDoctor = {
+              email: supabaseAuth.email,
+              name: supabaseAuth.fullName || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
+              providerType: supabaseAuth.providerType || '',
+              registrationNumber: supabaseAuth.registrationNumber || '',
+              providerNumber: supabaseAuth.providerNumber || '',
+              approvalStatus: supabaseAuth.approvalStatus || 'approved',
+            };
+          }
         }
 
         if (supabaseAuth?.email) {
@@ -6934,12 +7154,18 @@ export default async function handler(req, res) {
             fullName: supabaseAuth.fullName || '',
             providerType: supabaseAuth.providerType || '',
             registrationNumber: supabaseAuth.registrationNumber || '',
+            providerNumber: supabaseAuth.providerNumber || '',
+            approvalStatus: supabaseAuth.approvalStatus || 'pending',
             source: 'supabase',
           });
         }
       }
 
       if (!authenticatedDoctor) {
+        if (pendingApproval) {
+          sendJson(res, 403, { error: 'Doctor account is pending admin approval.' });
+          return;
+        }
         sendJson(res, 401, { error: 'Invalid credentials' });
         return;
       }
@@ -6953,6 +7179,8 @@ export default async function handler(req, res) {
           name: authenticatedDoctor.name,
           providerType: authenticatedDoctor.providerType || '',
           registrationNumber: authenticatedDoctor.registrationNumber || '',
+          providerNumber: authenticatedDoctor.providerNumber || '',
+          approvalStatus: authenticatedDoctor.approvalStatus || 'approved',
         },
       });
       return;
@@ -6969,6 +7197,8 @@ export default async function handler(req, res) {
           fullName: String(profile?.fullName || '').trim(),
           providerType: String(profile?.providerType || '').trim(),
           registrationNumber: String(profile?.registrationNumber || '').trim().toUpperCase(),
+          providerNumber: normalizeProviderNumber(profile?.providerNumber || ''),
+          approvalStatus: profile?.approvalStatus || (isDoctorAdminEmail(doctor.email) ? 'approved' : 'pending'),
         },
       });
       return;
@@ -6986,6 +7216,7 @@ export default async function handler(req, res) {
       )
         .trim()
         .toUpperCase();
+      const providerNumber = normalizeProviderNumber(body.providerNumber || body.medicareProviderNumber || '');
 
       if (!providerType) {
         sendJson(res, 400, { error: 'Provider type is required' });
@@ -7001,6 +7232,7 @@ export default async function handler(req, res) {
         fullName,
         providerType,
         registrationNumber,
+        providerNumber,
         source: 'portal-profile',
       });
 
@@ -7011,6 +7243,8 @@ export default async function handler(req, res) {
             fullName,
             providerType,
             registrationNumber,
+            providerNumber,
+            approvalStatus: updated?.approvalStatus || '',
           });
         } catch (errorObject) {
           info('doctor.profile.supabase_sync_failed', {
@@ -7030,6 +7264,100 @@ export default async function handler(req, res) {
           )
             .trim()
             .toUpperCase(),
+          providerNumber: normalizeProviderNumber(updated?.providerNumber || providerNumber || ''),
+          approvalStatus: updated?.approvalStatus || 'approved',
+        },
+      });
+      return;
+    }
+
+    if (
+      req.method === 'POST' &&
+      segments.length === 4 &&
+      segments[0] === 'doctor' &&
+      segments[1] === 'accounts' &&
+      segments[3] === 'approval'
+    ) {
+      const doctor = await requireDoctor(req, res);
+      if (!doctor) return;
+      if (!isDoctorAdminEmail(doctor.email)) {
+        sendJson(res, 403, { error: 'Only an admin doctor can approve doctor accounts.' });
+        return;
+      }
+
+      const targetEmail = normalizeEmail(decodeURIComponent(segments[2] || ''));
+      const body = await parseJsonBody(req);
+      const requestedApprovalStatus = String(body.approvalStatus || body.status || '').trim().toLowerCase();
+      if (!['approved', 'pending', 'rejected'].includes(requestedApprovalStatus)) {
+        sendJson(res, 400, { error: 'approvalStatus must be approved, pending, or rejected' });
+        return;
+      }
+      const approvalStatus = normalizeApprovalStatus(requestedApprovalStatus);
+      const providerNumber = normalizeProviderNumber(body.providerNumber || body.medicareProviderNumber || '');
+      if (!targetEmail) {
+        sendJson(res, 400, { error: 'Doctor email is required' });
+        return;
+      }
+
+      let account = await getDoctorAccountByEmail(targetEmail);
+      if (!account?.email && getSupabaseConfig().enabled) {
+        const supabaseDoctor = await findSupabaseDoctorByEmail(targetEmail);
+        if (supabaseDoctor?.email) {
+          account = await upsertDoctorAccount({
+            email: supabaseDoctor.email,
+            fullName: supabaseDoctor.fullName || '',
+            providerType: supabaseDoctor.providerType || '',
+            registrationNumber: supabaseDoctor.registrationNumber || '',
+            providerNumber: providerNumber || supabaseDoctor.providerNumber || '',
+            approvalStatus: supabaseDoctor.approvalStatus || 'pending',
+            source: 'supabase',
+          });
+        }
+      }
+      if (!account?.email) {
+        sendJson(res, 404, { error: 'Doctor account not found' });
+        return;
+      }
+
+      const updated = await setDoctorAccountApprovalStatus({
+        email: targetEmail,
+        approvalStatus,
+        providerNumber,
+      });
+
+      if (getSupabaseConfig().enabled) {
+        try {
+          await upsertSupabaseDoctorMetadata({
+            email: targetEmail,
+            fullName: updated?.fullName || account.fullName || '',
+            providerType: updated?.providerType || account.providerType || '',
+            registrationNumber: updated?.registrationNumber || account.registrationNumber || '',
+            providerNumber: updated?.providerNumber || account.providerNumber || '',
+            approvalStatus,
+          });
+        } catch (errorObject) {
+          info('doctor.approval.supabase_sync_failed', {
+            email: targetEmail,
+            message: errorObject?.message || String(errorObject),
+          });
+        }
+      }
+
+      await appendAudit({
+        type: 'DOCTOR_ACCOUNT_APPROVAL_UPDATED',
+        email: targetEmail,
+        by: normalizeEmail(doctor.email),
+        approvalStatus,
+      });
+
+      sendJson(res, 200, {
+        doctor: {
+          email: updated?.email || targetEmail,
+          fullName: updated?.fullName || '',
+          providerType: updated?.providerType || '',
+          registrationNumber: updated?.registrationNumber || '',
+          providerNumber: updated?.providerNumber || '',
+          approvalStatus: updated?.approvalStatus || approvalStatus,
         },
       });
       return;
