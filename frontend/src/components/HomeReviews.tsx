@@ -120,29 +120,20 @@ export function HomeReviews() {
     };
 
     return (
-        <section id="for-physicians" className="relative overflow-hidden border-y border-border py-16">
-            <div className="absolute inset-0">
-                <img
-                    src="/HERO.webp"
-                    alt=""
-                    aria-hidden="true"
-                    className="h-full w-full object-cover"
-                    style={{ objectPosition: '60% 77%' }}
-                />
-            </div>
+        <section id="for-physicians" className="relative overflow-hidden border-y border-border bg-[#06142b] py-16">
             <div className="relative mx-auto max-w-7xl px-5 md:px-8">
                 <div className="mb-8 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
                     <div>
-                        <p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-white/85">Experience Highlights</p>
-                        <h2 className="text-3xl font-serif font-bold text-white md:text-4xl">What the Onya experience is built to deliver</h2>
-                        <p className="mt-3 text-base font-bold text-white md:text-lg">Practical features that keep care fast, clear, and reliable.</p>
+                        <p className="onya-kicker mb-4 border-white/20 bg-white/10 text-white">Experience Highlights</p>
+                        <h2 className="onya-heading-xl max-w-[12ch] text-white">What Onya is built to deliver</h2>
+                        <p className="mt-4 max-w-2xl text-base font-bold text-white/85 md:text-lg">Practical features that keep care fast, clear, and reliable.</p>
                     </div>
                     <a
                         href="#how-it-works"
-                        className="hidden h-11 items-center rounded-xl bg-primary px-6 text-sm font-semibold text-white transition hover:bg-primary-hover md:inline-flex"
+                        className="onya-button hidden md:inline-flex"
                     >
                         Find my match
-                        <ArrowRight size={16} className="ml-2" />
+                        <ArrowRight size={16} />
                     </a>
                 </div>
 
@@ -165,11 +156,11 @@ export function HomeReviews() {
                                 className="px-2"
                                 style={{ flex: `0 0 ${100 / cardsPerView}%` }}
                             >
-                                <div className="h-full rounded-2xl border border-sand-200 bg-white p-6 shadow-sm transition-shadow hover:shadow-md">
-                                    <h3 className="mb-3 min-h-[2.75rem] text-2xl font-bold leading-tight text-text-primary">{review.title}</h3>
+                                <div className="h-full border border-white/15 bg-white p-6">
+                                    <h3 className="mb-3 min-h-[2.75rem] text-2xl font-extrabold leading-none text-[#06142b]">{review.title}</h3>
                                     <p className="mb-5 min-h-[96px] text-[15px] leading-relaxed text-text-secondary">{review.body}</p>
                                     <div className="border-t border-sand-200 pt-4">
-                                        <p className="text-sm font-semibold text-text-primary">{review.meta}</p>
+                                        <p className="text-sm font-extrabold text-primary">{review.meta}</p>
                                     </div>
                                 </div>
                             </article>
@@ -194,7 +185,7 @@ export function HomeReviews() {
                         <button
                             type="button"
                             onClick={goPrev}
-                            className="flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-white text-text-primary hover:bg-sand-50"
+                            className="flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-white text-text-primary hover:bg-sand-50"
                             aria-label="Previous highlights"
                         >
                             <ChevronLeft size={20} />
@@ -202,7 +193,7 @@ export function HomeReviews() {
                         <button
                             type="button"
                             onClick={goNext}
-                            className="flex h-12 w-12 items-center justify-center rounded-xl border border-border bg-white text-text-primary hover:bg-sand-50"
+                            className="flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-white text-text-primary hover:bg-sand-50"
                             aria-label="Next highlights"
                         >
                             <ChevronRight size={20} />
@@ -213,10 +204,10 @@ export function HomeReviews() {
                 <div className="mt-6 md:hidden">
                     <a
                         href="#how-it-works"
-                        className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-primary text-sm font-semibold text-white transition hover:bg-primary-hover"
+                        className="onya-button w-full"
                     >
                         Find my match
-                        <ArrowRight size={16} className="ml-2" />
+                        <ArrowRight size={16} />
                     </a>
                 </div>
             </div>

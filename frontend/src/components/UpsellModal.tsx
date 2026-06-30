@@ -29,27 +29,27 @@ export function UpsellModal() {
         <Modal isOpen={showUpsell}>
             <div className="space-y-6 p-5 pb-[calc(env(safe-area-inset-bottom)+1.1rem)] md:p-6 md:pb-6">
                 <div className="text-center space-y-2">
-                    <h3 className="text-xl font-bold text-text-primary">{upsell.title}</h3>
+                    <h3 className="text-2xl font-extrabold leading-tight text-text-primary">{upsell.title}</h3>
                     <p className="text-text-secondary">{upsell.subtitle}</p>
                 </div>
 
                 {/* Recommended Option */}
-                <div className="relative border-2 border-sunlight-200 bg-sunlight-50/70 rounded-xl p-5 overflow-hidden">
-                    <div className="absolute top-0 right-0 bg-bark-900 text-sand-50 text-xs font-bold px-3 py-1 rounded-bl-lg">
+                <div className="relative overflow-hidden border-2 border-primary bg-[#edf2ff] p-5">
+                    <div className="absolute top-0 right-0 bg-[#06142b] text-white text-xs font-extrabold px-3 py-1">
                         RECOMMENDED
                     </div>
 
                     <div className="mb-4">
                         <div className="flex items-center gap-2 mb-1">
-                            <h4 className="font-bold text-lg text-text-primary">{upsell.recommended.title}</h4>
+                            <h4 className="font-extrabold text-lg text-text-primary">{upsell.recommended.title}</h4>
                         </div>
-                        <p className="text-text-primary font-medium">{unlimitedPriceText}</p>
+                        <p className="text-text-primary font-bold">{unlimitedPriceText}</p>
                     </div>
 
                     <ul className="space-y-2 mb-6">
                         {upsell.recommended.bullets.map((b, i) => (
                             <li key={i} className="flex items-start gap-2 text-sm text-text-secondary">
-                                <Check size={16} className="text-forest-700 mt-0.5" />
+                                <Check size={16} className="text-primary mt-0.5" />
                                 <span>{b}</span>
                             </li>
                         ))}
@@ -67,10 +67,10 @@ export function UpsellModal() {
                 </div>
 
                 {/* One-off Option */}
-                <div className="border border-border rounded-xl p-5">
+                <div className="border border-border p-5">
                     <div className="flex justify-between items-start mb-4">
                         <div>
-                            <h4 className="font-bold text-text-primary">{upsell.oneoff.title}</h4>
+                            <h4 className="font-extrabold text-text-primary">{upsell.oneoff.title}</h4>
                             <p className="text-sm text-text-secondary">{oneOffPriceText}</p>
                         </div>
                     </div>

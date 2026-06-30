@@ -73,17 +73,17 @@ export const MagneticButton = forwardRef<HTMLButtonElement, MagneticButtonProps>
         const stretchToContainer = typeof className === 'string' && className.includes('w-full');
 
         const variants = {
-            primary: 'bg-primary text-sand-50 hover:bg-primary-hover shadow-lg shadow-primary/20 border border-transparent',
-            outline: 'border-2 border-primary text-primary bg-transparent hover:bg-sand-50',
+            primary: 'bg-primary text-white hover:bg-primary-hover border border-transparent',
+            outline: 'border border-primary text-primary bg-transparent hover:bg-sand-50',
             ghost: 'text-text-secondary bg-transparent hover:bg-sand-75',
-            dark: 'bg-text-primary text-sand-50 shadow-lg border border-transparent',
-            secondary: 'bg-white border border-primary text-primary hover:bg-sunlight-50 shadow-sm',
+            dark: 'bg-text-primary text-white border border-transparent',
+            secondary: 'bg-sand-50 border border-border text-text-primary hover:bg-white',
         } as const;
 
         const sizes = {
-            sm: 'h-9 px-5 text-sm rounded-xl',
-            md: 'h-11 px-6 text-sm rounded-xl',
-            lg: 'h-14 px-8 text-base rounded-2xl',
+            sm: 'h-9 px-5 text-sm rounded-full',
+            md: 'h-12 px-6 text-sm rounded-full',
+            lg: 'h-12 px-8 text-base rounded-full',
         } as const;
 
         return (
@@ -109,7 +109,7 @@ export const MagneticButton = forwardRef<HTMLButtonElement, MagneticButtonProps>
                         disabled={disabled}
                         data-lightswind-magnetic="true"
                         className={cn(
-                            'relative inline-flex items-center justify-center font-semibold tracking-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 overflow-hidden',
+                            'relative inline-flex items-center justify-center overflow-hidden font-extrabold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60',
                             variants[variant],
                             sizes[size],
                             className

@@ -1,30 +1,26 @@
 # Onya Health Design Language
 
-## Core palette (source of truth)
-Use the global tokens in `frontend/src/index.css`.
+Canonical design guidance lives in `DESIGN.md`.
 
-- `#0A1931` - deep navy (primary text, strongest emphasis)
-- `#1A3D63` - primary brand blue (primary actions, active navigation)
-- `#4A7FA7` - secondary blue (links, secondary actions, accents)
-- `#B3CFE5` - soft light blue (borders, dividers, muted surfaces)
-- `#F6FAFD` - page background / calm surface background
-- `#FFFFFF` - elevated content surfaces (cards/forms where needed)
+Use `nike/DESIGN.md` only as the imported reference. The active Onya translation is:
 
-## Usage rules
-1. All pages must use this same palette consistently across desktop and mobile.
-2. Use semantic tokens/classes from `index.css` and Tailwind theme tokens first; avoid one-off hex values.
-3. Do not introduce purple, neon/bright blue, or unrelated accent palettes.
-4. Keep UI calm, clinical, and trustworthy: soft borders, restrained shadows, clear hierarchy.
-5. Keep typography on Inter across the product.
+- Nike-style editorial scale and 8px spacing rhythm.
+- Blue-biased Onya palette.
+- Raw medical/certificate imagery.
+- Pill CTAs and chips.
+- Sharp product tiles and 8px panels.
+- No glassmorphism, gradient-orb decoration, bokeh, or oversized nested SaaS cards.
 
-## Semantic status colors
-Non-brand colors are only allowed for semantic state communication:
+Before UI edits, read:
 
-- success/live: `#ECFDF3` / `#86EFAC` / `#166534` (or token `--color-success`)
-- warning: `#FFF8E8` / `#F3DF9D` / `#8A6700`
-- error/denied: `#FFE9E8` / `#F3C5C4` / `#A93736`
+1. `DESIGN.md`
+2. `frontend/src/index.css`
+3. The touched screen/component files
 
-## QA checklist before merge
-- Verify major routes on desktop and mobile.
-- Confirm readable contrast for default/hover/focus/disabled states.
-- Search for hardcoded colors and remove conflicts with this palette.
+Primary QA:
+
+- Desktop and mobile visual pass.
+- No text clipping or horizontal overflow.
+- No hardcoded off-brand accent colors except semantic states.
+- `npm run lint`
+- `npm run build`

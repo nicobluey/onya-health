@@ -27,12 +27,14 @@ Use this tree before substantial work so the active context is clear. The old FE
 |-- SKILL.md               # Always-read coding guardrails
 |-- SKILLS.md              # Repeatable workflows by task type
 |-- PLANS.md               # Living plan, file map, bug batch, verification state
-|-- DESIGN.md              # Onya visual system, assets, copy and layout rules
+|-- DESIGN.md              # Active Nike-inspired, blue-biased Onya visual system
 |-- backend/README.md      # Backend/API operational notes
 |-- .agents/
 |   |-- README.md          # Deployment policy, incident-log policy, data architecture notes
-|   |-- design-language.md # Historical design language notes
+|   |-- design-language.md # Short pointer to the active design source of truth
 |   `-- fixes-log.md       # Production bug/regression history
+|-- nike/
+|   `-- DESIGN.md          # Imported Nike reference from getdesign; reference only
 `-- docs/
     |-- REPO_STRUCTURE.md
     `-- ai-landing-image-prompts.md
@@ -74,5 +76,6 @@ Use this tree before substantial work so the active context is clear. The old FE
 
 ## Current focus
 
-- Keep meal-plan generation backward-compatible with historical cached data.
-- Keep meal image persistence stable (no null-clobbering during cache hydration/upsert).
+- Primary growth surface is medical certificate conversion: `/`, `/doctor`, med-cert aliases, booking, patient auth, and patient portal.
+- Meal-plan, nutritionist, psychologist, and weight-loss reset routes redirect to `/doctor`; treat old modules as deprecated unless explicitly reactivated.
+- Use `DESIGN.md` plus `frontend/src/index.css` before UI work. The active system is Nike-inspired typography/spacing with Onya blue colors.

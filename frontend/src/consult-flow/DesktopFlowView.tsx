@@ -13,7 +13,7 @@ import {
     UsedByPatientsSection,
 } from '../components/LandingExtras';
 import { COPY } from './copy';
-import { Check, ArrowRight, Clock3, ShieldCheck } from 'lucide-react';
+import { Check, ArrowRight, Clock3 } from 'lucide-react';
 import { Button } from '../components/UI';
 import { Footer } from '../components/Footer';
 import { HeaderDropdown } from '../components/HeaderDropdown';
@@ -23,40 +23,6 @@ import type { ServiceConfig } from './services';
 
 interface DesktopFlowViewProps {
     service: ServiceConfig;
-}
-
-const DOCTOR_HERO_OVERLAY_CARDS = [
-    {
-        title: 'Doctor reviewed',
-        detail: 'AHPRA-registered doctor assessment.',
-        icon: ShieldCheck,
-    },
-];
-
-function DoctorHeroOverlayCard({
-    card,
-    className,
-}: {
-    card: (typeof DOCTOR_HERO_OVERLAY_CARDS)[number];
-    className: string;
-}) {
-    const Icon = card.icon;
-
-    return (
-        <article
-            className={`absolute rounded-xl border border-slate-200/85 bg-white/96 px-2.5 py-2 shadow-[0_8px_20px_rgba(15,23,42,0.11)] ${className}`}
-        >
-            <div className="flex items-start gap-2.5">
-                <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary/90">
-                    <Icon className="h-3 w-3" />
-                </span>
-                <div>
-                    <p className="text-xs font-semibold text-text-primary">{card.title}</p>
-                    <p className="mt-0.5 text-[11px] leading-relaxed text-text-secondary">{card.detail}</p>
-                </div>
-            </div>
-        </article>
-    );
 }
 
 export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
@@ -70,13 +36,13 @@ export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
 
     return (
         <div className="min-h-screen flex flex-col font-sans" style={themedStyle}>
-            <header className="sticky top-0 z-50 w-full border-b border-border bg-white shadow-sm">
+            <header className="sticky top-0 z-50 w-full border-b border-border bg-white">
                 <div className="max-w-7xl mx-auto px-8 h-16 flex justify-between items-center">
                     <HeaderBrand />
 
                     <div className="flex items-center gap-3">
                         <HeaderDropdown />
-                        {view !== 'booking' && <Button onClick={startBooking} className="px-5 h-10 text-sm">Book now</Button>}
+                        {view !== 'booking' && <Button onClick={startBooking} className="h-10 px-5 text-sm">Book now</Button>}
                     </div>
                 </div>
             </header>
@@ -86,52 +52,43 @@ export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
                 <>
                     {isDoctorPage ? (
                         <>
-                            <section className="border-b border-border bg-[linear-gradient(135deg,#f6fafd_0%,#f6fafd_45%,#ffffff_100%)] py-14 lg:py-20">
-                                <div className="mx-auto grid w-full max-w-7xl items-center gap-10 px-5 md:grid-cols-[minmax(0,0.95fr)_minmax(0,1.18fr)] md:px-8 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.35fr)] xl:gap-14">
-                                    <div className="max-w-xl">
-                                        <p className="inline-flex rounded-full border border-sunlight-200 bg-white/90 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-bark-600">
+                            <section className="relative min-h-[720px] overflow-hidden border-b border-border bg-[#06142b]">
+                                <img
+                                    src="/Medical Certificate Landing.webp"
+                                    alt="Person completing an online medical certificate consult"
+                                    className="absolute inset-0 h-full w-full object-cover object-[68%_50%]"
+                                    loading="eager"
+                                />
+                                <div className="absolute inset-0 bg-[#06142b]/38" />
+                                <div className="relative mx-auto flex min-h-[720px] w-full max-w-7xl items-center px-8 py-16">
+                                    <div className="max-w-4xl text-white">
+                                        <p className="onya-kicker text-white/82">
                                             Australian doctor-reviewed service
                                         </p>
-                                        <h1 className="mt-4 text-5xl leading-[1.04] text-text-primary lg:text-6xl">
-                                            Online medical certificate consults.
+                                        <h1 className="onya-display mt-5 max-w-4xl text-white">
+                                            Online certificate consults.
                                         </h1>
-                                        <p className="mt-5 max-w-xl text-lg leading-relaxed text-text-secondary">
+                                        <p className="mt-6 max-w-xl text-xl font-bold leading-relaxed text-white">
                                             Complete a short online form, receive doctor review, and get digital delivery if approved.
                                         </p>
 
                                         <div className="mt-8 max-w-sm lg:mt-9">
-                                            <Button className="h-14 rounded-2xl px-8 text-base font-semibold shadow-lg" onClick={startBooking}>
+                                            <Button className="h-14 bg-white px-8 text-base text-[#06142b] hover:bg-[#edf2ff]" onClick={startBooking}>
                                                 Start online consult
                                                 <ArrowRight className="ml-2" />
                                             </Button>
                                         </div>
 
-                                        <div className="mt-3 inline-flex max-w-md items-start gap-1.5 rounded-md border border-slate-200/70 bg-white/75 px-2.5 py-1.5 text-[13px] text-text-primary">
-                                            <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/80" />
+                                        <div className="mt-4 inline-flex max-w-md items-start gap-2 border border-white/24 bg-white/12 px-3 py-2 text-sm text-white backdrop-blur-sm">
+                                            <Clock3 className="mt-0.5 h-4 w-4 shrink-0" />
                                             <p className="leading-relaxed">
-                                                <span className="font-medium">Short form:</span> complete your consult details online in under 2 minutes.
+                                                <span className="font-extrabold">Short form:</span> complete your consult details online in under 2 minutes.
                                             </p>
                                         </div>
 
-                                        <p className="mt-3 text-sm text-text-secondary">
+                                        <p className="mt-3 text-sm font-semibold text-white/82">
                                             Non-emergency symptoms only. Certificates start from today onward.
                                         </p>
-                                    </div>
-
-                                    <div className="relative h-[430px] overflow-hidden rounded-[32px] border border-slate-200/80 bg-white shadow-[0_28px_70px_rgba(15,23,42,0.18)] md:h-[520px] xl:h-[620px]">
-                                        <img
-                                            src="/Medical Certificate Landing.webp"
-                                            alt="Person completing an online medical certificate consult"
-                                            className="absolute inset-0 block h-full w-full object-cover object-[68%_50%]"
-                                            loading="eager"
-                                        />
-                                        <div className="pointer-events-none absolute inset-y-0 left-0 w-44 bg-gradient-to-r from-white/22 to-transparent" />
-                                        <div className="pointer-events-none absolute inset-0 hidden md:block">
-                                            <DoctorHeroOverlayCard
-                                                card={DOCTOR_HERO_OVERLAY_CARDS[0]}
-                                                className="left-9 top-20 w-36 lg:left-12 lg:top-24 lg:w-40"
-                                            />
-                                        </div>
                                     </div>
                                 </div>
                             </section>
@@ -214,24 +171,24 @@ export default function DesktopFlowView({ service }: DesktopFlowViewProps) {
 
             {/* BOOKING FLOW VIEW */}
             {view === 'booking' && (
-                <div className="flex-1 w-full max-w-6xl mx-auto px-8 py-12 grid grid-cols-12 gap-16 items-start animate-fade-in-up">
+                <div className="flex-1 w-full max-w-6xl mx-auto px-8 py-12 grid grid-cols-12 gap-12 items-start animate-fade-in-up">
                     <div className="col-span-12 lg:col-span-7 space-y-8">
-                        <button onClick={goHome} className="text-sm text-text-secondary hover:text-text-primary flex items-center gap-2 mb-4">
+                        <button onClick={goHome} className="text-sm font-extrabold text-text-secondary hover:text-text-primary flex items-center gap-2 mb-4">
                             &larr; Back to Home
                         </button>
                         <Stepper currentStep={step} showPricing={service.slug === 'doctor'} />
-                        <div className="bg-white rounded-3xl shadow-xl border border-border p-10 min-h-[500px] transition-all relative overflow-visible">
+                        <div className="onya-panel min-h-[500px] p-10 transition-all relative overflow-visible">
                             <StepRenderer />
                         </div>
                     </div>
 
                     <div className="hidden lg:col-span-5 lg:block space-y-6 sticky top-28">
-                        <div className="bg-white rounded-3xl border border-border overflow-hidden shadow-lg p-8">
-                            <h3 className="font-serif text-2xl font-bold text-text-primary mb-4">Why choose Onya?</h3>
+                        <div className="onya-panel p-8">
+                            <h3 className="text-3xl font-extrabold leading-tight text-text-primary mb-5">Why choose Onya?</h3>
                             <ul className="space-y-4">
                                 {COPY.hero.trust.map(item => (
-                                    <li key={item} className="flex items-center gap-3 text-text-primary font-medium">
-                                        <div className="bg-white p-1 rounded-full text-forest-700 shadow-sm">
+                                    <li key={item} className="flex items-center gap-3 text-text-primary font-bold">
+                                        <div className="bg-primary p-1 rounded-full text-white">
                                             <Check size={14} strokeWidth={3} />
                                         </div>
                                         {item}

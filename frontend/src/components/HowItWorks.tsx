@@ -161,7 +161,7 @@ function StepStackCard({ step, idx, total, progress }: StepStackCardProps) {
 
     return (
         <article
-            className="absolute inset-0 rounded-3xl border border-border bg-white p-4 shadow-[0_26px_58px_-42px_rgba(15,23,42,0.52)] md:p-8"
+            className="absolute inset-0 border border-border bg-white p-4 md:p-8"
             style={{
                 opacity,
                 zIndex: idx + 1,
@@ -169,12 +169,12 @@ function StepStackCard({ step, idx, total, progress }: StepStackCardProps) {
                 transition: 'opacity 240ms ease, transform 280ms cubic-bezier(0.22, 1, 0.36, 1)',
             }}
         >
-            <span className="absolute left-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-bold text-white md:left-8 md:top-8">
+            <span className="absolute left-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-extrabold text-white md:left-8 md:top-8">
                 {idx + 1}
             </span>
             <div className="grid h-full content-start gap-4 pt-8 md:grid-cols-[1fr_1fr] md:items-start md:gap-8 md:pt-12">
                 <div className="md:pr-8">
-                    <h3 className="mt-2 text-xl font-semibold text-text-primary md:text-2xl">{step.title}</h3>
+                    <h3 className="mt-2 text-2xl font-extrabold leading-none text-text-primary md:text-3xl">{step.title}</h3>
                     <p className="mt-2 text-sm leading-relaxed text-text-secondary md:mt-3 md:text-base">{step.description}</p>
                 </div>
 
@@ -238,7 +238,7 @@ export function HowItWorks({ onStartConsult, serviceSlug }: HowItWorksProps) {
                 <div ref={stackRef} className="relative h-[340vh] md:h-[320vh]">
                     <div className="sticky top-14 bg-white pt-7 md:top-20 md:pt-9">
                         <div>
-                            <h2 className="relative z-10 text-center text-3xl font-bold text-text-primary md:text-4xl">
+                            <h2 className="relative z-10 text-center onya-heading text-text-primary">
                                 {sectionTitle}
                             </h2>
                             <p className="relative z-10 mx-auto mt-3 max-w-2xl text-center text-sm text-text-secondary md:text-base">

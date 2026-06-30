@@ -374,7 +374,7 @@ const SOCIAL_PROOF_ITEMS: SocialProofItem[] = [
 
 function Navbar({ ctaHref }: { ctaHref: string }) {
     return (
-        <header className="sticky top-0 z-40 border-b border-border bg-white shadow-sm">
+        <header className="sticky top-0 z-40 border-b border-border bg-white">
             <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 md:px-6">
                 <HeaderBrand />
                 <nav className="flex items-center gap-3 sm:gap-5">
@@ -389,7 +389,7 @@ function Navbar({ ctaHref }: { ctaHref: string }) {
                     <HeaderDropdown buttonClassName="h-10 w-10 rounded-xl text-text-primary/90 flex items-center justify-center hover:bg-sand-75 transition-colors" />
                     <a
                         href={ctaHref}
-                        className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                        className="onya-button h-10 min-h-10 px-4 text-sm"
                     >
                         Get Certificate
                     </a>
@@ -409,73 +409,46 @@ function Hero({
     selectedTitle: string;
 }) {
     return (
-        <section className="border-b border-border bg-bg">
-            <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-14 md:grid-cols-2 md:items-center md:px-6 md:py-20">
-                <div className="max-w-xl">
-                    <h1 className="text-4xl font-bold leading-tight text-text-primary md:text-5xl">{config.heroHeadline}</h1>
-                    <p className="mt-5 text-lg leading-relaxed text-text-secondary">{config.heroSubheadline}</p>
+        <section className="relative overflow-hidden border-b border-border bg-[#f3f8ff]">
+            <div className="absolute inset-0">
+                <img
+                    src={config.heroImageSrc}
+                    alt={config.heroImageAlt}
+                    className="h-full w-full object-cover object-[62%_center]"
+                    loading="eager"
+                />
+            </div>
+            <div className="relative z-10 mx-auto flex min-h-[calc(100svh-64px)] w-full max-w-6xl items-center px-4 py-10 md:min-h-[640px] md:px-6 md:py-20">
+                <div className="max-w-3xl">
+                    <p className="onya-kicker bg-white/95">{config.heroImageLabel}</p>
+                    <h1 className="onya-display mt-5 max-w-[11ch] text-[#06142b]">{config.heroHeadline}</h1>
+                    <p className="mt-5 max-w-xl text-lg font-semibold leading-relaxed text-[#06142b] md:text-xl">{config.heroSubheadline}</p>
 
-                    <ul className="mt-8 grid gap-3 sm:grid-cols-2">
+                    <ul className="mt-7 grid gap-2 sm:grid-cols-3">
                         {config.trustBullets.map((bullet) => (
                             <li
                                 key={bullet}
-                                className="flex items-start gap-3 rounded-xl border border-border bg-surface px-4 py-3 text-sm text-text-secondary"
+                                className="flex items-start gap-2 text-sm font-bold text-[#06142b]"
                             >
-                                <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-secondary" />
+                                <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-primary" />
                                 <span>{bullet}</span>
                             </li>
                         ))}
                     </ul>
 
-                    <div className="mt-9">
-                        <a
-                            href={bookingHref}
-                            className="inline-flex h-13 items-center justify-center rounded-xl bg-primary px-7 text-base font-semibold text-white transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                        >
+                    <div className="mt-8">
+                        <a href={bookingHref} className="onya-button">
                             {config.heroCta}
-                            <ArrowRight size={17} className="ml-2" />
+                            <ArrowRight size={17} />
                         </a>
-                        <p className="mt-3 text-sm font-medium text-text-secondary">Takes less than 2 minutes</p>
-                    </div>
-                </div>
-
-                <div className="rounded-3xl border border-border bg-surface p-4 shadow-sm md:p-5">
-                    <div className="relative overflow-hidden rounded-2xl">
-                        <img
-                            src={config.heroImageSrc}
-                            alt={config.heroImageAlt}
-                            className="h-72 w-full object-cover md:h-[340px]"
-                            loading="lazy"
-                        />
-                        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0a1931]/50 via-transparent to-transparent" />
-                        <div className="absolute left-3 top-3 inline-flex rounded-full border border-white/40 bg-white/90 px-3 py-1 text-xs font-semibold text-text-primary">
-                            {config.heroImageLabel}
-                        </div>
-                        <div className="absolute bottom-3 left-3 right-3 rounded-xl border border-white/20 bg-[#0a1931]/70 p-3 backdrop-blur-sm">
-                            <p className="text-xs font-semibold uppercase tracking-[0.1em] text-white/80">Selected type</p>
-                            <p className="mt-1 text-sm font-semibold text-white">{selectedTitle}</p>
-                        </div>
-                    </div>
-
-                    <div className="mt-4 space-y-3">
-                        {HOW_IT_WORKS_STEPS.map((step, index) => (
-                            <div
-                                key={step.title}
-                                className="flex items-center gap-3 rounded-xl border border-border bg-bg px-4 py-3"
-                            >
-                                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-                                    {index + 1}
-                                </span>
-                                <p className="text-sm text-text-secondary">{step.title}</p>
-                            </div>
-                        ))}
+                        <p className="mt-3 text-sm font-bold text-[#06142b]">Takes less than 2 minutes to start.</p>
                     </div>
                 </div>
             </div>
 
             <div className="border-t border-border bg-surface/70">
-                <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-2 px-4 py-4 md:px-6">
-                    <p className="mr-2 text-xs font-semibold uppercase tracking-[0.1em] text-text-secondary">Trusted platform</p>
+                <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-2 px-4 py-4 text-sm font-bold md:px-6">
+                    <p className="mr-2 text-text-secondary">Selected type: {selectedTitle}</p>
                     <span className="rounded-full border border-border bg-surface px-3 py-1 text-xs text-text-secondary">
                         Australian doctors
                     </span>
@@ -494,11 +467,11 @@ function Hero({
 function PricingSection() {
     return (
         <section className="border-b border-border bg-surface">
-            <div className="mx-auto w-full max-w-6xl px-4 py-14 md:px-6 md:py-16">
+            <div className="onya-section mx-auto w-full max-w-6xl px-4 md:px-6">
                 <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                     <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-secondary">Cost</p>
-                        <h2 className="mt-2 text-3xl font-bold text-text-primary">Simple pricing that updates by duration</h2>
+                        <p className="onya-kicker">Cost</p>
+                        <h2 className="onya-heading mt-4 text-text-primary">Simple pricing that updates by duration</h2>
                     </div>
                     <p className="max-w-xl text-sm leading-relaxed text-text-secondary md:text-base">
                         $9.71 for 1 day, then linearly scaled up to $29.71 for 5-7 days, or choose All Access at $19/month.
@@ -506,11 +479,11 @@ function PricingSection() {
                 </div>
                 <div className="mt-8 grid gap-4 md:grid-cols-3">
                     {PRICING_TIERS.map((tier) => (
-                        <article key={tier.label} className="rounded-2xl border border-border bg-bg p-6">
-                            <p className="inline-flex rounded-full border border-border bg-surface px-3 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-text-secondary">
+                        <article key={tier.label} className="onya-tile bg-bg p-6">
+                            <p className="inline-flex rounded-full border border-border bg-surface px-3 py-1 text-xs font-extrabold uppercase text-text-secondary">
                                 {tier.label}
                             </p>
-                            <h3 className="mt-4 text-xl font-semibold text-text-primary">{tier.title}</h3>
+                            <h3 className="mt-4 text-2xl font-extrabold leading-none text-text-primary">{tier.title}</h3>
                             <p className="mt-3 text-sm leading-relaxed text-text-secondary">{tier.note}</p>
                         </article>
                     ))}
@@ -529,17 +502,15 @@ function TrustLogoStrip() {
     return (
         <section className="border-b border-border bg-bg">
             <div className="mx-auto w-full max-w-6xl px-4 py-12 md:px-6 md:py-14">
-                <p className="text-center text-xs font-semibold uppercase tracking-[0.14em] text-text-secondary">
+                <p className="text-center text-xs font-extrabold uppercase text-text-secondary">
                     Employers and institutions your patients recognise
                 </p>
-                <div className="relative mt-6 overflow-hidden rounded-2xl border border-border bg-surface py-5">
-                    <div className="absolute inset-y-0 left-0 z-10 w-14 bg-gradient-to-r from-surface to-transparent" />
-                    <div className="absolute inset-y-0 right-0 z-10 w-14 bg-gradient-to-l from-surface to-transparent" />
+                <div className="relative mt-6 overflow-hidden border-y border-border bg-surface py-5">
                     <div className="logo-carousel-track gap-10 px-5">
                         {loopedLogos.map((logo, index) => (
                             <div
                                 key={`${logo.src}-${index}`}
-                                className="flex h-12 w-28 shrink-0 items-center justify-center rounded-xl border border-border bg-bg px-3"
+                                className="flex h-12 w-28 shrink-0 items-center justify-center border border-border bg-bg px-3"
                             >
                                 <img src={logo.src} alt={logo.alt} className="max-h-7 w-full object-contain opacity-80" loading="lazy" />
                             </div>
@@ -567,23 +538,23 @@ function SocialProofCarousel({ bookingHref }: { bookingHref: string }) {
 
     return (
         <section className="border-b border-border bg-surface">
-            <div className="mx-auto w-full max-w-6xl px-4 py-14 md:px-6 md:py-16">
+            <div className="onya-section mx-auto w-full max-w-6xl px-4 md:px-6">
                 <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                     <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-secondary">Experience highlights</p>
-                        <h2 className="mt-2 text-3xl font-bold text-text-primary">What this process is designed to deliver</h2>
+                        <p className="onya-kicker">Experience highlights</p>
+                        <h2 className="onya-heading mt-4 text-text-primary">What this process is designed to deliver</h2>
                     </div>
                     <a
                         href={bookingHref}
-                        className="inline-flex h-11 items-center justify-center rounded-xl border border-primary/30 bg-primary/5 px-5 text-sm font-semibold text-primary transition hover:border-primary hover:bg-primary/10"
+                        className="onya-button-secondary"
                     >
                         Start my request
-                        <ArrowRight size={16} className="ml-2" />
+                        <ArrowRight size={16} />
                     </a>
                 </div>
 
                 <div
-                    className="mt-8 overflow-hidden rounded-2xl border border-border bg-bg"
+                    className="mt-8 overflow-hidden border border-border bg-bg"
                     onMouseEnter={() => setIsPaused(true)}
                     onMouseLeave={() => setIsPaused(false)}
                 >
@@ -595,7 +566,7 @@ function SocialProofCarousel({ bookingHref }: { bookingHref: string }) {
                             <article key={item.title} className="w-full shrink-0 px-5 py-7 md:px-8 md:py-9">
                                 <h3 className="text-xl font-semibold text-text-primary">{item.title}</h3>
                                 <p className="mt-4 max-w-3xl text-base leading-relaxed text-text-secondary md:text-lg">{item.quote}</p>
-                                <p className="mt-5 text-xs font-semibold uppercase tracking-[0.12em] text-text-secondary">
+                                <p className="mt-5 text-xs font-extrabold uppercase text-text-secondary">
                                     {item.meta}
                                 </p>
                             </article>

@@ -47,30 +47,30 @@ const FOOTER_GROUPS: FooterLinkGroup[] = [
 
 export function Footer({ onStartConsult, consultHref = '/doctor' }: FooterProps) {
     return (
-        <section className="w-full bg-[#1a3d63] text-white">
+        <section className="w-full bg-[#06142b] text-white">
             <footer className="w-full px-6 pb-8 pt-10 md:px-10 md:pb-10 md:pt-14 lg:px-14">
                 <div>
-                    <div className="flex flex-col gap-8 border-b border-[#b3cfe5]/45 pb-10 lg:flex-row lg:items-end lg:justify-between">
+                    <div className="flex flex-col gap-8 border-b border-white/16 pb-10 lg:flex-row lg:items-end lg:justify-between">
                         <div>
                             <a href="/" className="inline-flex items-center" aria-label="Onya Health home">
                                 <img src="/onya-health-logo.webp" alt="Onya Health" className="h-10 w-auto brightness-0 invert" />
                             </a>
-                            <p className="mt-5 max-w-md text-2xl font-semibold leading-snug text-white">
+                            <p className="mt-5 max-w-xl text-3xl font-extrabold leading-[1.05] text-white md:text-5xl">
                                 Healthcare that works around your life.
-                                <span className="text-[#b3cfe5]"> Get reviewed online without waiting-room delays.</span>
+                                <span className="text-[#b8ccff]"> Reviewed online without waiting-room delays.</span>
                             </p>
                         </div>
 
                         <div className="flex flex-col items-start gap-4 lg:items-end">
                             {onStartConsult ? (
-                                <Button onClick={onStartConsult} className="h-11 bg-white px-5 text-sm text-bark-900 hover:bg-sand-100">
+                                <Button onClick={onStartConsult} className="h-12 bg-white px-6 text-sm text-[#06142b] hover:bg-[#edf2ff]">
                                     Start consultation
                                     <ArrowRight size={16} className="ml-2" />
                                 </Button>
                             ) : (
                                 <a
                                     href={consultHref}
-                                    className="inline-flex h-11 items-center justify-center rounded-xl bg-white px-5 text-sm font-semibold text-bark-900 transition hover:bg-sand-100"
+                                    className="inline-flex h-12 items-center justify-center rounded-full bg-white px-6 text-sm font-extrabold text-[#06142b] transition hover:bg-[#edf2ff]"
                                 >
                                     Start consultation
                                     <ArrowRight size={16} className="ml-2" />
@@ -110,7 +110,7 @@ export function Footer({ onStartConsult, consultHref = '/doctor' }: FooterProps)
                     <div className="grid grid-cols-2 gap-x-6 gap-y-10 py-10 sm:grid-cols-3 lg:grid-cols-4">
                         {FOOTER_GROUPS.map((group) => (
                             <div key={group.title}>
-                                <h3 className="text-xs uppercase tracking-[0.18em] text-[#b3cfe5]">{group.title}</h3>
+                                <h3 className="text-xs font-extrabold uppercase text-[#b8ccff]">{group.title}</h3>
                                 <ul className="mt-4 space-y-2.5">
                                     {group.links.map((link) => (
                                         <li key={link.label}>
@@ -127,8 +127,8 @@ export function Footer({ onStartConsult, consultHref = '/doctor' }: FooterProps)
                         ))}
 
                         <div className="col-span-2 sm:col-span-3 lg:col-span-1">
-                            <div className="rounded-2xl border border-[#b3cfe5]/45 bg-[#0a1931]/18 p-4">
-                                <p className="text-xs uppercase tracking-[0.18em] text-[#b3cfe5]">Clinic access</p>
+                            <div className="border border-white/16 bg-white/8 p-4">
+                                <p className="text-xs font-extrabold uppercase text-[#b8ccff]">Clinic access</p>
                                 <p className="mt-2 text-sm text-[#f6fafd]">
                                     Online consults available across Australia with secure digital delivery by email.
                                 </p>
@@ -136,7 +136,7 @@ export function Footer({ onStartConsult, consultHref = '/doctor' }: FooterProps)
                         </div>
                     </div>
 
-                    <div className="flex flex-col gap-4 border-t border-[#b3cfe5]/45 pt-6 text-sm text-[#b3cfe5] md:flex-row md:items-end md:justify-between">
+                    <div className="flex flex-col gap-4 border-t border-white/16 pt-6 text-sm text-[#b8ccff] md:flex-row md:items-end md:justify-between">
                         <p className="max-w-xl leading-relaxed">
                             We acknowledge Aboriginal and Torres Strait Islander peoples as the Traditional Custodians of Country throughout Australia and pay respect to Elders past and present.
                         </p>

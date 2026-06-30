@@ -43,14 +43,14 @@ export function Stepper({ currentStep, showPricing = false }: { currentStep: Boo
 
     return (
         <div className="w-full">
-            <div className="h-1.5 w-full bg-sand-100 rounded-full overflow-hidden mb-2">
+            <div className="h-2 w-full overflow-hidden rounded-full bg-[#dfe8ff] mb-2">
                 <div
                     className="h-full bg-primary transition-all duration-500 ease-out"
                     style={{ width: `${progress}%` }}
                 />
             </div>
             {showPricing && (
-                <div className="mt-1 flex justify-end text-sm font-semibold text-text-primary">
+                <div className="mt-1 flex justify-end text-sm font-extrabold text-text-primary">
                     {priceTitle}
                 </div>
             )}

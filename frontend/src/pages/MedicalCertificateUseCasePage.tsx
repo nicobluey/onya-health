@@ -7,7 +7,6 @@ import { HomeReviews } from '../components/HomeReviews';
 import { HowItWorks } from '../components/HowItWorks';
 import { HeaderDropdown } from '../components/HeaderDropdown';
 import { HeaderBrand } from '../components/HeaderBrand';
-import { MagneticButton } from '../components/lightswind/MagneticButton';
 
 type UseCaseKey = 'doctor' | 'student' | 'caretaker' | 'work';
 type PurposeParam = 'work' | 'university' | 'carers-leave' | null;
@@ -141,51 +140,37 @@ export default function MedicalCertificateUseCasePage() {
             </header>
 
             <main className="flex-1">
-                <section className="relative overflow-hidden pb-12 pt-24 md:min-h-[640px] md:pb-28 md:pt-28">
+                <section className="relative overflow-hidden bg-[#f3f8ff]">
                     <div className="absolute inset-0">
                         <img
                             src={currentUseCase.heroImage}
                             alt={currentUseCase.heroImageAlt}
                             className={`h-full w-full object-cover ${currentUseCase.heroObjectClass}`}
                         />
-                        <div className="absolute inset-0 bg-bark-900/28" />
                     </div>
 
-                    <div className="relative z-10 max-w-6xl mx-auto px-5 md:px-8 text-center">
-                        <h1 className="text-4xl md:text-6xl font-serif font-bold leading-[1.08] text-white tracking-tight">
+                    <div className="relative z-10 mx-auto flex min-h-[calc(100svh-64px)] max-w-7xl items-center px-5 py-10 md:min-h-[640px] md:px-8 md:py-20">
+                        <div className="max-w-[740px]">
+                        <p className="onya-kicker bg-white/95">$9.71 one-day request</p>
+                        <h1 className="onya-display mt-5 max-w-[10ch] text-[#06142b]">
                             {currentUseCase.title}
                         </h1>
-                        <p className="text-base md:text-xl text-white font-semibold leading-relaxed max-w-3xl mx-auto mt-5">
+                        <p className="mt-5 max-w-[620px] text-lg font-semibold leading-relaxed text-[#06142b] md:text-xl">
                             {currentUseCase.subtitle}
                         </p>
-                        <div className="mt-8 inline-flex">
-                            <MagneticButton
-                                variant="primary"
-                                size="lg"
-                                strength={0.46}
-                                radius={112}
-                                className="rounded-2xl px-8 shadow-lg"
-                                onClick={() => {
-                                    window.location.href = bookingHref;
-                                }}
-                                aria-label="Start certificate consult"
-                            >
-                                Book now
+                        <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+                            <a href={bookingHref} className="onya-button">
+                                Start certificate request
                                 <ArrowRight size={18} />
-                            </MagneticButton>
+                            </a>
+                            <a href="#certificate-options" className="onya-button-secondary">
+                                Compare types
+                            </a>
                         </div>
-                        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-                            <span className="inline-flex rounded-full border border-white/40 bg-white/90 px-3 py-1 text-xs font-semibold tracking-[0.08em] text-text-primary">
-                                <span className="relative mr-2 flex h-2.5 w-2.5">
-                                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#16a34a] opacity-70" />
-                                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-[#16a34a]" />
-                                </span>
-                                Doctors online now
-                            </span>
-                        </div>
-                        <p className="mx-auto mt-2 max-w-2xl text-xs font-medium text-white/90">
-                            $9.71 for a 1-day certificate request. Doctor review is required and certificates are issued only where clinically appropriate.
+                        <p className="mt-4 max-w-[560px] text-sm font-bold text-[#06142b]">
+                            Doctor review is required. Certificates are issued only where clinically appropriate.
                         </p>
+                        </div>
                     </div>
                 </section>
 
@@ -193,27 +178,29 @@ export default function MedicalCertificateUseCasePage() {
                     <HowItWorks />
                 </div>
 
-                <section id="ai-match-specialties" className="relative overflow-hidden max-w-7xl mx-auto px-5 md:px-8 py-10 md:py-14">
-                    <h2 className="relative z-10 text-3xl font-serif font-bold text-center text-text-primary mb-10">
+                <section id="certificate-options" className="bg-[#f5f7fa]">
+                    <div className="onya-section mx-auto max-w-7xl px-5 md:px-8">
+                    <p className="onya-kicker">Certificate type</p>
+                    <h2 className="onya-heading-xl mt-4 max-w-[11ch] text-[#06142b]">
                         Support matched to the care you need
                     </h2>
-                    <p className="relative z-10 mx-auto mb-8 max-w-3xl text-center text-base text-text-secondary">
+                    <p className="mt-5 max-w-2xl text-base leading-relaxed text-text-secondary md:text-lg">
                         Choose the certificate use case that matches your situation.
                     </p>
 
-                    <div className="relative z-10 grid gap-6 md:grid-cols-2 xl:grid-cols-4 items-stretch">
+                    <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                         {USE_CASES.map((useCase) => {
                             const selected = useCase.key === currentUseCase.key;
                             return (
                                 <article
                                     key={useCase.key}
-                                    className={`rounded-3xl border p-5 md:p-6 shadow-sm h-full flex flex-col transition-all ${
+                                    className={`onya-tile flex h-full flex-col transition ${
                                         selected
-                                            ? 'border-primary bg-sunlight-50/70 shadow-[0_20px_42px_-34px_rgba(74, 127, 167,0.72)]'
-                                            : 'border-border bg-white hover:shadow-md'
+                                            ? 'border-primary bg-[#f3f8ff]'
+                                            : 'bg-white hover:border-primary'
                                     }`}
                                 >
-                                    <div className="h-56 overflow-hidden rounded-2xl border border-white/50 md:h-60">
+                                    <div className="aspect-[4/3] overflow-hidden bg-[#eef4fb]">
                                         <img
                                             src={useCase.heroImage}
                                             alt={useCase.heroImageAlt}
@@ -221,32 +208,23 @@ export default function MedicalCertificateUseCasePage() {
                                             loading="lazy"
                                         />
                                     </div>
-                                    <h3 className="font-serif text-2xl font-bold text-text-primary mt-5 capitalize">
-                                        {useCase.cardTitle}
-                                    </h3>
-                                    <p className="text-text-secondary mt-3 leading-relaxed min-h-[5.8rem]">
-                                        {useCase.cardBody}
-                                    </p>
-                                    <div className="mt-auto">
-                                        <MagneticButton
-                                            variant={selected ? 'primary' : 'secondary'}
-                                            size="lg"
-                                            strength={0.46}
-                                            radius={112}
-                                            edgePadding={12}
-                                            className="w-full rounded-xl text-center"
-                                            onClick={() => {
-                                                window.location.href = useCase.path;
-                                            }}
-                                            aria-label={useCase.cardCta}
-                                        >
-                                            {selected ? 'Viewing' : useCase.cardCta}
+                                    <div className="flex flex-1 flex-col p-5">
+                                        <p className="text-sm font-extrabold uppercase text-primary">{selected ? 'Viewing' : useCase.cardCta}</p>
+                                        <h3 className="mt-2 text-2xl font-extrabold leading-none text-[#06142b]">
+                                            {useCase.cardTitle}
+                                        </h3>
+                                        <p className="mt-3 flex-1 text-sm leading-relaxed text-text-secondary">
+                                            {useCase.cardBody}
+                                        </p>
+                                        <a href={useCase.path} className={selected ? 'onya-button-secondary mt-5 w-full' : 'onya-button mt-5 w-full'}>
+                                            {selected ? 'Current type' : useCase.cardCta}
                                             <ArrowRight size={16} />
-                                        </MagneticButton>
+                                        </a>
                                     </div>
                                 </article>
                             );
                         })}
+                    </div>
                     </div>
                 </section>
 

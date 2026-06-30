@@ -1,9 +1,5 @@
-# DESIGN_STYLE (Migrated)
+# DESIGN_STYLE
 
-This document has been migrated.
+Canonical design guidance lives in `DESIGN.md`.
 
-Canonical location:
-- `.agents/design-language.md`
-
-For full agent workspace guidance:
-- `.agents/README.md`
+The active system is Nike-inspired typography and spacing, translated into Onya Health's blue clinical palette.

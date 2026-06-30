@@ -1,180 +1,157 @@
 ---
 name: onya-health-design
-description: Design system, copy rules, asset guidance, and interaction standards for Onya Health.
-version: 1.0.0
+description: Nike-inspired, blue-biased design system for Onya Health public, auth, and portal screens.
+version: 2.0.0
+source_reference: nike/DESIGN.md
 ---
 
 # DESIGN.md - Onya Health Design System
 
-This file tracks the Onya Health visual and copy system. The product should feel calm, modern, clinically trustworthy, and easy to use under mild stress.
+Onya now uses the Nike reference imported with `npx getdesign@latest add nike` as a spacing and typography model, not as a literal black retail clone. The system should feel direct, editorial, high-converting, and clinically credible.
 
 ## Design Intent
 
 Onya should feel:
 
-- clear and reassuring;
-- premium without looking decorative;
-- consumer-friendly rather than hospital-admin heavy;
-- medically responsible about review, privacy, and outcomes;
-- efficient for repeated portal and practitioner workflows.
+- decisive and premium;
+- fast to scan on mobile;
+- editorial and image-led on landing pages;
+- clinically responsible about doctor review and outcomes;
+- stripped back, with no decorative SaaS clutter.
 
 It should not feel:
 
-- like an instant-certificate vending machine;
-- like a generic AI SaaS landing page;
-- like a loud wellness marketplace;
-- like a clinical system with dense, intimidating forms.
+- vibe-coded, glassy, or over-rounded;
+- like a generic AI landing page;
+- like a wellness marketplace;
+- like a guaranteed certificate vending machine.
 
-## Source Of Truth
+## Nike Reference Translation
 
-Use global tokens and utilities in `frontend/src/index.css`. Keep legacy stubs `DESIGN_STYLE.md` and `DESIGN_SYSTEM.md` pointing to the current docs.
+Use these principles from `nike/DESIGN.md`:
 
-Preferred brand assets live in `frontend/public`, including:
+- Big display typography with tight line-height.
+- Strong image-first hero sections.
+- Pill CTAs and pill chips.
+- Tight 8px spacing grid.
+- Minimal chrome: white, off-white, ink, blue, and hairline borders.
+- Cards should feel like product tiles, not floating SaaS panels.
 
-- `HERO.webp`
-- `Green Cells.webp`
-- `Blue Cells.webp`
-- `Pipette.webp`
-- `Medical Certificate Landing.webp`
-- `landing-work-certificate.webp`
-- `landing-university-certificate.webp`
-- `landing-carers-certificate.webp`
-- `felicity-profile.webp`
-- `meal-fallbacks/*`
+Adaptations for Onya:
 
-Use raw imagery by default. Do not apply photo tints, gradient washes, haze layers, opacity fades, duotone effects, or blur overlays unless the user explicitly asks.
+- Primary action color is blue, not black.
+- Clinical copy remains conservative.
+- Raw approved imagery stays unfiltered.
+- Status colors are semantic only.
 
 ## Typography
 
-- Headings: `"Basic Commercial Pro", Arial, sans-serif` where available.
-- Body copy: `Inter, system-ui, sans-serif`.
-- No decorative display fonts.
-- No negative letter spacing.
-- Do not scale font size directly with viewport width.
+- Display and headings: `"Basic Commercial Pro", "Helvetica Neue", Arial, sans-serif`.
+- Body: `Inter, system-ui, sans-serif`.
+- Display lockups use uppercase where it increases landing-page clarity.
+- Letter spacing is `0`. Do not use positive or negative tracking utilities.
+- Hero H1s should use line-height `0.9-1.0`; compact panel headings use normal scale.
 
-Use plain-language healthcare copy. Avoid technical AI jargon unless the page is specifically about AI support.
+Recommended scale:
+
+- Campaign display: `clamp(48px, 8vw, 112px)`, weight `800`, line-height `0.9`.
+- Landing section H2: `40-64px`, weight `800`, line-height `0.95`.
+- Portal/page H1: `32-48px`, weight `800`, line-height `1.0`.
+- Body: `16px`, line-height `1.5`.
+- Caption: `12-14px`, weight `700`.
 
 ## Color Tokens
 
-Current public-site and app palette:
+Use global tokens from `frontend/src/index.css`.
 
+- Ink: `#06142B`
+- Primary blue: `#1151FF`
+- Hover blue: `#0034E3`
 - Deep navy: `#0A1931`
-- Primary brand blue: `#1A3D63`
-- Secondary blue: `#4A7FA7`
-- Soft light blue: `#B3CFE5`
-- Calm background: `#F6FAFD`
+- Blue surface: `#F3F8FF`
+- Soft cloud: `#F5F7FA`
+- Hairline: `#D7E2EE`
+- Hairline soft: `#E7EEF6`
 - White: `#FFFFFF`
 
-Marketing sky-blue system:
+Semantic colors only:
 
-- Primary: `#2E8CFF`
-- Hover: `#1F7BE6`
-- Supporting: `#58A8FF`
-- Surface tints: `#F1F8FF`, `#EAF4FF`, `#DBEEFF`
+- Success: `#007D48`
+- Warning: `#8A6700`
+- Error: `#A93736`
 
-Clinical green system for auth/portal where appropriate:
-
-- Primary: `#1F5F3F`
-- Supporting: `#88A18D`
-- Surface tints: `#EFF4EF`, `#EDF1EC`, `#F8FAF7`
-- Border tints: `#DBE2D9`, `#B9C8BA`
-
-Semantic colors only for state:
-
-- Success/live: green family.
-- Warning/pending: muted yellow family.
-- Error/denied: red family.
-
-Avoid purple, neon blue, beige-dominant, and unrelated accent palettes.
+Avoid purple, beige-dominant palettes, gradient orbs, bokeh, glassmorphism, and decorative color blobs.
 
 ## Layout Rules
 
-- Center content with stable max-width containers.
-- Use full-width sections, not floating page-section cards.
-- Use cards for repeated items, forms, modals, dashboards, and genuine framed tools.
-- Do not put cards inside cards.
-- Keep sibling cards at matched heights where they represent peer choices.
-- Inputs and buttons should use stable dimensions so hover/focus text does not shift layout.
-- Mobile layouts must be intentional, with no clipped text or horizontal overflow.
-- Keep one primary action per section.
+- Use full-width bands and constrained inner content.
+- Landing heroes must be image-led and give immediate category/offer clarity.
+- Use an 8px spacing grid. Prefer `8, 16, 24, 32, 48, 64, 96`.
+- Cards: square or 8px radius max unless a component is specifically a pill.
+- Buttons/chips: full pill radius.
+- Do not nest cards.
+- Use one primary CTA per section.
+- Mobile must show the next section hint in the first viewport for landing pages.
 
-## Page Structure
+## Components
+
+### Buttons
+
+- Primary: blue pill, white text, `48px` high.
+- Secondary: soft-cloud pill, ink text.
+- Outline: white pill, blue/ink border.
+- Buttons use sentence case unless the surrounding display lockup is uppercase.
+
+### Tiles
+
+- Product/service tiles use raw imagery, no overlay by default.
+- Tile content sits below imagery on white or soft-cloud.
+- Keep tile heights stable across siblings.
+
+### Forms
+
+- Inputs are pill or 8px rounded rectangles, `44-48px` high.
+- Labels are compact, uppercase allowed, letter spacing `0`.
+- Errors use semantic red, not brand blue.
+
+### Portal
+
+- Portal is denser than marketing.
+- Use blue clinical chrome, not green unless explicitly requested.
+- Sidebars and panels should feel like structured product UI, not soft wellness cards.
+
+## Page Requirements
 
 ### Homepage
 
-1. Clear first-viewport signal: Onya Health and online care/certificate request path.
-2. Primary CTA into the appropriate consult flow.
-3. Service cards and trust/process proof.
-4. Plain-language explanation of review and suitability.
-5. Footer links to policy, trust, contact, and key landing pages.
+1. Full-bleed image-led hero.
+2. Huge campaign H1: direct category/offer, not vague promise.
+3. Primary CTA to `/doctor#book`.
+4. Secondary CTA only when it helps choose certificate type.
+5. Product-tile style certificate options.
+6. Proof and process without over-explaining.
 
 ### Medical Certificate Landing Pages
 
-1. Conservative H1 such as `Request a medical certificate online`.
-2. Supporting copy that states clinician review and clinical appropriateness.
-3. CTA to start the consult request, not to claim instant approval.
-4. Pricing displayed exactly and consistently.
-5. FAQ with clear boundaries: not every request is approved, emergencies are excluded, and certificates are issued only when appropriate.
+1. Use the same display/spacing rhythm as homepage.
+2. State doctor review and clinical appropriateness clearly.
+3. Show pricing consistently.
+4. Keep certificate types as sharp tiles, not rounded SaaS cards.
 
-### Booking Flow
+### Auth And Portal
 
-1. Service choice and reason.
-2. Patient details and account-status check.
-3. Certificate dates/duration with server-side cap.
-4. Add-ons, including carer's certificate details when selected.
-5. Payment/checkout.
-6. Patient account and portal handoff.
-
-### Patient Auth And Portal
-
-Keep auth and portal screens calmer than marketing pages:
-
-- clinical green accent family when useful;
-- clear error states;
-- visible focus;
-- no visual clutter around health details;
-- no hardcoded patient or dietitian identity.
-
-### Doctor Portal
-
-Practitioner screens should be dense, readable, and action-focused:
-
-- queue status;
-- request risk summary;
-- patient-entered context;
-- approve/deny/more-info actions;
-- doctor profile and credential metadata;
-- admin approval status for accounts.
-
-### Weight-Loss Reset
-
-Meal-plan UI must make serving count, calories, macros, ingredient lists, and recipe steps easy to inspect. Plans should include safety guardrails and dietitian-review framing where needed.
-
-## Motion And Interaction
-
-Allowed:
-
-- subtle opacity/translate reveals;
-- small hover and focus transitions;
-- clear step transitions in booking;
-- progress states that reflect real work.
-
-Avoid:
-
-- over-animated medical workflows;
-- decorative cursor effects;
-- bounce/elastic motion;
-- animated content that blocks reading or form completion.
-
-All controls must remain keyboard-navigable with visible focus states.
+1. No decorative science floaters.
+2. Clear login form and portal identity.
+3. Dense, scannable panels with blue pills and hairline borders.
+4. Account-only trial users must be able to log in and load the portal.
 
 ## Copy Rules
 
 Use:
 
 - `Request`
-- `Submit for review`
-- `Clinician-reviewed`
+- `Start certificate request`
+- `Doctor-reviewed`
 - `Issued where clinically appropriate`
 - `Secure patient portal`
 - `Clear next steps`
@@ -183,32 +160,22 @@ Avoid:
 
 - `Instant certificate`
 - `Guaranteed approval`
-- `Approved in minutes` unless clinically and operationally reviewed
 - `AI doctor`
 - `Automatic certificate`
 - `No questions asked`
 
-Nutrition copy must avoid promising safe weight loss for every user. Extreme calorie targets must be blocked or framed for practitioner review.
+## Asset Rules
 
-## SEO And Crawlability
+- Use assets from `frontend/public`.
+- Prefer `.webp`.
+- Use raw imagery by default.
+- No image tints, blur, opacity washes, haze, duotone, or decorative overlays unless explicitly requested.
+- Photo text contrast should be achieved through composition and placement first.
 
-Important public pages need:
+## QA Checklist
 
-- crawlable H1/H2/body text;
-- unique title and meta description;
-- canonical URL;
-- internal links from header, footer, or body;
-- inclusion in `frontend/public/sitemap.xml`;
-- no accidental `noindex` or robots block.
-
-For a client-rendered Vite app, keep critical route copy available through metadata/static artifacts where possible and validate rendered crawlability after major public-page changes.
-
-## Asset Replacement Rule
-
-When adding or replacing assets:
-
-1. Put final web assets under `frontend/public`.
-2. Prefer `.webp` for large raster imagery.
-3. Reference assets directly by public path.
-4. Preserve raw appearance unless an explicit treatment is requested.
-5. Re-run build and browser QA affected pages.
+- Run `npm run lint`.
+- Run `npm run build`.
+- Visual-check desktop and mobile for `/`, `/doctor`, certificate landing pages, `/patient-login`, and `/patient`.
+- Confirm no horizontal overflow.
+- Confirm production aliases point to the deployed build before closing production work.

@@ -17,7 +17,7 @@ import { HeaderDropdown } from '../components/HeaderDropdown';
 import { HeaderBrand } from '../components/HeaderBrand';
 
 import { COPY } from './copy';
-import { Check, ArrowRight, Clock3, ShieldCheck } from 'lucide-react';
+import { Check, ArrowRight, Clock3 } from 'lucide-react';
 import { Button } from '../components/UI';
 import type { CSSProperties } from 'react';
 import type { ServiceConfig } from './services';
@@ -25,14 +25,6 @@ import type { ServiceConfig } from './services';
 interface MobileFlowViewProps {
     service: ServiceConfig;
 }
-
-const DOCTOR_HERO_INFO_CARDS = [
-    {
-        title: 'Doctor reviewed',
-        detail: 'AHPRA-registered doctor assessment.',
-        icon: ShieldCheck,
-    },
-];
 
 export default function MobileFlowView({ service }: MobileFlowViewProps) {
     const { step, view, startBooking } = useBooking();
@@ -46,12 +38,12 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
     return (
         <div className="min-h-screen flex flex-col font-sans" style={themedStyle}>
             {/* Header */}
-            <header className="sticky top-0 z-30 border-b border-border bg-white shadow-sm">
+            <header className="sticky top-0 z-30 border-b border-border bg-white">
                 <div className="flex items-center justify-between px-4 h-14">
                     <HeaderBrand compact />
                     <div className="flex items-center gap-1.5">
                         {view === 'landing' && (
-                            <div className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-white px-3 py-1.5 text-sm font-semibold text-text-primary shadow-sm">
+                            <div className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full bg-[#edf2ff] px-3 py-1.5 text-sm font-extrabold text-text-primary">
                                 <span className="relative flex h-2 w-2 shrink-0">
                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#16a34a] opacity-70"></span>
                                     <span className="relative inline-flex rounded-full h-2 w-2 bg-[#16a34a]"></span>
@@ -60,7 +52,7 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
                             </div>
                         )}
                         <HeaderDropdown
-                            buttonClassName="ml-1 h-9 w-9 rounded-lg text-text-primary/90 flex items-center justify-center hover:bg-sand-75 transition-colors"
+                            buttonClassName="ml-1 h-9 w-9 rounded-full text-text-primary/90 flex items-center justify-center hover:bg-[#edf2ff] transition-colors"
                             topOffsetClassName="top-14"
                         />
                     </div>
@@ -76,65 +68,36 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
                 <main className="flex-1">
                     {isDoctorPage ? (
                         <>
-                            <section className="border-b border-border bg-[linear-gradient(135deg,#f6fafd_0%,#f6fafd_45%,#ffffff_100%)] px-4 py-11">
-                                <div className="mx-auto max-w-xl">
-                                    <p className="inline-flex rounded-full border border-sunlight-200 bg-white/90 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-bark-600">
-                                        Australian doctor-reviewed service
-                                    </p>
-                                    <h1 className="mt-4 text-4xl font-serif font-bold leading-tight text-text-primary">
-                                        Online medical certificate consults.
+                            <section className="relative min-h-[620px] overflow-hidden border-b border-border bg-[#06142b]">
+                                <img
+                                    src="/Medical Certificate Landing.webp"
+                                    alt="Person completing an online medical certificate consult"
+                                    className="absolute inset-0 h-full w-full object-cover object-[68%_50%]"
+                                />
+                                <div className="absolute inset-0 bg-[#06142b]/48" />
+                                <div className="relative flex min-h-[620px] flex-col justify-end px-4 pb-10 pt-16 text-white">
+                                    <p className="onya-kicker text-white/82">Australian doctor-reviewed service</p>
+                                    <h1 className="mt-4 text-6xl font-extrabold uppercase leading-[0.92] text-white">
+                                        Online certificate consults.
                                     </h1>
-                                    <p className="mt-4 text-base leading-relaxed text-text-secondary">
+                                    <p className="mt-5 text-lg font-bold leading-relaxed text-white">
                                         Complete a short online form, receive doctor review, and get digital delivery if approved.
                                     </p>
-
                                     <div className="mt-6">
-                                        <Button fullWidth onClick={startBooking} className="h-14 text-lg font-semibold rounded-2xl shadow-lg">
+                                        <Button fullWidth onClick={startBooking} className="h-14 bg-white text-base text-[#06142b] hover:bg-[#edf2ff]">
                                             Start online consult
                                             <ArrowRight size={20} className="ml-2" />
                                         </Button>
                                     </div>
-
-                                    <div className="mt-3 inline-flex max-w-full items-start gap-1.5 rounded-md border border-slate-200/70 bg-white/75 px-2.5 py-1.5 text-[13px] text-text-primary">
-                                        <Clock3 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/80" />
+                                    <div className="mt-4 inline-flex max-w-full items-start gap-2 border border-white/24 bg-white/12 px-3 py-2 text-sm text-white backdrop-blur-sm">
+                                        <Clock3 className="mt-0.5 h-4 w-4 shrink-0" />
                                         <p className="leading-relaxed">
-                                            <span className="font-medium">Short form:</span> complete your consult details online in under 2 minutes.
+                                            <span className="font-extrabold">Short form:</span> complete consult details online in under 2 minutes.
                                         </p>
                                     </div>
-
-                                    <p className="mt-3 text-sm text-text-secondary">
+                                    <p className="mt-3 text-sm font-semibold text-white/82">
                                         Non-emergency symptoms only. Certificates start from today onward.
                                     </p>
-
-                                    <div className="relative mt-6 overflow-hidden rounded-[26px] border border-slate-200/80 bg-white shadow-[0_20px_46px_rgba(15,23,42,0.16)]">
-                                        <img
-                                            src="/Medical Certificate Landing.webp"
-                                            alt="Person completing an online medical certificate consult"
-                                            className="h-[290px] w-full object-cover object-[68%_50%]"
-                                        />
-                                    </div>
-
-                                    <div className="mt-4 grid gap-2.5">
-                                        {DOCTOR_HERO_INFO_CARDS.map((card) => {
-                                            const Icon = card.icon;
-                                            return (
-                                                <article
-                                                    key={card.title}
-                                                    className="rounded-xl border border-slate-200/80 bg-white/95 px-4 py-3 shadow-sm"
-                                                >
-                                                    <div className="flex items-start gap-2.5">
-                                                        <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                                                            <Icon className="h-3.5 w-3.5" />
-                                                        </span>
-                                                        <div>
-                                                            <p className="text-sm font-semibold text-text-primary">{card.title}</p>
-                                                            <p className="mt-0.5 text-xs leading-relaxed text-text-secondary">{card.detail}</p>
-                                                        </div>
-                                                    </div>
-                                                </article>
-                                            );
-                                        })}
-                                    </div>
                                 </div>
                             </section>
 
@@ -209,15 +172,15 @@ export default function MobileFlowView({ service }: MobileFlowViewProps) {
                 </main>
             ) : (
                 <main className="flex-1 px-4 py-6 bg-white">
-                    <div className="bg-white rounded-2xl shadow-sm border border-border p-5 mb-8 relative overflow-visible">
+                    <div className="onya-panel mb-8 p-5 relative overflow-visible">
                         <StepRenderer />
                     </div>
                     {/* Trust Chips Mobile */}
-                    <div className="bg-white p-4 rounded-xl border border-border space-y-3">
-                        <div className="text-xs font-bold uppercase text-bark-700 tracking-wider mb-1">Why Onya?</div>
+                    <div className="onya-panel p-4 space-y-3">
+                        <div className="text-xs font-extrabold uppercase text-primary mb-1">Why Onya?</div>
                         {COPY.hero.trust.map(item => (
-                            <div key={item} className="flex items-center gap-2 text-sm font-medium text-text-primary">
-                                <Check size={14} className="text-forest-700" />
+                            <div key={item} className="flex items-center gap-2 text-sm font-bold text-text-primary">
+                                <Check size={14} className="text-primary" />
                                 {item}
                             </div>
                         ))}

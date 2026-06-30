@@ -26,10 +26,10 @@ const DEFAULT_HEADER_LINKS: HeaderMenuLink[] = [
 
 export function HeaderDropdown({
     links = DEFAULT_HEADER_LINKS,
-    buttonClassName = 'h-10 w-10 rounded-xl text-text-primary/90 flex items-center justify-center hover:bg-sand-75 transition-colors',
+    buttonClassName = 'h-10 w-10 rounded-full text-text-primary/90 flex items-center justify-center hover:bg-[#edf2ff] transition-colors',
     topOffsetClassName = 'top-16',
     panelMode = 'sheet',
-    panelClassName = 'absolute right-0 top-[calc(100%+10px)] z-50 w-72 rounded-2xl border border-border bg-white/95 p-2 shadow-xl backdrop-blur',
+    panelClassName = 'absolute right-0 top-[calc(100%+10px)] z-50 w-72 border border-border bg-white p-2 shadow-xl',
 }: HeaderDropdownProps) {
     const [menuOpen, setMenuOpen] = useState(false);
     const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -73,7 +73,7 @@ export function HeaderDropdown({
             {menuOpen && (
                 panelMode === 'sheet' ? (
                     <nav
-                        className={`fixed inset-x-0 ${topOffsetClassName} z-50 border-t border-border bg-white px-4 pb-4 md:px-8`}
+                        className={`fixed inset-x-0 ${topOffsetClassName} z-50 border-y border-border bg-white px-4 pb-4 shadow-sm md:px-8`}
                     >
                         <div className="mx-auto grid max-w-7xl gap-2 pt-3 sm:grid-cols-2 lg:grid-cols-4">
                             {links.map((link) => (
@@ -81,7 +81,7 @@ export function HeaderDropdown({
                                     key={`${link.label}-${link.href}`}
                                     href={link.href}
                                     onClick={() => setMenuOpen(false)}
-                                    className="block rounded-lg border border-border bg-white px-3 py-2 text-sm font-semibold text-text-primary transition-colors hover:bg-sand-50"
+                                    className="block border border-border bg-white px-3 py-3 text-sm font-extrabold text-text-primary transition-colors hover:border-primary hover:bg-[#edf2ff]"
                                 >
                                     {link.label}
                                 </a>
@@ -96,7 +96,7 @@ export function HeaderDropdown({
                                     key={`${link.label}-${link.href}`}
                                     href={link.href}
                                     onClick={() => setMenuOpen(false)}
-                                    className="block rounded-lg border border-border bg-white px-3 py-2 text-sm font-semibold text-text-primary transition-colors hover:bg-sand-50"
+                                    className="block border border-border bg-white px-3 py-3 text-sm font-extrabold text-text-primary transition-colors hover:border-primary hover:bg-[#edf2ff]"
                                 >
                                     {link.label}
                                 </a>

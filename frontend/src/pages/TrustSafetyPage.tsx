@@ -40,15 +40,15 @@ export default function TrustSafetyPage() {
     }, []);
 
     return (
-        <main className="min-h-screen bg-bg">
-            <header className="sticky top-0 z-40 border-b border-border bg-white shadow-sm">
+        <main className="min-h-screen bg-white">
+            <header className="sticky top-0 z-40 border-b border-border bg-white">
                 <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 md:px-6">
                     <HeaderBrand />
                     <div className="flex items-center gap-3">
-                        <HeaderDropdown buttonClassName="flex h-10 w-10 items-center justify-center rounded-xl text-text-primary/90 transition-colors hover:bg-sand-75" />
+                        <HeaderDropdown buttonClassName="flex h-10 w-10 items-center justify-center rounded-full text-text-primary/90 transition-colors hover:bg-[#edf2ff]" />
                         <a
                             href="/doctor"
-                            className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white transition hover:bg-primary-hover"
+                            className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-4 text-sm font-extrabold text-white transition hover:bg-primary-hover"
                         >
                             Start consult
                             <ArrowRight size={16} className="ml-2" />
@@ -57,35 +57,35 @@ export default function TrustSafetyPage() {
                 </div>
             </header>
 
-            <section className="border-b border-border bg-sunlight-50">
+            <section className="border-b border-border bg-[#f5f7fa]">
                 <div className="mx-auto w-full max-w-5xl px-4 py-14 md:px-6 md:py-16">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary">Trust & safety</p>
-                    <h1 className="mt-4 text-4xl font-bold leading-tight text-text-primary md:text-5xl">How Onya Health approaches trust and safety</h1>
+                    <p className="onya-kicker">Trust & safety</p>
+                    <h1 className="onya-heading-xl mt-4">How Onya Health approaches trust and safety</h1>
                     <p className="mt-4 max-w-3xl text-base leading-relaxed text-text-secondary">
                         Our platform is designed to support safe, clear, and privacy-conscious healthcare workflows for patients across Australia.
                     </p>
                 </div>
             </section>
 
-            <section className="bg-surface">
+            <section className="bg-white">
                 <div className="mx-auto w-full max-w-5xl px-4 py-12 md:px-6 md:py-14">
                     <div className="grid gap-5 md:grid-cols-2">
                         {TRUST_PILLARS.map((pillar) => {
                             const Icon = pillar.icon;
                             return (
-                                <article key={pillar.title} className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+                                <article key={pillar.title} className="onya-tile p-6">
                                     <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
                                         <Icon size={18} />
                                     </div>
-                                    <h2 className="mt-4 text-lg font-semibold text-text-primary">{pillar.title}</h2>
+                                    <h2 className="mt-4 text-lg font-extrabold text-text-primary">{pillar.title}</h2>
                                     <p className="mt-2 text-sm leading-relaxed text-text-secondary">{pillar.body}</p>
                                 </article>
                             );
                         })}
                     </div>
 
-                    <div className="mt-8 rounded-2xl border border-border bg-white p-6 shadow-sm">
-                        <h2 className="text-xl font-semibold text-text-primary">Emergency care reminder</h2>
+                    <div className="onya-tile mt-8 p-6">
+                        <h2 className="text-xl font-extrabold text-text-primary">Emergency care reminder</h2>
                         <p className="mt-3 text-sm leading-relaxed text-text-secondary md:text-base">
                             Onya Health is not an emergency service. If you have chest pain, breathing difficulty, severe bleeding, or another urgent condition,
                             call 000 immediately.

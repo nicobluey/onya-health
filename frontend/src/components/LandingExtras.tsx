@@ -63,25 +63,22 @@ export function UsedByPatientsSection() {
                     <div className="grid grid-cols-[repeat(3,minmax(0,1fr))] gap-3 sm:gap-5">
                         {STATS.map((item) => (
                             <div key={item.label} className="min-w-0">
-                                <p className="break-words text-2xl font-bold leading-none text-text-primary sm:text-3xl">{item.value}</p>
-                                <p className="mt-1 text-xs font-medium text-bark-500">{item.label}</p>
+                                <p className="break-words text-2xl font-extrabold leading-none text-text-primary sm:text-3xl">{item.value}</p>
+                                <p className="mt-1 text-xs font-bold text-text-secondary">{item.label}</p>
                             </div>
                         ))}
                     </div>
-                    <p className="max-w-2xl text-sm text-bark-600 md:justify-self-end">
+                    <p className="max-w-2xl text-sm font-semibold text-text-secondary md:justify-self-end">
                         Request a medical-certificate consult online, then track doctor review, outcomes, and follow-up guidance in one secure place.
                     </p>
                 </div>
             </div>
 
             <div className="px-6 py-6 text-center md:px-8 md:py-7 lg:px-12">
-                <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-text-secondary">Trusted by patients</p>
-                <p className="mt-1.5 text-lg font-medium text-bark-600">Accepted by companies across Australia</p>
+                <p className="text-[11px] font-extrabold uppercase text-primary">Trusted by patients</p>
+                <p className="mt-1.5 text-lg font-extrabold text-[#06142b]">Accepted by companies across Australia</p>
 
                 <div className="relative mt-5 overflow-hidden">
-                    <div className="pointer-events-none absolute inset-y-0 left-0 z-10 w-20 bg-gradient-to-r from-white to-transparent" />
-                    <div className="pointer-events-none absolute inset-y-0 right-0 z-10 w-20 bg-gradient-to-l from-white to-transparent" />
-
                     <div className="logo-carousel-track gap-8 pr-8 md:gap-10 md:pr-10">
                         {LOGO_TRACK.map((org, idx) => (
                             <div key={`${org.name}-${idx}`} className="flex h-10 w-[130px] shrink-0 items-center justify-center md:h-12 md:w-[140px]">
@@ -109,36 +106,35 @@ interface BlogsSectionProps {
 export function BlogsSection({ onStartConsult }: BlogsSectionProps) {
     return (
         <section id="blogs" className="w-full bg-white py-16 md:py-24">
-            <div className="w-full overflow-hidden border-y border-[#b3cfe5] bg-[#f6fafd] py-14 md:py-20">
+            <div className="w-full overflow-hidden border-y border-border bg-[#f5f7fa] py-14 md:py-20">
                 <div className="mb-10 flex items-end justify-between border-b border-[#b3cfe5] px-6 pb-6 md:mb-12 md:px-10 lg:px-14">
                     <div>
-                        <p className="mb-1 text-xs font-medium uppercase tracking-widest text-[#4a7fa7]">Blogs</p>
-                        <h2 className="text-2xl font-semibold tracking-tight text-[#0a1931] md:text-3xl">From the Onya Blogs</h2>
+                        <p className="onya-kicker mb-3">Blogs</p>
+                        <h2 className="onya-heading text-[#06142b]">From the Onya Blogs</h2>
                     </div>
-                    <div className="hidden text-sm text-[#4a7fa7] sm:block">Latest reads from our clinical team</div>
+                    <div className="hidden text-sm font-bold text-text-secondary sm:block">Latest reads from our clinical team</div>
                 </div>
 
                 <div>
                     {FEATURED_BLOGS.map((item, idx) => (
                         <div key={item.slug}>
                             <a href={`/blog/${item.slug}`} className="group grid gap-6 px-6 py-8 transition-colors hover:bg-white/60 md:grid-cols-[1fr_1.2fr] md:gap-8 md:px-10 lg:px-14">
-                                <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-[#b3cfe5] md:aspect-[16/10]">
-                                    <img src={item.imageSrc} alt={item.title} className="h-full w-full object-cover opacity-90 transition-all duration-500 group-hover:scale-105 group-hover:opacity-100" loading="lazy" />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-[#0a1931]/35 to-transparent" />
+                                    <div className="relative aspect-[4/3] overflow-hidden border border-border bg-[#eef4fb] md:aspect-[16/10]">
+                                    <img src={item.imageSrc} alt={item.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.02]" loading="lazy" />
                                 </div>
 
                                 <div className="flex flex-col justify-center">
                                     <div className="mb-3 flex items-center gap-3">
-                                        <span className="rounded bg-[#b3cfe5] px-2.5 py-1 text-xs font-medium text-[#1a3d63]">{item.category}</span>
+                                        <span className="rounded-full bg-white px-3 py-1 text-xs font-extrabold text-primary">{item.category}</span>
                                         <span className="text-xs text-[#4a7fa7]">{item.readTimeMinutes} min read</span>
                                     </div>
-                                    <h3 className="mb-3 text-xl font-semibold leading-tight text-[#0a1931] transition-colors group-hover:text-[#1a3d63] md:text-2xl">
+                                    <h3 className="mb-3 text-2xl font-extrabold leading-none text-[#06142b] transition-colors group-hover:text-primary md:text-3xl">
                                         {item.title}
                                     </h3>
-                                    <blockquote className="mb-4 border-l-2 border-[#b3cfe5] pl-4 text-sm leading-relaxed text-[#1a3d63] italic">
+                                    <blockquote className="mb-4 border-l-2 border-[#1151ff] pl-4 text-sm leading-relaxed text-text-secondary">
                                         {item.excerpt}
                                     </blockquote>
-                                    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-[#4a7fa7] transition-colors group-hover:text-[#1a3d63]">
+                                    <span className="inline-flex items-center gap-1.5 text-sm font-extrabold text-primary transition-colors">
                                         Read blog
                                     </span>
                                 </div>
@@ -156,7 +152,7 @@ export function BlogsSection({ onStartConsult }: BlogsSectionProps) {
                     ) : (
                         <a
                             href={FALLBACK_CONSULT_HREF}
-                            className="inline-flex h-11 items-center justify-center rounded-xl bg-primary px-6 text-sm font-semibold text-white transition hover:bg-primary-hover"
+                            className="onya-button"
                         >
                             Start your consult
                         </a>
@@ -170,22 +166,22 @@ export function BlogsSection({ onStartConsult }: BlogsSectionProps) {
 export function LeadingClinicSection() {
     return (
         <section className="w-full bg-white py-0">
-            <div className="w-full bg-neutral-950 px-6 py-14 md:px-10 md:py-16 lg:px-14">
+            <div className="w-full bg-[#06142b] px-6 py-14 md:px-10 md:py-16 lg:px-14">
                 <div className="max-w-5xl">
-                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sunlight-300">Why Onya Health</p>
-                    <h2 className="mt-3 text-3xl font-bold leading-tight text-white md:text-4xl">
+                    <p className="onya-kicker text-[#b8ccff]">Why Onya Health</p>
+                    <h2 className="onya-heading mt-3 text-white">
                         What makes Onya Health Australia&apos;s leading telehealth clinic
                     </h2>
                 </div>
 
                 <div className="mt-8 grid gap-4 md:grid-cols-3 md:gap-5">
                     {LEADING_POINTS.map((point, idx) => (
-                        <article key={point.title} className="rounded-2xl border border-neutral-700 bg-neutral-900/70 p-5">
+                        <article key={point.title} className="border border-white/16 bg-white/8 p-5">
                             <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary text-sm font-semibold text-white">
                                 {idx + 1}
                             </span>
-                            <h3 className="mt-4 text-xl font-semibold text-white">{point.title}</h3>
-                            <p className="mt-2 text-sm leading-relaxed text-neutral-300">{point.body}</p>
+                            <h3 className="mt-4 text-xl font-extrabold text-white">{point.title}</h3>
+                            <p className="mt-2 text-sm leading-relaxed text-white/72">{point.body}</p>
                         </article>
                     ))}
                 </div>
@@ -211,10 +207,10 @@ const PATIENT_PLATFORM_PILLARS: Array<{ title: string; body: string }> = [
 
 export function PatientPlatformFocusSection({ onStartConsult }: SectionActionProps) {
     return (
-        <section className="w-full border-t border-border bg-surface">
+        <section className="w-full border-t border-border bg-[#f5f7fa]">
             <div className="mx-auto w-full max-w-7xl px-6 py-14 md:px-8 md:py-16">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-secondary">Patient-first platform</p>
-                <h2 className="mt-3 max-w-3xl text-3xl font-bold leading-tight text-text-primary md:text-4xl">
+                <p className="onya-kicker">Patient-first platform</p>
+                <h2 className="onya-heading mt-3 max-w-3xl">
                     Built to get patients from request to resolution, faster
                 </h2>
                 <p className="mt-4 max-w-3xl text-base leading-relaxed text-text-secondary">
@@ -224,14 +220,14 @@ export function PatientPlatformFocusSection({ onStartConsult }: SectionActionPro
 
                 <div className="mt-8 grid gap-4 md:grid-cols-3">
                     {PATIENT_PLATFORM_PILLARS.map((pillar) => (
-                        <article key={pillar.title} className="rounded-2xl border border-border bg-bg p-5">
-                            <h3 className="text-lg font-semibold text-text-primary">{pillar.title}</h3>
+                        <article key={pillar.title} className="onya-tile bg-white p-5">
+                            <h3 className="text-lg font-extrabold text-text-primary">{pillar.title}</h3>
                             <p className="mt-2 text-sm leading-relaxed text-text-secondary">{pillar.body}</p>
                         </article>
                     ))}
                 </div>
 
-                <div className="mt-8 rounded-2xl border border-border bg-white px-5 py-4 md:px-6">
+                <div className="mt-8 border border-border bg-white px-5 py-4 md:px-6">
                     <p className="text-sm leading-relaxed text-text-secondary">
                         When you are unwell, the experience should feel simple. That is why we prioritise speed, clarity, and safe delivery at
                         every step.
@@ -240,14 +236,14 @@ export function PatientPlatformFocusSection({ onStartConsult }: SectionActionPro
 
                 <div className="mt-6">
                     {onStartConsult ? (
-                        <Button onClick={onStartConsult} className="h-12 px-6 text-sm font-semibold">
+                        <Button onClick={onStartConsult} className="h-12 px-6 text-sm">
                             Start my medical certificate consult
                             <ArrowRight size={16} className="ml-2" />
                         </Button>
                     ) : (
                         <a
                             href={FALLBACK_CONSULT_HREF}
-                            className="inline-flex h-12 items-center justify-center rounded-xl bg-primary px-6 text-sm font-semibold text-white transition hover:bg-primary-hover"
+                            className="onya-button"
                         >
                             Start my medical certificate consult
                             <ArrowRight size={16} className="ml-2" />
@@ -262,22 +258,22 @@ export function PatientPlatformFocusSection({ onStartConsult }: SectionActionPro
 export function ReadyToSkipWaitingRoomSection({ onStartConsult }: SectionActionProps) {
     return (
         <section className="w-full bg-white py-0">
-            <div className="w-full border-t border-neutral-800 bg-neutral-950 px-6 py-14 text-center md:px-10 md:py-16 lg:px-14">
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-sunlight-300">Ready when you are</p>
-                <h2 className="mt-3 text-3xl font-bold leading-tight text-white md:text-4xl">Ready to skip the waiting room?</h2>
-                <p className="mx-auto mt-3 max-w-2xl text-base text-neutral-300">
+            <div className="w-full border-t border-[#102a55] bg-[#06142b] px-6 py-14 text-center md:px-10 md:py-16 lg:px-14">
+                <p className="onya-kicker text-[#b8ccff]">Ready when you are</p>
+                <h2 className="onya-heading mt-3 text-white">Ready to skip the waiting room?</h2>
+                <p className="mx-auto mt-3 max-w-2xl text-base text-white/72">
                     Get your medical certificate reviewed and delivered online without clinic queues.
                 </p>
                 <div className="mt-6 flex justify-center">
                     {onStartConsult ? (
-                        <Button onClick={onStartConsult} className="h-14 px-8 text-base font-semibold rounded-2xl shadow-lg">
+                        <Button onClick={onStartConsult} className="h-14 bg-white px-8 text-base text-[#06142b] hover:bg-[#edf2ff]">
                             Get medical certificate
                             <ArrowRight size={20} className="ml-2" />
                         </Button>
                     ) : (
                         <a
                             href={FALLBACK_CONSULT_HREF}
-                            className="inline-flex h-14 items-center justify-center rounded-2xl bg-primary px-8 text-base font-semibold text-white shadow-lg transition hover:bg-primary-hover"
+                            className="inline-flex h-14 items-center justify-center rounded-full bg-white px-8 text-base font-extrabold text-[#06142b] transition hover:bg-[#edf2ff]"
                         >
                             Get medical certificate
                             <ArrowRight size={20} className="ml-2" />

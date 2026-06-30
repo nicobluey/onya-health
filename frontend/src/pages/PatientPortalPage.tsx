@@ -157,12 +157,12 @@ function DesktopSidebar({
     onProfileClick: () => void;
 }) {
     return (
-        <aside className="sticky top-0 hidden h-dvh w-[260px] shrink-0 flex-col overflow-y-auto border-r border-[#b3cfe5] bg-[#f6fafd]/95 backdrop-blur md:flex">
+        <aside className="sticky top-0 hidden h-dvh w-[260px] shrink-0 flex-col overflow-y-auto border-r border-border bg-white md:flex">
             <div className="px-5 pt-5">
                 <a href="/" className="inline-flex items-center" aria-label="Go to home page">
                     <img src="/logo.webp" alt="Onya Health" className="h-10 w-auto object-contain" />
                 </a>
-                <p className="mt-6 text-xs font-semibold uppercase tracking-[0.18em] text-[#1a3d63]">Platform</p>
+                <p className="mt-6 text-xs font-extrabold uppercase text-primary">Platform</p>
                 <nav className="mt-3 space-y-1">
                     {[
                         { id: 'home' as const, label: 'Home', icon: Home },
@@ -176,10 +176,10 @@ function DesktopSidebar({
                                 key={item.id}
                                 type="button"
                                 onClick={() => onTabChange(item.id)}
-                                className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${
+                                className={`flex w-full items-center gap-3 rounded-full px-3 py-2.5 text-left text-sm font-extrabold transition ${
                                     active
-                                        ? 'bg-[#0a1931] text-white'
-                                        : 'text-[#1a3d63] hover:bg-[#f6fafd] hover:text-[#0a1931]'
+                                        ? 'bg-primary text-white'
+                                        : 'text-[#06142b] hover:bg-[#f3f8ff] hover:text-primary'
                                 }`}
                             >
                                 <Icon size={16} />
@@ -190,14 +190,14 @@ function DesktopSidebar({
                 </nav>
             </div>
 
-            <div className="mt-auto border-t border-[#b3cfe5] p-4">
+            <div className="mt-auto border-t border-border p-4">
                 <button
                     type="button"
                     onClick={onProfileClick}
-                    className="w-full rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] p-3 text-left transition hover:border-[#b3cfe5]"
+                    className="w-full border border-border bg-[#f3f8ff] p-3 text-left transition hover:border-primary"
                 >
                     <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-[#b3cfe5] text-sm font-semibold text-[#1a3d63]">
+                        <div className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-primary text-sm font-extrabold text-white">
                             {patient.profilePhotoUrl ? (
                                 <img src={patient.profilePhotoUrl} alt={`${patient.fullName || 'Patient'} avatar`} className="h-full w-full object-cover" />
                             ) : (
@@ -205,8 +205,8 @@ function DesktopSidebar({
                             )}
                         </div>
                         <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-[#0a1931]">{patient.fullName || 'Patient'}</p>
-                            <p className="truncate text-xs text-[#1a3d63]">{patient.email || 'No email'}</p>
+                            <p className="truncate text-sm font-extrabold text-[#06142b]">{patient.fullName || 'Patient'}</p>
+                            <p className="truncate text-xs text-text-secondary">{patient.email || 'No email'}</p>
                         </div>
                     </div>
                 </button>
@@ -219,12 +219,12 @@ function MobileTopBar({ activeTab, onHome }: { activeTab: MainTab; onHome: () =>
     const label = activeTab.slice(0, 1).toUpperCase() + activeTab.slice(1);
 
     return (
-        <header className="sticky top-0 z-40 border-b border-[#b3cfe5] bg-[#f6fafd]/95 backdrop-blur">
+        <header className="sticky top-0 z-40 border-b border-border bg-white">
             <div className="flex h-14 items-center justify-between px-4">
                 <button type="button" onClick={onHome} className="inline-flex items-center" aria-label="Go to patient home">
                     <img src="/logo.webp" alt="Onya Health" className="h-10 w-auto object-contain" />
                 </button>
-                <span className="rounded-full border border-[#b3cfe5] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#1a3d63]">
+                <span className="rounded-full border border-border bg-[#f3f8ff] px-3 py-1 text-xs font-extrabold uppercase text-primary">
                     {label}
                 </span>
             </div>
@@ -240,7 +240,7 @@ function MobileBottomNav({
     onTabChange: (next: MainTab) => void;
 }) {
     return (
-        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#b3cfe5] bg-[#f6fafd]">
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-border bg-white">
             <div className="mx-auto flex h-16 w-full max-w-[740px] items-center px-1">
                 {[
                     { id: 'home' as const, label: 'Home', icon: Home },
@@ -255,11 +255,11 @@ function MobileBottomNav({
                             type="button"
                             onClick={() => onTabChange(item.id)}
                             className={`flex flex-1 flex-col items-center justify-center gap-1.5 py-2 ${
-                                active ? 'text-[#1a3d63]' : 'text-[#1a3d63]'
+                                active ? 'text-primary' : 'text-[#06142b]'
                             }`}
                         >
                             <Icon size={20} />
-                            <span className="text-[11px] font-semibold tracking-[0.08em] uppercase">{item.label}</span>
+                            <span className="text-[11px] font-extrabold uppercase">{item.label}</span>
                         </button>
                     );
                 })}
@@ -1960,10 +1960,10 @@ export default function PatientPortalPage() {
 
     if (loading) {
         return (
-            <div className="relative min-h-screen overflow-hidden bg-[#f6fafd] px-4 py-8 font-sans text-[#0a1931]">
+            <div className="relative min-h-screen overflow-hidden bg-[#f5f7fa] px-4 py-8 font-sans text-[#06142b]">
                 <PortalBackdropArt />
-                <div className="relative z-10 mx-auto max-w-[900px] rounded-3xl border border-[#b3cfe5] bg-white p-6">
-                    <p className="text-sm text-[#1a3d63]">Loading your patient account...</p>
+                <div className="onya-panel relative z-10 mx-auto max-w-[900px] p-6">
+                    <p className="text-sm font-bold text-text-secondary">Loading your patient account...</p>
                 </div>
             </div>
         );
@@ -1971,22 +1971,22 @@ export default function PatientPortalPage() {
 
     if (loadError) {
         return (
-            <div className="relative min-h-screen overflow-hidden bg-[#f6fafd] px-4 py-8 font-sans text-[#0a1931]">
+            <div className="relative min-h-screen overflow-hidden bg-[#f5f7fa] px-4 py-8 font-sans text-[#06142b]">
                 <PortalBackdropArt />
-                <div className="relative z-10 mx-auto max-w-[900px] rounded-3xl border border-[#b3cfe5] bg-white p-6">
-                    <h1 className="text-2xl font-semibold text-[#0a1931]">Unable to load account</h1>
-                    <p className="mt-2 text-[#1a3d63]">{loadError}</p>
+                <div className="onya-panel relative z-10 mx-auto max-w-[900px] p-6">
+                    <h1 className="text-2xl font-extrabold text-[#06142b]">Unable to load account</h1>
+                    <p className="mt-2 text-text-secondary">{loadError}</p>
                     <div className="mt-4 flex gap-3">
                         <button
                             type="button"
                             onClick={() => window.location.reload()}
-                            className="rounded-xl bg-[#1a3d63] px-4 py-2 text-sm font-semibold text-white"
+                            className="onya-button min-h-10 px-4 py-2 text-sm"
                         >
                             Retry
                         </button>
                         <a
                             href="/patient-login"
-                            className="rounded-xl border border-[#b3cfe5] bg-white px-4 py-2 text-sm font-semibold text-[#0a1931]"
+                            className="onya-button-secondary min-h-10 px-4 py-2 text-sm"
                         >
                             Back to login
                         </a>
@@ -1998,13 +1998,13 @@ export default function PatientPortalPage() {
 
     return (
         <>
-            <div className="relative hidden min-h-screen bg-[#f6fafd] text-[#0a1931] md:flex">
+            <div className="relative hidden min-h-screen bg-[#f5f7fa] text-[#06142b] md:flex">
                 <PortalBackdropArt />
                 <DesktopSidebar activeTab={mainTab} onTabChange={setTab} patient={patient} onProfileClick={openAccountSettings} />
                 <main className="relative z-10 flex-1">
                     <div className="mx-auto w-full max-w-[1160px] px-8 py-7">
                         {portalScreen === 'main' && (
-                            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-[#b3cfe5] bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-[#1a3d63]">
+                            <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-border bg-white px-3 py-1 text-xs font-extrabold uppercase text-primary">
                                 <Home size={14} />
                                 {MAIN_TABS.find((tab) => tab === mainTab)?.toUpperCase()}
                             </div>
@@ -2014,7 +2014,7 @@ export default function PatientPortalPage() {
                 </main>
             </div>
 
-            <div className={`relative min-h-screen overflow-hidden bg-[#f6fafd] text-[#0a1931] md:hidden ${portalScreen === 'main' ? 'pb-28' : 'pb-6'}`}>
+            <div className={`relative min-h-screen overflow-hidden bg-[#f5f7fa] text-[#06142b] md:hidden ${portalScreen === 'main' ? 'pb-28' : 'pb-6'}`}>
                 <PortalBackdropArt />
                 <MobileTopBar activeTab={mainTab} onHome={openPortalHome} />
                 <main className="relative z-10 px-4 py-5">{renderPortalContent('mobile')}</main>

@@ -66,8 +66,7 @@ const RECORD_TAB_META: Record<
     },
 };
 
-const panelClassName =
-    'rounded-3xl border border-[#b3cfe5] bg-white shadow-[0_24px_42px_-34px_rgba(15,23,42,0.24)]';
+const panelClassName = 'onya-panel';
 
 function statusTone(status: string) {
     const normalized = String(status || '').toLowerCase();
@@ -126,14 +125,21 @@ function HomeHero({
     requestCount: number;
     onGoToTab: (tab: Exclude<MainTab, 'home'>) => void;
 }) {
+    const summaryItems = [
+        { label: 'Consults', value: requestCount },
+        { label: 'Queue', value: 'Clear' },
+        { label: 'Records', value: 'Secure' },
+    ];
+
     return (
-        <section className="relative overflow-hidden rounded-[30px] border border-[#b3cfe5] bg-white p-5 sm:p-7">
-            <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr] lg:items-end">
+        <section className="onya-panel overflow-hidden">
+            <div className="grid gap-0 lg:grid-cols-[1.2fr_0.8fr]">
                 <div>
-                    <p className="inline-flex items-center rounded-full border border-[#b3cfe5] bg-[#f6fafd] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#1a3d63]">
+                    <div className="p-5 sm:p-7">
+                    <p className="onya-kicker">
                         Patient Home
                     </p>
-                    <h1 className="mt-4 text-3xl font-semibold tracking-tight text-[#0a1931] sm:text-4xl">
+                    <h1 className="mt-4 text-4xl font-extrabold leading-none text-[#06142b] sm:text-5xl">
                         Welcome back, {firstNameValue}
                     </h1>
                     <p className="mt-2 max-w-[560px] text-sm text-[#1a3d63] sm:text-base">
@@ -144,7 +150,7 @@ function HomeHero({
                         <button
                             type="button"
                             onClick={() => onGoToTab('consult')}
-                            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#1a3d63] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#0a1931]"
+                            className="onya-button"
                         >
                             <ClipboardPlus size={16} />
                             Start Consult
@@ -152,7 +158,7 @@ function HomeHero({
                         <button
                             type="button"
                             onClick={() => onGoToTab('account')}
-                            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#b3cfe5] bg-white px-4 py-3 text-sm font-semibold text-[#0a1931] transition hover:border-[#b3cfe5]"
+                            className="onya-button-secondary"
                         >
                             <UserRound size={16} />
                             Manage Account
@@ -160,9 +166,9 @@ function HomeHero({
                         <button
                             type="button"
                             onClick={() => onGoToTab('consult')}
-                            className="rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] px-4 py-3 text-left transition hover:border-[#b3cfe5] sm:col-span-2"
+                            className="onya-soft-panel px-4 py-3 text-left transition hover:border-primary sm:col-span-2"
                         >
-                            <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#1a3d63]">
+                            <p className="inline-flex items-center gap-2 text-xs font-extrabold uppercase text-[#1151ff]">
                                 <Lock size={12} />
                                 Medical certificates
                             </p>
@@ -173,11 +179,17 @@ function HomeHero({
                             </p>
                         </button>
                     </div>
+                    </div>
                 </div>
 
-                <div className="relative hidden min-h-[260px] lg:block">
-                    <div className="overflow-hidden rounded-[1.8rem] border border-[#b3cfe5]">
-                        <img src="/HERO.webp" alt="" aria-hidden="true" className="h-[260px] w-full object-cover" />
+                <div className="border-t border-border bg-[#f3f8ff] lg:border-l lg:border-t-0">
+                    <div className="grid h-full grid-cols-3 lg:grid-cols-1">
+                        {summaryItems.map((item) => (
+                            <div key={item.label} className="border-r border-border p-4 last:border-r-0 lg:border-b lg:border-r-0 lg:last:border-b-0">
+                                <p className="text-xs font-extrabold uppercase text-[#1151ff]">{item.label}</p>
+                                <p className="mt-2 text-2xl font-extrabold leading-none text-[#06142b]">{item.value}</p>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>
@@ -197,7 +209,7 @@ function QueueStatusCard({
     if (!request) {
         return (
             <section className={`${panelClassName} p-5`}>
-                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-[#1a3d63]">Queue Status</p>
+                <p className="text-xs font-extrabold uppercase text-[#1151ff]">Queue Status</p>
                 <h2 className="mt-2 text-lg font-semibold text-[#0a1931]">No active queue</h2>
                 <p className="mt-1 text-sm text-[#1a3d63]">Start a consult and it will appear here when a doctor is reviewing it.</p>
             </section>

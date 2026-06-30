@@ -54,15 +54,15 @@ export default function AboutPage() {
     }, []);
 
     return (
-        <main className="min-h-screen bg-bg">
-            <header className="sticky top-0 z-40 border-b border-border bg-white shadow-sm">
+        <main className="min-h-screen bg-white">
+            <header className="sticky top-0 z-40 border-b border-border bg-white">
                 <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4 md:px-6">
                     <HeaderBrand />
                     <div className="flex items-center gap-3">
-                        <HeaderDropdown buttonClassName="h-10 w-10 rounded-xl text-text-primary/90 flex items-center justify-center hover:bg-sand-75 transition-colors" />
+                        <HeaderDropdown buttonClassName="h-10 w-10 rounded-full text-text-primary/90 flex items-center justify-center hover:bg-[#edf2ff] transition-colors" />
                         <a
                             href="/doctor"
-                            className="inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-white transition hover:bg-primary-hover"
+                            className="inline-flex h-10 items-center justify-center rounded-full bg-primary px-4 text-sm font-extrabold text-white transition hover:bg-primary-hover"
                         >
                             Start consult
                             <ArrowRight size={16} className="ml-2" />
@@ -71,10 +71,10 @@ export default function AboutPage() {
                 </div>
             </header>
 
-            <section className="border-b border-border bg-sunlight-50">
+            <section className="border-b border-border bg-[#f5f7fa]">
                 <div className="mx-auto w-full max-w-6xl px-4 py-14 md:px-6 md:py-20">
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-secondary">About Onya Health</p>
-                    <h1 className="mt-4 max-w-4xl text-4xl font-bold leading-tight text-text-primary md:text-5xl">
+                    <p className="onya-kicker">About Onya Health</p>
+                    <h1 className="onya-heading-xl mt-4 max-w-5xl">
                         Doctor and patient founded, built for better care on both sides
                     </h1>
                     <p className="mt-5 max-w-3xl text-lg leading-relaxed text-text-secondary">
@@ -85,18 +85,18 @@ export default function AboutPage() {
                 </div>
             </section>
 
-            <section className="border-b border-border bg-surface">
+            <section className="border-b border-border bg-white">
                 <div className="mx-auto w-full max-w-6xl px-4 py-14 md:px-6 md:py-16">
-                    <h2 className="text-3xl font-bold text-text-primary">Why we exist</h2>
+                    <h2 className="onya-heading">Why we exist</h2>
                     <div className="mt-8 grid gap-4 md:grid-cols-3">
                         {PRINCIPLES.map((principle) => {
                             const Icon = principle.icon;
                             return (
-                                <article key={principle.title} className="rounded-2xl border border-border bg-bg p-6">
+                                <article key={principle.title} className="onya-tile p-6">
                                     <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
                                         <Icon size={18} />
                                     </div>
-                                    <h3 className="mt-4 text-lg font-semibold text-text-primary">{principle.title}</h3>
+                                    <h3 className="mt-4 text-lg font-extrabold text-text-primary">{principle.title}</h3>
                                     <p className="mt-2 text-sm leading-relaxed text-text-secondary">{principle.body}</p>
                                 </article>
                             );
@@ -105,9 +105,9 @@ export default function AboutPage() {
                 </div>
             </section>
 
-            <section className="border-b border-border bg-bg">
+            <section className="border-b border-border bg-[#f5f7fa]">
                 <div className="mx-auto w-full max-w-6xl px-4 py-14 md:px-6 md:py-16">
-                    <h2 className="text-3xl font-bold text-text-primary">Improving the patient and provider experience</h2>
+                    <h2 className="onya-heading">Improving the patient and provider experience</h2>
                     <p className="mt-4 max-w-3xl text-base leading-relaxed text-text-secondary">
                         We believe better healthcare platforms should support both compassionate patient journeys and sustainable clinician
                         workflows. Onya Health is designed to move both forward together.
@@ -115,8 +115,8 @@ export default function AboutPage() {
 
                     <div className="mt-8 grid gap-5 md:grid-cols-2">
                         {EXPERIENCE_AREAS.map((area) => (
-                            <article key={area.title} className="rounded-2xl border border-border bg-surface p-6">
-                                <h3 className="text-xl font-semibold text-text-primary">{area.title}</h3>
+                            <article key={area.title} className="onya-tile bg-white p-6">
+                                <h3 className="text-xl font-extrabold text-text-primary">{area.title}</h3>
                                 <ul className="mt-4 space-y-3">
                                     {area.points.map((point) => (
                                         <li key={point} className="flex items-start gap-3 text-sm text-text-secondary">
@@ -131,9 +131,9 @@ export default function AboutPage() {
                 </div>
             </section>
 
-            <section className="bg-primary/5">
+            <section className="bg-white">
                 <div className="mx-auto w-full max-w-6xl px-4 py-14 text-center md:px-6 md:py-16">
-                    <h2 className="text-3xl font-bold text-text-primary">Building the next generation of digital care</h2>
+                    <h2 className="onya-heading">Building the next generation of digital care</h2>
                     <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-text-secondary">
                         Every product decision we make is grounded in one question: does this make care safer, clearer, and better for both
                         patients and providers?
@@ -141,14 +141,14 @@ export default function AboutPage() {
                     <div className="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
                         <a
                             href="/doctor"
-                            className="inline-flex h-12 items-center justify-center rounded-xl bg-primary px-6 text-sm font-semibold text-white transition hover:bg-primary-hover"
+                            className="onya-button"
                         >
                             Start a medical certificate consult
                             <ArrowRight size={16} className="ml-2" />
                         </a>
                         <a
                             href="/patient-login"
-                            className="inline-flex h-12 items-center justify-center rounded-xl border border-border bg-surface px-6 text-sm font-semibold text-text-primary transition hover:border-primary/40"
+                            className="onya-button-secondary"
                         >
                             Patient login
                         </a>

@@ -1,9 +1,5 @@
-# DESIGN_SYSTEM (Migrated)
+# DESIGN_SYSTEM
 
-This document has been migrated.
+Canonical design guidance lives in `DESIGN.md`.
 
-Canonical location:
-- `.agents/design-language.md`
-
-For full agent workspace guidance:
-- `.agents/README.md`
+Use `nike/DESIGN.md` as the imported reference only; do not treat it as the active product palette.

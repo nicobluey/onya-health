@@ -1,58 +1,8 @@
-import { type CSSProperties, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Lock, Mail } from 'lucide-react';
 import { fetchApiJson } from '../lib/api';
 import { HeaderDropdown } from '../components/HeaderDropdown';
 import { HeaderBrand } from '../components/HeaderBrand';
-
-type FloatingScienceCard = {
-    src: string;
-    className: string;
-    tilt: string;
-    duration: string;
-    delay: string;
-    reverse?: boolean;
-};
-
-const SCIENCE_FLOATING_CARDS: FloatingScienceCard[] = [
-    {
-        src: '/Blue%20Cells.webp',
-        className: '-left-14 top-16 h-32 w-32 md:-left-20 md:top-20 md:h-48 md:w-48',
-        tilt: '-8deg',
-        duration: '18s',
-        delay: '0s',
-    },
-    {
-        src: '/Blue%20Bubbles.webp',
-        className: 'right-[-2.4rem] top-24 h-28 w-28 md:right-[8%] md:top-16 md:h-36 md:w-36',
-        tilt: '8deg',
-        duration: '17s',
-        delay: '1.2s',
-        reverse: true,
-    },
-    {
-        src: '/Microscope.webp',
-        className: 'left-[2%] bottom-[12%] h-24 w-24 md:left-[4%] md:bottom-[18%] md:h-32 md:w-32',
-        tilt: '-6deg',
-        duration: '20s',
-        delay: '0.8s',
-    },
-    {
-        src: '/Lab%20Equipment.webp',
-        className: 'right-[22%] -bottom-7 h-24 w-24 md:right-[30%] md:bottom-8 md:h-28 md:w-28',
-        tilt: '9deg',
-        duration: '15s',
-        delay: '0.5s',
-        reverse: true,
-    },
-    {
-        src: '/Pipette.webp',
-        className: 'right-2 bottom-[8%] h-24 w-24 md:-right-10 md:bottom-[10%] md:h-[220px] md:w-[220px]',
-        tilt: '7deg',
-        duration: '17s',
-        delay: '1.5s',
-        reverse: true,
-    },
-];
 
 export default function PatientLoginPage() {
     const initialParams = useMemo(() => new URLSearchParams(window.location.search), []);
@@ -197,33 +147,15 @@ export default function PatientLoginPage() {
     };
 
     return (
-        <div className="relative min-h-screen overflow-hidden bg-sunlight-50 text-text-primary">
-            <div className="science-scene" aria-hidden="true">
-                {SCIENCE_FLOATING_CARDS.map((card, index) => (
-                    <div
-                        key={`${card.src}-${index}`}
-                        className={`science-float-card ${card.reverse ? 'is-reverse' : ''} ${card.className}`}
-                        style={
-                            {
-                                '--science-tilt': card.tilt,
-                                '--drift-duration': card.duration,
-                                '--drift-delay': card.delay,
-                            } as CSSProperties
-                        }
-                    >
-                        <img src={card.src} alt="" className="h-full w-full object-cover" />
-                    </div>
-                ))}
-            </div>
-
-            <header className="sticky top-0 z-20 w-full border-b border-border bg-white shadow-sm">
+        <div className="min-h-screen overflow-hidden bg-[#f5f7fa] text-text-primary">
+            <header className="sticky top-0 z-20 w-full border-b border-border bg-white">
                 <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-4 md:px-8">
                     <HeaderBrand />
                     <div className="flex items-center gap-2.5">
-                        <HeaderDropdown buttonClassName="h-9 w-9 rounded-lg text-text-primary/90 flex items-center justify-center hover:bg-sand-75 transition-colors" />
+                        <HeaderDropdown buttonClassName="h-10 w-10 rounded-full text-text-primary/90 flex items-center justify-center hover:bg-sand-75 transition-colors" />
                         <a
                             href="/doctor"
-                            className="inline-flex items-center gap-2 rounded-full border border-sand-200 bg-white/90 px-4 py-2 text-xs font-semibold uppercase tracking-[0.1em] text-bark-700 transition hover:border-forest-300"
+                            className="hidden h-10 items-center gap-2 rounded-full border border-border bg-white px-4 text-sm font-extrabold text-[#06142b] transition hover:border-primary sm:inline-flex"
                         >
                             Start Consult
                             <ArrowRight size={14} />
@@ -232,44 +164,50 @@ export default function PatientLoginPage() {
                 </div>
             </header>
 
-            <main className="relative z-10 mx-auto w-full max-w-7xl px-4 py-8 md:px-8 md:py-12">
-                <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-                    <section className="hidden overflow-hidden rounded-3xl border border-sand-200 bg-white shadow-[0_28px_56px_-36px_rgba(15,23,42,0.35)] lg:block">
-                        <img
-                            src="/HERO.webp"
-                            alt=""
-                            aria-hidden="true"
-                            className="h-[360px] w-full object-cover"
-                        />
-                        <div className="p-8">
-                            <p className="inline-flex items-center rounded-full border border-sand-200 bg-sunlight-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-bark-600">
-                                Patient Portal
-                            </p>
-                            <h1 className="mt-4 max-w-[16ch] text-5xl leading-[1.05] text-bark-900">
-                                Healthcare made for you.
-                            </h1>
-                            <p className="mt-4 max-w-[48ch] text-base text-bark-500">
-                                Sign in to track consult updates, manage your account details, and keep your records in one secure place.
-                            </p>
+            <main className="mx-auto grid min-h-[calc(100svh-64px)] w-full max-w-7xl gap-0 px-4 py-6 md:px-8 md:py-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-stretch">
+                <section className="relative hidden overflow-hidden border border-border bg-white lg:block">
+                    <img
+                        src="/Medical Certificate Landing.webp"
+                        alt=""
+                        aria-hidden="true"
+                        className="absolute inset-0 h-full w-full object-cover object-center"
+                    />
+                    <div className="relative z-10 flex h-full min-h-[680px] flex-col justify-end p-8">
+                        <p className="onya-kicker w-fit">Patient portal</p>
+                        <h1 className="onya-display mt-5 max-w-[8ch] text-[#06142b]">
+                            Portal access.
+                        </h1>
+                        <p className="mt-5 max-w-[520px] text-lg font-semibold leading-relaxed text-[#06142b]">
+                            Track consult updates, manage your profile, and keep certificate records in one secure workspace.
+                        </p>
+                        <div className="mt-8 grid max-w-[560px] grid-cols-3 border border-border bg-white">
+                            {['Secure login', 'Certificate records', 'Account details'].map((item) => (
+                                <div key={item} className="border-r border-border p-4 text-sm font-extrabold last:border-r-0">
+                                    {item}
+                                </div>
+                            ))}
                         </div>
-                    </section>
+                    </div>
+                </section>
 
-                    <section className="rounded-3xl border border-sand-200 bg-white p-6 shadow-[0_24px_42px_-34px_rgba(15,23,42,0.28)] md:p-7">
-                        <h2 className="text-3xl leading-tight">Patient login</h2>
-                        <p className="mt-2 text-bark-500">
-                            Access your consult activity, profile, billing, and queue status. Magic link is the fastest sign-in option.
+                <section className="flex items-center bg-white p-5 md:p-8 lg:border-y lg:border-r lg:border-border">
+                    <div className="mx-auto w-full max-w-[520px]">
+                        <p className="onya-kicker">Patient login</p>
+                        <h2 className="onya-heading-xl mt-4 text-[#06142b]">Get back in.</h2>
+                        <p className="mt-3 text-base leading-relaxed text-text-secondary">
+                            Access consult activity, billing, profile details, and queue status. Password login is available for trial and checkout-created accounts.
                         </p>
 
-                        <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
+                        <form className="mt-7 space-y-4" onSubmit={handleSubmit}>
                             <label className="block">
-                                <span className="mb-2 block text-sm font-medium text-bark-600">Email</span>
-                                <div className="flex items-center gap-2 rounded-xl border border-sand-200 bg-sunlight-50 px-3">
-                                    <Mail size={16} className="text-bark-400" />
+                                <span className="mb-2 block text-sm font-extrabold uppercase text-[#06142b]">Email</span>
+                                <div className="flex items-center gap-2 rounded-full border border-border bg-white px-4">
+                                    <Mail size={16} className="text-primary" />
                                     <input
                                         type="email"
                                         value={email}
                                         onChange={(e) => setEmail(e.target.value)}
-                                        className="h-11 w-full bg-transparent outline-none"
+                                        className="h-12 w-full bg-transparent outline-none"
                                         placeholder="you@example.com"
                                         required
                                     />
@@ -277,14 +215,14 @@ export default function PatientLoginPage() {
                             </label>
 
                             <label className="block">
-                                <span className="mb-2 block text-sm font-medium text-bark-600">Password</span>
-                                <div className="flex items-center gap-2 rounded-xl border border-sand-200 bg-sunlight-50 px-3">
-                                    <Lock size={16} className="text-bark-400" />
+                                <span className="mb-2 block text-sm font-extrabold uppercase text-[#06142b]">Password</span>
+                                <div className="flex items-center gap-2 rounded-full border border-border bg-white px-4">
+                                    <Lock size={16} className="text-primary" />
                                     <input
                                         type="password"
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
-                                        className="h-11 w-full bg-transparent outline-none"
+                                        className="h-12 w-full bg-transparent outline-none"
                                         placeholder="Use password if your account is set up"
                                         autoComplete="current-password"
                                     />
@@ -292,57 +230,55 @@ export default function PatientLoginPage() {
                             </label>
 
                             {error && (
-                                <p className="rounded-xl border border-[#f3c5c4] bg-[#ffe9e8] px-3 py-2 text-sm font-medium text-[#a93736]">
+                                <p className="border border-[#f3c5c4] bg-[#ffe9e8] px-4 py-3 text-sm font-bold text-[#a93736]">
                                     {error}
                                 </p>
                             )}
                             {magicStatus && (
-                                <p className="rounded-xl border border-[#86efac] bg-[#ecfdf3] px-3 py-2 text-sm font-medium text-[#166534]">
+                                <p className="border border-[#86efac] bg-[#ecfdf3] px-4 py-3 text-sm font-bold text-[#166534]">
                                     {magicStatus}
                                 </p>
                             )}
                             {resetStatus && (
-                                <p className="rounded-xl border border-[#f3df9d] bg-[#fff8e8] px-3 py-2 text-sm font-medium text-[#8a6700]">
+                                <p className="border border-[#f3df9d] bg-[#fff8e8] px-4 py-3 text-sm font-bold text-[#8a6700]">
                                     {resetStatus}
                                 </p>
                             )}
 
-                            <button
-                                type="button"
-                                onClick={handleSendMagicLink}
-                                disabled={magicSending || magicAuthenticating}
-                                className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-[#b3cfe5] bg-[#f6fafd] text-sm font-semibold text-[#1a3d63] transition hover:border-[#b3cfe5] disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                                {magicSending ? 'Sending magic link...' : 'Email me a magic sign-in link'}
-                            </button>
-
-                            <button
-                                type="submit"
-                                disabled={loading || magicAuthenticating}
-                                className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary text-sm font-semibold text-white transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-70"
-                            >
+                            <button type="submit" disabled={loading || magicAuthenticating} className="onya-button w-full">
                                 {loading ? 'Signing in...' : 'Continue to patient portal'}
                                 <ArrowRight size={16} />
                             </button>
 
-                            <button
-                                type="button"
-                                onClick={handleSendResetLink}
-                                disabled={resetSending || magicAuthenticating}
-                                className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-sand-200 bg-white text-sm font-semibold text-bark-700 transition hover:border-secondary disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                                {resetSending ? 'Sending reset link...' : 'Forgot password? Send reset link'}
-                            </button>
+                            <div className="grid gap-3 sm:grid-cols-2">
+                                <button
+                                    type="button"
+                                    onClick={handleSendMagicLink}
+                                    disabled={magicSending || magicAuthenticating}
+                                    className="onya-button-secondary"
+                                >
+                                    {magicSending ? 'Sending...' : 'Email magic link'}
+                                </button>
+
+                                <button
+                                    type="button"
+                                    onClick={handleSendResetLink}
+                                    disabled={resetSending || magicAuthenticating}
+                                    className="onya-button-secondary"
+                                >
+                                    {resetSending ? 'Sending...' : 'Reset password'}
+                                </button>
+                            </div>
                         </form>
 
-                        <p className="mt-5 text-center text-xs text-bark-500">
-                            Your account is created automatically after checkout using your consult email.
-                        </p>
-                        <p className="mt-1 text-center text-xs text-bark-500">
-                            New patient? <a href="/doctor" className="underline underline-offset-2">Start a consult to create your account</a>.
-                        </p>
-                    </section>
-                </div>
+                        <div className="mt-7 border-t border-border pt-4 text-sm text-text-secondary">
+                            <p>Your account is created automatically after checkout using your consult email.</p>
+                            <p className="mt-2">
+                                New patient? <a href="/doctor" className="font-extrabold text-primary underline underline-offset-2">Start a consult to create your account</a>.
+                            </p>
+                        </div>
+                    </div>
+                </section>
             </main>
         </div>
     );

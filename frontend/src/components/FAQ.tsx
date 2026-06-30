@@ -15,14 +15,15 @@ export function FAQ({ maxItems }: FAQProps) {
     const visibleItems = hasLimit && !showAll ? COPY.faq.items.slice(0, maxItems) : COPY.faq.items;
 
     return (
-        <div className="w-full max-w-2xl mx-auto py-12 px-4">
-            <h2 className="text-2xl font-bold text-text-primary mb-8 text-center">{COPY.faq.title}</h2>
-            <div className="space-y-4">
+        <div className="mx-auto w-full max-w-3xl px-4 py-14">
+            <p className="onya-kicker text-center">Questions</p>
+            <h2 className="onya-heading mt-3 text-center">{COPY.faq.title}</h2>
+            <div className="mt-8 border-y border-border">
                 {visibleItems.map((item, idx) => (
-                    <div key={idx} className="border-b border-border pb-4">
+                    <div key={idx} className="border-b border-border last:border-b-0">
                         <button
                             onClick={() => setOpenIndex(openIndex === idx ? null : idx)}
-                            className="flex w-full items-center justify-between py-2 text-left text-lg font-medium text-text-primary focus:outline-none"
+                            className="flex w-full items-center justify-between gap-5 py-5 text-left text-lg font-extrabold text-text-primary focus:outline-none"
                         >
                             <span>{item.q}</span>
                             <ChevronDown
@@ -37,13 +38,13 @@ export function FAQ({ maxItems }: FAQProps) {
                                     exit={{ height: 0, opacity: 0 }}
                                     className="overflow-hidden"
                                 >
-                                    <p className="pt-2 pb-4 text-text-secondary leading-relaxed">
+                                    <p className="pb-5 text-text-secondary leading-relaxed">
                                         {item.a}
                                     </p>
                                     {'linkHref' in item && item.linkHref && (
                                         <a
                                             href={item.linkHref}
-                                            className="inline-flex pb-4 text-sm font-semibold text-primary hover:text-primary-hover"
+                                            className="inline-flex pb-5 text-sm font-extrabold text-primary hover:text-primary-hover"
                                         >
                                             {'linkLabel' in item && item.linkLabel ? item.linkLabel : 'Learn more'}
                                         </a>
@@ -59,7 +60,7 @@ export function FAQ({ maxItems }: FAQProps) {
                     <button
                         type="button"
                         onClick={() => setShowAll((prev) => !prev)}
-                        className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-text-primary hover:bg-sand-50"
+                        className="onya-button-secondary h-11 px-5 text-sm"
                     >
                         {showAll ? 'Show fewer questions' : `Show all questions (${COPY.faq.items.length})`}
                     </button>
