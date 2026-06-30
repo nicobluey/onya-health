@@ -2909,13 +2909,15 @@ async function loadPatientPortalSnapshot(email, { includeBilling = true } = {}) 
 
   if (shouldUseLeanCertificateQuery) {
     const billingStartedAt = Date.now();
-    const [certificateRows, billingProfile] = await Promise.all([
+    const [supabaseAccount, certificateRows, billingProfile] = await Promise.all([
+      findSupabasePatientByEmail(normalizedEmail),
       listCertificatesByPatientEmail(normalizedEmail, {
         includeRawSubmission: false,
         limit: 60,
       }),
       includeBilling ? resolvePatientBillingProfile(normalizedEmail, null) : Promise.resolve(null),
     ]);
+    account = supabaseAccount;
     certificates = certificateRows;
     billing = billingProfile;
     billingFetchDurationMs = includeBilling ? Date.now() - billingStartedAt : 0;

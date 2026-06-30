@@ -31,9 +31,9 @@ const PATIENT_ORGS: PatientOrg[] = [
 ];
 
 const STATS: StatItem[] = [
-    { value: '24/7', label: 'Consult Requests' },
-    { value: 'Doctor-reviewed', label: 'Clinical Decisions' },
-    { value: 'Australia-wide', label: 'Service Coverage' },
+    { value: '24/7', label: 'Online requests' },
+    { value: 'Doctor-reviewed', label: 'Certificate outcomes' },
+    { value: 'Australia-wide', label: 'Patient access' },
 ];
 
 const LEADING_POINTS: Array<{ title: string; body: string }> = [
@@ -69,7 +69,7 @@ export function UsedByPatientsSection() {
                         ))}
                     </div>
                     <p className="max-w-2xl text-sm text-bark-600 md:justify-self-end">
-                        Request a medical-certificate consult online. Doctor review is completed digitally, with clear outcomes and follow-up guidance where needed.
+                        Request a medical-certificate consult online, then track doctor review, outcomes, and follow-up guidance in one secure place.
                     </p>
                 </div>
             </div>

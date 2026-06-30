@@ -123,10 +123,9 @@ function DoctorPreview() {
     return (
         <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
             <img
-                src="/HERO.webp"
+                src="/DOCTOR REVIEW.webp"
                 alt="Doctor reviewing a patient consultation online"
                 className="h-52 w-full object-cover md:h-60"
-                style={{ objectPosition: '58% 76%' }}
             />
         </div>
     );
