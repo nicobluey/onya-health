@@ -589,3 +589,46 @@
 1. `npm run build` succeeds.
 2. `node --check api/index.js` succeeds.
 3. Vercel inspect on latest production deployment shows status `Ready`.
+
+## 2026-06-29 - Promote staged launch deployment to production aliases
+
+### Symptoms
+
+- Git push and Vercel build completed for commit `92a7151`, but live domains still served
+  the older production HTML/API behavior.
+- Vercel deployment list showed the latest deployment as ready under Environment
+  `Production`, which made the state look deployed at first glance.
+
+### Root causes
+
+1. The latest deployment `Dk4Fw4vFBJRrQV5Di55eF64dUzzS` was still marked `Staged`.
+2. Deployment details showed `Assigning Custom Domains: Skipped`, so public aliases were
+   not moved to the new build.
+3. A duplicate Vercel project named `repo` was connected to the same GitHub repository,
+   creating extra deployment noise. Production domains are owned by the `onya-health`
+   Vercel project.
+
+### Files/areas changed
+
+- Vercel dashboard:
+  - promoted `onya-health` deployment `Dk4Fw4vFBJRrQV5Di55eF64dUzzS`
+  - commit `92a7151 Stabilize launch flows and docs`
+  - confirmed deployment detail changed to `Current`
+  - confirmed domains included `www.onyahealth.com.au` and `onya-health.vercel.app`
+- `AGENTS.md`
+  - documented the `Staged` vs `Current` Vercel distinction.
+- `.agents/README.md`
+  - documented the promotion flow and duplicate-project caveat.
+
+### Verification
+
+1. `https://www.onyahealth.com.au/` returns `200` with `Last-Modified: Mon, 29 Jun 2026`
+   and static crawl fallback content.
+2. `https://onyahealth.com.au/` returns `307` to `https://www.onyahealth.com.au/`.
+3. `https://www.onyahealth.com.au/sitemap.xml` includes
+   `/medical-certificate-doctor` and `/medical-certificate-carers-leave`.
+4. Sitemap no longer contains the private `/patient` route.
+5. `POST /api/checkout/session` with a carer add-on but missing carer details returns
+   `400` with code `CARER_CERTIFICATE_DETAILS_REQUIRED`.
+6. `POST /api/patient/account-exists` returns controlled `200` JSON for a non-existent
+   probe email.

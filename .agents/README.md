@@ -10,6 +10,12 @@ This folder tracks production incidents, regressions, and applied fixes so futur
   - `www.onyahealth.com.au`
   - `onya-health.vercel.app`
 - If alias assignment fails, treat deploy as incomplete and resolve before closing work.
+- In Vercel, Environment `Production` is not enough. The deployment detail page must show
+  `Current`, and the `Domains` section must include the production aliases.
+- If a ready deployment is still `Staged` and says `Assigning Custom Domains: Skipped`,
+  use `Deployment Actions` -> `Promote`, then re-test the live aliases.
+- Use the `onya-health` Vercel project for production. A duplicate `repo` project may show
+  the same Git commits, but it does not own the production domains.
 
 ## Markdown Context Tree
 
