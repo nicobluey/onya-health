@@ -1,5 +1,43 @@
 # Fixes Log
 
+## 2026-06-29 - Remove meal-plan product surface and refocus production on med certs
+
+### Symptoms
+
+- Meal-plan/nutrition features added heavy portal reads and distracted from the highest-converting medical-certificate funnel.
+- Public navigation and homepage still advertised inactive or secondary service lines.
+
+### Root causes
+
+1. The patient portal imported the full weight-loss/meal-planning bundle and hydrated meal-plan APIs from route/query state.
+2. Public service config, header/footer links, sitemap entries, and warmup assets still included nutrition/psychology routes.
+3. Meal-plan API endpoints remained callable by stale clients.
+
+### Files changed
+
+- `frontend/src/pages/PatientPortalPage.tsx`
+  - removed weight-loss onboarding/dashboard imports, state, hydration, generation, and visible timeline injection.
+  - filters historical nutrition service rows from visible portal timelines.
+- `frontend/src/patient-portal/home/HomeTab.tsx`, `frontend/src/patient-portal/model.ts`
+  - removed the nutrition dashboard card and simplified portal consult options to medical certificates only.
+- `frontend/src/pages/HomePage.tsx`, `frontend/src/consult-flow/services.ts`
+  - refocused homepage/service registry on doctor-reviewed medical certificates.
+- `frontend/src/app/AppRouter.tsx`, `frontend/src/components/HeaderDropdown.tsx`, `frontend/src/components/Footer.tsx`
+  - redirect removed nutrition/psychology routes to `/doctor` and remove public links.
+- `api/index.js`, `backend/server.js`
+  - added `ENABLE_MEAL_PLAN_FEATURE` gate; meal-plan API routes return `410` unless explicitly re-enabled.
+- `scripts/generate-sitemap.mjs`, `frontend/public/sitemap.xml`
+  - removed nutrition/psychology route publication.
+
+### Verification
+
+1. `node --check api/index.js backend/server.js backend/lib/storage.js` succeeds.
+2. `npx tsc -b --pretty false` succeeds.
+3. `npm run lint` succeeds.
+4. `npm run build` succeeds; main JS bundle reduced from about `803.84 kB` to `642.25 kB` minified after removing portal meal-plan imports.
+5. Local Playwright checks passed on desktop `1440x1000` and mobile `390x844` for `/`, `/doctor`, `/doctor#book`, and `/patient-login`.
+6. Local route checks confirm `/nutritionist`, `/psychologist`, and `/weight-loss-reset` redirect to `/doctor`.
+
 ## 2026-06-29 - Launch bug batch: docs, pricing, auth, doctor approval, SEO, and meal-plan safety
 
 ### Symptoms
@@ -652,6 +690,10 @@
    by default, and returned hundreds of recipes.
 4. Latest meal-plan reads inlined data-image payloads by default and scanned more cache
    rows than needed for normal portal hydration.
+5. Meal-plan read endpoints synchronously backfilled legacy cached recipes during portal
+   reads, which made normal sign-in hydration wait on maintenance writes.
+6. Portal bootstrap loaded billing after certificates instead of overlapping independent
+   Supabase reads.
 
 ### Files changed
 
@@ -659,12 +701,16 @@
   - added a direct patient-row existence lookup for `/api/patient/account-exists`.
   - reduced meal-plan catalog default limit/cache scan and made global fallback opt-in.
   - made latest meal-plan data-image inlining opt-in and reduced fallback scan limits.
+  - uses cached recipe bundles before querying the recipe table for latest meal plans.
+  - makes legacy recipe backfill non-blocking during read endpoints.
+  - overlaps patient billing and certificate reads during Supabase portal bootstrap.
 - `backend/lib/storage.js`
   - reduced latest meal-plan cache lookup from 24 rows to 1 row.
 - `frontend/src/components/FlowSteps.tsx`
   - aborts stale account-check requests and caches the latest email check result.
 - `frontend/src/pages/PatientPortalPage.tsx`
   - requests smaller meal-plan catalogs and avoids inline data images.
+  - reduced the patient portal catalog request from 120 generated recipes to 60.
 
 ### Verification
 

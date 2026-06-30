@@ -98,6 +98,9 @@ const CORS_ORIGIN = String(process.env.CORS_ORIGIN || '*').trim();
 const FRONTEND_BASE_URL = String(process.env.FRONTEND_BASE_URL || '')
   .trim()
   .replace(/\/$/, '');
+const MEAL_PLAN_FEATURE_ENABLED = ['1', 'true', 'yes'].includes(
+  String(process.env.ENABLE_MEAL_PLAN_FEATURE || '').trim().toLowerCase()
+);
 const DOCTOR_NOTIFICATION_EMAILS_CONFIGURED = (process.env.DOCTOR_NOTIFICATION_EMAILS || 'doctor@onyahealth.com')
   .split(',')
   .map((item) => item.trim())
@@ -2643,6 +2646,14 @@ async function handleApi(req, res, url) {
       billing,
       queueCount: patientCertificates.filter((item) => isCertificateOpenForReview(item)).length,
       latestRequest: latest ? patientSummaryFromCertificate(latest) : null,
+    });
+    return;
+  }
+
+  if (!MEAL_PLAN_FEATURE_ENABLED && url.pathname.startsWith('/api/patient/meal-plan/')) {
+    sendJson(res, 410, {
+      ok: false,
+      error: 'Meal planning is currently unavailable.',
     });
     return;
   }

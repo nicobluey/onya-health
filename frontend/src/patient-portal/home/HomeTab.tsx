@@ -32,8 +32,6 @@ import {
     queueStageIndex,
     statusLabel,
 } from '../model';
-import PatientDashboardWeightLossCard from '../../weight-loss-reset/components/PatientDashboardWeightLossCard';
-import type { AssignedDietitianProfile, WeightLossResetCardState } from '../../weight-loss-reset/types';
 
 const RECORD_TAB_META: Record<
     RecordTab,
@@ -122,12 +120,10 @@ function EmptySectionState({
 function HomeHero({
     firstNameValue,
     requestCount,
-    hasNutritionAccess,
     onGoToTab,
 }: {
     firstNameValue: string;
     requestCount: number;
-    hasNutritionAccess: boolean;
     onGoToTab: (tab: Exclude<MainTab, 'home'>) => void;
 }) {
     return (
@@ -161,26 +157,21 @@ function HomeHero({
                             <UserRound size={16} />
                             Manage Account
                         </button>
-                        {hasNutritionAccess ? (
-                            <div className="rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] px-4 py-3 sm:col-span-2">
-                                <p className="text-xs uppercase tracking-[0.12em] text-[#1a3d63]">Consults on file</p>
-                                <p className="mt-1 text-2xl font-semibold text-[#0a1931]">{requestCount}</p>
-                            </div>
-                        ) : (
-                            <button
-                                type="button"
-                                onClick={() => onGoToTab('consult')}
-                                className="rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] px-4 py-3 text-left transition hover:border-[#b3cfe5] sm:col-span-2"
-                            >
-                                <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#1a3d63]">
-                                    <Lock size={12} />
-                                    Nutritionist consults
-                                </p>
-                                <p className="mt-1 text-sm font-semibold text-[#0a1931]">
-                                    Get matched with a nutritionist and achieve your goals today.
-                                </p>
-                            </button>
-                        )}
+                        <button
+                            type="button"
+                            onClick={() => onGoToTab('consult')}
+                            className="rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] px-4 py-3 text-left transition hover:border-[#b3cfe5] sm:col-span-2"
+                        >
+                            <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#1a3d63]">
+                                <Lock size={12} />
+                                Medical certificates
+                            </p>
+                            <p className="mt-1 text-sm font-semibold text-[#0a1931]">
+                                {requestCount > 0
+                                    ? `${requestCount} consult${requestCount === 1 ? '' : 's'} on file. Start another certificate request anytime.`
+                                    : 'Start a doctor-reviewed certificate request when you need one.'}
+                            </p>
+                        </button>
                     </div>
                 </div>
 
@@ -585,7 +576,7 @@ function LifestyleNotesSection({
                             value={details}
                             onChange={(event) => setDetails(event.target.value)}
                             className="min-h-20 w-full rounded-xl border border-[#b3cfe5] bg-white px-3 py-2 text-sm outline-none focus:border-[#b3cfe5]"
-                            placeholder="Share habits, sleep, activity, nutrition, or triggers"
+                            placeholder="Share habits, sleep, activity, symptoms, or triggers"
                         />
                         <div className="flex items-center justify-end gap-2">
                             <button
@@ -609,7 +600,7 @@ function LifestyleNotesSection({
                     <EmptySectionState
                         icon={NotebookPen}
                         title="No lifestyle notes yet"
-                        description="Capture sleep, nutrition, stress, and daily habits to personalize your care plan."
+                        description="Capture sleep, stress, symptoms, and daily habits to personalize your care plan."
                         buttonLabel="Add lifestyle note"
                         onAdd={() => setIsAdding(true)}
                     />
@@ -777,7 +768,6 @@ export default function HomeTab({
     requests,
     queuedRequest,
     patient,
-    dietitian,
     data,
     recordTab,
     onRecordTabChange,
@@ -787,14 +777,12 @@ export default function HomeTab({
     onOpenQueue,
     onDownloadCertificate,
     onGoToTab,
-    weightLossResetCard,
 }: {
     mode: LayoutMode;
     firstNameValue: string;
     requests: PortalRequest[];
     queuedRequest: PortalRequest | null;
     patient: PatientProfile;
-    dietitian?: AssignedDietitianProfile | null;
     data: PortalProfileData;
     recordTab: RecordTab;
     onRecordTabChange: (tab: RecordTab) => void;
@@ -804,57 +792,9 @@ export default function HomeTab({
     onOpenQueue: () => void;
     onDownloadCertificate: (request: PortalRequest) => void;
     onGoToTab: (tab: Exclude<MainTab, 'home'>) => void;
-    weightLossResetCard: {
-        cardState: WeightLossResetCardState;
-        primaryHealthFocus?: string;
-        currentWeight?: number;
-        goalWeight?: number;
-        progressPercent: number;
-        generatedAt?: string;
-        onStart: () => void;
-        onContinueBooking: () => void;
-        onOpen: () => void;
-    };
 }) {
     const desktop = mode === 'desktop';
-    const hasNutritionAccess = weightLossResetCard.cardState !== 'not-started';
-    const timelineRequests = useMemo(() => {
-        const hasNutritionCard = weightLossResetCard.cardState !== 'not-started';
-        if (!hasNutritionCard) return requests;
-        const alreadyHasNutrition = requests.some((entry) => {
-            const service = String(entry?.serviceType || '').toLowerCase();
-            return service === 'weight_loss' || service === 'weight-loss' || service === 'nutritionist';
-        });
-        if (alreadyHasNutrition) return requests;
-
-        const createdAt = String(weightLossResetCard.generatedAt || '').trim() || new Date().toISOString();
-        const nutritionRequest: PortalRequest = {
-            id: `nutrition-${patient.email || 'patient'}`,
-            createdAt,
-            status: 'approved',
-            serviceType: 'weight_loss',
-            purpose: `Weekly nutrition consult with ${dietitian?.fullName || 'Felicity'}`,
-            symptom: '',
-            symptomVisibility: 'private',
-            description: 'Personalised nutrition planning, weekly meal adjustments, and practical prep support.',
-            startDate: createdAt,
-            durationDays: 7,
-            decision: {
-                by: dietitian?.fullName || 'Felicity',
-                at: createdAt,
-                notes: 'Recurring nutrition consult active.',
-            },
-            certificatePdfUrl: null,
-        };
-
-        return [nutritionRequest, ...requests];
-    }, [
-        dietitian?.fullName,
-        patient.email,
-        requests,
-        weightLossResetCard.cardState,
-        weightLossResetCard.generatedAt,
-    ]);
+    const timelineRequests = useMemo(() => requests, [requests]);
 
     if (desktop) {
         return (
@@ -862,20 +802,7 @@ export default function HomeTab({
                 <HomeHero
                     firstNameValue={firstNameValue}
                     requestCount={timelineRequests.length}
-                    hasNutritionAccess={hasNutritionAccess}
                     onGoToTab={onGoToTab}
-                />
-                <PatientDashboardWeightLossCard
-                    cardState={weightLossResetCard.cardState}
-                    firstName={firstNameValue}
-                    dietitian={dietitian}
-                    primaryHealthFocus={weightLossResetCard.primaryHealthFocus}
-                    currentWeight={weightLossResetCard.currentWeight}
-                    goalWeight={weightLossResetCard.goalWeight}
-                    progressPercent={weightLossResetCard.progressPercent}
-                    onStart={weightLossResetCard.onStart}
-                    onContinueBooking={weightLossResetCard.onContinueBooking}
-                    onOpen={weightLossResetCard.onOpen}
                 />
 
                 <div className="grid gap-6 xl:grid-cols-[1.65fr_1fr]">
@@ -902,20 +829,7 @@ export default function HomeTab({
             <HomeHero
                 firstNameValue={firstNameValue}
                 requestCount={timelineRequests.length}
-                hasNutritionAccess={hasNutritionAccess}
                 onGoToTab={onGoToTab}
-            />
-            <PatientDashboardWeightLossCard
-                cardState={weightLossResetCard.cardState}
-                firstName={firstNameValue}
-                dietitian={dietitian}
-                primaryHealthFocus={weightLossResetCard.primaryHealthFocus}
-                currentWeight={weightLossResetCard.currentWeight}
-                goalWeight={weightLossResetCard.goalWeight}
-                progressPercent={weightLossResetCard.progressPercent}
-                onStart={weightLossResetCard.onStart}
-                onContinueBooking={weightLossResetCard.onContinueBooking}
-                onOpen={weightLossResetCard.onOpen}
             />
             <QueueStatusCard request={queuedRequest} onOpenQueue={onOpenQueue} />
             <PreviousConsultQueue requests={timelineRequests} onDownloadCertificate={onDownloadCertificate} />

@@ -1,4 +1,4 @@
-﻿export type ServiceSlug = 'doctor' | 'nutritionist' | 'psychologist';
+﻿export type ServiceSlug = 'doctor';
 
 export interface ServiceTheme {
     pageBg: string;
@@ -59,72 +59,10 @@ export const SERVICE_CONFIGS: Record<ServiceSlug, ServiceConfig> = {
             cardTint: '#ffffff',
         },
     },
-    nutritionist: {
-        slug: 'nutritionist',
-        providerName: 'nutritionist',
-        providerPlural: 'Nutritionists',
-        heroSubtitle: 'Get personalised, caring nutrition support tailored to your goals. Meet online from home and build healthy habits with practical, understanding guidance.',
-        primaryCta: 'Book now',
-        mobileCta: 'Book now',
-        badgeText: 'Your nutritionist has shared your personalised care plan and next steps.',
-        homeTitle: 'Personalised nutrition support',
-        homeBody: 'Work with a caring nutritionist who understands your routine, food preferences, and goals to build a plan that actually fits your life.',
-        homeReview: 'Personalized nutrition planning with practical support you can follow day to day.',
-        homeReviewer: 'Experience highlight',
-        placeholderLabel: 'Nutrition plan preview',
-        benefitItems: [
-            'Qualified Australian nutrition professionals',
-            'Personalised meal and habit plans',
-            '100% online consultations',
-            'Supportive, judgement-free care',
-        ],
-        theme: {
-            pageBg: '#ffffff',
-            heroBg: '#4a7fa7',
-            heroTopGlow: 'transparent',
-            heroBottomGlow: 'transparent',
-            heroPanelTint: 'transparent',
-            primary: '#1a3d63',
-            primaryHover: '#0a1931',
-            cardTint: '#ffffff',
-        },
-    },
-    psychologist: {
-        slug: 'psychologist',
-        providerName: 'psychologist',
-        providerPlural: 'Psychologists',
-        heroSubtitle: 'Access personalised, professional mental health care without long wait times. Connect online from the comfort of home and get consistent support with regular sessions.',
-        primaryCta: 'Book now',
-        mobileCta: 'Book now',
-        badgeText: 'Your psychologist has prepared your first care plan and follow-up session.',
-        homeTitle: 'Professional therapy from home',
-        homeBody: 'Connect with a psychologist online for consistent, confidential care that helps you feel supported between sessions and over time.',
-        homeReview: 'Confidential online psychology support with consistent follow-up and structured care.',
-        homeReviewer: 'Experience highlight',
-        placeholderLabel: 'Psychology session preview',
-        benefitItems: [
-            'Registered mental health professionals',
-            'Regular online support sessions',
-            'Care from the comfort of home',
-            'Private and confidential',
-        ],
-        theme: {
-            pageBg: '#ffffff',
-            heroBg: '#4a7fa7',
-            heroTopGlow: 'transparent',
-            heroBottomGlow: 'transparent',
-            heroPanelTint: 'transparent',
-            primary: '#1a3d63',
-            primaryHover: '#0a1931',
-            cardTint: '#ffffff',
-        },
-    },
 };
 
 const ROUTES: Record<string, ServiceSlug> = {
     '/doctor': 'doctor',
-    '/nutritionist': 'nutritionist',
-    '/psychologist': 'psychologist',
 };
 
 export function getServiceForPath(pathname: string): ServiceSlug | null {
@@ -137,6 +75,4 @@ export function getServiceForPath(pathname: string): ServiceSlug | null {
 
 export const SERVICE_LIST: ServiceConfig[] = [
     SERVICE_CONFIGS.doctor,
-    SERVICE_CONFIGS.nutritionist,
-    SERVICE_CONFIGS.psychologist,
 ];

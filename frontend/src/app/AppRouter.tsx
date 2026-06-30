@@ -154,10 +154,12 @@ export function AppRouter() {
   if (
     pathname === '/nutritionist' ||
     pathname === '/nutritionist/' ||
+    pathname === '/psychologist' ||
+    pathname === '/psychologist/' ||
     pathname === '/weight-loss-reset' ||
     pathname === '/weight-loss-reset/'
   ) {
-    window.location.replace('/patient?program=weight-loss-reset');
+    window.location.replace('/doctor');
     return null;
   }
 

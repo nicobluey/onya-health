@@ -37,7 +37,7 @@ export const BLOG_POSTS: BlogPost[] = [
         slug: 'healthcare-made-for-you',
         title: 'Healthcare made for you: AI patient matching for better telehealth outcomes',
         category: 'AI Matching',
-        excerpt: 'How AI-assisted patient matching helps people find the right online doctor, nutritionist, or psychologist faster in Australia.',
+        excerpt: 'How guided online intake helps people request the right doctor-reviewed medical certificate faster in Australia.',
         author: 'Onya Clinical Team',
         publishedAt: '2026-03-01',
         imageSrc: '/blogs/images/blue-cells.webp',

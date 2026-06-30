@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react';
 import { ArrowRight } from 'lucide-react';
 import { SERVICE_LIST } from '../consult-flow';
 import { FAQ } from '../components/FAQ';
@@ -10,7 +9,6 @@ import { HeaderDropdown } from '../components/HeaderDropdown';
 import { HeaderBrand } from '../components/HeaderBrand';
 import { MagneticButton } from '../components/lightswind/MagneticButton';
 
-const ROTATING_PROVIDERS = ['doctor', 'nutritionist', 'psychologist'];
 const HOME_THEME = {
     pageBg: '#ffffff',
     heroBg: '#ffffff',
@@ -23,56 +21,14 @@ const HOME_HIGHLIGHTS = [
 ];
 
 const HOME_CARD_CTA_BY_SLUG: Record<string, string> = {
-    doctor: 'Talk to a doctor',
-    nutritionist: 'Talk to a nutritionist',
-    psychologist: 'Talk to a psychologist',
+    doctor: 'Start certificate request',
 };
 
 const HOME_CARD_IMAGE_BY_SLUG: Record<string, string> = {
     doctor: '/doctor-consult.webp',
-    nutritionist: '/nutrionist.webp',
-    psychologist: '/psychologist.webp',
 };
 
 export default function HomePage() {
-    const [wordIndex, setWordIndex] = useState(0);
-    const [displayWord, setDisplayWord] = useState('');
-    const [isDeleting, setIsDeleting] = useState(false);
-
-    useEffect(() => {
-        const currentWord = ROTATING_PROVIDERS[wordIndex];
-        const reachedWordEnd = displayWord === currentWord;
-        const reachedWordStart = displayWord.length === 0;
-        const delay = !isDeleting && reachedWordEnd
-            ? 1000
-            : isDeleting && reachedWordStart
-                ? 280
-                : isDeleting
-                    ? 50
-                    : 90;
-
-        const timer = setTimeout(() => {
-            if (!isDeleting) {
-                if (reachedWordEnd) {
-                    setIsDeleting(true);
-                    return;
-                }
-                setDisplayWord(currentWord.slice(0, displayWord.length + 1));
-                return;
-            }
-
-            if (!reachedWordStart) {
-                setDisplayWord(currentWord.slice(0, displayWord.length - 1));
-                return;
-            }
-
-            setIsDeleting(false);
-            setWordIndex((prev) => (prev + 1) % ROTATING_PROVIDERS.length);
-        }, delay);
-
-        return () => clearTimeout(timer);
-    }, [displayWord, isDeleting, wordIndex]);
-
     return (
         <div className="min-h-screen flex flex-col font-sans" style={{ backgroundColor: HOME_THEME.pageBg }}>
             <header className="sticky top-0 z-50 w-full border-b border-border bg-white shadow-sm">
@@ -96,22 +52,21 @@ export default function HomePage() {
                     <div className="max-w-7xl mx-auto px-5 md:px-8 text-center relative z-10">
                         <div className="-mt-4 md:-mt-5">
                             <h1 className="text-4xl md:text-6xl font-serif font-bold leading-[1.1] text-white tracking-tight">
-                                Healthcare made for you
+                                Medical certificates online
                             </h1>
                             <p className="text-base md:text-xl text-white font-semibold leading-relaxed max-w-3xl mx-auto mt-5">
-                                Online care that feels simpler, safer, and more connected.
+                                Request a doctor-reviewed certificate from anywhere in Australia.
                             </p>
                         </div>
-                        <div className="mt-5 text-white text-2xl md:text-4xl font-serif font-bold h-12 md:h-14">
-                            <span className="capitalize">{displayWord}</span>
-                            <span className="animate-pulse ml-1">|</span>
+                        <div className="mt-5 text-white text-2xl md:text-4xl font-serif font-bold">
+                            Doctor-reviewed
                         </div>
                         <div className="mt-7 flex justify-center">
                             <a
-                                href="#ai-match-specialties"
+                                href="/doctor#book"
                                 className="inline-flex h-11 items-center justify-center rounded-xl bg-white px-5 text-sm font-semibold text-bark-900 transition hover:bg-sand-100"
                             >
-                                Get started
+                                Start certificate request
                                 <ArrowRight size={16} className="ml-2" />
                             </a>
                         </div>
@@ -130,7 +85,7 @@ export default function HomePage() {
                                 ))}
                             </div>
                             <p className="max-w-2xl text-sm text-bark-600 md:justify-self-end">
-                                Access care faster through a tailored online experience that connects you with the right support across Australia.
+                                Access certificate reviews faster through a clear online intake, secure payment, and digital delivery.
                             </p>
                         </div>
                     </div>
@@ -138,15 +93,13 @@ export default function HomePage() {
 
                 <section id="ai-match-specialties" className="relative scroll-mt-24 overflow-hidden max-w-7xl mx-auto px-5 md:px-8 py-10 md:py-14">
                     <h2 className="relative z-10 text-3xl font-serif font-bold text-center text-text-primary mb-10">
-                        Support matched to the care you need
+                        Start with the certificate you need
                     </h2>
                     <p className="relative z-10 mx-auto mb-8 max-w-3xl text-center text-base text-text-secondary">
-                        Tell us what you need and Onya routes you to the most suitable clinician for your situation.
+                        A focused medical-certificate flow keeps the request fast, clinically safe, and easy to complete on any device.
                     </p>
-                    <div className="relative z-10 grid gap-6 md:grid-cols-3 items-stretch">
+                    <div className="relative z-10 mx-auto grid max-w-xl gap-6 items-stretch">
                         {SERVICE_LIST.map((service) => {
-                            const isComingSoon = service.slug === 'psychologist';
-
                             return (
                                 <article
                                     key={service.slug}
@@ -178,11 +131,6 @@ export default function HomePage() {
                                     </p>
                                     <div className="mt-auto">
                                         <div className="relative pt-6">
-                                            {isComingSoon && (
-                                                <span className="pointer-events-none absolute bottom-[10px] right-[-64%] z-20 flex w-[196%] min-w-[340px] max-w-none rotate-[-36deg] items-center justify-center border border-[#4a7fa7] bg-[#b3cfe5] py-3.5 text-center text-[11px] font-extrabold uppercase tracking-[0.2em] text-[#0a1931] shadow-[0_12px_24px_rgba(15,23,42,0.24)] md:bottom-[14px] md:right-[-62%] md:py-4 md:text-xs">
-                                                    <span className="block w-full text-center leading-[1.12]">COMING SOON</span>
-                                                </span>
-                                            )}
                                             <MagneticButton
                                                 variant="primary"
                                                 size="lg"

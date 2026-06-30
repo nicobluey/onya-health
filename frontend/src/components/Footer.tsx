@@ -20,9 +20,7 @@ const FOOTER_GROUPS: FooterLinkGroup[] = [
             { label: 'Work certificates', href: '/work' },
             { label: 'Student certificates', href: '/student' },
             { label: "Caretaker certificates", href: '/caretaker' },
-            { label: 'General consults', href: '/doctor' },
-            { label: 'Psychology support', href: '/psychologist' },
-            { label: 'Nutrition consults', href: '/nutritionist' },
+            { label: 'Fair Work certificates', href: '/fair-work-medical-certificates' },
         ],
     },
     {

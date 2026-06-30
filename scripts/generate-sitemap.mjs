@@ -12,8 +12,6 @@ const staticRoutes = [
   '/student',
   '/caretaker',
   '/work',
-  '/nutritionist',
-  '/psychologist',
   '/patient-login',
   '/verify',
   '/about',

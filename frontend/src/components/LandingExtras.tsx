@@ -43,7 +43,7 @@ const LEADING_POINTS: Array<{ title: string; body: string }> = [
     },
     {
         title: 'AHPRA-registered clinicians',
-        body: 'Doctors, psychologists, and allied providers deliver care with clear clinical governance and practical follow-up pathways.',
+        body: 'Doctors review certificate requests with clear clinical governance and practical follow-up pathways.',
     },
     {
         title: 'Australia-wide provider network',

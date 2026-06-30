@@ -12,8 +12,6 @@ const ROUTE_IMAGES = [
   '/HERO.webp',
   '/Medical Certificate Landing.webp',
   '/doctor-consult.webp',
-  '/nutrionist.webp',
-  '/psychologist.webp',
   '/student2.webp',
   '/parents.webp',
   '/woman_office_worker.webp',

@@ -1,10 +1,5 @@
 ﻿import {
-  Brain,
   ClipboardPlus,
-  Pill,
-  Scale,
-  Stethoscope,
-  TestTube2,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -13,19 +8,12 @@ export type PortalScreen =
   | 'main'
   | 'call-prep'
   | 'queued'
-  | 'consult-coming-soon'
-  | 'weight-loss-onboarding'
-  | 'weight-loss-reset';
+  | 'consult-coming-soon';
 export type RecordTab = 'medical-history' | 'allergies' | 'medications';
 export type LayoutMode = 'desktop' | 'mobile';
 
 export type ConsultOptionId =
-  | 'medical-certificate'
-  | 'blood-tests'
-  | 'prescriptions'
-  | 'general-consult'
-  | 'weight-loss'
-  | 'psychology';
+  | 'medical-certificate';
 
 export interface ConsultOption {
   id: ConsultOptionId;
@@ -63,16 +51,6 @@ export interface PatientProfile {
   dob?: string;
   phone?: string;
   address?: string;
-  profilePhotoPath?: string;
-  profilePhotoUrl?: string;
-}
-
-export interface DietitianProfile {
-  id: string;
-  fullName: string;
-  phone?: string;
-  credentials?: string;
-  bio?: string;
   profilePhotoPath?: string;
   profilePhotoUrl?: string;
 }
@@ -143,46 +121,6 @@ export const CONSULT_OPTIONS: ConsultOption[] = [
     icon: ClipboardPlus,
     status: 'available',
     badge: 'LIVE',
-  },
-  {
-    id: 'blood-tests',
-    title: 'Blood Tests',
-    subtitle: 'Request a pathology referral for blood work',
-    icon: TestTube2,
-    status: 'coming-soon',
-    badge: 'COMING SOON',
-  },
-  {
-    id: 'prescriptions',
-    title: 'Prescriptions',
-    subtitle: 'Renew or request a new prescription',
-    icon: Pill,
-    status: 'coming-soon',
-    badge: 'COMING SOON',
-  },
-  {
-    id: 'general-consult',
-    title: 'General Consult',
-    subtitle: 'Speak with a doctor about any health concern',
-    icon: Stethoscope,
-    status: 'coming-soon',
-    badge: 'COMING SOON',
-  },
-  {
-    id: 'weight-loss',
-    title: 'Personalised Nutrition Plan',
-    subtitle: 'Dietitian-supported plan with personalised meals, prep guidance, and progress support',
-    icon: Scale,
-    status: 'available',
-    badge: 'LIVE',
-  },
-  {
-    id: 'psychology',
-    title: 'Psychology',
-    subtitle: 'Talk with a psychologist online with confidential support',
-    icon: Brain,
-    status: 'coming-soon',
-    badge: 'COMING SOON',
   },
 ];
 
@@ -366,9 +304,6 @@ export function statusLabel(status: string) {
 export function consultTitle(serviceType: string) {
   const normalized = String(serviceType || '').toLowerCase().trim();
   if (normalized === 'doctor' || !normalized) return 'Medical Certificate';
-  if (normalized === 'weight_loss' || normalized === 'weight-loss' || normalized === 'nutritionist') {
-    return 'Nutritionist Consult';
-  }
   return serviceType
     .split('_')
     .map((word) => word.slice(0, 1).toUpperCase() + word.slice(1))

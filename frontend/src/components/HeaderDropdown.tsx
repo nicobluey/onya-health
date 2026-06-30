@@ -16,10 +16,10 @@ type HeaderDropdownProps = {
 
 const DEFAULT_HEADER_LINKS: HeaderMenuLink[] = [
     { label: 'Patient Login', href: '/patient-login' },
-    { label: 'Doctor', href: '/doctor' },
-    { label: 'Nutritionist', href: '/nutritionist' },
-    { label: 'Psychologist', href: '/psychologist' },
-    { label: 'For Physicians', href: '/#for-physicians' },
+    { label: 'Medical Certificates', href: '/doctor' },
+    { label: 'Work Certificates', href: '/work' },
+    { label: 'Student Certificates', href: '/student' },
+    { label: 'Carer Certificates', href: '/caretaker' },
     { label: 'How it works', href: '/#how-it-works' },
     { label: 'FAQ', href: '/#faq' },
 ];

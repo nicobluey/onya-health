@@ -148,6 +148,9 @@ const MEAL_PLAN_IMAGE_PROXY_PATH = '/api/patient/meal-plan/recipe-image';
 const WEIGHT_LOSS_IMAGE_BUCKET = String(process.env.WEIGHT_LOSS_IMAGE_BUCKET || 'weight-loss-reset-images').trim();
 const PROFILE_IMAGE_BUCKET = String(process.env.PATIENT_PROFILE_IMAGE_BUCKET || WEIGHT_LOSS_IMAGE_BUCKET).trim();
 const OPENAI_API_KEY = String(process.env.OPENAI_API_KEY || '').trim();
+const MEAL_PLAN_FEATURE_ENABLED = ['1', 'true', 'yes'].includes(
+  String(process.env.ENABLE_MEAL_PLAN_FEATURE || '').trim().toLowerCase()
+);
 const OPENAI_TTS_ENDPOINT = 'https://api.openai.com/v1/audio/speech';
 const OPENAI_TTS_MODEL = String(process.env.OPENAI_TTS_MODEL || 'gpt-4o-mini-tts').trim() || 'gpt-4o-mini-tts';
 const OPENAI_TTS_RESPONSE_FORMAT = 'mp3';
@@ -1153,15 +1156,18 @@ async function hydrateMealPlanBundleFromCacheEntry(entry) {
   ]);
   if (recipeIds.length === 0) return null;
 
-  const persistedRecipes = await listMealPlannerRecipesByIds(recipeIds).catch(() => []);
-  const persistedById = new Map(persistedRecipes.filter((recipe) => recipe?.id).map((recipe) => [recipe.id, recipe]));
-  const legacyRecipes = Array.isArray(bundle.recipes) ? bundle.recipes : [];
+  const legacyRecipes = normalizeRecipeListForProduct(Array.isArray(bundle.recipes) ? bundle.recipes : []).filter((recipe) =>
+    isLikelyGeneratedRecipe(recipe)
+  );
   const legacyById = new Map(
     legacyRecipes
       .filter((recipe) => recipe && typeof recipe === 'object')
       .map((recipe) => [String(recipe.id || '').trim(), recipe])
       .filter(([id]) => Boolean(id))
   );
+  const hasCompleteLegacyRecipes = recipeIds.every((id) => legacyById.has(id));
+  const persistedRecipes = hasCompleteLegacyRecipes ? [] : await listMealPlannerRecipesByIds(recipeIds).catch(() => []);
+  const persistedById = new Map(persistedRecipes.filter((recipe) => recipe?.id).map((recipe) => [recipe.id, recipe]));
 
   const legacyRecipesToPersist = recipeIds
     .filter((id) => !persistedById.has(id) && legacyById.has(id))
@@ -1170,7 +1176,7 @@ async function hydrateMealPlanBundleFromCacheEntry(entry) {
   if (legacyRecipesToPersist.length > 0) {
     const normalizedLegacyRecipes = normalizeRecipeListForProduct(legacyRecipesToPersist);
     if (normalizedLegacyRecipes.length > 0) {
-      await upsertMealPlannerRecipes(normalizedLegacyRecipes).catch((errorObject) => {
+      void upsertMealPlannerRecipes(normalizedLegacyRecipes).catch((errorObject) => {
         error('meal_plan.hydrate_backfill_recipes_failed', {
           cacheKey: String(entry?.cacheKey || entry?.cache_key || ''),
           message: errorObject?.message || String(errorObject),
@@ -1203,18 +1209,31 @@ async function hydrateMealPlanBundleFromCacheEntry(entry) {
   };
 }
 
-function collectRecipeIdsFromCacheEntries(entries) {
-  return normalizeRecipeIdList(
-    (Array.isArray(entries) ? entries : []).flatMap((entry) =>
-      normalizeRecipeIdList(entry?.bundle?.recipeIds ?? entry?.bundle?.recipe_ids, 1200)
-    )
-  , 1200);
+function collectRecipeIdsFromCacheEntries(entries, limit = 180) {
+  const max = Math.max(1, Math.min(1200, Number(limit || 180)));
+  const output = [];
+  const seen = new Set();
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    const bundle = entry?.bundle && typeof entry.bundle === 'object' && !Array.isArray(entry.bundle) ? entry.bundle : null;
+    const candidateIds = normalizeRecipeIdList([
+      ...normalizeRecipeIdList(bundle?.recipeIds ?? bundle?.recipe_ids, max),
+      ...extractRecipeIdsFromMealPlan(bundle?.mealPlan),
+    ], max);
+    for (const recipeId of candidateIds) {
+      if (!recipeId || seen.has(recipeId)) continue;
+      seen.add(recipeId);
+      output.push(recipeId);
+      if (output.length >= max) return output;
+    }
+  }
+  return output;
 }
 
 async function loadPatientGeneratedRecipeCatalog({
   patientEmail,
   cacheLimit = 36,
   includeGlobalGeneratedFallback = true,
+  targetLimit = 60,
 }) {
   const normalizedEmail = normalizeEmail(patientEmail);
   if (!normalizedEmail) {
@@ -1225,6 +1244,8 @@ async function loadPatientGeneratedRecipeCatalog({
     };
   }
 
+  const boundedTargetLimit = Math.max(24, Math.min(240, Number(targetLimit || 60)));
+  const maxRecipeIds = Math.max(72, Math.min(240, boundedTargetLimit * 3));
   const cacheEntries = await listMealPlanGenerationCacheByPatientEmail(normalizedEmail, cacheLimit).catch((errorObject) => {
     error('meal_plan.generated_catalog_cache_list_failed', {
       email: normalizedEmail,
@@ -1233,7 +1254,7 @@ async function loadPatientGeneratedRecipeCatalog({
     return [];
   });
 
-  const cacheRecipeIds = collectRecipeIdsFromCacheEntries(cacheEntries);
+  const cacheRecipeIds = collectRecipeIdsFromCacheEntries(cacheEntries, maxRecipeIds);
   const persistedByCacheIds = cacheRecipeIds.length > 0
     ? await listMealPlannerRecipesByIds(cacheRecipeIds).catch((errorObject) => {
         error('meal_plan.generated_catalog_recipe_lookup_failed', {
@@ -1258,14 +1279,14 @@ async function loadPatientGeneratedRecipeCatalog({
     for (const recipe of legacyRecipes) {
       if (persistedById.has(recipe.id) || missingLegacyById.has(recipe.id)) continue;
       missingLegacyById.set(recipe.id, recipe);
-      if (missingLegacyById.size >= 1200) break;
+      if (missingLegacyById.size >= maxRecipeIds) break;
     }
-    if (missingLegacyById.size >= 1200) break;
+    if (missingLegacyById.size >= maxRecipeIds) break;
   }
 
   if (missingLegacyById.size > 0) {
     const missingLegacyRecipes = [...missingLegacyById.values()];
-    await upsertMealPlannerRecipes(missingLegacyRecipes).catch((errorObject) => {
+    void upsertMealPlannerRecipes(missingLegacyRecipes).catch((errorObject) => {
       error('meal_plan.generated_catalog_legacy_backfill_failed', {
         email: normalizedEmail,
         message: errorObject?.message || String(errorObject),
@@ -1297,14 +1318,19 @@ async function loadPatientGeneratedRecipeCatalog({
       if (!recipe || !isLikelyGeneratedRecipe(recipe) || merged.has(recipe.id)) continue;
       merged.set(recipe.id, recipe);
       hydratedRecipeCount += 1;
+      if (merged.size >= boundedTargetLimit) break;
+    }
+    if (merged.size >= boundedTargetLimit) break;
+  }
+
+  if (merged.size < boundedTargetLimit) {
+    for (const recipe of persistedRecipes) {
+      if (!merged.has(recipe.id)) merged.set(recipe.id, recipe);
+      if (merged.size >= boundedTargetLimit) break;
     }
   }
 
-  for (const recipe of persistedRecipes) {
-    if (!merged.has(recipe.id)) merged.set(recipe.id, recipe);
-  }
-
-  if (includeGlobalGeneratedFallback) {
+  if (includeGlobalGeneratedFallback && merged.size < boundedTargetLimit) {
     const allPersistedRecipes = await listMealPlannerRecipes().catch((errorObject) => {
       error('meal_plan.generated_catalog_global_lookup_failed', {
         email: normalizedEmail,
@@ -1317,7 +1343,7 @@ async function loadPatientGeneratedRecipeCatalog({
     );
     for (const recipe of generatedFallbackRecipes) {
       if (!merged.has(recipe.id)) merged.set(recipe.id, recipe);
-      if (merged.size >= 1200) break;
+      if (merged.size >= boundedTargetLimit) break;
     }
   }
 
@@ -2871,22 +2897,43 @@ async function loadPatientPortalSnapshot(email, { includeBilling = true } = {}) 
   const normalizedEmail = normalizeEmail(email);
   const shouldUseLeanCertificateQuery = isSupabaseStorageEnabled();
   const certificatesFetchStartedAt = Date.now();
-  const accountPromise = shouldUseLeanCertificateQuery
-    ? Promise.resolve(null)
-    : getPatientAccountByEmail(normalizedEmail);
-  const [account, certificates] = await Promise.all([
-    accountPromise,
-    listCertificatesByPatientEmail(normalizedEmail, {
-      includeRawSubmission: !shouldUseLeanCertificateQuery,
-      limit: shouldUseLeanCertificateQuery ? 60 : 500,
-    }),
-  ]);
+  let account = null;
+  let certificates = [];
+  let billing = null;
+  let billingFetchDurationMs = 0;
+
+  if (shouldUseLeanCertificateQuery) {
+    const billingStartedAt = Date.now();
+    const [certificateRows, billingProfile] = await Promise.all([
+      listCertificatesByPatientEmail(normalizedEmail, {
+        includeRawSubmission: false,
+        limit: 60,
+      }),
+      includeBilling ? resolvePatientBillingProfile(normalizedEmail, null) : Promise.resolve(null),
+    ]);
+    certificates = certificateRows;
+    billing = billingProfile;
+    billingFetchDurationMs = includeBilling ? Date.now() - billingStartedAt : 0;
+  } else {
+    const [localAccount, certificateRows] = await Promise.all([
+      getPatientAccountByEmail(normalizedEmail),
+      listCertificatesByPatientEmail(normalizedEmail, {
+        includeRawSubmission: true,
+        limit: 500,
+      }),
+    ]);
+    account = localAccount;
+    certificates = certificateRows;
+  }
+
   const certificatesFetchDurationMs = Date.now() - certificatesFetchStartedAt;
   const { patientCertificates, latest } = getLatestFromPatientCertificates(certificates);
   const queueCount = patientCertificates.filter((item) => isCertificateOpenForReview(item)).length;
-  const billingStartedAt = Date.now();
-  const billing = includeBilling ? await resolvePatientBillingProfile(normalizedEmail, certificates) : null;
-  const billingFetchDurationMs = includeBilling ? Date.now() - billingStartedAt : 0;
+  if (!shouldUseLeanCertificateQuery) {
+    const billingStartedAt = Date.now();
+    billing = includeBilling ? await resolvePatientBillingProfile(normalizedEmail, certificates) : null;
+    billingFetchDurationMs = includeBilling ? Date.now() - billingStartedAt : 0;
+  }
 
   return {
     account,
@@ -6002,6 +6049,14 @@ export default async function handler(req, res) {
       return;
     }
 
+    if (!MEAL_PLAN_FEATURE_ENABLED && routePath.startsWith('patient/meal-plan/')) {
+      sendJson(res, 410, {
+        ok: false,
+        error: 'Meal planning is currently unavailable.',
+      });
+      return;
+    }
+
     if (req.method === 'GET' && routePath === 'patient/meal-plan/recipe-image') {
       const recipeId = String(url.searchParams.get('recipeId') || '').trim();
       const signature = String(url.searchParams.get('sig') || '').trim();
@@ -6068,8 +6123,8 @@ export default async function handler(req, res) {
       const patient = await requirePatient(req, res);
       if (!patient) return;
 
-      const requestedLimit = Math.round(Number(url.searchParams.get('limit') || 120));
-      const limit = Math.max(24, Math.min(240, Number.isFinite(requestedLimit) ? requestedLimit : 120));
+      const requestedLimit = Math.round(Number(url.searchParams.get('limit') || 60));
+      const limit = Math.max(24, Math.min(120, Number.isFinite(requestedLimit) ? requestedLimit : 60));
       const includeGlobalGeneratedFallback = ['1', 'true', 'yes'].includes(
         String(url.searchParams.get('includeFallback') || url.searchParams.get('fallback') || '').toLowerCase()
       );
@@ -6077,8 +6132,9 @@ export default async function handler(req, res) {
       try {
         const generatedCatalog = await loadPatientGeneratedRecipeCatalog({
           patientEmail: patient.email,
-          cacheLimit: Math.max(24, Math.min(80, limit)),
+          cacheLimit: Math.max(2, Math.min(8, Math.ceil(limit / 12))),
           includeGlobalGeneratedFallback,
+          targetLimit: limit,
         });
 
         const recipes = mapRecipeListForClient(normalizeRecipeListForProduct(generatedCatalog.recipes), req).slice(0, limit);

@@ -1,4 +1,4 @@
-import { type CSSProperties, type ChangeEvent, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, type ChangeEvent, type FormEvent, useEffect, useMemo, useState } from 'react';
 import {
     ArrowLeft,
     CalendarDays,
@@ -21,10 +21,6 @@ import {
 import { fetchApiJson, getApiBase } from '../lib/api';
 import { warmCheckoutPath } from '../lib/performanceWarmup';
 import HomeTab from '../patient-portal/home/HomeTab';
-import OnboardingFlow from '../weight-loss-reset/components/OnboardingFlow';
-import WeightLossResetDashboard from '../weight-loss-reset/components/WeightLossResetDashboard';
-import { postProcessGeneratedMealPlan, swapMealInPlan, withRecalculatedTotals } from '../weight-loss-reset/mealPlanning';
-import { useWeightLossResetState } from '../weight-loss-reset/useWeightLossResetState';
 import {
     type CheckoutSetupContext,
     type ConsultOption,
@@ -32,7 +28,6 @@ import {
     type LayoutMode,
     type MainTab,
     type PatientBillingInfo,
-    type DietitianProfile,
     type PatientProfile,
     type PortalProfileData,
     type PortalRequest,
@@ -57,8 +52,6 @@ import {
     sectionCardClassName,
     statusLabel,
 } from '../patient-portal/model';
-import type { MealPlan, MealType, OnboardingAnswers, Recipe } from '../weight-loss-reset/types';
-const MAX_WEIGHT_LOSS_RECIPE_CACHE = 2000;
 
 function isStorageQuotaExceeded(error: unknown) {
     if (!error || typeof error !== 'object') return false;
@@ -81,119 +74,6 @@ function safeLocalStorageSetItem(key: string, value: string) {
     }
 }
 
-function isPersistableDataRecipeImage(url: string) {
-    return /^data:image\/(?:webp|png|jpe?g|gif|avif);base64,/i.test(String(url || '').trim());
-}
-
-function isConcreteRecipeImageUrl(url: string) {
-    const value = String(url || '').trim();
-    if (!value) return false;
-    if (isPersistableDataRecipeImage(value)) return true;
-    if (value.includes('/api/patient/meal-plan/recipe-image')) return true;
-    if (!/^https?:\/\//i.test(value)) return false;
-    try {
-        const parsed = new URL(value);
-        if (String(parsed.hostname || '').trim().toLowerCase().includes('dietitiansaustralia.org.au')) return false;
-        if (parsed.pathname === '/api/patient/meal-plan/recipe-image') return true;
-        if (/\.(?:webp|png|jpe?g|gif|avif)$/i.test(parsed.pathname.toLowerCase())) return true;
-        const format = String(parsed.searchParams.get('fm') || parsed.searchParams.get('format') || '').trim().toLowerCase();
-        if (format && /^(?:webp|png|jpe?g|gif|avif)$/.test(format)) return true;
-    } catch {
-        return false;
-    }
-    return /(?:^|[?&])(fm|format)=(?:webp|png|jpe?g|gif|avif)(?:&|$)/i.test(value);
-}
-
-function isValidWeightLossRecipe(entry: unknown): entry is Recipe {
-    if (!entry || typeof entry !== 'object') return false;
-    const value = entry as Recipe;
-    return typeof value.id === 'string' && typeof value.title === 'string' && Array.isArray(value.ingredients);
-}
-
-function resolveRecipeImageCandidate(recipe: Recipe) {
-    const source = recipe?.source && typeof recipe.source === 'object' && !Array.isArray(recipe.source)
-        ? (recipe.source as Record<string, unknown>)
-        : {};
-    return String(recipe?.imageUrl || source.image_url || source.imageUrl || '').trim();
-}
-
-function collectPlannedRecipeIds(mealPlan: MealPlan | null) {
-    if (!mealPlan || !Array.isArray(mealPlan.days)) return [] as string[];
-    const ids = mealPlan.days.flatMap((day) =>
-        [day?.meals?.breakfast, day?.meals?.lunch, day?.meals?.dinner, ...(Array.isArray(day?.meals?.snacks) ? day.meals.snacks : [])]
-            .map((entry) => String(entry || '').trim())
-            .filter(Boolean),
-    );
-    return [...new Set(ids)];
-}
-
-function mergeRecipeCatalog(existing: Recipe[], incoming: Recipe[]): Recipe[] {
-    const merged = new Map<string, Recipe>();
-    const mergeRecipe = (baseRecipe: Recipe, nextRecipe: Recipe): Recipe => {
-        const baseSource =
-            baseRecipe?.source && typeof baseRecipe.source === 'object' && !Array.isArray(baseRecipe.source)
-                ? (baseRecipe.source as Record<string, unknown>)
-                : {};
-        const nextSource =
-            nextRecipe?.source && typeof nextRecipe.source === 'object' && !Array.isArray(nextRecipe.source)
-                ? (nextRecipe.source as Record<string, unknown>)
-                : {};
-
-        const baseImage = String(baseRecipe?.imageUrl || baseSource.image_url || baseSource.imageUrl || '').trim();
-        const nextImage = String(nextRecipe?.imageUrl || nextSource.image_url || nextSource.imageUrl || '').trim();
-        const chosenImage = isConcreteRecipeImageUrl(nextImage)
-            ? nextImage
-            : isConcreteRecipeImageUrl(baseImage)
-              ? baseImage
-              : '';
-
-        const mergedSource: Record<string, unknown> = {
-            ...baseSource,
-            ...nextSource,
-        };
-
-        if (chosenImage) {
-            mergedSource.image_url = chosenImage;
-            mergedSource.imageUrl = chosenImage;
-        } else {
-            delete mergedSource.image_url;
-            delete mergedSource.imageUrl;
-        }
-
-        return {
-            ...baseRecipe,
-            ...nextRecipe,
-            imageUrl: chosenImage || undefined,
-            calories: nextRecipe.calories ?? baseRecipe.calories,
-            protein: nextRecipe.protein ?? baseRecipe.protein,
-            carbs: nextRecipe.carbs ?? baseRecipe.carbs,
-            fat: nextRecipe.fat ?? baseRecipe.fat,
-            prepTimeMinutes: nextRecipe.prepTimeMinutes ?? baseRecipe.prepTimeMinutes,
-            cookTimeMinutes: nextRecipe.cookTimeMinutes ?? baseRecipe.cookTimeMinutes,
-            totalTimeMinutes: nextRecipe.totalTimeMinutes ?? baseRecipe.totalTimeMinutes,
-            serves: nextRecipe.serves ?? baseRecipe.serves,
-            source: mergedSource,
-        };
-    };
-
-    for (const recipe of existing) {
-        if (!isValidWeightLossRecipe(recipe)) continue;
-        merged.set(recipe.id, recipe);
-    }
-    for (const recipe of incoming) {
-        if (!isValidWeightLossRecipe(recipe)) continue;
-        const current = merged.get(recipe.id);
-        if (!current) {
-            merged.set(recipe.id, recipe);
-            continue;
-        }
-        merged.set(recipe.id, mergeRecipe(current, recipe));
-    }
-    const ordered = Array.from(merged.values()).sort((a, b) => a.title.localeCompare(b.title));
-    if (ordered.length <= MAX_WEIGHT_LOSS_RECIPE_CACHE) return ordered;
-    return ordered.slice(ordered.length - MAX_WEIGHT_LOSS_RECIPE_CACHE);
-}
-
 function PortalBackdropArt() {
     return null;
 }
@@ -206,6 +86,11 @@ function statusPillClasses(status: string) {
     }
     if (normalized === 'denied') return 'border-[#f3c5c4] bg-[#ffe9e8] text-[#a93736]';
     return 'border-[#b3cfe5] bg-[#f6fafd] text-[#1a3d63]';
+}
+
+function isMealPlanServiceType(serviceType: string) {
+    const normalized = String(serviceType || '').trim().toLowerCase();
+    return normalized === 'weight_loss' || normalized === 'weight-loss' || normalized === 'nutritionist';
 }
 
 function normalizeBillingInfo(input: unknown): PatientBillingInfo | null {
@@ -255,24 +140,6 @@ function normalizePatientProfile(input: unknown, fallbackEmail = ''): PatientPro
         dob: String(value.dob || '').trim(),
         phone: String(value.phone || '').trim(),
         address: String(value.address || '').trim(),
-        profilePhotoPath: String(value.profilePhotoPath || '').trim(),
-        profilePhotoUrl: String(value.profilePhotoUrl || '').trim(),
-    };
-}
-
-function normalizeDietitianProfile(input: unknown): DietitianProfile | null {
-    if (!input || typeof input !== 'object') return null;
-    const value = input as Record<string, unknown>;
-    const id = String(value.id || '').trim();
-    const fullName = String(value.fullName || '').trim();
-    if (!id || !fullName) return null;
-
-    return {
-        id,
-        fullName,
-        phone: String(value.phone || '').trim(),
-        credentials: String(value.credentials || '').trim(),
-        bio: String(value.bio || '').trim(),
         profilePhotoPath: String(value.profilePhotoPath || '').trim(),
         profilePhotoUrl: String(value.profilePhotoUrl || '').trim(),
     };
@@ -440,15 +307,12 @@ function ConsultTab({
     onSelectOption,
     billing,
     requests,
-    dietitian,
 }: {
     onSelectOption: (optionId: ConsultOptionId) => void;
     billing: PatientBillingInfo | null;
     requests: PortalRequest[];
-    dietitian: DietitianProfile | null;
 }) {
     const latestConsults = requests.slice(0, 3);
-    const dietitianName = String(dietitian?.fullName || 'Felicity').trim() || 'Felicity';
 
     return (
         <section className="space-y-5">
@@ -537,15 +401,11 @@ function ConsultTab({
             <section className={sectionCardClassName()}>
                 <div className="border-b border-[#b3cfe5] px-5 py-4">
                     <h2 className="text-lg font-semibold text-[#0a1931]">Latest consults</h2>
-                    <p className="mt-1 text-sm text-[#1a3d63]">Recent consult activity, including your recurring nutrition consult.</p>
+                    <p className="mt-1 text-sm text-[#1a3d63]">Recent medical-certificate activity and doctor-review outcomes.</p>
                 </div>
                 <div className="space-y-3 px-5 py-4">
                     {latestConsults.length > 0 ? (
                         latestConsults.map((request) => {
-                            const isNutrition =
-                                String(request.serviceType || '').toLowerCase() === 'weight_loss' ||
-                                String(request.serviceType || '').toLowerCase() === 'weight-loss' ||
-                                String(request.serviceType || '').toLowerCase() === 'nutritionist';
                             return (
                                 <article key={request.id} className="rounded-2xl border border-[#b3cfe5] bg-[#f6fafd] p-3">
                                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -554,9 +414,6 @@ function ConsultTab({
                                             {statusLabel(request.status)}
                                         </span>
                                     </div>
-                                    {isNutrition && (
-                                        <p className="mt-1 text-xs text-[#1a3d63]">Dietitian: {dietitianName}</p>
-                                    )}
                                     <p className="mt-1 text-xs text-[#4a7fa7]">Updated {formatDate(request.createdAt)}</p>
                                 </article>
                             );
@@ -1370,41 +1227,10 @@ function CheckoutAccountSetupScreen({
 
 export default function PatientPortalPage() {
     const initialSearchParams = useMemo(() => new URLSearchParams(window.location.search), []);
-    const requestedProgram = initialSearchParams.get('program')?.toLowerCase() || '';
     const initialEmailChangeToken = String(initialSearchParams.get('email_change_token') || '').trim();
-    const openWeightLossFromRoute = requestedProgram === 'weight-loss-reset' || requestedProgram === 'nutritionist';
     const [mainTab, setMainTab] = useState<MainTab>('home');
-    const {
-        state: weightLossResetState,
-        cardState: weightLossResetCardState,
-        latestWeight: latestWeightFromWeightLoss,
-        progressPercent: weightLossProgressPercent,
-        updateOnboardingAnswers,
-        saveOnboardingStep,
-        completeOnboarding,
-        markBookingComplete,
-        setMealPlan,
-        replaceMealPlan,
-        addWeightLog,
-        updateWeightLog,
-        addMessage,
-        toggleGroceryItem,
-    } = useWeightLossResetState();
-    const [weightLossRecipes, setWeightLossRecipes] = useState<Recipe[]>([]);
-    const [weightLossCatalogRecipes, setWeightLossCatalogRecipes] = useState<Recipe[]>([]);
-    const [weightLossRecipeError, setWeightLossRecipeError] = useState('');
-    const [hasLoadedWeightLossCatalogRecipes, setHasLoadedWeightLossCatalogRecipes] = useState(false);
-    const [isGeneratingMealPlan, setIsGeneratingMealPlan] = useState(false);
-    const isGeneratingMealPlanRef = useRef(false);
-    const weightLossStateRef = useRef(weightLossResetState);
-    const isHydratingCatalogRef = useRef(false);
-    const catalogHydrationRequestedAtRef = useRef(0);
-    const isHydratingLatestMealPlanRef = useRef(false);
-    const latestMealPlanHydrationRequestedAtRef = useRef(0);
 
     const [portalScreen, setPortalScreen] = useState<PortalScreen>('main');
-    const [weightLossOnboardingMode, setWeightLossOnboardingMode] = useState<'initial' | 'update'>('initial');
-    const [programRouteHandled, setProgramRouteHandled] = useState(false);
     const [lastMainTab, setLastMainTab] = useState<MainTab>('home');
     const [selectedConsultOptionId, setSelectedConsultOptionId] = useState<ConsultOptionId | null>(null);
     const [loading, setLoading] = useState(true);
@@ -1417,7 +1243,6 @@ export default function PatientPortalPage() {
             window.localStorage.getItem('onya_patient_email') || '',
         ),
     );
-    const [primaryDietitian, setPrimaryDietitian] = useState<DietitianProfile | null>(null);
     const [requests, setRequests] = useState<PortalRequest[]>([]);
     const [billing, setBilling] = useState<PatientBillingInfo | null>(null);
     const [billingActionState, setBillingActionState] = useState<'idle' | 'opening_portal' | 'cancelling'>('idle');
@@ -1435,10 +1260,6 @@ export default function PatientPortalPage() {
         const emailPart = (patient.email || 'guest').trim().toLowerCase() || 'guest';
         return `onya_patient_profile:${emailPart}`;
     }, [patient.email]);
-    const allWeightLossRecipes = useMemo(
-        () => mergeRecipeCatalog(weightLossCatalogRecipes, weightLossRecipes),
-        [weightLossCatalogRecipes, weightLossRecipes]
-    );
 
     useEffect(() => {
         if (!initialEmailChangeToken) return;
@@ -1465,7 +1286,6 @@ export default function PatientPortalPage() {
 
                 const nextToken = String(payload?.token || '').trim();
                 const nextPatient = normalizePatientProfile(payload?.patient, window.localStorage.getItem('onya_patient_email') || '');
-                const nextDietitian = normalizeDietitianProfile(payload?.dietitian);
                 if (disposed) return;
 
                 if (nextPatient?.email) {
@@ -1476,7 +1296,6 @@ export default function PatientPortalPage() {
                     setToken(nextToken);
                 }
                 setPatient(nextPatient);
-                if (nextDietitian) setPrimaryDietitian(nextDietitian);
                 setEmailChangeNotice(`Email updated to ${nextPatient.email}.`);
             } catch (errorObject) {
                 if (disposed) return;
@@ -1509,158 +1328,6 @@ export default function PatientPortalPage() {
         if (!portalDataReady) return;
         safeLocalStorageSetItem(profileStorageKey, JSON.stringify(portalData));
     }, [portalDataReady, portalData, profileStorageKey]);
-
-    const hydrateRecipeCatalogFromServer = useCallback(
-        async ({ force = false } = {}) => {
-            const activeToken = token || window.localStorage.getItem('onya_patient_token') || '';
-            if (!activeToken) return false;
-            if (isHydratingCatalogRef.current) return false;
-            const now = Date.now();
-            if (!force && now - catalogHydrationRequestedAtRef.current < 6_000) return false;
-
-            catalogHydrationRequestedAtRef.current = now;
-            isHydratingCatalogRef.current = true;
-            try {
-                const { response, payload } = await fetchApiJson('/api/patient/meal-plan/catalog?limit=120', {
-                    method: 'GET',
-                    cache: 'no-store',
-                    headers: {
-                        Authorization: `Bearer ${activeToken}`,
-                    },
-                });
-                const remoteRecipes = Array.isArray(payload?.recipes) ? (payload.recipes as Recipe[]) : [];
-                if (!response.ok || !payload?.ok) return false;
-                const validRemoteRecipes = remoteRecipes.filter((recipe) => isValidWeightLossRecipe(recipe));
-                setWeightLossCatalogRecipes(validRemoteRecipes);
-                return validRemoteRecipes.length > 0;
-            } catch (errorObject) {
-                console.error('Unable to load patient meal catalog.', errorObject);
-                return false;
-            } finally {
-                setHasLoadedWeightLossCatalogRecipes(true);
-                isHydratingCatalogRef.current = false;
-            }
-        },
-        [token]
-    );
-
-    useEffect(() => {
-        weightLossStateRef.current = weightLossResetState;
-    }, [weightLossResetState]);
-
-    const hydrateLatestMealPlanFromServer = useCallback(
-        async ({ force = false } = {}) => {
-            const activeToken = token || window.localStorage.getItem('onya_patient_token') || '';
-            if (!activeToken) return false;
-            if (isHydratingLatestMealPlanRef.current) return false;
-            const now = Date.now();
-            if (!force && now - latestMealPlanHydrationRequestedAtRef.current < 6_000) return false;
-
-            latestMealPlanHydrationRequestedAtRef.current = now;
-            isHydratingLatestMealPlanRef.current = true;
-            try {
-                const { response, payload } = await fetchApiJson('/api/patient/meal-plan/latest', {
-                    method: 'GET',
-                    cache: 'no-store',
-                    headers: {
-                        Authorization: `Bearer ${activeToken}`,
-                    },
-                });
-                if (!response.ok || !payload?.ok || !payload?.found) return false;
-
-                const serverMealPlan = payload?.mealPlan as MealPlan | null;
-                const serverRecipes = Array.isArray(payload?.recipes) ? (payload.recipes as Recipe[]) : [];
-                const serverOnboardingAnswers =
-                    payload?.onboardingAnswers && typeof payload.onboardingAnswers === 'object'
-                        ? (payload.onboardingAnswers as Partial<OnboardingAnswers>)
-                        : null;
-                if (!serverMealPlan || serverRecipes.length === 0) return false;
-
-                const validServerRecipes = serverRecipes.filter((recipe): recipe is Recipe => isValidWeightLossRecipe(recipe));
-                if (validServerRecipes.length === 0) return false;
-
-                if (serverOnboardingAnswers) {
-                    updateOnboardingAnswers(serverOnboardingAnswers);
-                    if (!weightLossStateRef.current.onboardingComplete || !weightLossStateRef.current.dietitianBookingComplete) {
-                        markBookingComplete();
-                    }
-                }
-
-                setWeightLossRecipes((current) => mergeRecipeCatalog(current, validServerRecipes));
-
-                const shouldApplyServerPlan = (() => {
-                    const currentPlan = weightLossStateRef.current.mealPlan;
-                    if (!currentPlan) return true;
-                    const knownIds = new Set(
-                        mergeRecipeCatalog(allWeightLossRecipes, validServerRecipes).map((recipe) => recipe.id)
-                    );
-                    const currentPlanIds = collectPlannedRecipeIds(currentPlan);
-                    return currentPlanIds.some((id) => !knownIds.has(id));
-                })();
-
-                if (!shouldApplyServerPlan) return true;
-
-                const mergedRecipes = mergeRecipeCatalog(allWeightLossRecipes, validServerRecipes);
-                const recipeMap = new Map(mergedRecipes.map((recipe) => [recipe.id, recipe]));
-                setMealPlan(
-                    postProcessGeneratedMealPlan(
-                        serverMealPlan,
-                        weightLossStateRef.current.onboardingAnswers,
-                        recipeMap
-                    )
-                );
-                return true;
-            } catch (errorObject) {
-                console.error('Unable to hydrate latest meal plan cache for this patient.', errorObject);
-                return false;
-            } finally {
-                isHydratingLatestMealPlanRef.current = false;
-            }
-        },
-        [allWeightLossRecipes, markBookingComplete, setMealPlan, token, updateOnboardingAnswers]
-    );
-
-    useEffect(() => {
-        if (!token || !openWeightLossFromRoute) return;
-        void hydrateRecipeCatalogFromServer({ force: true });
-        void hydrateLatestMealPlanFromServer({ force: true });
-    }, [hydrateLatestMealPlanFromServer, hydrateRecipeCatalogFromServer, openWeightLossFromRoute, token]);
-
-    useEffect(() => {
-        if (portalScreen !== 'weight-loss-reset') return;
-        if (!token) return;
-        if (weightLossCatalogRecipes.length >= 24) return;
-        void hydrateRecipeCatalogFromServer({ force: true });
-    }, [hydrateRecipeCatalogFromServer, portalScreen, token, weightLossCatalogRecipes.length]);
-
-    useEffect(() => {
-        if (portalScreen !== 'weight-loss-reset') return;
-        if (!token) return;
-        if (weightLossResetState.mealPlan) return;
-        void hydrateLatestMealPlanFromServer({ force: true });
-    }, [hydrateLatestMealPlanFromServer, portalScreen, token, weightLossResetState.mealPlan]);
-
-    useEffect(() => {
-        if (!openWeightLossFromRoute || programRouteHandled) return;
-        setMainTab('home');
-        setPortalScreen(
-            weightLossResetState.dietitianBookingComplete && weightLossResetState.onboardingComplete
-                ? 'weight-loss-reset'
-                : 'weight-loss-onboarding'
-        );
-        setProgramRouteHandled(true);
-
-        const nextUrl = new URL(window.location.href);
-        nextUrl.searchParams.delete('program');
-        const search = nextUrl.searchParams.toString();
-        window.history.replaceState({}, '', `${nextUrl.pathname}${search ? `?${search}` : ''}${nextUrl.hash}`);
-    }, [
-        openWeightLossFromRoute,
-        programRouteHandled,
-        weightLossResetState.dietitianBookingComplete,
-        weightLossResetState.onboardingComplete,
-    ]);
-
 
     const hasActiveQueuedRequest = Boolean(
         activeQueuedRequest?.id && isQueuedStatus(activeQueuedRequest?.status || '')
@@ -1750,37 +1417,6 @@ export default function PatientPortalPage() {
                     }
                     return;
                 }
-                const currentWeightLossState = weightLossStateRef.current;
-                if (
-                    openWeightLossFromRoute ||
-                    currentWeightLossState.onboardingStep > 0 ||
-                    currentWeightLossState.onboardingComplete ||
-                    currentWeightLossState.dietitianBookingComplete
-                ) {
-                    const preferredName = currentWeightLossState.onboardingAnswers.firstName?.trim() || 'Patient';
-                    const preferredEmail = window.localStorage.getItem('onya_patient_email') || 'patient@demo.local';
-                    setPatient({
-                        fullName: preferredName,
-                        firstName: preferredName,
-                        lastName: '',
-                        email: preferredEmail,
-                        dob: '',
-                        phone: '',
-                        address: '',
-                        profilePhotoPath: '',
-                        profilePhotoUrl: '',
-                    });
-                    setPrimaryDietitian(null);
-                    setRequests([]);
-                    setBilling(null);
-                    setBillingError('');
-                    setBillingActionState('idle');
-                    if (!silent) {
-                        setLoading(false);
-                        setLoadError('');
-                    }
-                    return;
-                }
                 window.location.href = '/patient-login';
                 return;
             }
@@ -1829,9 +1465,7 @@ export default function PatientPortalPage() {
                     payload?.patient,
                     window.localStorage.getItem('onya_patient_email') || '',
                 );
-                const assignedDietitian = normalizeDietitianProfile(payload?.dietitian);
                 setPatient(patientProfile);
-                setPrimaryDietitian(assignedDietitian);
                 window.localStorage.setItem('onya_patient_email', patientProfile.email);
                 setBilling(normalizeBillingInfo(payload?.billing));
                 setBillingError('');
@@ -1862,40 +1496,13 @@ export default function PatientPortalPage() {
             disposed = true;
             window.clearInterval(pollTimer);
         };
-    }, [token, checkoutSetupContext, openWeightLossFromRoute, hasActiveQueuedRequest, emailChangeConsuming]);
+    }, [token, checkoutSetupContext, hasActiveQueuedRequest, emailChangeConsuming]);
 
     const firstNameValue = useMemo(() => firstName(patient.fullName || ''), [patient.fullName]);
-    const nutritionConsultRequest = useMemo<PortalRequest | null>(() => {
-        if (weightLossResetCardState === 'not-started') return null;
-        const dietitianName = String(primaryDietitian?.fullName || 'Felicity').trim() || 'Felicity';
-        const generatedAt = String(weightLossResetState.mealPlan?.generatedAt || '').trim() || new Date().toISOString();
-        return {
-            id: `nutrition-${patient.email || 'patient'}`,
-            createdAt: generatedAt,
-            status: 'approved',
-            serviceType: 'weight_loss',
-            purpose: `Weekly nutrition consult with ${dietitianName}`,
-            symptom: '',
-            symptomVisibility: 'private',
-            description: 'Personalised nutrition planning, meal reviews, and ongoing support.',
-            startDate: generatedAt,
-            durationDays: 7,
-            decision: {
-                by: dietitianName,
-                at: generatedAt,
-                notes: 'Recurring nutrition check-in active.',
-            },
-            certificatePdfUrl: null,
-        };
-    }, [patient.email, primaryDietitian?.fullName, weightLossResetCardState, weightLossResetState.mealPlan?.generatedAt]);
-    const timelineRequests = useMemo(() => {
-        if (!nutritionConsultRequest) return requests;
-        const alreadyHasNutrition = requests.some((entry) => {
-            const service = String(entry?.serviceType || '').toLowerCase();
-            return service === 'weight_loss' || service === 'weight-loss' || service === 'nutritionist';
-        });
-        return alreadyHasNutrition ? requests : [nutritionConsultRequest, ...requests];
-    }, [nutritionConsultRequest, requests]);
+    const timelineRequests = useMemo(
+        () => requests.filter((entry) => !isMealPlanServiceType(entry?.serviceType || '')),
+        [requests]
+    );
     const latestRequest = useMemo(() => (timelineRequests.length > 0 ? timelineRequests[0] : null), [timelineRequests]);
     const selectedConsultOption = useMemo(
         () => CONSULT_OPTIONS.find((item) => item.id === selectedConsultOptionId) || null,
@@ -2022,197 +1629,6 @@ export default function PatientPortalPage() {
         }
     };
 
-    const openWeightLossOnboarding = () => {
-        setWeightLossOnboardingMode('initial');
-        setLastMainTab(mainTab);
-        setMainTab('home');
-        setPortalScreen('weight-loss-onboarding');
-    };
-
-    const openWeightLossPreferenceEditor = useCallback(() => {
-        setWeightLossOnboardingMode('update');
-        saveOnboardingStep(1);
-        setLastMainTab(mainTab);
-        setMainTab('home');
-        setPortalScreen('weight-loss-onboarding');
-    }, [mainTab, saveOnboardingStep]);
-
-    const openWeightLossDashboard = () => {
-        setLastMainTab(mainTab);
-        setMainTab('home');
-        setPortalScreen('weight-loss-reset');
-    };
-
-    const generateAndStoreWeightLossMealPlan = useCallback(
-        async (
-            answers = weightLossStateRef.current.onboardingAnswers,
-            options: { refresh?: boolean } = {},
-        ) => {
-            if (isGeneratingMealPlanRef.current) return;
-            isGeneratingMealPlanRef.current = true;
-            setIsGeneratingMealPlan(true);
-            try {
-                setWeightLossRecipeError('');
-                const seedSalt = options.refresh ? String(Date.now()) : '';
-                const includeSnack = false;
-                const activeToken = token || window.localStorage.getItem('onya_patient_token') || '';
-
-                if (activeToken) {
-                    try {
-                        const { response, payload } = await fetchApiJson('/api/patient/meal-plan/generate', {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                Authorization: `Bearer ${activeToken}`,
-                            },
-                            body: JSON.stringify({
-                                answers,
-                                includeSnack,
-                                seedSalt,
-                                generationMode: 'ai_recipes',
-                                generateRecipes: true,
-                            }),
-                        });
-
-                        const serverMealPlan = payload?.mealPlan;
-                        const serverRecipes = Array.isArray(payload?.recipes) ? (payload.recipes as Recipe[]) : [];
-                        if (response.ok && payload?.ok && serverMealPlan && serverRecipes.length > 0) {
-                            const validServerRecipes = serverRecipes.filter(
-                                (recipe): recipe is Recipe => isValidWeightLossRecipe(recipe),
-                            );
-                            if (validServerRecipes.length === 0) {
-                                setWeightLossRecipeError('API returned a meal plan without a valid recipe catalog.');
-                                return;
-                            } else {
-                                const mergedRecipes = mergeRecipeCatalog(allWeightLossRecipes, validServerRecipes);
-                                setWeightLossRecipes((current) => mergeRecipeCatalog(current, validServerRecipes));
-                                const recipeMap = new Map(mergedRecipes.map((recipe) => [recipe.id, recipe]));
-                                const withRealImageCount = validServerRecipes.filter((recipe) => {
-                                    const url = resolveRecipeImageCandidate(recipe);
-                                    return isConcreteRecipeImageUrl(url);
-                                }).length;
-                                const imageCoverage =
-                                    validServerRecipes.length > 0 ? withRealImageCount / validServerRecipes.length : 0;
-                                setWeightLossRecipeError(
-                                    imageCoverage < 0.85
-                                        ? 'Meal plan generated. Some meal images are unavailable right now, but your meals are saved and usable.'
-                                        : withRealImageCount > 0
-                                          ? ''
-                                          : 'Meal plan generated, but some image links are unavailable right now.'
-                                );
-                                setMealPlan(postProcessGeneratedMealPlan(serverMealPlan, answers, recipeMap));
-                                return;
-                            }
-                        } else {
-                            setWeightLossRecipeError(
-                                String(payload?.error || '').trim() || `AI meal plan response was not usable (${response.status}).`
-                            );
-                            return;
-                        }
-                    } catch (errorObject) {
-                        console.error('Meal generation API failed.', errorObject);
-                        setWeightLossRecipeError(
-                            errorObject instanceof Error ? errorObject.message : 'Meal generation API request failed.'
-                        );
-                        return;
-                    }
-                } else {
-                    setWeightLossRecipeError('No authenticated patient session found for AI meal generation.');
-                }
-            } finally {
-                isGeneratingMealPlanRef.current = false;
-                setIsGeneratingMealPlan(false);
-            }
-        },
-        [allWeightLossRecipes, setMealPlan, token]
-    );
-
-    const handleWeightLossOnboardingProgress = useCallback(
-        (answers: OnboardingAnswers, step: number) => {
-            updateOnboardingAnswers(answers);
-            saveOnboardingStep(step);
-        },
-        [saveOnboardingStep, updateOnboardingAnswers]
-    );
-
-    const handleWeightLossBookingComplete = useCallback(
-        async (answers: OnboardingAnswers) => {
-            updateOnboardingAnswers(answers);
-            completeOnboarding();
-            markBookingComplete();
-            await generateAndStoreWeightLossMealPlan(answers, { refresh: true });
-        },
-        [
-            completeOnboarding,
-            generateAndStoreWeightLossMealPlan,
-            markBookingComplete,
-            updateOnboardingAnswers,
-        ]
-    );
-
-    const handleWeightLossPreferencesUpdated = useCallback(
-        async (answers: OnboardingAnswers) => {
-            updateOnboardingAnswers(answers);
-            completeOnboarding();
-            await generateAndStoreWeightLossMealPlan(answers, { refresh: true });
-        },
-        [completeOnboarding, generateAndStoreWeightLossMealPlan, updateOnboardingAnswers]
-    );
-
-    const handleWeightLossSwapMeal = useCallback(
-        (dayIndex: number, mealType: MealType, recipeId: string) => {
-            if (!weightLossResetState.mealPlan) return;
-            const recipeMap = new Map(allWeightLossRecipes.map((recipe) => [recipe.id, recipe]));
-            const swapped = swapMealInPlan({
-                mealPlan: weightLossResetState.mealPlan,
-                dayIndex,
-                mealType,
-                replacementRecipeId: recipeId,
-            });
-            // For manual swaps, preserve the user's explicit choice and only recompute totals/grocery/prep metadata.
-            replaceMealPlan(withRecalculatedTotals(swapped, recipeMap));
-        },
-        [allWeightLossRecipes, replaceMealPlan, weightLossResetState.mealPlan]
-    );
-
-    useEffect(() => {
-        if (!hasLoadedWeightLossCatalogRecipes) return;
-        const hasRecipes = allWeightLossRecipes.length > 0;
-        if (!weightLossResetState.mealPlan) return;
-
-        if (!hasRecipes) {
-            return;
-        }
-
-        const recipeIdSet = new Set(allWeightLossRecipes.map((recipe) => recipe.id));
-        const plannedIds = weightLossResetState.mealPlan.days.flatMap((day) =>
-            [day.meals.breakfast, day.meals.lunch, day.meals.dinner, ...(day.meals.snacks || [])].filter(Boolean),
-        ) as string[];
-
-        const hasUnknownRecipes = plannedIds.some((id) => !recipeIdSet.has(id));
-        if (!hasUnknownRecipes) {
-            const recipeMap = new Map(allWeightLossRecipes.map((recipe) => [recipe.id, recipe]));
-            const recalculated = withRecalculatedTotals(weightLossResetState.mealPlan, recipeMap);
-            const currentTotals = JSON.stringify(weightLossResetState.mealPlan.days.map((day) => day.totals || {}));
-            const nextTotals = JSON.stringify(recalculated.days.map((day) => day.totals || {}));
-            const currentStructure = JSON.stringify(weightLossResetState.mealPlan.days.map((day) => day.meals || {}));
-            const nextStructure = JSON.stringify(recalculated.days.map((day) => day.meals || {}));
-            if (currentTotals === nextTotals && currentStructure === nextStructure) return;
-            replaceMealPlan(recalculated);
-            return;
-        }
-
-        setWeightLossRecipeError((current) =>
-            current ||
-            'Some saved meals are unavailable in your current recipe library. Generate again to refresh this specific week.'
-        );
-    }, [
-        allWeightLossRecipes,
-        hasLoadedWeightLossCatalogRecipes,
-        replaceMealPlan,
-        weightLossResetState.mealPlan,
-    ]);
-
     const openConsultOption = (optionId: ConsultOptionId) => {
         const option = CONSULT_OPTIONS.find((item) => item.id === optionId);
         if (!option) return;
@@ -2225,15 +1641,6 @@ export default function PatientPortalPage() {
                     return;
                 }
                 window.location.href = '/doctor';
-                return;
-            }
-
-            if (option.id === 'weight-loss') {
-                if (weightLossResetState.dietitianBookingComplete && weightLossResetState.onboardingComplete) {
-                    openWeightLossDashboard();
-                    return;
-                }
-                openWeightLossOnboarding();
                 return;
             }
 
@@ -2314,10 +1721,6 @@ export default function PatientPortalPage() {
         if (nextToken) {
             window.localStorage.setItem('onya_patient_token', nextToken);
             setToken(nextToken);
-        }
-        const nextDietitian = normalizeDietitianProfile(apiPayload?.dietitian);
-        if (nextDietitian) {
-            setPrimaryDietitian(nextDietitian);
         }
     };
 
@@ -2492,55 +1895,6 @@ export default function PatientPortalPage() {
     };
 
     const renderPortalContent = (mode: LayoutMode) => {
-        if (portalScreen === 'weight-loss-onboarding') {
-            return (
-                <OnboardingFlow
-                    initialAnswers={weightLossResetState.onboardingAnswers}
-                    initialStep={weightLossResetState.onboardingStep}
-                    dietitian={primaryDietitian}
-                    mode={weightLossOnboardingMode}
-                    onSaveProgress={handleWeightLossOnboardingProgress}
-                    onMarkOnboardingComplete={completeOnboarding}
-                    onBookingComplete={handleWeightLossBookingComplete}
-                    onCompletePreferenceUpdate={handleWeightLossPreferencesUpdated}
-                    onOpenDashboard={openWeightLossDashboard}
-                />
-            );
-        }
-
-        if (portalScreen === 'weight-loss-reset') {
-            return (
-                <div className="space-y-3">
-                    {weightLossRecipeError && (
-                        <p className="rounded-xl border border-[#b3cfe5] bg-[#f6fafd] px-3 py-2 text-xs text-[#1a3d63]">
-                            {weightLossRecipeError}
-                        </p>
-                    )}
-                    <WeightLossResetDashboard
-                        answers={weightLossResetState.onboardingAnswers}
-                        displayFirstName={firstNameValue}
-                        dietitian={primaryDietitian}
-                        mealPlan={weightLossResetState.mealPlan}
-                        recipes={allWeightLossRecipes}
-                        weightLogs={weightLossResetState.weightLogs}
-                        messages={weightLossResetState.messages}
-                        groceryCheckedItems={weightLossResetState.groceryCheckedItems}
-                        onBackToHome={openPortalHome}
-                        isGeneratingPlan={isGeneratingMealPlan}
-                        onUpdatePreferences={openWeightLossPreferenceEditor}
-                        onRegeneratePlan={() => {
-                            void generateAndStoreWeightLossMealPlan(weightLossResetState.onboardingAnswers, { refresh: true });
-                        }}
-                        onSwapMeal={handleWeightLossSwapMeal}
-                        onAddWeightLog={addWeightLog}
-                        onUpdateWeightLog={updateWeightLog}
-                        onAddMessage={addMessage}
-                        onToggleGroceryItem={toggleGroceryItem}
-                    />
-                </div>
-            );
-        }
-
         if (portalScreen === 'call-prep') {
             return <CallPrepScreen onBack={closeOverlayScreen} onStartCall={startCallAndQueue} />;
         }
@@ -2565,7 +1919,6 @@ export default function PatientPortalPage() {
                     requests={timelineRequests}
                     queuedRequest={queuedRequest}
                     patient={patient}
-                    dietitian={primaryDietitian}
                     data={portalData}
                     recordTab={recordTab}
                     onRecordTabChange={setRecordTab}
@@ -2575,23 +1928,12 @@ export default function PatientPortalPage() {
                     onOpenQueue={openQueuedScreen}
                     onDownloadCertificate={downloadCertificatePdf}
                     onGoToTab={setTab}
-                    weightLossResetCard={{
-                        cardState: weightLossResetCardState,
-                        primaryHealthFocus: weightLossResetState.onboardingAnswers.primaryHealthFocus,
-                        currentWeight: latestWeightFromWeightLoss,
-                        goalWeight: weightLossResetState.onboardingAnswers.goalWeightKg,
-                        progressPercent: weightLossProgressPercent,
-                        generatedAt: weightLossResetState.mealPlan?.generatedAt,
-                        onStart: openWeightLossOnboarding,
-                        onContinueBooking: openWeightLossOnboarding,
-                        onOpen: openWeightLossDashboard,
-                    }}
                 />
             );
         }
 
         if (mainTab === 'consult') {
-            return <ConsultTab onSelectOption={openConsultOption} billing={billing} requests={timelineRequests} dietitian={primaryDietitian} />;
+            return <ConsultTab onSelectOption={openConsultOption} billing={billing} requests={timelineRequests} />;
         }
 
         return (
