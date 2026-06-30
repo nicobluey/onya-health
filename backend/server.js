@@ -34,10 +34,6 @@ import {
 } from './lib/doctor-auth.js';
 import { calculateRisk } from './lib/risk.js';
 import { buildCertificatePdf } from './lib/pdf.js';
-import {
-  generateOpenAiMealPlanWithGeneratedRecipes,
-  generateFallbackMealPlan,
-} from './lib/meal-plan-ai.js';
 import { generateDoctorNotes, generateMoreInfoDraft } from './lib/notes.js';
 import {
   appendAudit,
@@ -163,6 +159,14 @@ const LOCAL_FALLBACK_RECIPE_CATALOG_PATH = path.resolve(
 );
 
 const stripeSubscriptionCache = new Map();
+let mealPlanAiModulePromise = null;
+
+function loadMealPlanAiModule() {
+  if (!mealPlanAiModulePromise) {
+    mealPlanAiModulePromise = import('./lib/meal-plan-ai.js');
+  }
+  return mealPlanAiModulePromise;
+}
 
 const PORTAL_DIR = path.resolve(process.cwd(), 'backend', 'doctor-portal');
 
@@ -907,13 +911,14 @@ function recipeMatchesHardConstraints(recipe, constraints) {
   return !hasDislikedIngredient;
 }
 
-function buildRuleFallbackBundleFromCatalog({ recipes, answers, includeSnack, seedSalt }) {
+async function buildRuleFallbackBundleFromCatalog({ recipes, answers, includeSnack, seedSalt }) {
   const catalog = Array.isArray(recipes) ? recipes.filter((recipe) => recipe && recipe.id && recipe.title) : [];
   if (catalog.length === 0) return null;
 
   const constraints = extractAnswerConstraintTokens(answers);
   const filtered = catalog.filter((recipe) => recipeMatchesHardConstraints(recipe, constraints));
   const candidateCatalog = filtered.length >= 18 ? filtered : catalog;
+  const { generateFallbackMealPlan } = await loadMealPlanAiModule();
   const mealPlan = generateFallbackMealPlan({
     recipes: candidateCatalog,
     includeSnack,
@@ -2949,6 +2954,7 @@ async function handleApi(req, res, url) {
           return;
         }
       }
+      const { generateOpenAiMealPlanWithGeneratedRecipes } = await loadMealPlanAiModule();
       const generatedBundle = await generateOpenAiMealPlanWithGeneratedRecipes({
         answers,
         includeSnack,
@@ -2970,7 +2976,7 @@ async function handleApi(req, res, url) {
         if (!Array.isArray(fallbackCatalog) || fallbackCatalog.length === 0) {
           fallbackCatalog = await loadLocalFallbackRecipeCatalog();
         }
-        const fallbackBundle = buildRuleFallbackBundleFromCatalog({
+        const fallbackBundle = await buildRuleFallbackBundleFromCatalog({
           recipes: fallbackCatalog,
           answers,
           includeSnack,

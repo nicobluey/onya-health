@@ -33,10 +33,6 @@ import { calculateRisk } from '../backend/lib/risk.js';
 import { buildCertificatePdf } from '../backend/lib/pdf.js';
 import { generateDoctorNotes, generateMoreInfoDraft } from '../backend/lib/notes.js';
 import {
-  generateOpenAiMealPlanWithGeneratedRecipes,
-  generateFallbackMealPlan,
-} from '../backend/lib/meal-plan-ai.js';
-import {
   appendAudit,
   createCertificate,
   getCertificateById,
@@ -186,6 +182,14 @@ const checkoutTimingWindows = {
   persistence: [],
 };
 const patientProfileCache = new Map();
+let mealPlanAiModulePromise = null;
+
+function loadMealPlanAiModule() {
+  if (!mealPlanAiModulePromise) {
+    mealPlanAiModulePromise = import('../backend/lib/meal-plan-ai.js');
+  }
+  return mealPlanAiModulePromise;
+}
 
 function normalizeDurationMs(value) {
   const numberValue = Number(value);
@@ -1108,7 +1112,7 @@ function recipeMatchesHardConstraints(recipe, constraints) {
   return !hasDislikedIngredient;
 }
 
-function buildRuleFallbackBundleFromCatalog({ recipes, answers, includeSnack, seedSalt }) {
+async function buildRuleFallbackBundleFromCatalog({ recipes, answers, includeSnack, seedSalt }) {
   const catalog = Array.isArray(recipes) ? recipes.filter((recipe) => recipe && recipe.id && recipe.title) : [];
   if (catalog.length === 0) return null;
   const catalogWithImages = catalog.filter((recipe) => {
@@ -1122,6 +1126,7 @@ function buildRuleFallbackBundleFromCatalog({ recipes, answers, includeSnack, se
   const constraints = extractAnswerConstraintTokens(answers);
   const filtered = catalogWithImages.filter((recipe) => recipeMatchesHardConstraints(recipe, constraints));
   const candidateCatalog = filtered.length >= 18 ? filtered : catalogWithImages;
+  const { generateFallbackMealPlan } = await loadMealPlanAiModule();
   const mealPlan = generateFallbackMealPlan({
     recipes: candidateCatalog,
     includeSnack,
@@ -6435,6 +6440,7 @@ export default async function handler(req, res) {
             return;
           }
         }
+        const { generateOpenAiMealPlanWithGeneratedRecipes } = await loadMealPlanAiModule();
         const generatedBundle = await generateOpenAiMealPlanWithGeneratedRecipes({
           answers,
           includeSnack,
@@ -6451,7 +6457,7 @@ export default async function handler(req, res) {
             cacheLimit: 180,
             includeGlobalGeneratedFallback: true,
           });
-          const fallbackBundle = buildRuleFallbackBundleFromCatalog({
+          const fallbackBundle = await buildRuleFallbackBundleFromCatalog({
             recipes: generatedFallbackCatalog.recipes,
             answers,
             includeSnack,
