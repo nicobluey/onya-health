@@ -37,7 +37,7 @@ const USE_CASES: UseCaseConfig[] = [
         title: 'Request a medical certificate online',
         subtitle: 'Complete a short online form for Australian doctor review. Certificates are issued digitally where clinically appropriate.',
         heroImage: '/Medical Certificate Landing.webp',
-        heroObjectClass: 'object-[64%_44%] md:object-[52%_44%]',
+        heroObjectClass: 'object-[30%_44%] md:object-[52%_44%]',
         heroImageAlt: 'Doctor reviewing an online medical certificate request',
         cardTitle: 'Doctor certificates',
         cardBody: 'Doctor-reviewed certificate requests with digital delivery where clinically appropriate.',
