@@ -1521,7 +1521,7 @@ export default function PatientPortalPage() {
             catalogHydrationRequestedAtRef.current = now;
             isHydratingCatalogRef.current = true;
             try {
-                const { response, payload } = await fetchApiJson('/api/patient/meal-plan/catalog?limit=420&includeDataImages=1', {
+                const { response, payload } = await fetchApiJson('/api/patient/meal-plan/catalog?limit=120', {
                     method: 'GET',
                     cache: 'no-store',
                     headers: {
@@ -1559,7 +1559,7 @@ export default function PatientPortalPage() {
             latestMealPlanHydrationRequestedAtRef.current = now;
             isHydratingLatestMealPlanRef.current = true;
             try {
-                const { response, payload } = await fetchApiJson('/api/patient/meal-plan/latest?includeDataImages=1', {
+                const { response, payload } = await fetchApiJson('/api/patient/meal-plan/latest', {
                     method: 'GET',
                     cache: 'no-store',
                     headers: {

@@ -3219,11 +3219,32 @@ async function patientAccountExists(email) {
   return Boolean(localAccount);
 }
 
+async function patientAccountExistsFast(email) {
+  const normalized = normalizeEmail(email);
+  if (!normalized) return false;
+
+  const supabaseConfig = getSupabaseConfig();
+  if (supabaseConfig.enabled) {
+    const rows = await supabaseRestRequest(
+      supabaseConfig,
+      `patients?email=eq.${encodeURIComponent(normalized)}&select=id,email&limit=1`,
+      {
+        method: 'GET',
+        prefer: 'return=representation',
+      }
+    );
+    if (Array.isArray(rows) && rows.length > 0) return true;
+  }
+
+  const localAccount = await getPatientAccountByEmail(normalized);
+  return Boolean(localAccount);
+}
+
 async function patientAccountExistsByEmailOrPhone({ email = '', phone = '' }) {
   const normalizedEmail = normalizeEmail(email);
   const normalizedPhone = normalizePhoneForLookup(phone);
 
-  if (normalizedEmail && (await patientAccountExists(normalizedEmail))) {
+  if (normalizedEmail && (await patientAccountExistsFast(normalizedEmail))) {
     return { exists: true, reason: 'email', email: normalizedEmail };
   }
 
@@ -6047,14 +6068,17 @@ export default async function handler(req, res) {
       const patient = await requirePatient(req, res);
       if (!patient) return;
 
-      const requestedLimit = Math.round(Number(url.searchParams.get('limit') || 500));
-      const limit = Math.max(50, Math.min(800, Number.isFinite(requestedLimit) ? requestedLimit : 500));
+      const requestedLimit = Math.round(Number(url.searchParams.get('limit') || 120));
+      const limit = Math.max(24, Math.min(240, Number.isFinite(requestedLimit) ? requestedLimit : 120));
+      const includeGlobalGeneratedFallback = ['1', 'true', 'yes'].includes(
+        String(url.searchParams.get('includeFallback') || url.searchParams.get('fallback') || '').toLowerCase()
+      );
 
       try {
         const generatedCatalog = await loadPatientGeneratedRecipeCatalog({
           patientEmail: patient.email,
-          cacheLimit: 320,
-          includeGlobalGeneratedFallback: true,
+          cacheLimit: Math.max(24, Math.min(80, limit)),
+          includeGlobalGeneratedFallback,
         });
 
         const recipes = mapRecipeListForClient(normalizeRecipeListForProduct(generatedCatalog.recipes), req).slice(0, limit);
@@ -6090,6 +6114,9 @@ export default async function handler(req, res) {
     if (req.method === 'GET' && routePath === 'patient/meal-plan/latest') {
       const patient = await requirePatient(req, res);
       if (!patient) return;
+      const includeDataImages = ['1', 'true', 'yes'].includes(
+        String(url.searchParams.get('includeDataImages') || '').toLowerCase()
+      );
 
       try {
         const latestEntry = await getLatestMealPlanGenerationCacheByPatientEmail(patient.email).catch((cacheError) => {
@@ -6107,17 +6134,18 @@ export default async function handler(req, res) {
           });
           return null;
         }) : null;
+        let fallbackCacheEntries = [];
 
         const selectedEntryIsRulesFallback = isRulesFallbackCacheEntry(selectedEntry);
         if (!hydrated || selectedEntryIsRulesFallback) {
-          const cacheEntries = await listMealPlanGenerationCacheByPatientEmail(patient.email, 48).catch((cacheError) => {
+          fallbackCacheEntries = await listMealPlanGenerationCacheByPatientEmail(patient.email, 12).catch((cacheError) => {
             error('meal_plan.latest_cache_list_failed', {
               email: normalizeEmail(patient.email),
               message: cacheError?.message || String(cacheError),
             });
             return [];
           });
-          for (const cacheEntry of cacheEntries) {
+          for (const cacheEntry of fallbackCacheEntries) {
             if (!cacheEntry) continue;
             if (
               selectedEntry &&
@@ -6155,20 +6183,22 @@ export default async function handler(req, res) {
         }
 
         const recipes = mapRecipeListForClient(normalizeRecipeListForProduct(hydrated.recipes), req, {
-          inlineDataImages: true,
+          inlineDataImages: includeDataImages,
         });
         let onboardingAnswers = sanitizeOnboardingAnswersForBundle(
           hydrated.onboardingAnswers || selectedEntry?.bundle?.onboardingAnswers || selectedEntry?.bundle?.answers || null
         );
         if (!onboardingAnswers) {
-          const cacheEntries = await listMealPlanGenerationCacheByPatientEmail(patient.email, 36).catch((cacheError) => {
-            error('meal_plan.latest_onboarding_cache_list_failed', {
-              email: normalizeEmail(patient.email),
-              message: cacheError?.message || String(cacheError),
-            });
-            return [];
-          });
-          for (const cacheEntry of cacheEntries) {
+          const onboardingCacheEntries = fallbackCacheEntries.length > 0
+            ? fallbackCacheEntries
+            : await listMealPlanGenerationCacheByPatientEmail(patient.email, 12).catch((cacheError) => {
+                error('meal_plan.latest_onboarding_cache_list_failed', {
+                  email: normalizeEmail(patient.email),
+                  message: cacheError?.message || String(cacheError),
+                });
+                return [];
+              });
+          for (const cacheEntry of onboardingCacheEntries) {
             onboardingAnswers = sanitizeOnboardingAnswersForBundle(
               cacheEntry?.bundle?.onboardingAnswers || cacheEntry?.bundle?.onboarding_answers || cacheEntry?.bundle?.answers || null
             );

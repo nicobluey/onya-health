@@ -474,6 +474,11 @@ export const DetailsStep = () => {
     const [genderOpen, setGenderOpen] = useState(false);
     const genderMenuRef = useRef<HTMLDivElement | null>(null);
     const emailCheckRequestRef = useRef(0);
+    const lastEmailCheckRef = useRef<{
+        email: string;
+        state: Extract<EmailAccountCheckState, 'available' | 'exists'>;
+        matchedEmail: string;
+    } | null>(null);
     const genderOptions = ['Male', 'Female', 'Other'];
 
     const validate = () => {
@@ -552,21 +557,31 @@ export const DetailsStep = () => {
         if (!normalizedEmail) {
             setMatchedAccountEmail('');
             setEmailAccountCheckState('idle');
+            lastEmailCheckRef.current = null;
             return;
         }
 
         if (!isLikelyEmail(normalizedEmail)) {
             setMatchedAccountEmail('');
             setEmailAccountCheckState('idle');
+            lastEmailCheckRef.current = null;
+            return;
+        }
+
+        if (lastEmailCheckRef.current?.email === normalizedEmail) {
+            setMatchedAccountEmail(lastEmailCheckRef.current.matchedEmail);
+            setEmailAccountCheckState(lastEmailCheckRef.current.state);
             return;
         }
 
         setEmailAccountCheckState('checking');
+        const controller = new AbortController();
         const timer = window.setTimeout(async () => {
             try {
                 const { response, payload } = await fetchApiJson('/api/patient/account-exists', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
+                    signal: controller.signal,
                     body: JSON.stringify({
                         email: normalizedEmail,
                     }),
@@ -581,6 +596,11 @@ export const DetailsStep = () => {
                     const matchedEmail = normalizeEmailInput(String(payload?.matchedEmail || normalizedEmail));
                     setMatchedAccountEmail(matchedEmail);
                     setEmailAccountCheckState('exists');
+                    lastEmailCheckRef.current = {
+                        email: normalizedEmail,
+                        state: 'exists',
+                        matchedEmail,
+                    };
                     if (matchedEmail) {
                         window.localStorage.setItem('onya_patient_email', matchedEmail);
                     }
@@ -589,13 +609,20 @@ export const DetailsStep = () => {
 
                 setMatchedAccountEmail('');
                 setEmailAccountCheckState('available');
+                lastEmailCheckRef.current = {
+                    email: normalizedEmail,
+                    state: 'available',
+                    matchedEmail: '',
+                };
             } catch {
+                if (controller.signal.aborted) return;
                 if (requestId !== emailCheckRequestRef.current) return;
                 setEmailAccountCheckState('error');
             }
-        }, 350);
+        }, 700);
 
         return () => {
+            controller.abort();
             window.clearTimeout(timer);
         };
     }, [details.email]);

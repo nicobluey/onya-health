@@ -632,3 +632,42 @@
    `400` with code `CARER_CERTIFICATE_DETAILS_REQUIRED`.
 6. `POST /api/patient/account-exists` returns controlled `200` JSON for a non-existent
    probe email.
+
+## 2026-06-29 - Reduce patient portal and account-check latency
+
+### Symptoms
+
+- Patient account checks and sign-in-adjacent portal loads felt slow in production.
+- Live timing showed account-exists requests taking up to ~2.5s for known emails.
+- Patient portal bootstrap was ~4.3s cold, and meal-plan hydration endpoints were
+  ~3-4.4s with catalog responses around 640 KB.
+
+### Root causes
+
+1. The lightweight account-exists flow used the full patient lookup helper, which can
+   call Supabase Auth Admin and fall back to listing auth users.
+2. Booking email checks were triggered aggressively and stale requests were ignored but
+   not aborted.
+3. Meal-plan catalog reads loaded too many cache rows, enabled global generated fallback
+   by default, and returned hundreds of recipes.
+4. Latest meal-plan reads inlined data-image payloads by default and scanned more cache
+   rows than needed for normal portal hydration.
+
+### Files changed
+
+- `api/index.js`
+  - added a direct patient-row existence lookup for `/api/patient/account-exists`.
+  - reduced meal-plan catalog default limit/cache scan and made global fallback opt-in.
+  - made latest meal-plan data-image inlining opt-in and reduced fallback scan limits.
+- `backend/lib/storage.js`
+  - reduced latest meal-plan cache lookup from 24 rows to 1 row.
+- `frontend/src/components/FlowSteps.tsx`
+  - aborts stale account-check requests and caches the latest email check result.
+- `frontend/src/pages/PatientPortalPage.tsx`
+  - requests smaller meal-plan catalogs and avoids inline data images.
+
+### Verification
+
+1. `node --check api/index.js backend/lib/storage.js` succeeds.
+2. `npm run lint` succeeds.
+3. `npm run build` succeeds.

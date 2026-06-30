@@ -2315,7 +2315,7 @@ async function getLatestMealPlanGenerationCacheByPatientEmailSupabase(patientEma
     const rows = await supabaseRequest(
       `meal_plan_generation_cache?patient_email=eq.${encodeURIComponent(
         normalizedEmail
-      )}&select=*&order=updated_at.desc&limit=24`,
+      )}&select=*&order=updated_at.desc&limit=1`,
       {
         method: 'GET',
         prefer: 'return=representation',
