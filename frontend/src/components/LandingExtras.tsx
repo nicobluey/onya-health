@@ -31,9 +31,9 @@ const PATIENT_ORGS: PatientOrg[] = [
 ];
 
 const STATS: StatItem[] = [
-    { value: '24/7', label: 'Online requests' },
-    { value: 'Doctor-reviewed', label: 'Certificate outcomes' },
-    { value: 'Australia-wide', label: 'Patient access' },
+    { value: '$9.71', label: '1-day request' },
+    { value: '24/7', label: 'Start online' },
+    { value: 'Doctor', label: 'Reviewed outcome' },
 ];
 
 const LEADING_POINTS: Array<{ title: string; body: string }> = [
@@ -69,14 +69,14 @@ export function UsedByPatientsSection() {
                         ))}
                     </div>
                     <p className="max-w-2xl text-sm font-semibold text-text-secondary md:justify-self-end">
-                        Request a medical-certificate consult online, then track doctor review, outcomes, and follow-up guidance in one secure place.
+                        Start the request when you are unwell, then get doctor review, outcome updates, and digital delivery if approved.
                     </p>
                 </div>
             </div>
 
             <div className="px-6 py-6 text-center md:px-8 md:py-7 lg:px-12">
-                <p className="text-[11px] font-extrabold uppercase text-primary">Trusted by patients</p>
-                <p className="mt-1.5 text-lg font-extrabold text-[#06142b]">Accepted by companies across Australia</p>
+                <p className="text-[11px] font-extrabold uppercase text-primary">Built for real evidence requests</p>
+                <p className="mt-1.5 text-lg font-extrabold text-[#06142b]">For workplaces and institutions Australians recognise</p>
 
                 <div className="relative mt-5 overflow-hidden">
                     <div className="logo-carousel-track gap-8 pr-8 md:gap-10 md:pr-10">

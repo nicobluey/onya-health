@@ -474,7 +474,7 @@ function PricingSection() {
                         <h2 className="onya-heading mt-4 text-text-primary">Simple pricing that updates by duration</h2>
                     </div>
                     <p className="max-w-xl text-sm leading-relaxed text-text-secondary md:text-base">
-                        $9.71 for 1 day, then linearly scaled up to $29.71 for 5-7 days, or choose All Access at $19/month.
+                        1-day requests start at $9.71. Longer requests are priced clearly before payment, capped at $29.71 for 5-7 days, or choose All Access at $19/month.
                     </p>
                 </div>
                 <div className="mt-8 grid gap-4 md:grid-cols-3">

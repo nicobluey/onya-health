@@ -3,34 +3,34 @@ import { ArrowRight, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const HOME_REVIEWS = [
     {
-        title: 'Smart intake and clinician matching',
-        body: 'A guided intake captures your symptoms and context, then routes your request to the most suitable clinician pathway.',
-        meta: 'Experience feature · Intake'
+        title: 'Built for sick days, not admin days',
+        body: 'The request asks for the symptoms, dates, and leave context a doctor needs, without making you explain everything twice.',
+        meta: 'Why patients use it · Less admin'
     },
     {
-        title: 'Fast digital-first submission',
-        body: 'Most patients can complete the request quickly on mobile or desktop without paperwork or waiting-room admin.',
-        meta: 'Experience feature · Speed'
+        title: 'Clear price before you commit',
+        body: 'A 1-day request starts at $9.71, with longer durations shown before payment so there are no checkout surprises.',
+        meta: 'Why patients use it · Transparent cost'
     },
     {
-        title: 'Clear doctor-reviewed workflow',
-        body: 'Requests are reviewed by Australian clinicians with conservative decision rules and structured follow-up when needed.',
-        meta: 'Experience feature · Clinical safety'
+        title: 'Doctor review, not a download button',
+        body: 'An Australian doctor reviews whether the request is clinically suitable and may ask for more information.',
+        meta: 'Why patients use it · Credible evidence'
     },
     {
-        title: 'Transparent status and next steps',
-        body: 'Patients can track progress and receive clear outcomes so they know what is happening at each stage.',
-        meta: 'Experience feature · Visibility'
+        title: 'Designed for work and uni pressure',
+        body: 'The flow separates work, student, and carer requests so the right evidence context is captured from the start.',
+        meta: 'Why patients use it · Better context'
     },
     {
-        title: 'Built for secure document delivery',
-        body: 'When clinically appropriate, documentation is delivered digitally through secure channels with minimal friction.',
-        meta: 'Experience feature · Delivery'
+        title: 'Digital delivery if approved',
+        body: 'When a certificate is issued, it is sent online so you can forward it where it needs to go.',
+        meta: 'Why patients use it · Simple delivery'
     },
     {
-        title: 'Designed for real-world schedules',
-        body: 'The flow is structured for busy patients who need care access that fits around work, study, or family demands.',
-        meta: 'Experience feature · Convenience'
+        title: 'Clear answer either way',
+        body: 'If a certificate is not clinically appropriate, you get guidance on next steps instead of vague rejection copy.',
+        meta: 'Why patients use it · No guessing'
     },
 ];
 
@@ -124,15 +124,15 @@ export function HomeReviews() {
             <div className="relative mx-auto max-w-7xl px-5 md:px-8">
                 <div className="mb-8 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
                     <div>
-                        <p className="onya-kicker mb-4 border-white/20 bg-white/10 text-white">Experience Highlights</p>
-                        <h2 className="onya-heading-xl max-w-[12ch] text-white">What Onya is built to deliver</h2>
-                        <p className="mt-4 max-w-2xl text-base font-bold text-white/85 md:text-lg">Practical features that keep care fast, clear, and reliable.</p>
+                        <p className="onya-kicker mb-4 border-white/20 bg-white/10 text-white">Why patients use Onya</p>
+                        <h2 className="onya-heading-xl max-w-[12ch] text-white">Less waiting. Less explaining. Clear evidence.</h2>
+                        <p className="mt-4 max-w-2xl text-base font-bold text-white/85 md:text-lg">A focused medical-certificate request for the days when a clinic visit is the last thing you need.</p>
                     </div>
                     <a
                         href="#how-it-works"
                         className="onya-button hidden md:inline-flex"
                     >
-                        Find my match
+                        Start my request
                         <ArrowRight size={16} />
                     </a>
                 </div>
@@ -206,7 +206,7 @@ export function HomeReviews() {
                         href="#how-it-works"
                         className="onya-button w-full"
                     >
-                        Find my match
+                        Start my request
                         <ArrowRight size={16} />
                     </a>
                 </div>

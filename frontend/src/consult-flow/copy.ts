@@ -1,12 +1,12 @@
 export const COPY = {
     hero: {
-        title: "Medical certificates online, reviewed by Australian-registered doctors.",
-        subtitle: "$9.71 for 1 day, then linearly scaled by duration up to $29.71 for 5-7 days. If clinically appropriate, your certificate is issued digitally and sent to you.",
-        cta: "Book now",
+        title: "Need a medical certificate today?",
+        subtitle: "Start from $9.71 for a 1-day request. Tell us what is going on, choose your dates, and an Australian doctor reviews whether a certificate is appropriate.",
+        cta: "Start request",
         trust: [
-            "Australia-only service",
-            "Doctor-reviewed decisions",
-            "Secure payment and data handling"
+            "For patients in Australia",
+            "Reviewed by Australian doctors",
+            "Secure payment and patient details"
         ]
     },
     steps: {
@@ -73,30 +73,30 @@ export const COPY = {
             helper: "Certificates can start from today onward. Backdating is not available."
         },
         upsell: {
-            title: "Need medical certificates more than once?",
-            subtitle: "Most people end up needing more than one certificate each year.",
+            title: "Think you will need certificates again?",
+            subtitle: "If work, uni, or recurring illness means this is not a one-off, All Access can cost less quickly.",
             recommended: {
-                tag: "Recommended — Unlimited Certificates",
-                title: "Unlimited medical certificates",
+                tag: "Best value for repeat requests",
+                title: "All Access certificates",
                 price: "$19 / month — cancel anytime",
                 bullets: [
-                    "Unlimited doctor-reviewed certificates",
-                    "No re-entering details",
-                    "Ideal for uni, work, or recurring conditions"
+                    "Unlimited doctor-reviewed requests",
+                    "Saved details for faster future requests",
+                    "Useful for work, uni, or recurring conditions"
                 ],
                 cta: "Choose unlimited",
-                micro: "Best value if you need more than one certificate"
+                micro: "Best value if you need more than one request"
             },
             oneoff: {
-                title: "One-off Certificate",
-                price: "$9.71 for 1 day · scales to $29.71 by 5 days (capped for 5-7 days)",
+                title: "One-off request",
+                price: "$9.71 for 1 day · up to $29.71 for 5-7 days",
                 bullets: [
-                    "One certificate for this consult",
+                    "One doctor-reviewed request",
                     "No ongoing commitment"
                 ],
                 cta: "Just this one"
             },
-            footer: "Reviewed by licensed Australian doctors · No lock-in · Cancel anytime"
+            footer: "Reviewed by Australian doctors · No lock-in · Cancel anytime"
         },
         details: {
             fields: {

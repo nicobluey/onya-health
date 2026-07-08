@@ -20,6 +20,7 @@ interface UseCaseConfig {
     heroImage: string;
     heroObjectClass: string;
     heroImageAlt: string;
+    cardImage: string;
     cardTitle: string;
     cardBody: string;
     cardCta: string;
@@ -34,32 +35,34 @@ const USE_CASES: UseCaseConfig[] = [
         key: 'doctor',
         path: '/doctor',
         aliases: ['/medical-certificate-doctor'],
-        title: 'Request a medical certificate online',
-        subtitle: 'Complete a short online form for Australian doctor review. Certificates are issued digitally where clinically appropriate.',
-        heroImage: '/Medical Certificate Landing.webp',
-        heroObjectClass: 'object-[30%_44%] md:object-[52%_44%]',
-        heroImageAlt: 'Doctor reviewing an online medical certificate request',
-        cardTitle: 'Doctor certificates',
-        cardBody: 'Doctor-reviewed certificate requests with digital delivery where clinically appropriate.',
-        cardCta: 'Book now',
-        cardImageClass: 'object-[62%_44%]',
+        title: 'Need a medical certificate today?',
+        subtitle: 'Start online in a few minutes. An Australian doctor reviews your symptoms, dates, and context, then sends a certificate digitally if approved.',
+        heroImage: '/generated/medcert-hero.webp',
+        heroObjectClass: 'object-[58%_center] md:object-center',
+        heroImageAlt: 'Patient starting an online medical certificate request from home',
+        cardImage: '/generated/medcert-hero.webp',
+        cardTitle: 'General request',
+        cardBody: 'Not sure which path fits? Start here and choose the reason inside the request.',
+        cardCta: 'Start request',
+        cardImageClass: 'object-[58%_center]',
         purposeParam: null,
         metaTitle: 'Request a Medical Certificate Online | $9.71 for 1 Day | Onya Health',
-        metaDescription: 'Request a medical certificate online for $9.71 for 1 day, then linearly scaled up to $29.71 for 5-7 days. Australian doctor review required; issued where clinically appropriate.',
+        metaDescription: 'Request a medical certificate online from $9.71 for a 1-day request, with pricing shown before payment. Australian doctor review required; issued where clinically appropriate.',
     },
     {
         key: 'student',
         path: '/student',
         aliases: ['/medical-certificate-student', '/medical-certificate-university'],
-        title: 'Student medical certificates for classes and assessments',
-        subtitle: 'Request evidence quickly when illness affects classes, exams, or assignment deadlines.',
-        heroImage: '/student2.webp',
-        heroObjectClass: 'object-[50%_42%] md:object-[50%_40%]',
+        title: 'Ill and missing uni?',
+        subtitle: 'When sickness hits a class, exam, placement, or deadline, start a student certificate request online and get a doctor-reviewed outcome.',
+        heroImage: '/generated/medcert-student-hero.webp',
+        heroObjectClass: 'object-[54%_center] md:object-center',
         heroImageAlt: 'Student completing a medical certificate request online',
-        cardTitle: 'Student certificates',
-        cardBody: 'Built for university and school documentation when illness affects study.',
-        cardCta: 'Book now',
-        cardImageClass: 'object-[50%_42%]',
+        cardImage: '/generated/medcert-student.webp',
+        cardTitle: 'Student certificate',
+        cardBody: 'For missed classes, exams, placements, and assessment deadlines when you are unwell.',
+        cardCta: 'Start student request',
+        cardImageClass: 'object-center',
         purposeParam: 'university',
         metaTitle: 'Student Medical Certificates | $9.71 for 1 Day | Onya Health',
         metaDescription: 'Request an online student medical certificate for $9.71 for 1 day with Australian doctor review and digital delivery where clinically appropriate.',
@@ -68,15 +71,16 @@ const USE_CASES: UseCaseConfig[] = [
         key: 'caretaker',
         path: '/caretaker',
         aliases: ['/ca', '/medical-certificate-caretaker', '/medical-certificate-carers-leave'],
-        title: 'Carer and parent leave certificates online',
-        subtitle: 'Request leave documentation when you need to care for someone under your care.',
-        heroImage: '/parents.webp',
-        heroObjectClass: 'object-[54%_44%] md:object-[50%_46%]',
-        heroImageAlt: 'Parent-focused carer leave support banner',
-        cardTitle: 'Carer certificates',
-        cardBody: 'Documentation support for carer responsibilities and family care scenarios.',
-        cardCta: 'Book now',
-        cardImageClass: 'object-[52%_46%]',
+        title: 'Caring for someone sick?',
+        subtitle: 'Start a carer or parent leave certificate request online when someone under your care needs you at home.',
+        heroImage: '/generated/medcert-carer-hero.webp',
+        heroObjectClass: 'object-[44%_center] md:object-center',
+        heroImageAlt: 'Carer completing an online medical certificate request while a child rests nearby',
+        cardImage: '/generated/medcert-carer.webp',
+        cardTitle: 'Carer certificate',
+        cardBody: 'For parent and carer leave when a child, family member, or person under your care is unwell.',
+        cardCta: 'Start carer request',
+        cardImageClass: 'object-center',
         purposeParam: 'carers-leave',
         metaTitle: 'Carer Medical Certificates | $9.71 for 1 Day | Onya Health',
         metaDescription: 'Request an online carer leave certificate for $9.71 for 1 day with secure Australian doctor review and digital delivery where clinically appropriate.',
@@ -85,15 +89,16 @@ const USE_CASES: UseCaseConfig[] = [
         key: 'work',
         path: '/work',
         aliases: ['/medical-certificate-work'],
-        title: 'Work medical certificates for sick leave',
-        subtitle: 'Request work absence documentation online without waiting room delays.',
-        heroImage: '/woman_office_worker.webp',
-        heroObjectClass: 'object-[68%_42%] md:object-[56%_44%]',
+        title: 'Too sick for work?',
+        subtitle: 'Request sick-leave evidence online without sitting in a waiting room. A doctor reviews the details and sends a certificate digitally if approved.',
+        heroImage: '/generated/medcert-work-hero.webp',
+        heroObjectClass: 'object-[52%_center] md:object-center',
         heroImageAlt: 'Worker requesting a medical certificate online',
-        cardTitle: 'Work certificates',
-        cardBody: 'Sick leave documentation requests for common workplace absence needs.',
-        cardCta: 'Book now',
-        cardImageClass: 'object-[66%_42%]',
+        cardImage: '/generated/medcert-work.webp',
+        cardTitle: 'Work certificate',
+        cardBody: 'For short sick-leave absences when your employer asks for medical evidence.',
+        cardCta: 'Start work request',
+        cardImageClass: 'object-center',
         purposeParam: 'work',
         metaTitle: 'Work Medical Certificates | $9.71 for 1 Day | Onya Health',
         metaDescription: 'Request an online work medical certificate for $9.71 for 1 day with Australian doctor review and digital delivery where clinically appropriate.',
@@ -140,7 +145,7 @@ export default function MedicalCertificateUseCasePage() {
             </header>
 
             <main className="flex-1">
-                <section className="relative overflow-hidden bg-[#f3f8ff]">
+                <section className="relative overflow-hidden bg-[#06142b]">
                     <div className="absolute inset-0">
                         <img
                             src={currentUseCase.heroImage}
@@ -148,44 +153,45 @@ export default function MedicalCertificateUseCasePage() {
                             className={`h-full w-full object-cover ${currentUseCase.heroObjectClass}`}
                         />
                     </div>
+                    <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,20,43,0.94)_0%,rgba(6,20,43,0.78)_52%,rgba(6,20,43,0.6)_100%)] md:bg-[linear-gradient(90deg,rgba(6,20,43,0.95)_0%,rgba(6,20,43,0.78)_38%,rgba(6,20,43,0.28)_70%,rgba(6,20,43,0.04)_100%)]" />
 
-                    <div className="relative z-10 mx-auto flex min-h-[calc(100svh-64px)] max-w-7xl items-center px-5 py-10 md:min-h-[640px] md:px-8 md:py-20">
+                    <div className="relative z-10 mx-auto flex min-h-[calc(100svh-64px)] max-w-7xl items-center px-5 py-10 md:min-h-[680px] md:px-8 md:py-20">
                         <div className="max-w-[740px]">
-                        <p className="onya-kicker bg-white/95">$9.71 one-day request</p>
-                        <h1 className="onya-display mt-5 max-w-[10ch] text-[#06142b]">
+                        <p className="onya-kicker border-white/20 bg-white/10 text-white">$9.71 one-day request</p>
+                        <h1 className="onya-display mt-5 max-w-[10ch] text-white">
                             {currentUseCase.title}
                         </h1>
-                        <p className="mt-5 max-w-[620px] text-lg font-semibold leading-relaxed text-[#06142b] md:text-xl">
+                        <p className="mt-5 max-w-[620px] text-lg font-bold leading-relaxed text-white/88 md:text-xl">
                             {currentUseCase.subtitle}
                         </p>
                         <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-                            <a href={bookingHref} className="onya-button">
-                                Start certificate request
+                            <a href={bookingHref} className="onya-button bg-white text-[#06142b] hover:bg-[#edf2ff]">
+                                Start from $9.71
                                 <ArrowRight size={18} />
                             </a>
-                            <a href="#certificate-options" className="onya-button-secondary">
-                                Compare types
+                            <a href="#certificate-options" className="onya-button-secondary border-white/20 bg-white/10 text-white hover:bg-white/18">
+                                Compare certificate types
                             </a>
                         </div>
-                        <p className="mt-4 max-w-[560px] text-sm font-bold text-[#06142b]">
-                            Doctor review is required. Certificates are issued only where clinically appropriate.
+                        <p className="mt-4 max-w-[560px] text-sm font-bold text-white/78">
+                            You are paying for doctor review. Certificates are issued only where clinically appropriate.
                         </p>
                         </div>
                     </div>
                 </section>
 
                 <div id="how-it-works">
-                    <HowItWorks />
+                    <HowItWorks serviceSlug="doctor" />
                 </div>
 
                 <section id="certificate-options" className="bg-[#f5f7fa]">
                     <div className="onya-section mx-auto max-w-7xl px-5 md:px-8">
                     <p className="onya-kicker">Certificate type</p>
-                    <h2 className="onya-heading-xl mt-4 max-w-[11ch] text-[#06142b]">
-                        Support matched to the care you need
+                    <h2 className="onya-heading-xl mt-4 max-w-[12ch] text-[#06142b]">
+                        Pick the request that matches the problem.
                     </h2>
-                    <p className="mt-5 max-w-2xl text-base leading-relaxed text-text-secondary md:text-lg">
-                        Choose the certificate use case that matches your situation.
+                    <p className="mt-5 max-w-2xl text-base font-semibold leading-relaxed text-text-secondary md:text-lg">
+                        Different situations need different context. Choose the closest match so the doctor starts with the right information.
                     </p>
 
                     <div className="mt-10 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -202,14 +208,14 @@ export default function MedicalCertificateUseCasePage() {
                                 >
                                     <div className="aspect-[4/3] overflow-hidden bg-[#eef4fb]">
                                         <img
-                                            src={useCase.heroImage}
+                                            src={useCase.cardImage}
                                             alt={useCase.heroImageAlt}
                                             className={`h-full w-full object-cover ${useCase.cardImageClass}`}
                                             loading="lazy"
                                         />
                                     </div>
                                     <div className="flex flex-1 flex-col p-5">
-                                        <p className="text-sm font-extrabold uppercase text-primary">{selected ? 'Viewing' : useCase.cardCta}</p>
+                                        <p className="text-sm font-extrabold uppercase text-primary">{selected ? 'Selected' : 'Certificate type'}</p>
                                         <h3 className="mt-2 text-2xl font-extrabold leading-none text-[#06142b]">
                                             {useCase.cardTitle}
                                         </h3>
@@ -217,7 +223,7 @@ export default function MedicalCertificateUseCasePage() {
                                             {useCase.cardBody}
                                         </p>
                                         <a href={useCase.path} className={selected ? 'onya-button-secondary mt-5 w-full' : 'onya-button mt-5 w-full'}>
-                                            {selected ? 'Current type' : useCase.cardCta}
+                                            {selected ? 'Start this request' : useCase.cardCta}
                                             <ArrowRight size={16} />
                                         </a>
                                     </div>

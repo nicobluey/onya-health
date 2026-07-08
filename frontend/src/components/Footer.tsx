@@ -56,15 +56,15 @@ export function Footer({ onStartConsult, consultHref = '/doctor' }: FooterProps)
                                 <img src="/onya-health-logo.webp" alt="Onya Health" className="h-10 w-auto brightness-0 invert" />
                             </a>
                             <p className="mt-5 max-w-xl text-3xl font-extrabold leading-[1.05] text-white md:text-5xl">
-                                Healthcare that works around your life.
-                                <span className="text-[#b8ccff]"> Reviewed online without waiting-room delays.</span>
+                                Medical certificates without the waiting room.
+                                <span className="text-[#b8ccff]"> Doctor-reviewed online, issued digitally where appropriate.</span>
                             </p>
                         </div>
 
                         <div className="flex flex-col items-start gap-4 lg:items-end">
                             {onStartConsult ? (
                                 <Button onClick={onStartConsult} className="h-12 bg-white px-6 text-sm text-[#06142b] hover:bg-[#edf2ff]">
-                                    Start consultation
+                                    Start certificate request
                                     <ArrowRight size={16} className="ml-2" />
                                 </Button>
                             ) : (
@@ -72,7 +72,7 @@ export function Footer({ onStartConsult, consultHref = '/doctor' }: FooterProps)
                                     href={consultHref}
                                     className="inline-flex h-12 items-center justify-center rounded-full bg-white px-6 text-sm font-extrabold text-[#06142b] transition hover:bg-[#edf2ff]"
                                 >
-                                    Start consultation
+                                    Start certificate request
                                     <ArrowRight size={16} className="ml-2" />
                                 </a>
                             )}
@@ -130,7 +130,7 @@ export function Footer({ onStartConsult, consultHref = '/doctor' }: FooterProps)
                             <div className="border border-white/16 bg-white/8 p-4">
                                 <p className="text-xs font-extrabold uppercase text-[#b8ccff]">Clinic access</p>
                                 <p className="mt-2 text-sm text-[#f6fafd]">
-                                    Online consults available across Australia with secure digital delivery by email.
+                                    Online medical-certificate requests across Australia, with secure digital delivery where approved.
                                 </p>
                             </div>
                         </div>

@@ -146,12 +146,12 @@ export function Reviews() {
             <div className="relative mx-auto max-w-7xl px-6 md:px-8">
                 <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-8">
                     <div>
-                        <p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-white/85">Experience Highlights</p>
-                        <h2 className="text-3xl font-serif font-bold text-white md:text-4xl">What patients can expect from this pathway</h2>
-                        <p className="mt-3 text-base font-bold text-white md:text-lg">Feature-level outcomes focused on speed, safety, and clarity.</p>
+                        <p className="mb-2 text-xs font-bold uppercase tracking-[0.22em] text-white/85">Why patients use Onya</p>
+                        <h2 className="text-3xl font-serif font-bold text-white md:text-4xl">A certificate request that respects your time</h2>
+                        <p className="mt-3 text-base font-bold text-white md:text-lg">Clear pricing, doctor review, and digital delivery where approved.</p>
                     </div>
                     <Button onClick={startBooking} className="hidden h-11 px-6 md:inline-flex">
-                        Start Consult
+                        Start request
                         <ArrowRight size={16} className="ml-2" />
                     </Button>
                 </div>
