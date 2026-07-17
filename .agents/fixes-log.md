@@ -742,6 +742,8 @@
     to `https://supadoc.com.au`
   - updated production `CORS_ORIGIN` to allow Supadoc, existing Onya, and Vercel
     production origins during the transition
+  - removed the accidental/dead `superdoc.com.au` domain entry after confirming the
+    GoDaddy account is for `supadoc.com.au`
 - GoDaddy DNS
   - apex `A @` points to `76.76.21.21`
   - `www` CNAME points to `cname.vercel-dns.com.`
@@ -774,9 +776,16 @@
 7. `dig +short www.supadoc.com.au CNAME` returns `cname.vercel-dns.com.`.
 8. Earlier `superdoc.com.au` checks returned no public DNS; the GoDaddy account and
    public DNS records are for `supadoc.com.au`.
-9. Pending fresh deployment: verify `https://supadoc.com.au/` returns `200` and includes
-   Supadoc canonical, Open Graph, and Twitter image URLs.
-10. Pending fresh deployment: verify `https://supadoc.com.au/sitemap.xml` returns `200`
-    and sitemap URLs use `https://supadoc.com.au`.
-11. Pending fresh deployment: verify a production API request with
-    `Origin: https://supadoc.com.au` returns `200` JSON and allows the Supadoc origin.
+9. Production deployment `dpl_4xcY58yxLF8midrV2XcUcobwThzC` is `Ready`.
+10. `vercel alias ls` shows active aliases on the latest deployment for
+    `supadoc.com.au`, `www.supadoc.com.au`, `onyahealth.com.au`,
+    `www.onyahealth.com.au`, and `onya-health.vercel.app`.
+11. `https://supadoc.com.au/` returns `200` and includes Supadoc canonical, Open Graph,
+    and Twitter image URLs.
+12. `https://www.supadoc.com.au/` returns `200` and includes the same Supadoc canonical
+    and social sharing URLs.
+13. `https://supadoc.com.au/sitemap.xml` returns `200` and sitemap URLs use
+    `https://supadoc.com.au`.
+14. `POST https://supadoc.com.au/api/patient/account-exists` with
+    `Origin: https://supadoc.com.au` returns `200` JSON and
+    `access-control-allow-origin: https://supadoc.com.au`.
