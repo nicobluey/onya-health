@@ -770,3 +770,16 @@
    `onya-health`, but Vercel still reports DNS as not configured.
 5. `dig +trace superdoc.com.au A` stops at the `.com.au` registry and does not delegate
    to the GoDaddy nameservers yet, so the GoDaddy zone records are not publicly visible.
+6. Production deployment `dpl_DqJXJ48dMRCiu8gcDpChkDmzE5KK` is `Ready` and aliases include
+   `superdoc.com.au`, `www.superdoc.com.au`, `www.onyahealth.com.au`,
+   `onya-health.vercel.app`, and `onyahealth.com.au`.
+7. `https://onya-health.vercel.app/` returns `200` and includes Superdoc canonical,
+   Open Graph, and Twitter image URLs.
+8. `https://onya-health.vercel.app/sitemap.xml` returns `200` and sitemap URLs use
+   `https://superdoc.com.au`.
+9. `POST https://onya-health.vercel.app/api/patient/account-exists` with
+   `Origin: https://superdoc.com.au` returns `200` JSON and
+   `access-control-allow-origin: https://superdoc.com.au`.
+10. `https://superdoc.com.au/` and `https://www.superdoc.com.au/` are not resolvable yet
+    from public DNS, so final Superdoc live-site checks are blocked on registry/DNS
+    publication rather than Vercel deployment.
