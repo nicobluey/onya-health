@@ -46,7 +46,7 @@ const CLINICAL_REVIEWER = {
 };
 
 const LAST_UPDATED = 'April 7, 2026';
-const SITE_URL = 'https://superdoc.com.au';
+const SITE_URL = 'https://supadoc.com.au';
 
 const HEALTH_TOPICS: HealthTopic[] = [
     { slug: 'flu-2026-australia-vaccination', title: 'Flu in 2026: vaccination and symptom planning in Australia', intro: 'Understand common flu symptoms, when to isolate, and how to organise practical next steps while you recover.' },

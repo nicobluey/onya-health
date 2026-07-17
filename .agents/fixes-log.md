@@ -718,16 +718,16 @@
 2. `npm run lint` succeeds.
 3. `npm run build` succeeds.
 
-## 2026-07-17 - Move public web canonical domain to Superdoc
+## 2026-07-17 - Move public web canonical domain to Supadoc
 
 ### Symptoms
 
-- `superdoc.com.au` needed to become the primary public web domain.
+- `supadoc.com.au` needed to become the primary public web domain.
 - Existing Onya Health email/sender infrastructure needed to remain on the Onya domain.
 
 ### Root causes
 
-1. The Vercel project had not been connected to the Superdoc apex and `www` domains.
+1. The Vercel project had not been connected to the Supadoc apex and `www` domains.
 2. SEO metadata, social preview URLs, robots, and sitemap output still used
    `www.onyahealth.com.au` as the canonical public origin.
 3. Project deployment docs still treated the old Onya domains as the required production
@@ -736,50 +736,47 @@
 ### Files/areas changed
 
 - Vercel project `onya-health`
-  - added `superdoc.com.au`
-  - added `www.superdoc.com.au`
+  - added `supadoc.com.au`
+  - added `www.supadoc.com.au`
   - updated production `APP_BASE_URL`, `FRONTEND_BASE_URL`, and `VITE_API_BASE_URL`
-    to `https://superdoc.com.au`
-  - updated production `CORS_ORIGIN` to allow Superdoc, existing Onya, and Vercel
+    to `https://supadoc.com.au`
+  - updated production `CORS_ORIGIN` to allow Supadoc, existing Onya, and Vercel
     production origins during the transition
 - GoDaddy DNS
   - apex `A @` points to `76.76.21.21`
   - `www` CNAME points to `cname.vercel-dns.com.`
   - nameservers and mail-related records left unchanged
 - `frontend/index.html`
-  - canonical, Open Graph, and Twitter image URLs now use `https://superdoc.com.au`.
+  - canonical, Open Graph, and Twitter image URLs now use `https://supadoc.com.au`.
 - `frontend/public/robots.txt`
-  - sitemap URL now uses `https://superdoc.com.au`.
+  - sitemap URL now uses `https://supadoc.com.au`.
 - `frontend/public/sitemap.xml`
-  - generated route URLs now use `https://superdoc.com.au`.
+  - generated route URLs now use `https://supadoc.com.au`.
 - `frontend/src/pages/HealthTopicLandingPage.tsx`
-  - health-topic canonical/structured-data base URL now uses `https://superdoc.com.au`.
+  - health-topic canonical/structured-data base URL now uses `https://supadoc.com.au`.
 - `scripts/generate-sitemap.mjs`
-  - default sitemap base URL now uses `https://superdoc.com.au`.
+  - default sitemap base URL now uses `https://supadoc.com.au`.
 - `AGENTS.md`, `PLANS.md`, `.agents/README.md`
-  - deployment policy now uses Superdoc as the primary web domain and keeps Onya mail
+  - deployment policy now uses Supadoc as the primary web domain and keeps Onya mail
     migration separate.
 
 ### Verification
 
 1. `npm run lint` succeeds.
 2. `npm run build` succeeds.
-3. `npx vercel domains inspect superdoc.com.au` finds the domain attached to
-   `onya-health`, but Vercel still reports DNS as not configured.
-4. `npx vercel domains inspect www.superdoc.com.au` finds the domain attached to
-   `onya-health`, but Vercel still reports DNS as not configured.
-5. `dig +trace superdoc.com.au A` stops at the `.com.au` registry and does not delegate
-   to the GoDaddy nameservers yet, so the GoDaddy zone records are not publicly visible.
-6. Production deployment `dpl_DqJXJ48dMRCiu8gcDpChkDmzE5KK` is `Ready` and aliases include
-   `superdoc.com.au`, `www.superdoc.com.au`, `www.onyahealth.com.au`,
-   `onya-health.vercel.app`, and `onyahealth.com.au`.
-7. `https://onya-health.vercel.app/` returns `200` and includes Superdoc canonical,
-   Open Graph, and Twitter image URLs.
-8. `https://onya-health.vercel.app/sitemap.xml` returns `200` and sitemap URLs use
-   `https://superdoc.com.au`.
-9. `POST https://onya-health.vercel.app/api/patient/account-exists` with
-   `Origin: https://superdoc.com.au` returns `200` JSON and
-   `access-control-allow-origin: https://superdoc.com.au`.
-10. `https://superdoc.com.au/` and `https://www.superdoc.com.au/` are not resolvable yet
-    from public DNS, so final Superdoc live-site checks are blocked on registry/DNS
-    publication rather than Vercel deployment.
+3. `npx vercel domains inspect supadoc.com.au` finds the domain attached to
+   `onya-health`; Vercel sees GoDaddy nameservers.
+4. `npx vercel domains inspect www.supadoc.com.au` finds the domain attached to
+   `onya-health`; Vercel sees GoDaddy nameservers.
+5. `dig +short supadoc.com.au NS` returns `ns23.domaincontrol.com.` and
+   `ns24.domaincontrol.com.`.
+6. `dig +short supadoc.com.au A` returns `76.76.21.21`.
+7. `dig +short www.supadoc.com.au CNAME` returns `cname.vercel-dns.com.`.
+8. Earlier `superdoc.com.au` checks returned no public DNS; the GoDaddy account and
+   public DNS records are for `supadoc.com.au`.
+9. Pending fresh deployment: verify `https://supadoc.com.au/` returns `200` and includes
+   Supadoc canonical, Open Graph, and Twitter image URLs.
+10. Pending fresh deployment: verify `https://supadoc.com.au/sitemap.xml` returns `200`
+    and sitemap URLs use `https://supadoc.com.au`.
+11. Pending fresh deployment: verify a production API request with
+    `Origin: https://supadoc.com.au` returns `200` JSON and allows the Supadoc origin.

@@ -6,8 +6,8 @@ This folder tracks production incidents, regressions, and applied fixes so futur
 
 - Always deploy to production aliases, not random preview subdomains.
 - Every live release must be aliased to all three:
-  - `superdoc.com.au`
-  - `www.superdoc.com.au`
+  - `supadoc.com.au`
+  - `www.supadoc.com.au`
   - `onya-health.vercel.app`
 - If alias assignment fails, treat deploy as incomplete and resolve before closing work.
 - In Vercel, Environment `Production` is not enough. The deployment detail page must show

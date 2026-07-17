@@ -184,8 +184,8 @@ Before finishing implementation:
 
 For live releases, deployment is incomplete until aliases are assigned to:
 
-- `superdoc.com.au`
-- `www.superdoc.com.au`
+- `supadoc.com.au`
+- `www.supadoc.com.au`
 - `onya-health.vercel.app`
 
 Do not treat a preview deployment alone as production complete. In Vercel, a deployment
@@ -193,7 +193,7 @@ with Environment `Production` can still be `Staged`; production is complete only
 deployment detail page shows `Current` and the `Domains` section includes the live aliases.
 
 If Vercel shows `Assigning Custom Domains: Skipped`, open the deployment actions menu and
-choose `Promote`. Confirm that `superdoc.com.au`, `www.superdoc.com.au`, and `onya-health.vercel.app` are
+choose `Promote`. Confirm that `supadoc.com.au`, `www.supadoc.com.au`, and `onya-health.vercel.app` are
 listed in the promotion dialog before confirming. After promotion, verify the live site and
 at least one changed production API behavior.
 

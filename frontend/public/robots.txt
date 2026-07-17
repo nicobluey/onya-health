@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://superdoc.com.au/sitemap.xml
+Sitemap: https://supadoc.com.au/sitemap.xml
