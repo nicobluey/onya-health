@@ -29,6 +29,8 @@ Current implementation state:
 - Vite + React + TypeScript frontend in `frontend/`.
 - Node/Vercel API entrypoint in `api/index.js`.
 - Local Node backend wrapper in `backend/server.js`.
+- Primary public web origin is `https://superdoc.com.au`; Onya Health mail remains on
+  the existing Onya Health domain until explicitly migrated.
 - Doctor portal static pages under `frontend/public/doctor`.
 - Patient portal in `frontend/src/pages/PatientPortalPage.tsx`.
 - Booking flow in `frontend/src/consult-flow`.

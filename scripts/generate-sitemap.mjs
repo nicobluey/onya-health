@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
-const BASE_URL = process.env.SITEMAP_BASE_URL || 'https://www.onyahealth.com.au';
+const BASE_URL = process.env.SITEMAP_BASE_URL || 'https://superdoc.com.au';
 const ROOT = process.cwd();
 const topicSource = path.join(ROOT, 'frontend/src/pages/HealthTopicLandingPage.tsx');
 const sitemapPath = path.join(ROOT, 'frontend/public/sitemap.xml');

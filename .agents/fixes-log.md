@@ -717,3 +717,56 @@
 1. `node --check api/index.js backend/lib/storage.js` succeeds.
 2. `npm run lint` succeeds.
 3. `npm run build` succeeds.
+
+## 2026-07-17 - Move public web canonical domain to Superdoc
+
+### Symptoms
+
+- `superdoc.com.au` needed to become the primary public web domain.
+- Existing Onya Health email/sender infrastructure needed to remain on the Onya domain.
+
+### Root causes
+
+1. The Vercel project had not been connected to the Superdoc apex and `www` domains.
+2. SEO metadata, social preview URLs, robots, and sitemap output still used
+   `www.onyahealth.com.au` as the canonical public origin.
+3. Project deployment docs still treated the old Onya domains as the required production
+   aliases.
+
+### Files/areas changed
+
+- Vercel project `onya-health`
+  - added `superdoc.com.au`
+  - added `www.superdoc.com.au`
+  - updated production `APP_BASE_URL`, `FRONTEND_BASE_URL`, and `VITE_API_BASE_URL`
+    to `https://superdoc.com.au`
+  - updated production `CORS_ORIGIN` to allow Superdoc, existing Onya, and Vercel
+    production origins during the transition
+- GoDaddy DNS
+  - apex `A @` points to `76.76.21.21`
+  - `www` CNAME points to `cname.vercel-dns.com.`
+  - nameservers and mail-related records left unchanged
+- `frontend/index.html`
+  - canonical, Open Graph, and Twitter image URLs now use `https://superdoc.com.au`.
+- `frontend/public/robots.txt`
+  - sitemap URL now uses `https://superdoc.com.au`.
+- `frontend/public/sitemap.xml`
+  - generated route URLs now use `https://superdoc.com.au`.
+- `frontend/src/pages/HealthTopicLandingPage.tsx`
+  - health-topic canonical/structured-data base URL now uses `https://superdoc.com.au`.
+- `scripts/generate-sitemap.mjs`
+  - default sitemap base URL now uses `https://superdoc.com.au`.
+- `AGENTS.md`, `PLANS.md`, `.agents/README.md`
+  - deployment policy now uses Superdoc as the primary web domain and keeps Onya mail
+    migration separate.
+
+### Verification
+
+1. `npm run lint` succeeds.
+2. `npm run build` succeeds.
+3. `npx vercel domains inspect superdoc.com.au` finds the domain attached to
+   `onya-health`, but Vercel still reports DNS as not configured.
+4. `npx vercel domains inspect www.superdoc.com.au` finds the domain attached to
+   `onya-health`, but Vercel still reports DNS as not configured.
+5. `dig +trace superdoc.com.au A` stops at the `.com.au` registry and does not delegate
+   to the GoDaddy nameservers yet, so the GoDaddy zone records are not publicly visible.

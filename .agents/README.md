@@ -6,8 +6,8 @@ This folder tracks production incidents, regressions, and applied fixes so futur
 
 - Always deploy to production aliases, not random preview subdomains.
 - Every live release must be aliased to all three:
-  - `onyahealth.com.au`
-  - `www.onyahealth.com.au`
+  - `superdoc.com.au`
+  - `www.superdoc.com.au`
   - `onya-health.vercel.app`
 - If alias assignment fails, treat deploy as incomplete and resolve before closing work.
 - In Vercel, Environment `Production` is not enough. The deployment detail page must show
@@ -16,6 +16,8 @@ This folder tracks production incidents, regressions, and applied fixes so futur
   use `Deployment Actions` -> `Promote`, then re-test the live aliases.
 - Use the `onya-health` Vercel project for production. A duplicate `repo` project may show
   the same Git commits, but it does not own the production domains.
+- Keep Onya Health email/sender configuration on the existing Onya domain until the mail
+  system is intentionally migrated.
 
 ## Markdown Context Tree
 
