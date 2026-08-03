@@ -266,6 +266,9 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
   `200`.
 - Tightened production doctor notification discovery so pending and rejected Supabase
   practitioner accounts are excluded.
+- Added an audit-backed patient/doctor message thread, doctor replies with patient email
+  delivery, direct email-to-review links, and patient-portal calls to action on message and
+  completed-certificate emails.
 
 2026-06-29:
 

@@ -41,6 +41,7 @@ import {
   getMealPlanTemplateCacheByIntakeHash,
   getPatientBillingByEmail,
   isSupabaseStorageEnabled,
+  listCertificateMessages,
   listMealPlannerRecipes,
   listMealPlanGenerationCacheByPatientEmail,
   listCertificates,
@@ -59,6 +60,7 @@ import {
   renderDoctorWelcomeEmail,
   renderPatientCertificateDeniedEmail,
   renderPatientCertificateReadyEmail,
+  renderPatientDoctorMessageEmail,
   renderPatientMagicLinkEmail,
   renderPatientMoreInfoEmail,
   renderPatientPasswordResetEmail,
@@ -3496,6 +3498,31 @@ async function sendPatientMoreInfoEmail(certificate, doctorEmail, notes) {
   });
 }
 
+async function sendPatientDoctorMessageEmail(certificate, doctorName, message) {
+  const patientEmail = certificate?.certificateDraft?.email;
+  if (!patientEmail) return;
+
+  const emailContent = renderPatientDoctorMessageEmail({
+    baseUrl: FRONTEND_BASE_URL || APP_BASE_URL || '',
+    requestId: certificate.id,
+    doctorName,
+    message,
+  });
+
+  await sendEmail({
+    to: patientEmail,
+    subject: 'New message from your doctor',
+    html: emailContent.html,
+    text: emailContent.text,
+  });
+
+  info('certificate.doctor_message_email.sent', {
+    certificateId: certificate.id,
+    provider: currentEmailProvider(),
+    patientEmail,
+  });
+}
+
 async function markPaidFromStripeSession(session, trigger, req) {
   const certificateId =
     session?.metadata?.certificate_id ||
@@ -6853,8 +6880,12 @@ export default async function handler(req, res) {
         return;
       }
 
+      const messages = await listCertificateMessages(certId);
       sendJson(res, 200, {
-        request: patientSummaryFromCertificate(certificate),
+        request: {
+          ...patientSummaryFromCertificate(certificate),
+          messages,
+        },
         certificateDraft: certificate.certificateDraft || {},
       });
       return;
@@ -6881,20 +6912,29 @@ export default async function handler(req, res) {
         sendJson(res, 400, { error: 'Message is required' });
         return;
       }
+      if (message.length > 4000) {
+        sendJson(res, 400, { error: 'Message must be 4000 characters or fewer' });
+        return;
+      }
 
+      const messageId = crypto.randomUUID();
       await appendAudit({
         type: 'PATIENT_MESSAGE_SENT',
         certificateId: certId,
         by: normalizeEmail(patient.email),
+        messageId,
+        senderName: String(certificate?.certificateDraft?.fullName || 'Patient').trim(),
         message,
       });
 
       const recipients = await resolveDoctorNotificationEmails();
+      const reviewUrl = `${getAppBaseUrl(req)}/doctor/review?id=${encodeURIComponent(certId)}`;
       const patientMessageEmail = renderDoctorPatientMessageEmail({
         baseUrl: getFrontendBaseUrl(req),
         certId,
         patientEmail: normalizeEmail(patient.email),
         message,
+        reviewUrl,
       });
 
       let emailSent = false;
@@ -6922,9 +6962,11 @@ export default async function handler(req, res) {
         emailSent,
       });
 
+      const messages = await listCertificateMessages(certId);
       sendJson(res, 200, {
         message: emailSent ? 'Message sent to doctor' : 'Message saved; doctor notification email is pending',
         emailSent,
+        messages,
       });
       return;
     }
@@ -7515,9 +7557,76 @@ export default async function handler(req, res) {
         return;
       }
 
+      const messages = await listCertificateMessages(certId);
       sendJson(res, 200, {
         doctor: doctor.email,
-        certificate: doctorPayloadFromRequest(certificate),
+        certificate: {
+          ...doctorPayloadFromRequest(certificate),
+          messages,
+        },
+      });
+      return;
+    }
+
+    if (req.method === 'POST' && segments.length === 4 && segments[0] === 'doctor' && segments[1] === 'certificates' && segments[3] === 'message') {
+      const doctor = await requireDoctor(req, res);
+      if (!doctor) return;
+      const doctorProfile = await resolveDoctorProfile(doctor.email);
+      const doctorName = resolveDoctorDisplayName(doctorProfile, doctor.email);
+
+      const certId = decodeURIComponent(segments[2]);
+      const body = await parseJsonBody(req);
+      const message = String(body.message || '').trim();
+      if (!message) {
+        sendJson(res, 400, { error: 'Message is required' });
+        return;
+      }
+      if (message.length > 4000) {
+        sendJson(res, 400, { error: 'Message must be 4000 characters or fewer' });
+        return;
+      }
+
+      const certificate = await getCertificateById(certId);
+      if (!certificate) {
+        sendJson(res, 404, { error: 'Certificate not found' });
+        return;
+      }
+      if (!isCertificateOpenForReview(certificate)) {
+        sendJson(res, 409, {
+          error: 'Certificate already reviewed',
+          status: certificate.status,
+        });
+        return;
+      }
+
+      await appendAudit({
+        type: 'DOCTOR_MESSAGE_SENT',
+        certificateId: certId,
+        by: normalizeEmail(doctor.email),
+        messageId: crypto.randomUUID(),
+        senderName: doctorName,
+        message,
+      });
+
+      let patientNotificationFailed = false;
+      try {
+        await sendPatientDoctorMessageEmail(certificate, doctorName, message);
+      } catch (errorObject) {
+        patientNotificationFailed = true;
+        error('doctor.message.patient_email_failed', {
+          doctor: doctor.email,
+          certificateId: certId,
+          message: errorObject?.message || String(errorObject),
+        });
+      }
+
+      const messages = await listCertificateMessages(certId);
+      sendJson(res, 200, {
+        message: patientNotificationFailed
+          ? 'Reply saved, but patient email delivery failed. Please check email provider logs.'
+          : 'Reply sent to patient',
+        messages,
+        patientNotificationFailed,
       });
       return;
     }
@@ -7697,6 +7806,8 @@ export default async function handler(req, res) {
         type: 'MORE_INFO_REQUESTED',
         certificateId: updated.id,
         by: doctor.email,
+        messageId: crypto.randomUUID(),
+        senderName: reviewerName,
         notes,
       });
       await sendPatientMoreInfoEmail(updated, doctor.email, notes);

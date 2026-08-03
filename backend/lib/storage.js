@@ -27,6 +27,11 @@ const SUPPORTED_MEAL_RECIPE_IMAGE_MIME_TO_EXTENSION = {
   'image/gif': 'gif',
   'image/avif': 'avif',
 };
+const CERTIFICATE_MESSAGE_EVENT_TYPES = new Set([
+  'PATIENT_MESSAGE_SENT',
+  'DOCTOR_MESSAGE_SENT',
+  'MORE_INFO_REQUESTED',
+]);
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
@@ -1131,6 +1136,38 @@ async function appendAuditLocal(entry) {
   });
 }
 
+function mapCertificateMessageEvent(entry, index = 0) {
+  const payload = entry?.payload && typeof entry.payload === 'object' ? entry.payload : entry || {};
+  const eventType = String(entry?.event_type || entry?.type || payload?.type || '').trim().toUpperCase();
+  if (!CERTIFICATE_MESSAGE_EVENT_TYPES.has(eventType)) return null;
+
+  const message = String(payload.message || payload.notes || '').trim();
+  if (!message) return null;
+
+  const createdAt = String(entry?.created_at || entry?.at || payload?.createdAt || payload?.at || '').trim();
+  const sender = eventType === 'PATIENT_MESSAGE_SENT' ? 'patient' : 'doctor';
+  return {
+    id: String(payload.messageId || `${eventType.toLowerCase()}-${createdAt || index}`).trim(),
+    sender,
+    senderName: String(payload.senderName || (sender === 'doctor' ? 'Doctor' : 'Patient')).trim(),
+    message,
+    createdAt,
+  };
+}
+
+async function listCertificateMessagesLocal(requestId) {
+  const normalizedId = String(requestId || '').trim();
+  if (!normalizedId) return [];
+
+  const db = await readDbRaw();
+  return db.auditLog
+    .filter((entry) => String(entry?.certificateId || entry?.requestId || '').trim() === normalizedId)
+    .map((entry, index) => mapCertificateMessageEvent(entry, index))
+    .filter(Boolean)
+    .sort((left, right) => String(left.createdAt || '').localeCompare(String(right.createdAt || '')))
+    .slice(-100);
+}
+
 async function getPatientBillingLocal(email) {
   const normalizedEmail = normalizeEmail(email);
   if (!normalizedEmail) return null;
@@ -1541,6 +1578,25 @@ async function appendAuditSupabase(entry) {
       created_at: new Date().toISOString(),
     },
   });
+}
+
+async function listCertificateMessagesSupabase(requestId) {
+  const normalizedId = String(requestId || '').trim();
+  if (!normalizedId) return [];
+
+  const rows = await supabaseRequest(
+    `request_events?request_id=eq.${encodeURIComponent(
+      normalizedId
+    )}&event_type=in.(PATIENT_MESSAGE_SENT,DOCTOR_MESSAGE_SENT,MORE_INFO_REQUESTED)&select=event_type,payload,created_at&order=created_at.asc&limit=100`,
+    {
+      method: 'GET',
+      prefer: 'return=representation',
+    }
+  );
+
+  return (Array.isArray(rows) ? rows : [])
+    .map((entry, index) => mapCertificateMessageEvent(entry, index))
+    .filter(Boolean);
 }
 
 async function getPatientBillingSupabase(email) {
@@ -2560,6 +2616,13 @@ export async function appendAudit(entry) {
     return appendAuditSupabase(entry);
   }
   return appendAuditLocal(entry);
+}
+
+export async function listCertificateMessages(requestId) {
+  if (getSupabaseConfig().enabled) {
+    return listCertificateMessagesSupabase(requestId);
+  }
+  return listCertificateMessagesLocal(requestId);
 }
 
 export async function getPatientBillingByEmail(email) {

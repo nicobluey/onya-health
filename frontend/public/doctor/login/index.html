@@ -278,6 +278,11 @@
     <script>
       const params = new URLSearchParams(window.location.search);
       const resetTokenFromUrl = String(params.get('token') || '').trim();
+      const requestedReturnTo = String(params.get('returnTo') || '').trim();
+      const portalDestination =
+        requestedReturnTo.startsWith('/doctor/') && !requestedReturnTo.startsWith('//')
+          ? requestedReturnTo
+          : '/doctor/queue';
 
       const tabs = document.querySelectorAll('.tab');
       const panels = document.querySelectorAll('.panel');
@@ -324,7 +329,7 @@
         try {
           const data = await submitJson('/api/doctor/login', payload);
           localStorage.setItem('onyaDoctorToken', data.token);
-          window.location.href = '/doctor/queue';
+          window.location.href = portalDestination;
         } catch (error) {
           setStatus('signin-status', error.message || 'Login failed', true);
         } finally {
@@ -343,7 +348,7 @@
           const data = await submitJson('/api/doctor/register', payload);
           if (data.token) {
             localStorage.setItem('onyaDoctorToken', data.token);
-            window.location.href = '/doctor/queue';
+            window.location.href = portalDestination;
             return;
           }
           event.currentTarget.reset();
@@ -395,7 +400,7 @@
             return;
           }
           localStorage.setItem('onyaDoctorToken', data.token);
-          window.location.href = '/doctor/queue';
+          window.location.href = portalDestination;
         } catch (error) {
           setStatus('reset-status', error.message || 'Unable to reset password', true);
         } finally {

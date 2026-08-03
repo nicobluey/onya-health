@@ -52,6 +52,7 @@ npm run dev -- --port 5173
   - `POST /api/doctor/password/reset/request`
   - `POST /api/doctor/password/reset/confirm`
   - `GET /api/doctor/certificates`
+  - `POST /api/doctor/certificates/:id/message`
   - `POST /api/doctor/certificates/:id/decision`
   - `POST /api/doctor/certificates/:id/request-more-info`
 - Meal planning:
@@ -81,6 +82,12 @@ Keep secrets out of logs and documentation.
 - Account welcome and password-reset messages are sent to the doctor's own account email.
 - New certificate-review and patient-reply notifications are sent to the explicit
   `DOCTOR_NOTIFICATION_EMAILS` list plus approved practitioner accounts.
+- Patient-message notifications link directly to the relevant doctor review. After
+  authentication, the doctor returns to that request and can reply from its conversation
+  panel. Doctor replies are stored in the request event history and emailed to the patient.
+- Approved certificate emails include the generated PDF attachment and a patient-portal
+  button. If attachment generation fails, the fallback email directs the patient to the
+  portal download.
 - Pending or rejected practitioner accounts must not receive patient or certificate
   notifications. Addresses explicitly configured in `DOCTOR_NOTIFICATION_EMAILS` are
   treated as operator-managed recipients and do not require a portal account.

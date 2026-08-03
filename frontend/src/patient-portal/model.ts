@@ -41,6 +41,13 @@ export interface PortalRequest {
     notes?: string;
   } | null;
   certificatePdfUrl?: string | null;
+  messages?: Array<{
+    id: string;
+    sender: 'patient' | 'doctor';
+    senderName: string;
+    message: string;
+    createdAt: string;
+  }>;
 }
 
 export interface PatientProfile {

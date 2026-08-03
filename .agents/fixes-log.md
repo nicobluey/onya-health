@@ -826,3 +826,60 @@
 2. Authenticated `GET /api/doctor/profile` returned `200` with `approved` status.
 3. Authenticated `GET /api/doctor/certificates` returned `200`.
 4. No patient certificate was approved or modified during verification.
+
+## 2026-08-04 - Complete doctor/patient messaging and certificate email delivery
+
+### Symptoms
+
+- Doctors received patient-message emails but the email had no reply button.
+- Patient messages were audit events only and were not visible on the doctor review page,
+  so the doctor could not reply in context from the portal.
+- Patient message and completed-certificate emails did not consistently provide a clear
+  route back to the patient portal.
+
+### Root causes
+
+1. `PATIENT_MESSAGE_SENT` events were written to `request_events`, but certificate review
+   responses did not load those events.
+2. There was no dedicated authenticated doctor-to-patient message endpoint.
+3. The patient-message email template did not receive a certificate-specific review URL.
+4. The completed-certificate email attached the PDF but only showed a portal link in its
+   attachment-failure fallback.
+
+### Files/areas changed
+
+- `backend/lib/storage.js`
+  - added local and Supabase retrieval of patient, doctor, and more-information message
+    events for a certificate.
+- `api/index.js`, `backend/server.js`
+  - return message history in authenticated request detail responses;
+  - persist patient messages with stable sender metadata;
+  - added `POST /api/doctor/certificates/:id/message` to store a doctor reply and email the
+    patient;
+  - preserve controlled success responses when email delivery fails.
+- `backend/lib/email-templates.js`
+  - added direct doctor-review and patient-portal calls to action;
+  - added the doctor-reply email template;
+  - kept the generated certificate PDF attached to approval emails.
+- `frontend/public/doctor/*`, `backend/doctor-portal/*`
+  - added the patient conversation and reply composer to certificate review;
+  - preserved the target review through doctor sign-in;
+  - escaped patient and message data before rendering HTML.
+- `frontend/src/pages/PatientPortalPage.tsx`, `frontend/src/patient-portal/model.ts`
+  - load and display the request conversation in the queued patient view;
+  - update the thread immediately after a patient message.
+
+### Verification
+
+1. `node --check` passes for the API, local backend, storage, and email template modules.
+2. `npm run lint` passes.
+3. `npm run build` passes.
+4. Isolated local API smoke test confirmed:
+   - historical patient audit messages load in doctor request details;
+   - a doctor reply is stored and returned in the thread;
+   - the patient reply email includes an `Open patient portal` button;
+   - certificate approval creates an email with a PDF attachment and patient-portal button.
+5. Production Supabase message-history lookup returned existing patient messages through
+   the new storage query without exposing message contents in logs.
+6. Doctor review screenshots at `1440x1000` and `390x844` confirmed the conversation,
+   reply composer, clinical notes, and decision controls remain readable without overlap.

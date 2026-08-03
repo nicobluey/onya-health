@@ -133,12 +133,14 @@ export function renderPatientCertificateReadyEmail({ baseUrl, requestId, attachm
     title: 'Your medical certificate is ready',
     subtitle: 'Your request has been reviewed and approved by an Onya doctor.',
     bodyHtml,
+    ctaLabel: 'Open patient portal',
+    ctaUrl: patientPortalUrl,
   });
 
   return {
     html,
     text: attachmentIncluded
-      ? `Your medical certificate is ready.\nRequest ID: ${requestId}\nA PDF copy is attached to this email.`
+      ? `Your medical certificate is ready.\nRequest ID: ${requestId}\nA PDF copy is attached to this email.\nOpen patient portal: ${patientPortalUrl}`
       : `Your medical certificate is ready.\nRequest ID: ${requestId}\nIf no attachment is visible, download your certificate from: ${patientPortalUrl}`,
   };
 }
@@ -162,6 +164,8 @@ export function renderPatientCertificateDeniedEmail({ baseUrl, requestId }) {
 }
 
 export function renderPatientMoreInfoEmail({ baseUrl, requestId, doctorEmail, notes }) {
+  const normalizedBaseUrl = String(baseUrl || '').replace(/\/$/, '');
+  const patientPortalUrl = normalizedBaseUrl ? `${normalizedBaseUrl}/patient-login` : '/patient-login';
   const html = renderShell({
     baseUrl,
     badge: 'More Information Needed',
@@ -173,11 +177,13 @@ export function renderPatientMoreInfoEmail({ baseUrl, requestId, doctorEmail, no
       <p style="margin:0 0 8px;"><strong>Doctor note:</strong></p>
       <p style="margin:0;padding:12px 14px;border:1px solid ${BRAND.border};border-radius:12px;background:#f6fafd;">${escapeHtml(notes || 'Please provide additional details to continue your review.')}</p>
     `,
+    ctaLabel: 'Reply in patient portal',
+    ctaUrl: patientPortalUrl,
   });
 
   return {
     html,
-    text: `More information is needed for request ${requestId}.\nDoctor: ${doctorEmail}\nNote: ${notes || 'Please provide additional details to continue your review.'}`,
+    text: `More information is needed for request ${requestId}.\nDoctor: ${doctorEmail}\nNote: ${notes || 'Please provide additional details to continue your review.'}\nReply in patient portal: ${patientPortalUrl}`,
   };
 }
 
@@ -260,7 +266,7 @@ export function renderDoctorPasswordResetEmail({ baseUrl, resetUrl, expiresMinut
   };
 }
 
-export function renderDoctorPatientMessageEmail({ baseUrl, certId, patientEmail, message }) {
+export function renderDoctorPatientMessageEmail({ baseUrl, certId, patientEmail, message, reviewUrl }) {
   const html = renderShell({
     baseUrl,
     badge: 'Patient Message',
@@ -272,9 +278,34 @@ export function renderDoctorPatientMessageEmail({ baseUrl, certId, patientEmail,
       <p style="margin:0 0 8px;"><strong>Message:</strong></p>
       <p style="margin:0;padding:12px 14px;border:1px solid ${BRAND.border};border-radius:12px;background:#f6fafd;">${escapeHtml(message)}</p>
     `,
+    ctaLabel: 'Open message and reply',
+    ctaUrl: reviewUrl,
   });
   return {
     html,
-    text: `Patient message for request ${certId}\nFrom: ${patientEmail}\nMessage: ${message}`,
+    text: `Patient message for request ${certId}\nFrom: ${patientEmail}\nMessage: ${message}\nOpen message and reply: ${reviewUrl}`,
+  };
+}
+
+export function renderPatientDoctorMessageEmail({ baseUrl, requestId, doctorName, message }) {
+  const normalizedBaseUrl = String(baseUrl || '').replace(/\/$/, '');
+  const patientPortalUrl = normalizedBaseUrl ? `${normalizedBaseUrl}/patient-login` : '/patient-login';
+  const html = renderShell({
+    baseUrl,
+    badge: 'Doctor Message',
+    title: 'Your doctor sent you a message',
+    subtitle: 'Open your patient portal to review the conversation and reply.',
+    bodyHtml: `
+      <p style="margin:0 0 10px;"><strong>Request ID:</strong> ${escapeHtml(requestId)}</p>
+      <p style="margin:0 0 10px;"><strong>From:</strong> ${escapeHtml(doctorName || 'Your doctor')}</p>
+      <p style="margin:0 0 8px;"><strong>Message:</strong></p>
+      <p style="margin:0;padding:12px 14px;border:1px solid ${BRAND.border};border-radius:12px;background:#f6fafd;">${escapeHtml(message)}</p>
+    `,
+    ctaLabel: 'Open patient portal',
+    ctaUrl: patientPortalUrl,
+  });
+  return {
+    html,
+    text: `Doctor message for request ${requestId}\nFrom: ${doctorName || 'Your doctor'}\nMessage: ${message}\nOpen patient portal: ${patientPortalUrl}`,
   };
 }

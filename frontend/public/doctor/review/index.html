@@ -27,6 +27,17 @@
       .error { color: #a93736; }
       iframe { width: 100%; min-height: 640px; border: 1px solid #b3cfe5; border-radius: 10px; background: #fff; }
       .summary { margin-top: 14px; padding-top: 14px; border-top: 1px solid #b3cfe5; }
+      .message-thread { display: grid; gap: 10px; margin: 12px 0; }
+      .message-empty { padding: 14px; border: 1px dashed #b3cfe5; border-radius: 10px; color: #4a7fa7; }
+      .message { max-width: 78%; border: 1px solid #b3cfe5; border-radius: 12px; padding: 10px 12px; background: #f6fafd; }
+      .message.doctor { margin-left: auto; background: #1a3d63; border-color: #1a3d63; color: #fff; }
+      .message-meta { margin-bottom: 4px; font-size: 11px; font-weight: 700; opacity: 0.75; }
+      .message-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+      #reply { min-height: 96px; }
+      @media (max-width: 640px) {
+        header { align-items: flex-start; gap: 12px; }
+        .message { max-width: 92%; }
+      }
     </style>
   </head>
   <body>
@@ -39,6 +50,16 @@
     </header>
     <main>
       <div id="content" class="panel">Loading certificate...</div>
+      <div class="panel">
+        <div class="label">Patient conversation</div>
+        <div id="message-thread" class="message-thread"></div>
+        <label class="label" for="reply">Reply to patient</label>
+        <textarea id="reply" maxlength="4000" placeholder="Write a clear message for the patient..."></textarea>
+        <div class="actions">
+          <button id="send-reply" class="approve">Send reply to patient</button>
+        </div>
+        <div id="message-status" class="status muted"></div>
+      </div>
       <div class="panel">
         <label class="label" for="notes">Doctor Notes</label>
         <textarea id="notes" placeholder="Add your clinical review notes here..."></textarea>
@@ -61,7 +82,8 @@
     <script>
       const token = localStorage.getItem('onyaDoctorToken');
       if (!token) {
-        window.location.href = '/doctor/login';
+        const returnTo = `${window.location.pathname}${window.location.search}`;
+        window.location.href = `/doctor/login?returnTo=${encodeURIComponent(returnTo)}`;
       }
 
       const params = new URLSearchParams(window.location.search);
@@ -69,13 +91,17 @@
       const contentNode = document.getElementById('content');
       const statusNode = document.getElementById('status');
       const notesNode = document.getElementById('notes');
+      const replyNode = document.getElementById('reply');
+      const messageThreadNode = document.getElementById('message-thread');
+      const messageStatusNode = document.getElementById('message-status');
       const previewPanel = document.getElementById('preview-panel');
       const previewFrame = document.getElementById('preview-frame');
 
-      const buttonIds = ['assign', 'auto-notes', 'more-info', 'preview-pdf', 'approve', 'deny', 'close'];
+      const buttonIds = ['send-reply', 'assign', 'auto-notes', 'more-info', 'preview-pdf', 'approve', 'deny', 'close'];
       const actionButtons = buttonIds.map((buttonId) => document.getElementById(buttonId));
       let previewObjectUrl = null;
       let currentStatus = null;
+      let currentMessages = [];
 
       if (!id) {
         contentNode.textContent = 'Missing certificate ID.';
@@ -84,6 +110,45 @@
       function formatReasons(reasons) {
         if (!reasons || !reasons.length) return 'No additional flags';
         return reasons.join(', ');
+      }
+
+      function escapeHtml(value) {
+        return String(value || '')
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;')
+          .replaceAll('"', '&quot;')
+          .replaceAll("'", '&#39;');
+      }
+
+      function formatMessageDate(value) {
+        const date = new Date(value || '');
+        if (Number.isNaN(date.getTime())) return '';
+        return new Intl.DateTimeFormat('en-AU', {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        }).format(date);
+      }
+
+      function renderMessages(messages) {
+        currentMessages = Array.isArray(messages) ? messages : [];
+        if (currentMessages.length === 0) {
+          messageThreadNode.innerHTML = '<div class="message-empty">No messages in this request yet.</div>';
+          return;
+        }
+        messageThreadNode.innerHTML = currentMessages
+          .map((entry) => {
+            const fromDoctor = entry?.sender === 'doctor';
+            const senderName = entry?.senderName || (fromDoctor ? 'Doctor' : 'Patient');
+            const sentAt = formatMessageDate(entry?.createdAt);
+            return `
+              <div class="message ${fromDoctor ? 'doctor' : ''}">
+                <div class="message-meta">${escapeHtml(senderName)}${sentAt ? ` · ${escapeHtml(sentAt)}` : ''}</div>
+                <div class="message-body">${escapeHtml(entry?.message || '')}</div>
+              </div>
+            `;
+          })
+          .join('');
       }
 
       function isOpenStatus(status) {
@@ -97,9 +162,13 @@
       }
 
       function setBusy(isBusy) {
-        actionButtons.forEach((button) => {
-          button.disabled = isBusy;
-        });
+        if (isBusy) {
+          actionButtons.forEach((button) => {
+            button.disabled = true;
+          });
+          return;
+        }
+        updateActionAvailability();
       }
 
       function setStatus(message, tone) {
@@ -116,12 +185,20 @@
         statusNode.classList.add('muted');
       }
 
+      function setMessageStatus(message, tone) {
+        messageStatusNode.textContent = message;
+        messageStatusNode.className = 'status';
+        messageStatusNode.classList.add(tone === 'error' ? 'error' : tone === 'success' ? 'success' : 'muted');
+      }
+
       function updateActionAvailability() {
         const open = isOpenStatus(currentStatus);
         document.getElementById('approve').disabled = !open;
         document.getElementById('deny').disabled = !open;
         document.getElementById('more-info').disabled = !open;
         document.getElementById('assign').disabled = !open;
+        document.getElementById('send-reply').disabled = !open;
+        replyNode.disabled = !open;
         document.getElementById('close').disabled = !canCloseStatus(currentStatus);
       }
 
@@ -153,33 +230,66 @@
 
         const cert = payload.certificate;
         currentStatus = cert.status;
+        renderMessages(cert.messages);
         if (cert.decision?.notes) {
           notesNode.value = cert.decision.notes;
         }
 
         contentNode.innerHTML = `
           <div class="grid">
-            <div><div class="label">Patient</div><div class="value">${cert.patientName || '-'}</div></div>
-            <div><div class="label">Email</div><div class="value">${cert.patientEmail || '-'}</div></div>
-            <div><div class="label">DOB</div><div class="value">${cert.patientDob || '-'}</div></div>
-            <div><div class="label">Age</div><div class="value">${cert.patientAge ?? '-'}</div></div>
-            <div><div class="label">Purpose</div><div class="value">${cert.purpose || '-'}</div></div>
-            <div><div class="label">Symptom</div><div class="value">${cert.symptom || '-'}</div></div>
-            <div><div class="label">Start Date</div><div class="value">${cert.startDate || '-'}</div></div>
-            <div><div class="label">Duration</div><div class="value">${cert.durationDays || 1} day(s)</div></div>
-            <div><div class="label">Verification</div><div class="value">${cert.verificationCode || '-'}</div></div>
-            <div><div class="label">Risk</div><div class="value">${String(cert.risk?.level || '').toUpperCase()} (${cert.risk?.score ?? 0})</div></div>
-            <div><div class="label">Risk Notes</div><div class="value">${formatReasons(cert.risk?.reasons)}</div></div>
+            <div><div class="label">Patient</div><div class="value">${escapeHtml(cert.patientName || '-')}</div></div>
+            <div><div class="label">Email</div><div class="value">${escapeHtml(cert.patientEmail || '-')}</div></div>
+            <div><div class="label">DOB</div><div class="value">${escapeHtml(cert.patientDob || '-')}</div></div>
+            <div><div class="label">Age</div><div class="value">${escapeHtml(cert.patientAge ?? '-')}</div></div>
+            <div><div class="label">Purpose</div><div class="value">${escapeHtml(cert.purpose || '-')}</div></div>
+            <div><div class="label">Symptom</div><div class="value">${escapeHtml(cert.symptom || '-')}</div></div>
+            <div><div class="label">Start Date</div><div class="value">${escapeHtml(cert.startDate || '-')}</div></div>
+            <div><div class="label">Duration</div><div class="value">${escapeHtml(cert.durationDays || 1)} day(s)</div></div>
+            <div><div class="label">Verification</div><div class="value">${escapeHtml(cert.verificationCode || '-')}</div></div>
+            <div><div class="label">Risk</div><div class="value">${escapeHtml(String(cert.risk?.level || '').toUpperCase())} (${escapeHtml(cert.risk?.score ?? 0)})</div></div>
+            <div><div class="label">Risk Notes</div><div class="value">${escapeHtml(formatReasons(cert.risk?.reasons))}</div></div>
           </div>
           <div class="summary">
             <div class="label">Clinical Notes From Patient</div>
-            <div class="value">${cert.description || 'No summary provided.'}</div>
+            <div class="value">${escapeHtml(cert.description || 'No summary provided.')}</div>
           </div>
         `;
 
         updateActionAvailability();
         if (!isOpenStatus(cert.status)) {
           setStatus(`This certificate is already ${cert.status}.`, 'muted');
+        }
+      }
+
+      async function sendReply() {
+        const message = replyNode.value.trim();
+        if (!message) {
+          setMessageStatus('Write a message before sending.', 'error');
+          return;
+        }
+
+        setMessageStatus('Sending reply...', 'muted');
+        setBusy(true);
+        try {
+          const response = await fetch(`/api/doctor/certificates/${encodeURIComponent(id)}/message`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ message }),
+          });
+          const payload = await parseResponseJson(response);
+          if (!response.ok) {
+            throw new Error(payload.error || 'Failed to send reply');
+          }
+          replyNode.value = '';
+          renderMessages(payload.messages);
+          setMessageStatus(payload.message || 'Reply sent to patient.', payload.patientNotificationFailed ? 'error' : 'success');
+        } catch (error) {
+          setMessageStatus(error.message || 'Failed to send reply.', 'error');
+        } finally {
+          setBusy(false);
         }
       }
 
@@ -371,6 +481,7 @@
       }
 
       document.getElementById('assign').addEventListener('click', assignCertificate);
+      document.getElementById('send-reply').addEventListener('click', sendReply);
       document.getElementById('approve').addEventListener('click', () => submitDecision('approved'));
       document.getElementById('deny').addEventListener('click', () => submitDecision('denied'));
       document.getElementById('close').addEventListener('click', closeCertificate);
@@ -378,9 +489,13 @@
       document.getElementById('more-info').addEventListener('click', addMoreInfoDraft);
       document.getElementById('preview-pdf').addEventListener('click', previewPdf);
 
-      loadCertificate().catch((err) => {
-        contentNode.textContent = err?.message || 'Failed to load certificate.';
-      });
+      if (id) {
+        loadCertificate().catch((err) => {
+          contentNode.textContent = err?.message || 'Failed to load certificate.';
+        });
+      } else {
+        setBusy(true);
+      }
     </script>
   </body>
 </html>

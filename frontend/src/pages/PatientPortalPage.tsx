@@ -911,6 +911,7 @@ function QueuedWaitingScreen({
     const reviewActive = stageIndex === 2;
     const queueHeading = reviewActive ? 'Under doctor review' : 'Queued';
     const queueSubheading = reviewActive ? `Estimated time remaining: ${etaMinutes} min` : statusLabel(request?.status || '');
+    const messages = Array.isArray(request?.messages) ? request.messages : [];
     const rows = [
         { label: 'Type', value: 'Medical Certificate', icon: Tag },
         { label: 'Leave type', value: request?.purpose || '—', icon: FileText },
@@ -1002,6 +1003,40 @@ function QueuedWaitingScreen({
                         </div>
                     );
                 })}
+            </article>
+
+            <article className={sectionCardClassName('p-4')}>
+                <div className="flex items-center gap-2">
+                    <MessageCircle size={17} className="text-[#1a3d63]" />
+                    <h2 className="text-sm font-extrabold text-[#0a1931]">Conversation</h2>
+                </div>
+                <div className="mt-3 space-y-2">
+                    {messages.length === 0 ? (
+                        <p className="rounded-xl border border-dashed border-[#b3cfe5] bg-[#f6fafd] p-3 text-sm text-[#4a7fa7]">
+                            No messages in this request yet.
+                        </p>
+                    ) : (
+                        messages.map((entry) => {
+                            const fromPatient = entry.sender === 'patient';
+                            return (
+                                <div
+                                    key={entry.id}
+                                    className={`max-w-[88%] rounded-xl border p-3 ${
+                                        fromPatient
+                                            ? 'ml-auto border-[#1a3d63] bg-[#1a3d63] text-white'
+                                            : 'border-[#b3cfe5] bg-[#f6fafd] text-[#0a1931]'
+                                    }`}
+                                >
+                                    <p className="text-[11px] font-extrabold opacity-70">{entry.senderName || (fromPatient ? 'You' : 'Doctor')}</p>
+                                    <p className="mt-1 whitespace-pre-wrap break-words text-sm">{entry.message}</p>
+                                    {entry.createdAt && (
+                                        <p className="mt-1 text-[11px] opacity-60">{formatDate(entry.createdAt)}</p>
+                                    )}
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
             </article>
 
             <button
@@ -1520,6 +1555,15 @@ export default function PatientPortalPage() {
         setLastMainTab(mainTab);
         setActiveQueuedRequest(queuedRequest);
         setPortalScreen('queued');
+
+        const activeToken = token || window.localStorage.getItem('onya_patient_token') || '';
+        if (!queuedRequest?.id || !activeToken) return;
+        void fetchApiJson(`/api/patient/requests/${encodeURIComponent(queuedRequest.id)}`, {
+            headers: { Authorization: `Bearer ${activeToken}` },
+        }).then(({ response, payload }) => {
+            if (!response.ok || !payload?.request) return;
+            setActiveQueuedRequest(payload.request as PortalRequest);
+        }).catch(() => undefined);
     };
 
     const closeOverlayScreen = () => {
@@ -1763,6 +1807,9 @@ export default function PatientPortalPage() {
             );
             if (!response.ok) {
                 throw new Error(payload.error || 'Unable to send message');
+            }
+            if (Array.isArray(payload.messages)) {
+                setActiveQueuedRequest((current) => current ? { ...current, messages: payload.messages } : current);
             }
             window.alert(String(payload.message || 'Message sent to doctor.'));
         } catch (errorObject) {
