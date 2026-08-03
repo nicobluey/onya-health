@@ -789,3 +789,40 @@
 14. `POST https://supadoc.com.au/api/patient/account-exists` with
     `Origin: https://supadoc.com.au` returns `200` JSON and
     `access-control-allow-origin: https://supadoc.com.au`.
+
+## 2026-08-04 - Activate Isaac doctor account and restrict notification recipients
+
+### Symptoms
+
+- `isaacsupadoc@gmail.com` had a complete, email-confirmed practitioner record but was
+  still pending approval and could not access the live doctor queue.
+- Supabase notification discovery included every doctor-role account, even when the
+  account was pending or rejected.
+
+### Root causes
+
+1. The Isaac account had not completed the explicit admin-approval step.
+2. `listSupabaseDoctorEmails()` filtered by role but not by approval status, creating a
+   risk that unapproved accounts could receive patient and certificate notifications.
+
+### Files/areas changed
+
+- Production Supabase/Auth and doctor admin API:
+  - rotated the Isaac account to a new temporary password;
+  - changed approval status from `pending` to `approved` through the authenticated live
+    admin route;
+  - retained the existing practitioner identity and registration metadata.
+- `api/index.js`
+  - limited discovered Supabase doctor recipients to approved accounts and configured
+    admin doctors.
+- `backend/README.md`
+  - documented doctor welcome/reset and clinical notification routing.
+- `PLANS.md`
+  - recorded the account activation and notification-safety change.
+
+### Verification
+
+1. Live doctor login for `isaacsupadoc@gmail.com` returned `200`.
+2. Authenticated `GET /api/doctor/profile` returned `200` with `approved` status.
+3. Authenticated `GET /api/doctor/certificates` returned `200`.
+4. No patient certificate was approved or modified during verification.

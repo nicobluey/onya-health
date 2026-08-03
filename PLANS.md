@@ -259,6 +259,14 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
 
 ## Latest Validation
 
+2026-08-04:
+
+- Activated and verified the approved production practitioner account for
+  `isaacsupadoc@gmail.com`; live login, profile, and certificate queue requests returned
+  `200`.
+- Tightened production doctor notification discovery so pending and rejected Supabase
+  practitioner accounts are excluded.
+
 2026-06-29:
 
 - `npm run build` passed.

@@ -76,6 +76,15 @@ Common production variables:
 
 Keep secrets out of logs and documentation.
 
+## Doctor Email Routing
+
+- Account welcome and password-reset messages are sent to the doctor's own account email.
+- New certificate-review and patient-reply notifications are sent to the explicit
+  `DOCTOR_NOTIFICATION_EMAILS` list plus approved practitioner accounts.
+- Pending or rejected practitioner accounts must not receive patient or certificate
+  notifications. Addresses explicitly configured in `DOCTOR_NOTIFICATION_EMAILS` are
+  treated as operator-managed recipients and do not require a portal account.
+
 ## Storage Modes
 
 When Supabase service credentials are present, production data should be read/written through Supabase tables.

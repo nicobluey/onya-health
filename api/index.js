@@ -1799,6 +1799,15 @@ async function listSupabaseDoctorEmails() {
 
     return users
       .filter((entry) => userHasDoctorRole(entry))
+      .filter((entry) => {
+        const email = normalizeEmail(entry?.email);
+        const metadata = entry?.user_metadata || {};
+        const approvalStatus =
+          metadata.provider_approved === true
+            ? 'approved'
+            : normalizeApprovalStatus(metadata.approval_status);
+        return doctorProfileHasApproval({ email, approvalStatus }, email);
+      })
       .map((entry) => normalizeEmail(entry?.email))
       .filter((email) => isLikelyDoctorEmail(email));
   } catch (errorObject) {
