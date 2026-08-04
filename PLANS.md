@@ -269,6 +269,9 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
 - Added an audit-backed patient/doctor message thread, doctor replies with patient email
   delivery, direct email-to-review links, and patient-portal calls to action on message and
   completed-certificate emails.
+- Added a bulk queue message summary and a mobile-safe `Needs reply` indicator when the
+  latest conversation entry is from the patient; local storage/API state checks, lint,
+  build, desktop/mobile visual checks, and a read-only production Supabase query passed.
 
 2026-06-29:
 

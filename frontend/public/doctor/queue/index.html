@@ -32,11 +32,15 @@
       .meta { color: #4a7fa7; margin-bottom: 14px; }
       .list { display: grid; gap: 12px; }
       .card { background: #fff; border: 1px solid #b3cfe5; border-radius: 14px; padding: 14px; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; }
+      .card.needs-reply { border-color: #4a7fa7; box-shadow: inset 3px 0 0 #1a3d63; }
       .id { font-size: 12px; color: #4a7fa7; margin-top: 4px; }
+      .card-badges { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
       .risk { padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; display: inline-block; }
       .risk-low { background: #dcfce7; color: #1a3d63; }
       .risk-medium { background: #fef3c7; color: #92400e; }
       .risk-high { background: #fee2e2; color: #991b1b; }
+      .message-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border-radius: 999px; background: #eaf4ff; color: #1a3d63; font-size: 12px; font-weight: 700; }
+      .message-icon { width: 14px; height: 14px; flex: none; }
       a.review-link { background: #1a3d63; color: white; text-decoration: none; border-radius: 10px; padding: 9px 12px; font-size: 13px; font-weight: 700; }
       .empty { text-align: center; padding: 32px; border: 1px dashed #b3cfe5; border-radius: 12px; color: #4a7fa7; background: #fff; }
       .profile-card { background: #fff; border: 1px solid #b3cfe5; border-radius: 14px; padding: 16px; margin-bottom: 16px; }
@@ -56,6 +60,15 @@
       .status { min-height: 18px; font-size: 13px; }
       .status.error { color: #a93736; }
       .status.success { color: #1a3d63; }
+      @media (max-width: 620px) {
+        header { align-items: flex-start; padding: 16px; }
+        h1 { font-size: 20px; }
+        .header-actions { flex-wrap: wrap; justify-content: flex-end; }
+        .wrap { margin-top: 18px; }
+        .card { grid-template-columns: 1fr; align-items: stretch; }
+        .card-action { display: flex; }
+        a.review-link { width: 100%; text-align: center; }
+      }
     </style>
   </head>
   <body>
@@ -132,6 +145,16 @@
         if (normalized === 'HIGH') return 'risk-high';
         if (normalized === 'MEDIUM') return 'risk-medium';
         return 'risk-low';
+      }
+
+      function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#039;',
+        })[character]);
       }
 
       async function parseJsonResponse(response) {
@@ -212,21 +235,33 @@
           return;
         }
 
-        listNode.innerHTML = payload.certificates.map((item) => `
-          <article class="card">
-            <div>
-              <strong>${item.patientName || 'Unnamed patient'}</strong>
-              <div class="id">Request ${item.id} · ${new Date(item.createdAt).toLocaleString()}</div>
-              <div class="id">Verification ${item.verificationCode || '-'}</div>
-              <div style="margin-top:8px">
-                <span class="risk ${riskClass(item.risk.level)}">${String(item.risk.level || 'low').toUpperCase()} RISK (${item.risk.score})</span>
+        listNode.innerHTML = payload.certificates.map((item) => {
+          const risk = item.risk || {};
+          const needsReply = Boolean(item.messageSummary?.needsReply);
+          const messageBadge = needsReply
+            ? `<span class="message-badge" title="Latest message is from the patient">
+                <svg class="message-icon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"></path></svg>
+                Needs reply
+              </span>`
+            : '';
+
+          return `
+            <article class="card${needsReply ? ' needs-reply' : ''}">
+              <div>
+                <strong>${escapeHtml(item.patientName || 'Unnamed patient')}</strong>
+                <div class="id">Request ${escapeHtml(item.id)} · ${escapeHtml(new Date(item.createdAt).toLocaleString())}</div>
+                <div class="id">Verification ${escapeHtml(item.verificationCode || '-')}</div>
+                <div class="card-badges">
+                  <span class="risk ${riskClass(risk.level)}">${escapeHtml(String(risk.level || 'low').toUpperCase())} RISK (${escapeHtml(risk.score ?? 0)})</span>
+                  ${messageBadge}
+                </div>
               </div>
-            </div>
-            <div>
-              <a class="review-link" href="/doctor/review?id=${encodeURIComponent(item.id)}">Open Review</a>
-            </div>
-          </article>
-        `).join('');
+              <div class="card-action">
+                <a class="review-link" href="/doctor/review?id=${encodeURIComponent(item.id)}">Open Review</a>
+              </div>
+            </article>
+          `;
+        }).join('');
       }
 
       loadProfile().catch((error) => {

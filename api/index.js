@@ -40,6 +40,7 @@ import {
   getLatestMealPlanGenerationCacheByPatientEmail,
   getMealPlanTemplateCacheByIntakeHash,
   getPatientBillingByEmail,
+  getCertificateMessageSummaries,
   isSupabaseStorageEnabled,
   listCertificateMessages,
   listMealPlannerRecipes,
@@ -7515,7 +7516,7 @@ export default async function handler(req, res) {
       const statusFilter = getStatusFilterFromUrl(url);
       const items = await listCertificates();
 
-      const filtered = items
+      const filteredItems = items
         .filter((item) => {
           if (isOpenForReview(item.status) && !isCertificateOpenForReview(item)) {
             return false;
@@ -7526,7 +7527,9 @@ export default async function handler(req, res) {
           }
           return item.status === statusFilter;
         })
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      const messageSummaries = await getCertificateMessageSummaries(filteredItems.map((item) => item.id));
+      const filtered = filteredItems
         .map((item) => ({
           id: item.id,
           createdAt: item.createdAt,
@@ -7536,6 +7539,12 @@ export default async function handler(req, res) {
           verificationCode: getCertificateVerificationCode(item),
           risk: item.risk,
           assignedTo: item?.rawSubmission?.workflow?.assignedTo || null,
+          messageSummary: messageSummaries[item.id] || {
+            messageCount: 0,
+            latestSender: null,
+            latestMessageAt: null,
+            needsReply: false,
+          },
         }));
 
       sendJson(res, 200, {

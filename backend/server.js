@@ -43,6 +43,7 @@ import {
   getLatestMealPlanGenerationCacheByPatientEmail,
   getMealPlanTemplateCacheByIntakeHash,
   getPatientBillingByEmail,
+  getCertificateMessageSummaries,
   isSupabaseStorageEnabled,
   listCertificateMessages,
   listMealPlannerRecipes,
@@ -3684,7 +3685,7 @@ async function handleApi(req, res, url) {
     const statusFilter = url.searchParams.get('status');
     const items = await listCertificates();
 
-    const filtered = items
+    const filteredItems = items
       .filter((item) => {
         if (isOpenForReview(item.status) && !isCertificateOpenForReview(item)) {
           return false;
@@ -3695,7 +3696,9 @@ async function handleApi(req, res, url) {
         }
         return item.status === statusFilter;
       })
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    const messageSummaries = await getCertificateMessageSummaries(filteredItems.map((item) => item.id));
+    const filtered = filteredItems
       .map((item) => ({
         id: item.id,
         createdAt: item.createdAt,
@@ -3704,6 +3707,12 @@ async function handleApi(req, res, url) {
         patientName: item.certificateDraft.fullName,
         verificationCode: getCertificateVerificationCode(item),
         risk: item.risk,
+        messageSummary: messageSummaries[item.id] || {
+          messageCount: 0,
+          latestSender: null,
+          latestMessageAt: null,
+          needsReply: false,
+        },
       }));
 
     sendJson(res, 200, {

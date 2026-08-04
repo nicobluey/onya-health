@@ -883,3 +883,43 @@
    the new storage query without exposing message contents in logs.
 6. Doctor review screenshots at `1440x1000` and `390x844` confirmed the conversation,
    reply composer, clinical notes, and decision controls remain readable without overlap.
+
+## 2026-08-04 - Show patient messages awaiting a doctor reply in the queue
+
+### Symptoms
+
+- The doctor queue did not show which certificate requests had a patient message waiting
+  for a response.
+- Doctors had to open requests individually to find conversations needing follow-up.
+
+### Root cause
+
+- The queue endpoint returned certificate and risk information but no conversation
+  summary, even though patient and doctor messages were already stored in the request
+  audit trail.
+
+### Files/areas changed
+
+- `backend/lib/storage.js`
+  - added bulk local and Supabase message-summary retrieval for queue request IDs;
+  - marks a thread as needing a reply only when its latest valid message is from the
+    patient.
+- `api/index.js`, `backend/server.js`
+  - include a content-free `messageSummary` in each authenticated queue item without a
+    database query per certificate.
+- `frontend/public/doctor/queue/index.html`, `backend/doctor-portal/queue.html`
+  - show a message icon and `Needs reply` badge on waiting threads;
+  - remove the badge automatically after a doctor becomes the latest sender;
+  - preserve a clear mobile review action and escape queue values before HTML rendering.
+
+### Verification
+
+1. `node --check` passes for the storage, production API, and local backend modules.
+2. `npm run lint` passes.
+3. `npm run build` passes.
+4. Isolated storage and authenticated queue smoke tests confirmed that patient-last
+   threads are flagged and doctor-last threads are not.
+5. Queue screenshots at `1440x1000` and `390x844` confirmed the badge, card emphasis, and
+   review action remain readable without overlap.
+6. A read-only production Supabase smoke check confirmed the bulk query returns existing
+   patient-last and doctor-last conversation summaries without logging patient data.

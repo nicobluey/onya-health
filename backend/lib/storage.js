@@ -1155,6 +1155,38 @@ function mapCertificateMessageEvent(entry, index = 0) {
   };
 }
 
+function buildCertificateMessageSummaries(entries = []) {
+  const summaries = Object.create(null);
+
+  entries.forEach((entry, index) => {
+    const requestId = String(entry?.request_id || entry?.certificateId || entry?.requestId || '').trim();
+    const message = mapCertificateMessageEvent(entry, index);
+    if (!requestId || !message) return;
+
+    const summary = summaries[requestId] || {
+      messageCount: 0,
+      latestSender: null,
+      latestMessageAt: null,
+      needsReply: false,
+    };
+    summary.messageCount += 1;
+
+    if (
+      !summary.latestMessageAt ||
+      !message.createdAt ||
+      String(message.createdAt).localeCompare(String(summary.latestMessageAt)) >= 0
+    ) {
+      summary.latestSender = message.sender;
+      summary.latestMessageAt = message.createdAt || null;
+      summary.needsReply = message.sender === 'patient';
+    }
+
+    summaries[requestId] = summary;
+  });
+
+  return summaries;
+}
+
 async function listCertificateMessagesLocal(requestId) {
   const normalizedId = String(requestId || '').trim();
   if (!normalizedId) return [];
@@ -1166,6 +1198,22 @@ async function listCertificateMessagesLocal(requestId) {
     .filter(Boolean)
     .sort((left, right) => String(left.createdAt || '').localeCompare(String(right.createdAt || '')))
     .slice(-100);
+}
+
+async function getCertificateMessageSummariesLocal(requestIds) {
+  const normalizedIds = new Set(
+    (Array.isArray(requestIds) ? requestIds : [])
+      .map((requestId) => String(requestId || '').trim())
+      .filter(Boolean)
+  );
+  if (normalizedIds.size === 0) return Object.create(null);
+
+  const db = await readDbRaw();
+  return buildCertificateMessageSummaries(
+    db.auditLog.filter((entry) =>
+      normalizedIds.has(String(entry?.certificateId || entry?.requestId || '').trim())
+    )
+  );
 }
 
 async function getPatientBillingLocal(email) {
@@ -1597,6 +1645,44 @@ async function listCertificateMessagesSupabase(requestId) {
   return (Array.isArray(rows) ? rows : [])
     .map((entry, index) => mapCertificateMessageEvent(entry, index))
     .filter(Boolean);
+}
+
+async function getCertificateMessageSummariesSupabase(requestIds) {
+  const normalizedIds = [
+    ...new Set(
+      (Array.isArray(requestIds) ? requestIds : [])
+        .map((requestId) => String(requestId || '').trim())
+        .filter(Boolean)
+    ),
+  ];
+  if (normalizedIds.length === 0) return Object.create(null);
+
+  const rows = [];
+  const chunkSize = 100;
+  const pageSize = 1000;
+
+  for (let index = 0; index < normalizedIds.length; index += chunkSize) {
+    const chunk = normalizedIds.slice(index, index + chunkSize);
+    const escaped = chunk.map((id) => `"${id.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`);
+    const inFilter = `(${escaped.join(',')})`;
+
+    for (let offset = 0; ; offset += pageSize) {
+      const page = await supabaseRequest(
+        `request_events?request_id=in.${encodeURIComponent(
+          inFilter
+        )}&event_type=in.(PATIENT_MESSAGE_SENT,DOCTOR_MESSAGE_SENT,MORE_INFO_REQUESTED)&select=request_id,event_type,payload,created_at&order=created_at.asc&limit=${pageSize}&offset=${offset}`,
+        {
+          method: 'GET',
+          prefer: 'return=representation',
+        }
+      );
+      const pageRows = Array.isArray(page) ? page : [];
+      rows.push(...pageRows);
+      if (pageRows.length < pageSize) break;
+    }
+  }
+
+  return buildCertificateMessageSummaries(rows);
 }
 
 async function getPatientBillingSupabase(email) {
@@ -2623,6 +2709,13 @@ export async function listCertificateMessages(requestId) {
     return listCertificateMessagesSupabase(requestId);
   }
   return listCertificateMessagesLocal(requestId);
+}
+
+export async function getCertificateMessageSummaries(requestIds) {
+  if (getSupabaseConfig().enabled) {
+    return getCertificateMessageSummariesSupabase(requestIds);
+  }
+  return getCertificateMessageSummariesLocal(requestIds);
 }
 
 export async function getPatientBillingByEmail(email) {
