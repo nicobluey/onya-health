@@ -282,6 +282,20 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
 
 2026-08-08:
 
+- Fixed doctor signup's async form-reset crash; successful public registrations now clear
+  the form and show the required pending-admin-approval state.
+- Fixed checkout's Supabase foreign-key race by awaiting the Auth profile and patient rows
+  before the service request, then persisting the complete request before creating Stripe
+  Checkout. Checkout failures now return controlled public copy instead of raw provider or
+  database details.
+- Production verification on `supadoc.com.au` created and expired an unpaid live Checkout
+  Session, confirmed the patient and service rows were created in dependency order, and
+  removed the temporary request. Demo patient login/bootstrap and approved doctor
+  login/profile/queue/patient-search calls all returned `200`; the unverified demo doctor
+  remained blocked with `403` pending approval.
+- Desktop and 390 px production browser checks passed for patient and doctor portals with
+  no horizontal overflow or browser-console errors. All required live aliases resolve to
+  the current deployment.
 - Replaced ephemeral Vercel doctor-reset tokens with hashed, expiring Supabase Auth metadata and required the trusted Supabase profile role before issuing or accepting a doctor reset.
 - Fixed consumed Supabase reset metadata clearing, verified single-use doctor links, and confirmed patient-role accounts cannot enter the doctor reset flow.
 - Fixed stale booking account warnings by invalidating checks on email edits and rechecking the current email/phone on submit; phone matches no longer reveal another account's email.

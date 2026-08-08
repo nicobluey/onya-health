@@ -995,3 +995,60 @@
    review action remain readable without overlap.
 6. A read-only production Supabase smoke check confirmed the bulk query returns existing
    patient-last and doctor-last conversation summaries without logging patient data.
+
+## 2026-08-08 - Repair doctor signup feedback and Stripe checkout persistence
+
+### Symptoms
+
+- A successful doctor signup displayed `Cannot read properties of null (reading 'reset')`
+  instead of the pending-approval confirmation.
+- Checkout created a live Stripe Session but returned a raw Supabase `23503` foreign-key
+  error because the referenced patient row did not exist.
+- Failed checkout attempts left two open, unpaid Stripe Sessions that the browser never
+  received.
+
+### Root causes
+
+1. The doctor signup handler read `event.currentTarget` after an asynchronous request;
+   native event dispatch had already cleared that property.
+2. Supabase profile and patient upserts were launched in parallel background work even
+   though `patients` depends on `profiles` and `service_requests` depends on `patients`.
+3. Stripe Session creation ran in parallel with request persistence, so Stripe could
+   succeed even when the database write failed.
+4. The production API passed internal provider errors directly to checkout UI copy.
+
+### Files/areas changed
+
+- `frontend/public/doctor/login/index.html`, `backend/doctor-portal/login.html`
+  - retain the submitted form before awaiting the registration request and reset that
+    stable reference after a successful pending registration.
+- `backend/lib/storage.js`
+  - await profile and patient upserts in foreign-key order on every submission, including
+    cached patient IDs;
+  - cache patient IDs only after required rows exist;
+  - resolve patient identity from the submitted email instead of trusting a caller-supplied
+    patient ID.
+- `api/index.js`, `backend/server.js`
+  - persist the certificate request before creating a Stripe Checkout Session;
+  - return controlled checkout-unavailable copy while retaining detailed server logs.
+
+### Verification
+
+1. Mocked Supabase checks confirmed both new and cached identities write in this order:
+   Auth user, profile, patient, service request, medical-certificate request.
+2. `node --check` passed for the production API, local backend, and storage module.
+3. `npm run lint`, `npm run build`, and `npm audit --omit=dev --audit-level=high` passed.
+4. Local browser signup with a delayed response cleared the form and showed the pending
+   approval confirmation without the null-reference error; the 390 px layout remained
+   readable.
+5. Production checkout returned `200`, created all required Supabase rows, and produced an
+   open/unpaid live Stripe Session. The session was expired and the temporary medical
+   request was removed after verification.
+6. The two open/unpaid orphan Sessions from the reported failures were expired.
+7. Production demo-patient login and bootstrap returned `200`. Demo-doctor registration
+   returned `201`, while login correctly returned `403` until practitioner verification.
+8. The approved production practitioner login, profile, queue, and patient-search APIs
+   returned `200`. Desktop and 390 px browser checks found no console errors or horizontal
+   overflow.
+9. `supadoc.com.au`, `www.supadoc.com.au`, and `onya-health.vercel.app` resolve to the
+   current Vercel production deployment.
