@@ -286,6 +286,8 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
 - Fixed consumed Supabase reset metadata clearing, verified single-use doctor links, and confirmed patient-role accounts cannot enter the doctor reset flow.
 - Fixed stale booking account warnings by invalidating checks on email edits and rechecking the current email/phone on submit; phone matches no longer reveal another account's email.
 - The exact screenshot email/phone returned `exists: false` from all production aliases, and a browser regression confirmed a previous warning clears for the new address.
+- Promoted commit `d260e3e` to all required aliases. Live production SMTP accepted a reset email for the approved practitioner with no rejected recipients, while the reported patient account remained outside the doctor reset flow.
+- `npm audit --omit=dev --audit-level=high` reports zero production vulnerabilities; five high-severity development/build-tool advisories remain for a separate dependency upgrade because the `sharp` remediation is breaking.
 - Added private, server-backed patient clinical profiles and real test-result uploads.
 - Added authenticated doctor patient-name search, patient detail, full request history, and protected attachment access.
 - Applied and verified `20260808_add_patient_clinical_profiles.sql` in production, including private storage and trigram patient-name indexes.

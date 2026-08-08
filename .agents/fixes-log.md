@@ -32,6 +32,9 @@
 3. A temporary auth user with doctor-like editable metadata but a trusted patient profile received no doctor reset state or email.
 4. All three production aliases reported `exists: false` for the exact email and phone in the booking screenshot before the fix, confirming that the block was stale browser state rather than a database match.
 5. A browser regression pass reproduced an existing-account warning, changed to the screenshot email, confirmed the warning cleared immediately, and received the available-account state with no console errors.
+6. Vercel promoted commit `d260e3e` to `supadoc.com.au`, `www.supadoc.com.au`, and `onya-health.vercel.app`; all aliases returned `200` health and account-check responses.
+7. A live reset request for the approved practitioner stored durable Supabase reset state, and production SMTP accepted the reset email with no rejected recipients. The reported patient account remained unchanged and generated no doctor email.
+8. `npm audit --omit=dev --audit-level=high` reports zero production dependency vulnerabilities. The full development-tree audit reports five high-severity advisories in build tooling, including a breaking `sharp` upgrade, and is tracked separately from this release.
 
 ## 2026-08-08 - Doctor patient search and shared clinical records
 
