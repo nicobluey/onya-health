@@ -97,8 +97,12 @@ export function verifyPatientToken(token) {
 }
 
 export function validateDoctorCredentials(email, password) {
-  const expectedEmail = process.env.DOCTOR_LOGIN_EMAIL || 'doctor@onyahealth.com';
-  const expectedPassword = process.env.DOCTOR_LOGIN_PASSWORD || 'ChangeMe123!';
+  const expectedEmail = String(process.env.DOCTOR_LOGIN_EMAIL || '').trim().toLowerCase();
+  const expectedPassword = String(process.env.DOCTOR_LOGIN_PASSWORD || '');
 
-  return email === expectedEmail && password === expectedPassword;
+  if (!expectedEmail || !expectedPassword) {
+    return false;
+  }
+
+  return String(email || '').trim().toLowerCase() === expectedEmail && password === expectedPassword;
 }

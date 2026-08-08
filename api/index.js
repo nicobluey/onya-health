@@ -7599,7 +7599,7 @@ export default async function handler(req, res) {
 
       let authenticatedDoctor = null;
       let pendingApproval = false;
-      if (validateDoctorCredentials(email, password)) {
+      if (!getSupabaseConfig().enabled && validateDoctorCredentials(email, password)) {
         authenticatedDoctor = {
           email,
           name: process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',

@@ -3736,7 +3736,7 @@ async function handleApi(req, res, url) {
 
     let doctorIdentity = null;
     let pendingApproval = false;
-    if (validateDoctorCredentials(email, password)) {
+    if (!isSupabaseStorageEnabled() && validateDoctorCredentials(email, password)) {
       doctorIdentity = {
         email,
         name: process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',

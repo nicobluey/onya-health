@@ -1030,7 +1030,11 @@
     patient ID.
 - `api/index.js`, `backend/server.js`
   - persist the certificate request before creating a Stripe Checkout Session;
-  - return controlled checkout-unavailable copy while retaining detailed server logs.
+  - return controlled checkout-unavailable copy while retaining detailed server logs;
+  - disable the legacy static doctor credential path whenever Supabase is configured.
+- `backend/lib/auth.js`
+  - remove the default doctor email/password fallback so missing configuration fails
+    closed.
 
 ### Verification
 
@@ -1053,6 +1057,7 @@
 9. `supadoc.com.au`, `www.supadoc.com.au`, and `onya-health.vercel.app` resolve to the
    current Vercel production deployment.
 10. The legacy production doctor fallback was still using its default account and
-    password. Both Vercel variables were rotated to the approved Isaac practitioner and a
-    strong temporary password, followed by a fresh production deployment and successful
-    authenticated API smoke checks. No credential value is stored in the repository.
+    password. The code now disables that bypass whenever Supabase is configured and has no
+    built-in fallback values; the obsolete Vercel variables were removed after deployment.
+    The approved Isaac Supabase account passed direct Auth and portal API checks. No
+    credential value is stored in the repository.
