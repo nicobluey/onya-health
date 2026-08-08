@@ -52,6 +52,7 @@ import {
   listCertificatesByPatientEmail,
   listMealPlannerRecipesByIds,
   normalizePatientClinicalProfile,
+  searchCertificatesByPatientName,
   searchPatientDirectory,
   uploadPatientMedicalRecord,
   upsertMealPlanGenerationCache,
@@ -7818,7 +7819,7 @@ export default async function handler(req, res) {
 
       const [directoryRows, certificates] = await Promise.all([
         searchPatientDirectory(query, 25),
-        listCertificates(),
+        searchCertificatesByPatientName(query, 250),
       ]);
       const certificatesByEmail = new Map();
       for (const certificate of certificates) {
@@ -7927,27 +7928,33 @@ export default async function handler(req, res) {
         return;
       }
 
-      const patientCertificates = await listCertificatesByPatientEmail(lookup.email);
-      const latestCertificate = patientCertificates[0] || lookup.certificate || null;
-      const [profilePayload, clinicalProfile] = await Promise.all([
-        resolvePatientProfileByEmail({
-          email: lookup.email,
-          latestCertificate,
-          account: null,
-        }),
-        getPatientClinicalProfileByEmail(lookup.email),
-      ]);
-
-      await appendAudit({
+      const auditPromise = appendAudit({
         type: 'DOCTOR_PATIENT_RECORD_VIEWED',
         by: normalizeEmail(doctor.email),
         patientReference: lookup.id,
-        requestCount: patientCertificates.length,
       }).catch(() => undefined);
+      const [patientCertificates, clinicalProfile] = await Promise.all([
+        listCertificatesByPatientEmail(lookup.email, { includeRawSubmission: false, limit: 200 }),
+        getPatientClinicalProfileByEmail(lookup.email),
+        auditPromise,
+      ]);
+      const latestCertificate = patientCertificates[0] || lookup.certificate || null;
+      const patient = buildPatientIdentity({
+        email: lookup.email,
+        latestCertificate,
+        account: lookup.directoryEntry
+          ? {
+              email: lookup.directoryEntry.email,
+              fullName: lookup.directoryEntry.fullName,
+              phone: lookup.directoryEntry.phone,
+              address: lookup.directoryEntry.address,
+            }
+          : null,
+      });
 
       sendJson(res, 200, {
         patient: {
-          ...profilePayload.patient,
+          ...patient,
           id: lookup.directoryEntry?.id || null,
         },
         clinicalProfile: serializePatientClinicalProfile(

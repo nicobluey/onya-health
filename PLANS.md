@@ -284,9 +284,10 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
 
 - Added private, server-backed patient clinical profiles and real test-result uploads.
 - Added authenticated doctor patient-name search, patient detail, full request history, and protected attachment access.
-- Applied and verified `20260808_add_patient_clinical_profiles.sql` in production.
+- Applied and verified `20260808_add_patient_clinical_profiles.sql` in production, including private storage and trigram patient-name indexes.
 - `npm run build`, `npm run lint`, and Node syntax checks passed.
 - Local authenticated API smoke and doctor portal visual checks passed at `1440x1000` and `390x844`.
+- Replaced the initial full-certificate search and redundant detail reads with targeted indexed queries and parallel hydration; direct production-Supabase checks measured about `0.8s` and `1.4s` respectively.
 
 2026-08-04:
 

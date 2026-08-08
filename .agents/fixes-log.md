@@ -13,13 +13,14 @@
 1. There was no server-backed clinical-profile model or private attachment bucket.
 2. Doctor APIs were request-oriented only and had no authenticated patient directory/detail endpoints.
 3. Patient record widgets updated local state without syncing medical history, medications, allergies, lifestyle notes, or test documents to the backend.
+4. The first search implementation read the full certificate collection and repeated patient/profile lookups, producing slow live response times.
 
 ### Files changed
 
 - `supabase/migrations/20260808_add_patient_clinical_profiles.sql`
   - adds the protected clinical-profile table and private `patient-medical-records` bucket.
 - `backend/lib/storage.js`, `api/index.js`, `backend/server.js`
-  - add normalized local/Supabase persistence, private signed downloads, patient profile APIs, authenticated doctor patient search/detail APIs, and audit events.
+  - add normalized local/Supabase persistence, private signed downloads, patient profile APIs, indexed name-filtered doctor searches, parallel detail hydration, and audit events.
 - `frontend/src/pages/PatientPortalPage.tsx`, `frontend/src/patient-portal/home/HomeTab.tsx`, `frontend/src/patient-portal/model.ts`
   - sync patient-entered records to the server, migrate existing local records, and upload/open real attachments.
 - `frontend/public/doctor/patients/index.html`, `backend/doctor-portal/patients.html`, doctor queue pages, and `vercel.json`
@@ -32,6 +33,7 @@
 3. An isolated local API smoke test passed patient login, clinical-profile save, private attachment upload/download, bootstrap hydration, unauthenticated doctor rejection, doctor login, name search, record detail, request history, and doctor attachment access.
 4. Doctor patient records passed desktop `1440x1000` and mobile `390x844` visual checks with no horizontal overflow or browser-console errors.
 5. The production migration was applied and a read-only query confirmed the table plus a private 2.5 MB storage bucket.
+6. Direct production-Supabase checks measured the targeted name query at about `0.8s` and parallel history/profile hydration at about `1.4s`, replacing the initial full-table and redundant-read path.
 
 ## 2026-06-29 - Remove meal-plan product surface and refocus production on med certs
 

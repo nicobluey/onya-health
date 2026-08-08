@@ -55,6 +55,7 @@ import {
   listCertificates,
   listCertificatesByPatientEmail,
   normalizePatientClinicalProfile,
+  searchCertificatesByPatientName,
   searchPatientDirectory,
   uploadPatientMedicalRecord,
   upsertMealPlanGenerationCache,
@@ -3974,7 +3975,7 @@ async function handleApi(req, res, url) {
 
     const [directoryRows, certificates] = await Promise.all([
       searchPatientDirectory(query, 25),
-      listCertificates(),
+      searchCertificatesByPatientName(query, 250),
     ]);
     const certificatesByEmail = new Map();
     for (const certificate of certificates) {
@@ -4072,12 +4073,12 @@ async function handleApi(req, res, url) {
       return;
     }
 
-    const patientCertificates = await listCertificatesByPatientEmail(lookup.email);
-    const latestCertificate = patientCertificates[0] || lookup.certificate || null;
-    const [account, clinicalProfile] = await Promise.all([
+    const [patientCertificates, account, clinicalProfile] = await Promise.all([
+      listCertificatesByPatientEmail(lookup.email, { includeRawSubmission: false, limit: 200 }),
       getPatientAccountByEmail(lookup.email),
       getPatientClinicalProfileByEmail(lookup.email),
     ]);
+    const latestCertificate = patientCertificates[0] || lookup.certificate || null;
     await appendAudit({
       type: 'DOCTOR_PATIENT_RECORD_VIEWED',
       by: normalizeEmail(doctor.email),

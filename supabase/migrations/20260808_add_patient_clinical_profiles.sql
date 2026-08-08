@@ -16,6 +16,14 @@ alter table public.patient_clinical_profiles enable row level security;
 revoke all on table public.patient_clinical_profiles from anon, authenticated;
 grant all on table public.patient_clinical_profiles to service_role;
 
+create extension if not exists pg_trgm with schema extensions;
+
+create index if not exists patients_full_name_trgm_idx
+  on public.patients using gin (full_name extensions.gin_trgm_ops);
+
+create index if not exists medical_certificate_requests_patient_full_name_trgm_idx
+  on public.medical_certificate_requests using gin (patient_full_name extensions.gin_trgm_ops);
+
 insert into storage.buckets (
   id,
   name,
