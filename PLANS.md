@@ -38,7 +38,8 @@ Current implementation state:
 - Approved doctors can search patients by name at `/doctor/patients`, review previous
   certificate requests, filter by submission date and certificate duration, and inspect
   patient-shared clinical records.
-- Stripe Checkout uses Supadoc session branding and a dedicated medical-certificate product image. Canonical
+- Stripe Checkout uses Supadoc session branding, a solid primary-blue summary panel, and the
+  Supadoc favicon for its compact header and product imagery. Canonical
   prices are `$11.21` for 1 day, linear through `$29.71` at day 5, capped through day 7,
   `$4.95` for a carer certificate, and `$19.00` monthly for All Access.
 - Doctors can edit the default clinical certificate statement and regenerate the PDF
@@ -214,7 +215,7 @@ Deliverables:
 
 - Doctor navigation uses `Search` for patient records and `Approvals` for practitioner access requests.
 - Patient search supports server-backed submitted-within, custom date-range, and 1-7 day duration filters.
-- Stripe prices, recurrence, product names, and certificate-specific product imagery match the public funnel.
+- Stripe prices, recurrence, product names, and favicon-based product imagery match the public funnel.
 - Checkout Session branding uses Supadoc colors, logo, icon, and clinically safe submit copy.
 - The default certificate statement uses the requested consultation wording.
 - Doctors can edit the certificate statement and regenerate an in-place PDF preview more than once.

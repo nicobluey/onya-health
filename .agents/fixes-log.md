@@ -1179,3 +1179,26 @@
 9. A final live unpaid Checkout Session rendered the actual Stripe summary background as
    `#DDE8FF`, displayed A$11.21 and the certificate thumbnail, and had no horizontal overflow
    at 1440 px or 390 px. The session was expired after inspection.
+
+## 2026-08-08 - Correct Stripe summary branding
+
+### Symptoms
+
+- The pale Checkout summary background did not match the intended saturated Stripe treatment.
+- The generated medical-certificate thumbnail was visually noisy at Stripe's compact image size.
+- Supplying a wide logo made the Checkout header heavier than the compact icon-and-name reference.
+
+### Root cause
+
+The earlier pass treated the summary as a light application surface and used a detailed product
+illustration where Stripe's fixed thumbnail size calls for a simple square brand mark.
+
+### Changes
+
+- Use `#1151FF` for the full Stripe summary background and `#0A1931` for payment actions.
+- Use `favicon.png` for the Stripe product and header icon.
+- Omit the wide Checkout logo slot and remove the generated certificate thumbnail.
+
+### Verification
+
+Production desktop/mobile Checkout verification is pending the replacement deployment.
