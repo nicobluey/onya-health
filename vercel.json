@@ -25,6 +25,10 @@
       "dest": "/doctor/queue/index.html"
     },
     {
+      "src": "/doctor/patients/?$",
+      "dest": "/doctor/patients/index.html"
+    },
+    {
       "src": "/doctor/review/?$",
       "dest": "/doctor/review/index.html"
     },

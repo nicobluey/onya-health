@@ -33,6 +33,10 @@ Current implementation state:
   the existing Onya Health domain until explicitly migrated.
 - Doctor portal static pages under `frontend/public/doctor`.
 - Patient portal in `frontend/src/pages/PatientPortalPage.tsx`.
+- Patient-entered clinical history and private test-result attachments are persisted through
+  `patient_clinical_profiles` and the private `patient-medical-records` storage bucket.
+- Approved doctors can search patients by name at `/doctor/patients`, review previous
+  certificate requests, and inspect patient-shared clinical records.
 - Booking flow in `frontend/src/consult-flow`.
 - Weight-loss reset and meal planning in `frontend/src/weight-loss-reset`.
 - Supabase migrations and helper scripts under `supabase/` and `scripts/`.
@@ -179,6 +183,23 @@ Verification:
 - Deterministic meal-planning helper checks.
 - Build passes.
 
+### M8 - Doctor Patient Records
+
+Status: completed on 2026-08-08.
+
+Deliverables:
+
+- Patient medical history, allergies, medications, lifestyle notes, and uploaded test records are server-backed.
+- Uploaded medical records use a private Supabase bucket and short-lived authenticated download URLs.
+- Approved doctors can search by patient name and review patient identity, shared clinical history, attachments, and all certificate requests.
+- Doctor record and attachment access produces audit entries.
+
+Verification:
+
+- Isolated patient/doctor API smoke test.
+- Desktop and mobile doctor-portal visual checks.
+- Production migration verification, build, lint, and syntax checks.
+
 ## Validation Commands
 
 ```bash
@@ -258,6 +279,14 @@ Use this tree before substantial changes so the relevant docs are read in order 
 The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed because active workflows now live in `SKILLS.md`.
 
 ## Latest Validation
+
+2026-08-08:
+
+- Added private, server-backed patient clinical profiles and real test-result uploads.
+- Added authenticated doctor patient-name search, patient detail, full request history, and protected attachment access.
+- Applied and verified `20260808_add_patient_clinical_profiles.sql` in production.
+- `npm run build`, `npm run lint`, and Node syntax checks passed.
+- Local authenticated API smoke and doctor portal visual checks passed at `1440x1000` and `390x844`.
 
 2026-08-04:
 

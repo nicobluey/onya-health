@@ -4,6 +4,7 @@ import {
     Check,
     ChevronRight,
     ClipboardPlus,
+    Download,
     FileText,
     Heart,
     Lock,
@@ -635,32 +636,82 @@ function LifestyleNotesSection({
 function TestResultsSection({
     entries,
     onAddResult,
+    onOpenAttachment,
 }: {
     entries: TestResultEntry[];
-    onAddResult: (draft: TestResultDraft) => void;
+    onAddResult: (draft: TestResultDraft) => Promise<void>;
+    onOpenAttachment: (entry: TestResultEntry) => Promise<void>;
 }) {
     const [isAdding, setIsAdding] = useState(false);
     const [name, setName] = useState('');
     const [summary, setSummary] = useState('');
     const [testDate, setTestDate] = useState('');
     const [fileName, setFileName] = useState('');
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState('');
+    const [attachmentError, setAttachmentError] = useState('');
+    const [openingRecordId, setOpeningRecordId] = useState('');
 
-    const submit = (event: FormEvent) => {
-        event.preventDefault();
-        if (!name.trim()) return;
-
-        onAddResult({
-            name: name.trim(),
-            summary: summary.trim(),
-            testDate: testDate || new Date().toISOString(),
-            fileName: fileName.trim(),
-        });
-
+    const cancelAdd = () => {
         setName('');
         setSummary('');
         setTestDate('');
         setFileName('');
+        setSelectedFile(null);
+        setError('');
         setIsAdding(false);
+    };
+
+    const openAttachment = async (entry: TestResultEntry) => {
+        setOpeningRecordId(entry.id);
+        setAttachmentError('');
+        try {
+            await onOpenAttachment(entry);
+        } catch (errorObject) {
+            setAttachmentError(
+                errorObject instanceof Error ? errorObject.message : 'Unable to open this attachment.'
+            );
+        } finally {
+            setOpeningRecordId('');
+        }
+    };
+
+    const submit = async (event: FormEvent) => {
+        event.preventDefault();
+        if (!name.trim()) return;
+        if (selectedFile && selectedFile.size > 2_500_000) {
+            setError('Attachments must be 2.5 MB or smaller.');
+            return;
+        }
+
+        setSubmitting(true);
+        setError('');
+        try {
+            const fileDataUrl = selectedFile
+                ? await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(String(reader.result || ''));
+                    reader.onerror = () => reject(new Error('Unable to read the selected file.'));
+                    reader.readAsDataURL(selectedFile);
+                })
+                : '';
+            await onAddResult({
+                name: name.trim(),
+                summary: summary.trim(),
+                testDate: testDate || new Date().toISOString(),
+                fileName: fileName.trim(),
+                mimeType: selectedFile?.type || '',
+                fileSize: selectedFile?.size || 0,
+                fileDataUrl,
+            });
+
+            cancelAdd();
+        } catch (errorObject) {
+            setError(errorObject instanceof Error ? errorObject.message : 'Unable to save this result.');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
@@ -702,27 +753,39 @@ function TestResultsSection({
                             <label className="block text-xs font-semibold uppercase tracking-[0.08em] text-[#1a3d63]">Attachment</label>
                             <input
                                 type="file"
-                                onChange={(event) => setFileName(event.target.files?.[0]?.name || '')}
+                                accept="application/pdf,image/png,image/jpeg,image/webp,image/heic,image/heif"
+                                onChange={(event) => {
+                                    const file = event.target.files?.[0] || null;
+                                    setSelectedFile(file);
+                                    setFileName(file?.name || '');
+                                    setError('');
+                                }}
                                 className="block w-full text-xs text-[#1a3d63] file:mr-3 file:rounded-lg file:border-0 file:bg-[#f6fafd] file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-[#1a3d63]"
                             />
                             {fileName && <p className="text-xs text-[#4a7fa7]">Selected: {fileName}</p>}
+                            {error && <p className="text-xs font-semibold text-[#a93736]" role="alert">{error}</p>}
                         </div>
                         <div className="flex items-center justify-end gap-2">
                             <button
                                 type="button"
-                                onClick={() => setIsAdding(false)}
+                                onClick={cancelAdd}
                                 className="rounded-lg border border-[#b3cfe5] px-3 py-1.5 text-xs font-semibold text-[#1a3d63]"
                             >
                                 Cancel
                             </button>
                             <button
                                 type="submit"
-                                className="rounded-lg bg-[#1a3d63] px-3 py-1.5 text-xs font-semibold text-white"
+                                disabled={submitting}
+                                className="rounded-lg bg-[#1a3d63] px-3 py-1.5 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                                Save result
+                                {submitting ? 'Saving...' : 'Save result'}
                             </button>
                         </div>
                     </form>
+                )}
+
+                {attachmentError && (
+                    <p className="mb-3 text-xs font-semibold text-[#a93736]" role="alert">{attachmentError}</p>
                 )}
 
                 {entries.length === 0 ? (
@@ -744,7 +807,22 @@ function TestResultsSection({
                                     </div>
                                     <span className="ml-auto shrink-0 text-xs text-[#4a7fa7]">{formatDate(entry.testDate)}</span>
                                 </div>
-                                {entry.fileName && <p className="mt-2 text-xs text-[#4a7fa7]">Attachment: {entry.fileName}</p>}
+                                {entry.fileName && (
+                                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                                        <p className="text-xs text-[#4a7fa7]">Attachment: {entry.fileName}</p>
+                                        {entry.hasAttachment && entry.downloadUrl && (
+                                            <button
+                                                type="button"
+                                                disabled={openingRecordId === entry.id}
+                                                onClick={() => void openAttachment(entry)}
+                                                className="inline-flex items-center gap-1 rounded-lg border border-[#b3cfe5] bg-white px-2 py-1 text-xs font-semibold text-[#1a3d63] disabled:cursor-not-allowed disabled:opacity-60"
+                                            >
+                                                <Download size={12} />
+                                                {openingRecordId === entry.id ? 'Opening...' : 'Open'}
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
                             </li>
                         ))}
                     </ul>
@@ -786,6 +864,7 @@ export default function HomeTab({
     onAddRecordEntry,
     onAddLifestyleNote,
     onAddTestResult,
+    onOpenTestResult,
     onOpenQueue,
     onDownloadCertificate,
     onGoToTab,
@@ -800,7 +879,8 @@ export default function HomeTab({
     onRecordTabChange: (tab: RecordTab) => void;
     onAddRecordEntry: (tab: RecordTab, title: string, details: string) => void;
     onAddLifestyleNote: (title: string, details: string) => void;
-    onAddTestResult: (draft: TestResultDraft) => void;
+    onAddTestResult: (draft: TestResultDraft) => Promise<void>;
+    onOpenTestResult: (entry: TestResultEntry) => Promise<void>;
     onOpenQueue: () => void;
     onDownloadCertificate: (request: PortalRequest) => void;
     onGoToTab: (tab: Exclude<MainTab, 'home'>) => void;
@@ -827,7 +907,7 @@ export default function HomeTab({
                             onAddEntry={onAddRecordEntry}
                         />
                         <LifestyleNotesSection entries={data.lifestyleNotes} onAddEntry={onAddLifestyleNote} />
-                        <TestResultsSection entries={data.testResults} onAddResult={onAddTestResult} />
+                        <TestResultsSection entries={data.testResults} onAddResult={onAddTestResult} onOpenAttachment={onOpenTestResult} />
                     </div>
 
                     <SideRail queuedRequest={queuedRequest} patient={patient} data={data} onOpenQueue={onOpenQueue} />
@@ -852,7 +932,7 @@ export default function HomeTab({
                 onAddEntry={onAddRecordEntry}
             />
             <LifestyleNotesSection entries={data.lifestyleNotes} onAddEntry={onAddLifestyleNote} />
-            <TestResultsSection entries={data.testResults} onAddResult={onAddTestResult} />
+            <TestResultsSection entries={data.testResults} onAddResult={onAddTestResult} onOpenAttachment={onOpenTestResult} />
             <AccountSnapshot patient={patient} />
             <ProfilePulse patient={patient} data={data} />
         </section>

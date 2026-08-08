@@ -41,6 +41,9 @@ npm run dev -- --port 5173
   - `POST /api/patient/account-exists`
   - `POST /api/patient/profile`
   - `GET /api/patient/bootstrap`
+  - `GET|POST /api/patient/clinical-profile`
+  - `POST /api/patient/clinical-profile/test-results`
+  - `GET /api/patient/clinical-profile/test-results/:recordId/file`
 - Booking and certificates:
   - `POST /api/certificates`
   - `POST /api/checkout/confirm`
@@ -55,6 +58,9 @@ npm run dev -- --port 5173
   - `POST /api/doctor/certificates/:id/message`
   - `POST /api/doctor/certificates/:id/decision`
   - `POST /api/doctor/certificates/:id/request-more-info`
+  - `GET /api/doctor/patients?query=:name`
+  - `GET /api/doctor/patients/:lookupKey`
+  - `GET /api/doctor/patients/:lookupKey/test-results/:recordId/file`
 - Meal planning:
   - patient meal-plan latest/cache/catalog routes under `/api/patient/meal-plan/*`
 
@@ -95,6 +101,11 @@ Keep secrets out of logs and documentation.
 ## Storage Modes
 
 When Supabase service credentials are present, production data should be read/written through Supabase tables.
+
+Patient-entered medical history is stored in `patient_clinical_profiles`. Test-result files
+are stored in the private `patient-medical-records` bucket and opened through short-lived,
+authenticated download endpoints; storage object paths must never be returned directly to
+the browser.
 
 Without Supabase credentials, local development falls back to JSON files under:
 

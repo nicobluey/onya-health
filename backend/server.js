@@ -38,6 +38,9 @@ import { generateDoctorNotes, generateMoreInfoDraft } from './lib/notes.js';
 import {
   appendAudit,
   createCertificate,
+  createPatientMedicalRecordDownload,
+  getPatientClinicalProfileByEmail,
+  getPatientDirectoryEntryById,
   getCertificateById,
   getMealPlanGenerationCache,
   getLatestMealPlanGenerationCacheByPatientEmail,
@@ -50,9 +53,14 @@ import {
   listMealPlanGenerationCacheByPatientEmail,
   listMealPlannerRecipesByIds,
   listCertificates,
+  listCertificatesByPatientEmail,
+  normalizePatientClinicalProfile,
+  searchPatientDirectory,
+  uploadPatientMedicalRecord,
   upsertMealPlanGenerationCache,
   upsertMealPlannerRecipes,
   upsertPatientBillingByEmail,
+  upsertPatientClinicalProfileByEmail,
   updateCertificate,
 } from './lib/storage.js';
 import { sendEmail } from './lib/email.js';
@@ -281,7 +289,7 @@ async function parseJsonBody(req) {
     let raw = '';
     req.on('data', (chunk) => {
       raw += chunk.toString('utf8');
-      if (raw.length > 2_000_000) {
+      if (raw.length > 4_000_000) {
         reject(new Error('Request body too large'));
       }
     });
@@ -1116,6 +1124,98 @@ function patientSummaryFromCertificate(certificate) {
   };
 }
 
+function serializePatientClinicalProfile(profile, buildDownloadPath) {
+  const normalized = normalizePatientClinicalProfile(profile);
+  return {
+    ...normalized,
+    testResults: normalized.testResults.map(({ storagePath, ...entry }) => ({
+      ...entry,
+      hasAttachment: Boolean(storagePath),
+      downloadUrl: storagePath && typeof buildDownloadPath === 'function' ? buildDownloadPath(entry.id) : '',
+    })),
+  };
+}
+
+function mergePatientClinicalProfileUpdate(currentProfile, incomingProfile) {
+  const current = normalizePatientClinicalProfile(currentProfile);
+  const incoming = normalizePatientClinicalProfile(incomingProfile);
+  const currentTestResults = new Map(current.testResults.map((entry) => [String(entry.id), entry]));
+  return {
+    ...incoming,
+    testResults: incoming.testResults.map((entry) => {
+      const currentEntry = currentTestResults.get(String(entry.id));
+      return {
+        ...entry,
+        fileName: currentEntry?.fileName || entry.fileName,
+        mimeType: currentEntry?.mimeType || '',
+        fileSize: currentEntry?.fileSize || 0,
+        storagePath: currentEntry?.storagePath || '',
+      };
+    }),
+  };
+}
+
+function certificatePatientEmail(certificate) {
+  return normalizeEmail(
+    certificate?.certificateDraft?.email ||
+      certificate?.rawSubmission?.patient?.email ||
+      certificate?.rawSubmission?.patientEmail ||
+      ''
+  );
+}
+
+function doctorPatientRequestSummary(certificate) {
+  const draft = certificate?.certificateDraft || {};
+  return {
+    id: certificate.id,
+    createdAt: certificate.createdAt,
+    status: certificate.status,
+    serviceType: certificate.serviceType || 'doctor',
+    purpose: String(draft.purpose || '').trim(),
+    symptom: String(draft.symptom || '').trim(),
+    description: String(draft.description || '').trim(),
+    startDate: draft.startDate || null,
+    durationDays: Number(draft.durationDays || 1),
+    risk: certificate.risk || null,
+    decision: certificate.decision || null,
+    verificationCode: getCertificateVerificationCode(certificate),
+  };
+}
+
+async function resolveDoctorPatientLookup(lookupKey) {
+  const normalizedKey = String(lookupKey || '').trim();
+  const separatorIndex = normalizedKey.indexOf(':');
+  if (separatorIndex <= 0) return null;
+  const source = normalizedKey.slice(0, separatorIndex);
+  const id = normalizedKey.slice(separatorIndex + 1).trim();
+  if (!id) return null;
+
+  if (source === 'patient') {
+    const directoryEntry = await getPatientDirectoryEntryById(id);
+    if (!directoryEntry?.email) return null;
+    return {
+      source,
+      id: directoryEntry.id,
+      email: normalizeEmail(directoryEntry.email),
+      directoryEntry,
+    };
+  }
+
+  if (source === 'request') {
+    const certificate = await getCertificateById(id);
+    const email = certificatePatientEmail(certificate);
+    if (!certificate || !email) return null;
+    return {
+      source,
+      id: certificate.id,
+      email,
+      certificate,
+    };
+  }
+
+  return null;
+}
+
 function buildPatientIdentity({ email, latestCertificate, account }) {
   const draft = latestCertificate?.certificateDraft || {};
   return {
@@ -1123,6 +1223,7 @@ function buildPatientIdentity({ email, latestCertificate, account }) {
     email: normalizeEmail(email || account?.email || draft.email || ''),
     dob: String(account?.dob || draft.dob || '').trim(),
     phone: String(account?.phone || draft.phone || '').trim(),
+    address: String(account?.address || draft.address || '').trim(),
   };
 }
 
@@ -2647,13 +2748,16 @@ async function handleApi(req, res, url) {
     return;
   }
 
-  if (req.method === 'GET' && url.pathname === '/api/patient/me') {
+  if (req.method === 'GET' && ['/api/patient/me', '/api/patient/bootstrap'].includes(url.pathname)) {
     const patient = await requirePatient(req, res);
     if (!patient) return;
 
     const account = await getPatientAccountByEmail(patient.email);
     const certificates = await listCertificates();
-    const billing = await resolvePatientBillingProfile(patient.email, certificates);
+    const [billing, clinicalProfile] = await Promise.all([
+      resolvePatientBillingProfile(patient.email, certificates),
+      getPatientClinicalProfileByEmail(patient.email),
+    ]);
     const patientCertificates = getPatientCertificatesForEmail(certificates, patient.email);
     if (patientCertificates.length === 0 && !account) {
       sendJson(res, 404, { error: 'Patient account not found' });
@@ -2679,7 +2783,135 @@ async function handleApi(req, res, url) {
       billing,
       queueCount: patientCertificates.filter((item) => isCertificateOpenForReview(item)).length,
       latestRequest: latest ? patientSummaryFromCertificate(latest) : null,
+      count: patientCertificates.length,
+      requests: patientCertificates.map(patientSummaryFromCertificate),
+      clinicalProfile: serializePatientClinicalProfile(
+        clinicalProfile,
+        (recordId) => `/api/patient/clinical-profile/test-results/${encodeURIComponent(recordId)}/file`
+      ),
     });
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/patient/clinical-profile') {
+    const patient = await requirePatient(req, res);
+    if (!patient) return;
+    const clinicalProfile = await getPatientClinicalProfileByEmail(patient.email);
+    sendJson(res, 200, {
+      clinicalProfile: serializePatientClinicalProfile(
+        clinicalProfile,
+        (recordId) => `/api/patient/clinical-profile/test-results/${encodeURIComponent(recordId)}/file`
+      ),
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/patient/clinical-profile') {
+    const patient = await requirePatient(req, res);
+    if (!patient) return;
+    const body = await parseJsonBody(req);
+    const currentProfile = await getPatientClinicalProfileByEmail(patient.email);
+    const nextProfile = mergePatientClinicalProfileUpdate(currentProfile, body?.clinicalProfile || body);
+    const savedProfile = await upsertPatientClinicalProfileByEmail(patient.email, nextProfile);
+    await appendAudit({
+      type: 'PATIENT_CLINICAL_PROFILE_UPDATED',
+      email: normalizeEmail(patient.email),
+      counts: {
+        medicalHistory: savedProfile.medicalHistory.length,
+        allergies: savedProfile.allergies.length,
+        medications: savedProfile.medications.length,
+        lifestyleNotes: savedProfile.lifestyleNotes.length,
+        testResults: savedProfile.testResults.length,
+      },
+    }).catch(() => undefined);
+    sendJson(res, 200, {
+      ok: true,
+      clinicalProfile: serializePatientClinicalProfile(
+        savedProfile,
+        (recordId) => `/api/patient/clinical-profile/test-results/${encodeURIComponent(recordId)}/file`
+      ),
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/patient/clinical-profile/test-results') {
+    const patient = await requirePatient(req, res);
+    if (!patient) return;
+    const body = await parseJsonBody(req);
+    const name = String(body?.name || '').trim().slice(0, 200);
+    const summary = String(body?.summary || '').trim().slice(0, 4000);
+    const testDate = String(body?.testDate || '').trim().slice(0, 64) || new Date().toISOString();
+    const fileDataUrl = String(body?.fileDataUrl || '').trim();
+    if (!name) {
+      sendJson(res, 400, { error: 'Test or document name is required' });
+      return;
+    }
+
+    let upload = {
+      fileName: String(body?.fileName || '').trim().slice(0, 255),
+      mimeType: '',
+      fileSize: 0,
+      storagePath: '',
+    };
+    if (fileDataUrl) {
+      try {
+        upload = await uploadPatientMedicalRecord({
+          email: patient.email,
+          fileName: body?.fileName,
+          fileDataUrl,
+        });
+      } catch (uploadError) {
+        sendJson(res, 400, { error: uploadError?.message || 'Unable to upload this medical record' });
+        return;
+      }
+    }
+
+    const currentProfile = await getPatientClinicalProfileByEmail(patient.email);
+    const recordId = crypto.randomUUID();
+    const savedProfile = await upsertPatientClinicalProfileByEmail(patient.email, {
+      ...currentProfile,
+      testResults: [
+        {
+          id: recordId,
+          name,
+          summary,
+          testDate,
+          fileName: upload.fileName,
+          mimeType: upload.mimeType,
+          fileSize: upload.fileSize,
+          storagePath: upload.storagePath,
+          createdAt: new Date().toISOString(),
+        },
+        ...currentProfile.testResults,
+      ],
+    });
+    await appendAudit({
+      type: 'PATIENT_TEST_RESULT_ADDED',
+      email: normalizeEmail(patient.email),
+      recordId,
+      hasAttachment: Boolean(upload.storagePath),
+    }).catch(() => undefined);
+    sendJson(res, 201, {
+      ok: true,
+      clinicalProfile: serializePatientClinicalProfile(
+        savedProfile,
+        (entryId) => `/api/patient/clinical-profile/test-results/${encodeURIComponent(entryId)}/file`
+      ),
+    });
+    return;
+  }
+
+  const patientRecordFileMatch = url.pathname.match(/^\/api\/patient\/clinical-profile\/test-results\/([^/]+)\/file$/);
+  if (req.method === 'GET' && patientRecordFileMatch) {
+    const patient = await requirePatient(req, res);
+    if (!patient) return;
+    const recordId = decodeURIComponent(patientRecordFileMatch[1]);
+    const download = await createPatientMedicalRecordDownload(patient.email, recordId);
+    if (!download?.url) {
+      sendJson(res, 404, { error: 'Attachment not found' });
+      return;
+    }
+    sendJson(res, 200, { ...download, expiresInSeconds: null });
     return;
   }
 
@@ -3728,6 +3960,150 @@ async function handleApi(req, res, url) {
     return;
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/doctor/patients') {
+    const doctor = await requireDoctor(req, res);
+    if (!doctor) return;
+    const query = String(url.searchParams.get('query') || '')
+      .trim()
+      .replace(/\s+/g, ' ')
+      .slice(0, 100);
+    if (query.length < 2) {
+      sendJson(res, 200, { count: 0, patients: [] });
+      return;
+    }
+
+    const [directoryRows, certificates] = await Promise.all([
+      searchPatientDirectory(query, 25),
+      listCertificates(),
+    ]);
+    const certificatesByEmail = new Map();
+    for (const certificate of certificates) {
+      const email = certificatePatientEmail(certificate);
+      if (!email) continue;
+      const group = certificatesByEmail.get(email) || [];
+      group.push(certificate);
+      certificatesByEmail.set(email, group);
+    }
+    for (const group of certificatesByEmail.values()) {
+      group.sort((left, right) => String(right.createdAt || '').localeCompare(String(left.createdAt || '')));
+    }
+
+    const normalizedQuery = query.toLocaleLowerCase('en-AU');
+    const matchesByEmail = new Map();
+    for (const directoryEntry of directoryRows) {
+      const email = normalizeEmail(directoryEntry.email);
+      if (!email) continue;
+      const patientCertificates = certificatesByEmail.get(email) || [];
+      const latestCertificate = patientCertificates[0] || null;
+      matchesByEmail.set(email, {
+        lookupKey: `patient:${directoryEntry.id}`,
+        fullName: directoryEntry.fullName || latestCertificate?.certificateDraft?.fullName || 'Unnamed patient',
+        email,
+        dob: String(latestCertificate?.certificateDraft?.dob || '').trim(),
+        phone: directoryEntry.phone || latestCertificate?.certificateDraft?.phone || '',
+        requestCount: patientCertificates.length,
+        latestRequestAt: latestCertificate?.createdAt || null,
+      });
+    }
+
+    for (const [email, patientCertificates] of certificatesByEmail.entries()) {
+      const latestCertificate = patientCertificates[0] || null;
+      const fullName = String(latestCertificate?.certificateDraft?.fullName || '').trim();
+      if (!fullName.toLocaleLowerCase('en-AU').includes(normalizedQuery)) continue;
+      const existing = matchesByEmail.get(email);
+      matchesByEmail.set(email, {
+        lookupKey: existing?.lookupKey || `request:${latestCertificate.id}`,
+        fullName: existing?.fullName || fullName || 'Unnamed patient',
+        email,
+        dob: existing?.dob || String(latestCertificate?.certificateDraft?.dob || '').trim(),
+        phone: existing?.phone || String(latestCertificate?.certificateDraft?.phone || '').trim(),
+        requestCount: patientCertificates.length,
+        latestRequestAt: latestCertificate?.createdAt || null,
+      });
+    }
+
+    const patients = [...matchesByEmail.values()]
+      .sort((left, right) => left.fullName.localeCompare(right.fullName, 'en-AU'))
+      .slice(0, 25);
+    sendJson(res, 200, { count: patients.length, patients });
+    info('doctor.patient_search.completed', {
+      doctor: doctor.email,
+      queryLength: query.length,
+      resultCount: patients.length,
+    });
+    return;
+  }
+
+  const doctorPatientFileMatch = url.pathname.match(
+    /^\/api\/doctor\/patients\/([^/]+)\/test-results\/([^/]+)\/file$/
+  );
+  if (req.method === 'GET' && doctorPatientFileMatch) {
+    const doctor = await requireDoctor(req, res);
+    if (!doctor) return;
+    const lookup = await resolveDoctorPatientLookup(decodeURIComponent(doctorPatientFileMatch[1]));
+    if (!lookup) {
+      sendJson(res, 404, { error: 'Patient not found' });
+      return;
+    }
+    const recordId = decodeURIComponent(doctorPatientFileMatch[2]);
+    const download = await createPatientMedicalRecordDownload(lookup.email, recordId);
+    if (!download?.url) {
+      sendJson(res, 404, { error: 'Attachment not found' });
+      return;
+    }
+    await appendAudit({
+      type: 'DOCTOR_PATIENT_ATTACHMENT_ACCESSED',
+      by: normalizeEmail(doctor.email),
+      patientReference: lookup.id,
+      recordId,
+    }).catch(() => undefined);
+    sendJson(res, 200, { ...download, expiresInSeconds: null });
+    return;
+  }
+
+  const doctorPatientMatch = url.pathname.match(/^\/api\/doctor\/patients\/([^/]+)$/);
+  if (req.method === 'GET' && doctorPatientMatch) {
+    const doctor = await requireDoctor(req, res);
+    if (!doctor) return;
+    const lookupKey = decodeURIComponent(doctorPatientMatch[1]);
+    const lookup = await resolveDoctorPatientLookup(lookupKey);
+    if (!lookup) {
+      sendJson(res, 404, { error: 'Patient not found' });
+      return;
+    }
+
+    const patientCertificates = await listCertificatesByPatientEmail(lookup.email);
+    const latestCertificate = patientCertificates[0] || lookup.certificate || null;
+    const [account, clinicalProfile] = await Promise.all([
+      getPatientAccountByEmail(lookup.email),
+      getPatientClinicalProfileByEmail(lookup.email),
+    ]);
+    await appendAudit({
+      type: 'DOCTOR_PATIENT_RECORD_VIEWED',
+      by: normalizeEmail(doctor.email),
+      patientReference: lookup.id,
+      requestCount: patientCertificates.length,
+    }).catch(() => undefined);
+    sendJson(res, 200, {
+      patient: {
+        ...buildPatientIdentity({
+          email: lookup.email,
+          latestCertificate,
+          account,
+        }),
+        id: lookup.directoryEntry?.id || null,
+      },
+      clinicalProfile: serializePatientClinicalProfile(
+        clinicalProfile,
+        (recordId) =>
+          `/api/doctor/patients/${encodeURIComponent(lookupKey)}/test-results/${encodeURIComponent(recordId)}/file`
+      ),
+      requestCount: patientCertificates.length,
+      requests: patientCertificates.map(doctorPatientRequestSummary),
+    });
+    return;
+  }
+
   const certificateIdMatch = url.pathname.match(/^\/api\/doctor\/certificates\/([^/]+)$/);
   if (req.method === 'GET' && certificateIdMatch) {
     const doctor = await requireDoctor(req, res);
@@ -4123,6 +4499,11 @@ async function handlePortal(req, res, url) {
 
   if (url.pathname === '/doctor/queue') {
     await servePortalFile(res, 'queue.html');
+    return;
+  }
+
+  if (url.pathname === '/doctor/patients') {
+    await servePortalFile(res, 'patients.html');
     return;
   }
 

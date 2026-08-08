@@ -1,5 +1,38 @@
 # Fixes Log
 
+## 2026-08-08 - Doctor patient search and shared clinical records
+
+### Symptoms
+
+- Doctors could review only the active certificate queue and could not find a patient by name or see previous requests together.
+- Medical history entered in the patient portal lived only in browser storage, so it was unavailable to clinicians and on other devices.
+- The patient portal recorded an uploaded file name but never stored the actual report.
+
+### Root causes
+
+1. There was no server-backed clinical-profile model or private attachment bucket.
+2. Doctor APIs were request-oriented only and had no authenticated patient directory/detail endpoints.
+3. Patient record widgets updated local state without syncing medical history, medications, allergies, lifestyle notes, or test documents to the backend.
+
+### Files changed
+
+- `supabase/migrations/20260808_add_patient_clinical_profiles.sql`
+  - adds the protected clinical-profile table and private `patient-medical-records` bucket.
+- `backend/lib/storage.js`, `api/index.js`, `backend/server.js`
+  - add normalized local/Supabase persistence, private signed downloads, patient profile APIs, authenticated doctor patient search/detail APIs, and audit events.
+- `frontend/src/pages/PatientPortalPage.tsx`, `frontend/src/patient-portal/home/HomeTab.tsx`, `frontend/src/patient-portal/model.ts`
+  - sync patient-entered records to the server, migrate existing local records, and upload/open real attachments.
+- `frontend/public/doctor/patients/index.html`, `backend/doctor-portal/patients.html`, doctor queue pages, and `vercel.json`
+  - add the responsive doctor patient-record workspace and route it from the queue.
+
+### Verification
+
+1. `npm run build` and `npm run lint` pass.
+2. `node --check api/index.js backend/server.js backend/lib/storage.js` passes.
+3. An isolated local API smoke test passed patient login, clinical-profile save, private attachment upload/download, bootstrap hydration, unauthenticated doctor rejection, doctor login, name search, record detail, request history, and doctor attachment access.
+4. Doctor patient records passed desktop `1440x1000` and mobile `390x844` visual checks with no horizontal overflow or browser-console errors.
+5. The production migration was applied and a read-only query confirmed the table plus a private 2.5 MB storage bucket.
+
 ## 2026-06-29 - Remove meal-plan product surface and refocus production on med certs
 
 ### Symptoms

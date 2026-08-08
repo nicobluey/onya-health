@@ -15,6 +15,22 @@ const ENABLE_LOCAL_LEGACY_RECIPE_FALLBACK = String(process.env.ENABLE_LOCAL_LEGA
 const MEAL_RECIPE_IMAGE_BUCKET = String(
   process.env.MEAL_RECIPE_IMAGE_BUCKET || process.env.WEIGHT_LOSS_IMAGE_BUCKET || 'weight-loss-reset-images'
 ).trim();
+const PATIENT_MEDICAL_RECORDS_BUCKET = String(
+  process.env.PATIENT_MEDICAL_RECORDS_BUCKET || 'patient-medical-records'
+).trim();
+const MAX_PATIENT_MEDICAL_RECORD_BYTES = Math.max(
+  128_000,
+  Number(process.env.MAX_PATIENT_MEDICAL_RECORD_BYTES || 2_500_000)
+);
+const SUPPORTED_PATIENT_MEDICAL_RECORD_MIME_TO_EXTENSION = {
+  'application/pdf': 'pdf',
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/webp': 'webp',
+  'image/heic': 'heic',
+  'image/heif': 'heif',
+};
 const MAX_MEAL_RECIPE_IMAGE_BYTES = Math.max(
   64_000,
   Number(process.env.MAX_MEAL_RECIPE_IMAGE_BYTES || 8 * 1024 * 1024)
@@ -80,6 +96,18 @@ function parseSupportedRecipeDataImageUri(value) {
   if (!match) return null;
   const mime = String(match[1] || '').trim().toLowerCase();
   if (!SUPPORTED_MEAL_RECIPE_IMAGE_MIME_TO_EXTENSION[mime]) return null;
+  const body = String(match[2] || '').replace(/\s+/g, '');
+  if (!body) return null;
+  return { mime, body };
+}
+
+function parseSupportedPatientMedicalRecordDataUri(value) {
+  const candidate = String(value || '').trim();
+  if (!candidate) return null;
+  const match = candidate.match(/^data:([a-z0-9.+-]+\/[a-z0-9.+-]+);base64,([a-z0-9+/=\r\n]+)$/i);
+  if (!match) return null;
+  const mime = String(match[1] || '').trim().toLowerCase();
+  if (!SUPPORTED_PATIENT_MEDICAL_RECORD_MIME_TO_EXTENSION[mime]) return null;
   const body = String(match[2] || '').replace(/\s+/g, '');
   if (!body) return null;
   return { mime, body };
@@ -168,6 +196,7 @@ const EMPTY_DB = {
   certificates: [],
   auditLog: [],
   patientBilling: [],
+  patientClinicalProfiles: [],
   mealPlanGenerationCache: [],
 };
 
@@ -348,6 +377,7 @@ async function readDbRaw() {
     certificates: Array.isArray(parsed?.certificates) ? parsed.certificates : [],
     auditLog: Array.isArray(parsed?.auditLog) ? parsed.auditLog : [],
     patientBilling: Array.isArray(parsed?.patientBilling) ? parsed.patientBilling : [],
+    patientClinicalProfiles: Array.isArray(parsed?.patientClinicalProfiles) ? parsed.patientClinicalProfiles : [],
     mealPlanGenerationCache: Array.isArray(parsed?.mealPlanGenerationCache) ? parsed.mealPlanGenerationCache : [],
   };
 }
@@ -1187,6 +1217,121 @@ function buildCertificateMessageSummaries(entries = []) {
   return summaries;
 }
 
+function truncateClinicalText(value, maxLength) {
+  return String(value || '').trim().slice(0, maxLength);
+}
+
+function normalizePatientClinicalTextEntries(source) {
+  if (!Array.isArray(source)) return [];
+  return source
+    .slice(0, 200)
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null;
+      const title = truncateClinicalText(entry.title, 200);
+      const details = truncateClinicalText(entry.details, 4000);
+      if (!title && !details) return null;
+      return {
+        id: truncateClinicalText(entry.id, 120) || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+        title: title || 'Untitled',
+        details,
+        createdAt: truncateClinicalText(entry.createdAt, 64) || new Date().toISOString(),
+      };
+    })
+    .filter(Boolean);
+}
+
+function normalizePatientTestResults(source) {
+  if (!Array.isArray(source)) return [];
+  return source
+    .slice(0, 200)
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null;
+      const name = truncateClinicalText(entry.name, 200);
+      const summary = truncateClinicalText(entry.summary, 4000);
+      if (!name && !summary) return null;
+      return {
+        id: truncateClinicalText(entry.id, 120) || `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+        name: name || 'Untitled result',
+        summary,
+        testDate: truncateClinicalText(entry.testDate, 64) || new Date().toISOString(),
+        fileName: truncateClinicalText(entry.fileName, 255),
+        mimeType: truncateClinicalText(entry.mimeType, 100),
+        fileSize: Math.max(0, Number(entry.fileSize || 0)),
+        storagePath: truncateClinicalText(entry.storagePath, 600),
+        createdAt: truncateClinicalText(entry.createdAt, 64) || new Date().toISOString(),
+      };
+    })
+    .filter(Boolean);
+}
+
+function normalizePatientClinicalProfileValue(input) {
+  const source = input && typeof input === 'object' ? input : {};
+  return {
+    medicalHistory: normalizePatientClinicalTextEntries(source.medicalHistory),
+    allergies: normalizePatientClinicalTextEntries(source.allergies),
+    medications: normalizePatientClinicalTextEntries(source.medications),
+    lifestyleNotes: normalizePatientClinicalTextEntries(source.lifestyleNotes),
+    testResults: normalizePatientTestResults(source.testResults),
+  };
+}
+
+function mapPatientClinicalProfileRow(row) {
+  if (!row || typeof row !== 'object') return normalizePatientClinicalProfileValue(null);
+  return normalizePatientClinicalProfileValue({
+    medicalHistory: row.medical_history ?? row.medicalHistory,
+    allergies: row.allergies,
+    medications: row.medications,
+    lifestyleNotes: row.lifestyle_notes ?? row.lifestyleNotes,
+    testResults: row.test_results ?? row.testResults,
+  });
+}
+
+function mapPatientDirectoryRow(row) {
+  if (!row || typeof row !== 'object') return null;
+  const id = String(row.id || '').trim();
+  const email = normalizeEmail(row.email);
+  if (!id || !email) return null;
+  return {
+    id,
+    email,
+    fullName: String(row.full_name || row.fullName || '').trim(),
+    phone: String(row.phone || '').trim(),
+    address: String(row.address || '').trim(),
+  };
+}
+
+async function getPatientClinicalProfileLocal(email) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return normalizePatientClinicalProfileValue(null);
+  const db = await readDbRaw();
+  const row = db.patientClinicalProfiles.find(
+    (entry) => normalizeEmail(entry?.patientEmail || entry?.email) === normalizedEmail
+  );
+  return mapPatientClinicalProfileRow(row?.profile || row);
+}
+
+async function upsertPatientClinicalProfileLocal(email, profile) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return null;
+  const normalizedProfile = normalizePatientClinicalProfileValue(profile);
+  return mutateDb((db) => {
+    const index = db.patientClinicalProfiles.findIndex(
+      (entry) => normalizeEmail(entry?.patientEmail || entry?.email) === normalizedEmail
+    );
+    const row = {
+      patientEmail: normalizedEmail,
+      profile: normalizedProfile,
+      updatedAt: new Date().toISOString(),
+    };
+    if (index === -1) {
+      db.patientClinicalProfiles.push(row);
+    } else {
+      db.patientClinicalProfiles[index] = row;
+    }
+    return normalizedProfile;
+  });
+}
+
 async function listCertificateMessagesLocal(requestId) {
   const normalizedId = String(requestId || '').trim();
   if (!normalizedId) return [];
@@ -1683,6 +1828,227 @@ async function getCertificateMessageSummariesSupabase(requestIds) {
   }
 
   return buildCertificateMessageSummaries(rows);
+}
+
+async function resolveSupabasePatientIdByEmail(email) {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return null;
+  const cachedPatientId = getCachedPatientId(normalizedEmail);
+  if (cachedPatientId) return cachedPatientId;
+
+  const rows = await supabaseRequest(
+    `patients?email=eq.${encodeURIComponent(normalizedEmail)}&select=id&limit=1`,
+    {
+      method: 'GET',
+      prefer: 'return=representation',
+    }
+  );
+  const patientId = String(rows?.[0]?.id || '').trim();
+  if (patientId) setCachedPatientId(normalizedEmail, patientId);
+  return patientId || null;
+}
+
+async function getPatientClinicalProfileSupabase(email) {
+  const patientId = await resolveSupabasePatientIdByEmail(email);
+  if (!patientId) return normalizePatientClinicalProfileValue(null);
+
+  const rows = await supabaseRequest(
+    `patient_clinical_profiles?patient_id=eq.${encodeURIComponent(
+      patientId
+    )}&select=medical_history,allergies,medications,lifestyle_notes,test_results&limit=1`,
+    {
+      method: 'GET',
+      prefer: 'return=representation',
+    }
+  );
+  return mapPatientClinicalProfileRow(rows?.[0] || null);
+}
+
+async function upsertPatientClinicalProfileSupabase(email, profile) {
+  const patientId = await resolveSupabasePatientIdByEmail(email);
+  if (!patientId) {
+    const error = new Error('Patient profile was not found');
+    error.code = 'PATIENT_NOT_FOUND';
+    throw error;
+  }
+
+  const normalizedProfile = normalizePatientClinicalProfileValue(profile);
+  const rows = await supabaseRequest('patient_clinical_profiles', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates,return=representation',
+    body: {
+      patient_id: patientId,
+      medical_history: normalizedProfile.medicalHistory,
+      allergies: normalizedProfile.allergies,
+      medications: normalizedProfile.medications,
+      lifestyle_notes: normalizedProfile.lifestyleNotes,
+      test_results: normalizedProfile.testResults,
+      updated_at: new Date().toISOString(),
+    },
+  });
+  return mapPatientClinicalProfileRow(rows?.[0] || normalizedProfile);
+}
+
+async function searchPatientDirectorySupabase(query, limit = 20) {
+  const normalizedQuery = String(query || '')
+    .trim()
+    .replace(/[%*(),]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .slice(0, 100);
+  if (normalizedQuery.length < 2) return [];
+  const resolvedLimit = Math.min(50, Math.max(1, Number(limit || 20)));
+  const rows = await supabaseRequest(
+    `patients?full_name=ilike.${encodeURIComponent(
+      `*${normalizedQuery}*`
+    )}&select=id,email,full_name,phone,address&order=full_name.asc&limit=${resolvedLimit}`,
+    {
+      method: 'GET',
+      prefer: 'return=representation',
+    }
+  );
+  return (Array.isArray(rows) ? rows : []).map(mapPatientDirectoryRow).filter(Boolean);
+}
+
+async function getPatientDirectoryEntryByIdSupabase(patientId) {
+  const normalizedId = String(patientId || '').trim();
+  if (!normalizedId) return null;
+  const rows = await supabaseRequest(
+    `patients?id=eq.${encodeURIComponent(
+      normalizedId
+    )}&select=id,email,full_name,phone,address&limit=1`,
+    {
+      method: 'GET',
+      prefer: 'return=representation',
+    }
+  );
+  return mapPatientDirectoryRow(rows?.[0] || null);
+}
+
+function parsePatientMedicalRecordUpload({ fileName, fileDataUrl }) {
+  const parsed = parseSupportedPatientMedicalRecordDataUri(fileDataUrl);
+  if (!parsed) {
+    const error = new Error('Upload a PDF, PNG, JPG, WEBP, HEIC, or HEIF file');
+    error.code = 'FILE_TYPE_UNSUPPORTED';
+    throw error;
+  }
+  const buffer = Buffer.from(parsed.body, 'base64');
+  if (!buffer.length) {
+    const error = new Error('The selected file is empty');
+    error.code = 'FILE_EMPTY';
+    throw error;
+  }
+  if (buffer.length > MAX_PATIENT_MEDICAL_RECORD_BYTES) {
+    const maxMegabytes = (MAX_PATIENT_MEDICAL_RECORD_BYTES / 1_000_000).toFixed(1).replace(/\.0$/, '');
+    const error = new Error(`The selected file must be ${maxMegabytes} MB or smaller`);
+    error.code = 'FILE_TOO_LARGE';
+    throw error;
+  }
+  return {
+    buffer,
+    mimeType: parsed.mime,
+    extension: SUPPORTED_PATIENT_MEDICAL_RECORD_MIME_TO_EXTENSION[parsed.mime],
+    fileName: truncateClinicalText(fileName, 255) || `medical-record.${SUPPORTED_PATIENT_MEDICAL_RECORD_MIME_TO_EXTENSION[parsed.mime]}`,
+  };
+}
+
+async function uploadPatientMedicalRecordLocal({ email, fileName, fileDataUrl }) {
+  const upload = parsePatientMedicalRecordUpload({ fileName, fileDataUrl });
+  const patientHash = createHash('sha256').update(normalizeEmail(email)).digest('hex').slice(0, 20);
+  const fileHash = createHash('sha256').update(upload.buffer).digest('hex').slice(0, 20);
+  const safeName = normalizeStorageObjectPathSegment(path.parse(upload.fileName).name, 'medical-record');
+  const relativePath = `patient-medical-records/${patientHash}/${Date.now()}-${fileHash}-${safeName}.${upload.extension}`;
+  const absolutePath = path.resolve(DATA_DIR, relativePath);
+  await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+  await fs.writeFile(absolutePath, upload.buffer);
+  return {
+    fileName: upload.fileName,
+    mimeType: upload.mimeType,
+    fileSize: upload.buffer.length,
+    storagePath: relativePath,
+  };
+}
+
+async function uploadPatientMedicalRecordSupabase({ email, fileName, fileDataUrl }) {
+  const patientId = await resolveSupabasePatientIdByEmail(email);
+  if (!patientId) {
+    const error = new Error('Patient profile was not found');
+    error.code = 'PATIENT_NOT_FOUND';
+    throw error;
+  }
+  const upload = parsePatientMedicalRecordUpload({ fileName, fileDataUrl });
+  const fileHash = createHash('sha256').update(upload.buffer).digest('hex').slice(0, 20);
+  const safeName = normalizeStorageObjectPathSegment(path.parse(upload.fileName).name, 'medical-record');
+  const objectPath = `patients/${patientId}/${Date.now()}-${fileHash}-${safeName}.${upload.extension}`;
+
+  await uploadBufferToSupabaseStorage({
+    config: getSupabaseConfig(),
+    bucket: PATIENT_MEDICAL_RECORDS_BUCKET,
+    objectPath,
+    contentType: upload.mimeType,
+    bodyBuffer: upload.buffer,
+  });
+  return {
+    fileName: upload.fileName,
+    mimeType: upload.mimeType,
+    fileSize: upload.buffer.length,
+    storagePath: objectPath,
+  };
+}
+
+async function createPatientMedicalRecordDownloadLocal(email, recordId) {
+  const profile = await getPatientClinicalProfileLocal(email);
+  const record = profile.testResults.find((entry) => String(entry.id) === String(recordId));
+  const storagePath = String(record?.storagePath || '').trim();
+  if (!record || !storagePath.startsWith('patient-medical-records/')) return null;
+  const absolutePath = path.resolve(DATA_DIR, storagePath);
+  const allowedRoot = `${path.resolve(DATA_DIR, 'patient-medical-records')}${path.sep}`;
+  if (!absolutePath.startsWith(allowedRoot)) return null;
+  const buffer = await fs.readFile(absolutePath);
+  return {
+    url: `data:${record.mimeType || 'application/octet-stream'};base64,${buffer.toString('base64')}`,
+    fileName: record.fileName || 'medical-record',
+    mimeType: record.mimeType || 'application/octet-stream',
+  };
+}
+
+async function createPatientMedicalRecordDownloadSupabase(email, recordId) {
+  const profile = await getPatientClinicalProfileSupabase(email);
+  const record = profile.testResults.find((entry) => String(entry.id) === String(recordId));
+  const storagePath = String(record?.storagePath || '').trim();
+  if (!record || !storagePath) return null;
+
+  const config = getSupabaseConfig();
+  const response = await fetch(
+    `${config.url}/storage/v1/object/sign/${encodeURIComponent(PATIENT_MEDICAL_RECORDS_BUCKET)}/${storagePath
+      .split('/')
+      .map((part) => encodeURIComponent(part))
+      .join('/')}`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: config.key,
+        Authorization: `Bearer ${config.key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ expiresIn: 300 }),
+    }
+  );
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(`Medical record download failed (${response.status})`);
+  }
+  const signedPath = String(payload?.signedURL || payload?.signedUrl || '').trim();
+  if (!signedPath) throw new Error('Medical record download URL was not returned');
+  const url = /^https?:\/\//i.test(signedPath)
+    ? signedPath
+    : signedPath.startsWith('/storage/v1/')
+    ? `${config.url}${signedPath}`
+    : `${config.url}/storage/v1${signedPath.startsWith('/') ? '' : '/'}${signedPath}`;
+  return {
+    url,
+    fileName: record.fileName || 'medical-record',
+    mimeType: record.mimeType || 'application/octet-stream',
+  };
 }
 
 async function getPatientBillingSupabase(email) {
@@ -2716,6 +3082,52 @@ export async function getCertificateMessageSummaries(requestIds) {
     return getCertificateMessageSummariesSupabase(requestIds);
   }
   return getCertificateMessageSummariesLocal(requestIds);
+}
+
+export function normalizePatientClinicalProfile(profile) {
+  return normalizePatientClinicalProfileValue(profile);
+}
+
+export async function getPatientClinicalProfileByEmail(email) {
+  if (getSupabaseConfig().enabled) {
+    return getPatientClinicalProfileSupabase(email);
+  }
+  return getPatientClinicalProfileLocal(email);
+}
+
+export async function upsertPatientClinicalProfileByEmail(email, profile) {
+  if (getSupabaseConfig().enabled) {
+    return upsertPatientClinicalProfileSupabase(email, profile);
+  }
+  return upsertPatientClinicalProfileLocal(email, profile);
+}
+
+export async function searchPatientDirectory(query, limit = 20) {
+  if (getSupabaseConfig().enabled) {
+    return searchPatientDirectorySupabase(query, limit);
+  }
+  return [];
+}
+
+export async function getPatientDirectoryEntryById(patientId) {
+  if (getSupabaseConfig().enabled) {
+    return getPatientDirectoryEntryByIdSupabase(patientId);
+  }
+  return null;
+}
+
+export async function uploadPatientMedicalRecord(input) {
+  if (getSupabaseConfig().enabled) {
+    return uploadPatientMedicalRecordSupabase(input);
+  }
+  return uploadPatientMedicalRecordLocal(input);
+}
+
+export async function createPatientMedicalRecordDownload(email, recordId) {
+  if (getSupabaseConfig().enabled) {
+    return createPatientMedicalRecordDownloadSupabase(email, recordId);
+  }
+  return createPatientMedicalRecordDownloadLocal(email, recordId);
 }
 
 export async function getPatientBillingByEmail(email) {

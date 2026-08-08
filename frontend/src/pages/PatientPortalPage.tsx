@@ -1,4 +1,4 @@
-import { type CSSProperties, type ChangeEvent, type FormEvent, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, type ChangeEvent, type FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ArrowLeft,
     CalendarDays,
@@ -45,7 +45,9 @@ import {
     createId,
     firstName,
     formatDate,
+    hasPortalProfileData,
     isQueuedStatus,
+    mergePortalProfileData,
     queueEstimatedMinutes,
     queueStageIndex,
     readPortalProfile,
@@ -1285,7 +1287,9 @@ export default function PatientPortalPage() {
     const [activeQueuedRequest, setActiveQueuedRequest] = useState<PortalRequest | null>(null);
     const [recordTab, setRecordTab] = useState<RecordTab>('medical-history');
     const [portalData, setPortalData] = useState<PortalProfileData>(createEmptyPortalData);
+    const portalDataRef = useRef<PortalProfileData>(createEmptyPortalData());
     const [portalDataReady, setPortalDataReady] = useState(false);
+    const [clinicalProfileSaveError, setClinicalProfileSaveError] = useState('');
     const [checkoutSetupContext, setCheckoutSetupContext] = useState<CheckoutSetupContext | null>(null);
     const [emailChangeNotice, setEmailChangeNotice] = useState('');
     const [emailChangeConsuming, setEmailChangeConsuming] = useState(Boolean(initialEmailChangeToken));
@@ -1355,7 +1359,9 @@ export default function PatientPortalPage() {
 
     useEffect(() => {
         const saved = window.localStorage.getItem(profileStorageKey);
-        setPortalData(readPortalProfile(saved));
+        const savedProfile = readPortalProfile(saved);
+        portalDataRef.current = savedProfile;
+        setPortalData(savedProfile);
         setPortalDataReady(true);
     }, [profileStorageKey]);
 
@@ -1510,6 +1516,46 @@ export default function PatientPortalPage() {
                 setRequests(items);
                 const firstQueued = items.find((item) => isQueuedStatus(item.status)) || null;
                 setActiveQueuedRequest(firstQueued);
+
+                const serverClinicalProfile = readPortalProfile(JSON.stringify(payload?.clinicalProfile || {}));
+                const nextProfileStorageKey = `onya_patient_profile:${patientProfile.email || 'guest'}`;
+                const localClinicalProfile = readPortalProfile(window.localStorage.getItem(nextProfileStorageKey));
+                const mergedClinicalProfile = mergePortalProfileData(serverClinicalProfile, localClinicalProfile);
+                portalDataRef.current = mergedClinicalProfile;
+                setPortalData(mergedClinicalProfile);
+                setPortalDataReady(true);
+                safeLocalStorageSetItem(nextProfileStorageKey, JSON.stringify(mergedClinicalProfile));
+
+                if (
+                    hasPortalProfileData(localClinicalProfile) &&
+                    JSON.stringify(mergedClinicalProfile) !== JSON.stringify(serverClinicalProfile)
+                ) {
+                    void fetchApiJson('/api/patient/clinical-profile', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${activeToken}`,
+                        },
+                        body: JSON.stringify({ clinicalProfile: mergedClinicalProfile }),
+                    }).then(({ response: syncResponse, payload: syncPayload }) => {
+                        if (!syncResponse.ok) {
+                            throw new Error(syncPayload?.error || 'Unable to sync medical records.');
+                        }
+                        if (disposed) return;
+                        const syncedProfile = readPortalProfile(JSON.stringify(syncPayload?.clinicalProfile || mergedClinicalProfile));
+                        portalDataRef.current = syncedProfile;
+                        setPortalData(syncedProfile);
+                        setClinicalProfileSaveError('');
+                    }).catch((errorObject) => {
+                        if (!disposed) {
+                            setClinicalProfileSaveError(
+                                errorObject instanceof Error
+                                    ? errorObject.message
+                                    : 'Medical records are saved on this device but have not synced.'
+                            );
+                        }
+                    });
+                }
             } catch (errorObject) {
                 if (!disposed && !silent) {
                     setLoadError(errorObject instanceof Error ? errorObject.message : 'Unable to load patient account');
@@ -1696,6 +1742,34 @@ export default function PatientPortalPage() {
         setPortalScreen('consult-coming-soon');
     };
 
+    const persistClinicalProfile = async (nextProfile: PortalProfileData) => {
+        const activeToken = token || window.localStorage.getItem('onya_patient_token') || '';
+        if (!activeToken) {
+            setClinicalProfileSaveError('Sign in again to sync your medical records.');
+            return;
+        }
+        try {
+            const { response, payload } = await fetchApiJson('/api/patient/clinical-profile', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${activeToken}`,
+                },
+                body: JSON.stringify({ clinicalProfile: nextProfile }),
+            });
+            if (!response.ok) {
+                throw new Error(payload?.error || 'Unable to sync medical records.');
+            }
+            setClinicalProfileSaveError('');
+        } catch (errorObject) {
+            setClinicalProfileSaveError(
+                errorObject instanceof Error
+                    ? errorObject.message
+                    : 'Medical records are saved on this device but have not synced.'
+            );
+        }
+    };
+
     const addRecordEntry = (tab: RecordTab, title: string, details: string) => {
         const entry: TextEntry = {
             id: createId(),
@@ -1703,7 +1777,10 @@ export default function PatientPortalPage() {
             details,
             createdAt: new Date().toISOString(),
         };
-        setPortalData((current) => appendRecordEntry(current, tab, entry));
+        const nextProfile = appendRecordEntry(portalDataRef.current, tab, entry);
+        portalDataRef.current = nextProfile;
+        setPortalData(nextProfile);
+        void persistClinicalProfile(nextProfile);
     };
 
     const addLifestyleNote = (title: string, details: string) => {
@@ -1713,25 +1790,52 @@ export default function PatientPortalPage() {
             details,
             createdAt: new Date().toISOString(),
         };
-        setPortalData((current) => ({
-            ...current,
-            lifestyleNotes: [entry, ...current.lifestyleNotes],
-        }));
+        const nextProfile = {
+            ...portalDataRef.current,
+            lifestyleNotes: [entry, ...portalDataRef.current.lifestyleNotes],
+        };
+        portalDataRef.current = nextProfile;
+        setPortalData(nextProfile);
+        void persistClinicalProfile(nextProfile);
     };
 
-    const addTestResult = (draft: TestResultDraft) => {
-        const entry: TestResultEntry = {
-            id: createId(),
-            name: draft.name,
-            summary: draft.summary,
-            testDate: draft.testDate,
-            fileName: draft.fileName,
-            createdAt: new Date().toISOString(),
-        };
-        setPortalData((current) => ({
-            ...current,
-            testResults: [entry, ...current.testResults],
-        }));
+    const addTestResult = async (draft: TestResultDraft) => {
+        const activeToken = token || window.localStorage.getItem('onya_patient_token') || '';
+        if (!activeToken) throw new Error('Sign in again to upload a medical record.');
+        const { response, payload } = await fetchApiJson('/api/patient/clinical-profile/test-results', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${activeToken}`,
+            },
+            body: JSON.stringify(draft),
+        });
+        if (!response.ok) {
+            throw new Error(payload?.error || 'Unable to save this medical record.');
+        }
+        const savedProfile = readPortalProfile(JSON.stringify(payload?.clinicalProfile || {}));
+        portalDataRef.current = savedProfile;
+        setPortalData(savedProfile);
+        setClinicalProfileSaveError('');
+    };
+
+    const openTestResultAttachment = async (entry: TestResultEntry) => {
+        const activeToken = token || window.localStorage.getItem('onya_patient_token') || '';
+        if (!activeToken || !entry.downloadUrl) throw new Error('This attachment is unavailable.');
+        const { response, payload } = await fetchApiJson(entry.downloadUrl, {
+            headers: { Authorization: `Bearer ${activeToken}` },
+        });
+        if (!response.ok || !payload?.url) {
+            throw new Error(payload?.error || 'Unable to open this attachment.');
+        }
+        const link = document.createElement('a');
+        link.href = String(payload.url);
+        link.target = '_blank';
+        link.rel = 'noopener';
+        link.download = String(payload.fileName || entry.fileName || 'medical-record');
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
     };
 
     const savePatientProfile = async (payload: {
@@ -1960,22 +2064,30 @@ export default function PatientPortalPage() {
 
         if (mainTab === 'home') {
             return (
-                <HomeTab
-                    mode={mode}
-                    firstNameValue={firstNameValue}
-                    requests={timelineRequests}
-                    queuedRequest={queuedRequest}
-                    patient={patient}
-                    data={portalData}
-                    recordTab={recordTab}
-                    onRecordTabChange={setRecordTab}
-                    onAddRecordEntry={addRecordEntry}
-                    onAddLifestyleNote={addLifestyleNote}
-                    onAddTestResult={addTestResult}
-                    onOpenQueue={openQueuedScreen}
-                    onDownloadCertificate={downloadCertificatePdf}
-                    onGoToTab={setTab}
-                />
+                <>
+                    {clinicalProfileSaveError && (
+                        <div className="mb-4 rounded-lg border border-[#f3c5c4] bg-[#fff0ef] px-4 py-3 text-sm font-semibold text-[#a93736]" role="alert">
+                            {clinicalProfileSaveError}
+                        </div>
+                    )}
+                    <HomeTab
+                        mode={mode}
+                        firstNameValue={firstNameValue}
+                        requests={timelineRequests}
+                        queuedRequest={queuedRequest}
+                        patient={patient}
+                        data={portalData}
+                        recordTab={recordTab}
+                        onRecordTabChange={setRecordTab}
+                        onAddRecordEntry={addRecordEntry}
+                        onAddLifestyleNote={addLifestyleNote}
+                        onAddTestResult={addTestResult}
+                        onOpenTestResult={openTestResultAttachment}
+                        onOpenQueue={openQueuedScreen}
+                        onDownloadCertificate={downloadCertificatePdf}
+                        onGoToTab={setTab}
+                    />
+                </>
             );
         }
 

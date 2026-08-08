@@ -86,6 +86,10 @@ export interface TestResultEntry {
   summary: string;
   testDate: string;
   fileName: string;
+  mimeType: string;
+  fileSize: number;
+  hasAttachment: boolean;
+  downloadUrl: string;
   createdAt: string;
 }
 
@@ -102,6 +106,9 @@ export interface TestResultDraft {
   summary: string;
   testDate: string;
   fileName: string;
+  mimeType?: string;
+  fileSize?: number;
+  fileDataUrl?: string;
 }
 
 export interface CheckoutSetupContext {
@@ -219,10 +226,39 @@ function parseTestResults(source: unknown): TestResultEntry[] {
         summary,
         testDate: testDate || new Date().toISOString(),
         fileName: asText(value.fileName),
+        mimeType: asText(value.mimeType),
+        fileSize: Math.max(0, Number(value.fileSize || 0)),
+        hasAttachment: Boolean(value.hasAttachment || value.downloadUrl),
+        downloadUrl: asText(value.downloadUrl),
         createdAt: asText(value.createdAt) || new Date().toISOString(),
       };
     })
     .filter((item): item is TestResultEntry => Boolean(item));
+}
+
+export function hasPortalProfileData(data: PortalProfileData) {
+  return Boolean(
+    data.medicalHistory.length ||
+      data.allergies.length ||
+      data.medications.length ||
+      data.lifestyleNotes.length ||
+      data.testResults.length
+  );
+}
+
+export function mergePortalProfileData(primary: PortalProfileData, secondary: PortalProfileData): PortalProfileData {
+  const mergeEntries = <T extends { id: string }>(preferred: T[], fallback: T[]) => {
+    const seen = new Set(preferred.map((entry) => entry.id));
+    return [...preferred, ...fallback.filter((entry) => !seen.has(entry.id))];
+  };
+
+  return {
+    medicalHistory: mergeEntries(primary.medicalHistory, secondary.medicalHistory),
+    allergies: mergeEntries(primary.allergies, secondary.allergies),
+    medications: mergeEntries(primary.medications, secondary.medications),
+    lifestyleNotes: mergeEntries(primary.lifestyleNotes, secondary.lifestyleNotes),
+    testResults: mergeEntries(primary.testResults, secondary.testResults),
+  };
 }
 
 export function readPortalProfile(raw: string | null): PortalProfileData {

@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Patient Records - Onya Health</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #06142b;
+        --navy: #0a1931;
+        --blue: #1151ff;
+        --blue-hover: #0034e3;
+        --surface: #f3f8ff;
+        --cloud: #f5f7fa;
+        --line: #d7e2ee;
+        --muted: #475569;
+        --white: #fff;
+        --success: #007d48;
+        --warning: #8a6700;
+        --error: #a93736;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; min-height: 100vh; background: var(--surface); color: var(--ink); font-family: Inter, system-ui, sans-serif; }
+      button, input { font: inherit; }
+      button, a { -webkit-tap-highlight-color: transparent; }
+      header {
+        min-height: 72px;
+        padding: 16px 24px;
+        border-bottom: 1px solid var(--line);
+        background: var(--white);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      h1, h2, h3 { margin: 0; font-family: "Basic Commercial Pro", "Helvetica Neue", Arial, sans-serif; letter-spacing: 0; }
+      h1 { font-size: 28px; line-height: 1; }
+      h2 { font-size: 24px; }
+      h3 { font-size: 16px; }
+      .header-actions { display: flex; align-items: center; gap: 8px; }
+      .action-link, .button {
+        min-height: 40px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--white);
+        color: var(--navy);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px 14px;
+        font-size: 13px;
+        font-weight: 700;
+        text-decoration: none;
+        cursor: pointer;
+      }
+      .button-primary { border-color: var(--blue); background: var(--blue); color: var(--white); }
+      .button-primary:hover { border-color: var(--blue-hover); background: var(--blue-hover); }
+      .action-link:focus-visible, .button:focus-visible, input:focus-visible, .patient-result:focus-visible {
+        outline: 3px solid rgba(17, 81, 255, 0.25);
+        outline-offset: 2px;
+      }
+      main { width: min(1240px, calc(100% - 32px)); margin: 28px auto 48px; }
+      .intro { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 20px; }
+      .intro > div { min-width: 0; }
+      .intro p { margin: 8px 0 0; color: var(--muted); line-height: 1.5; }
+      .search-form { width: min(520px, 100%); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+      .search-form label { grid-column: 1 / -1; font-size: 13px; font-weight: 700; }
+      .search-form input { height: 48px; min-width: 0; border: 1px solid #aabdd2; border-radius: 8px; background: var(--white); color: var(--ink); padding: 0 14px; }
+      .status { min-height: 22px; margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+      .status.error { color: var(--error); }
+      .workspace { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); border: 1px solid var(--line); border-radius: 8px; background: var(--white); min-height: 560px; overflow: hidden; }
+      .results-panel { border-right: 1px solid var(--line); background: var(--cloud); }
+      .panel-heading { padding: 16px; border-bottom: 1px solid var(--line); }
+      .panel-heading p { margin: 5px 0 0; color: var(--muted); font-size: 13px; }
+      .results-list { display: grid; gap: 8px; padding: 12px; }
+      .patient-result { width: 100%; border: 1px solid var(--line); border-radius: 8px; background: var(--white); color: var(--ink); padding: 12px; text-align: left; cursor: pointer; }
+      .patient-result:hover, .patient-result.selected { border-color: var(--blue); background: #eef5ff; }
+      .patient-result strong { display: block; font-size: 15px; }
+      .patient-result span { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; line-height: 1.4; overflow-wrap: anywhere; }
+      .detail-panel { min-width: 0; }
+      .placeholder { min-height: 558px; display: grid; place-items: center; padding: 32px; text-align: center; color: var(--muted); }
+      .placeholder[hidden] { display: none; }
+      .placeholder strong { display: block; margin-bottom: 6px; color: var(--ink); font-size: 18px; }
+      .patient-detail { padding: 24px; }
+      .patient-detail[hidden] { display: none; }
+      .patient-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }
+      .patient-heading p { margin: 6px 0 0; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+      .count-pill { flex: none; border-radius: 999px; background: #eaf4ff; color: var(--navy); padding: 6px 10px; font-size: 12px; font-weight: 800; }
+      .identity-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin-top: 20px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--line); }
+      .identity-item { min-width: 0; background: var(--white); padding: 12px; }
+      .identity-item span { display: block; color: var(--muted); font-size: 11px; font-weight: 700; text-transform: uppercase; }
+      .identity-item strong { display: block; margin-top: 5px; font-size: 14px; font-weight: 700; overflow-wrap: anywhere; }
+      .detail-section { padding: 24px 0; border-bottom: 1px solid var(--line); }
+      .detail-section:last-child { border-bottom: 0; padding-bottom: 0; }
+      .section-intro { margin: 5px 0 16px; color: var(--muted); font-size: 13px; }
+      .clinical-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; }
+      .clinical-group { min-width: 0; }
+      .record-list, .request-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+      .record-item { border-left: 3px solid var(--line); padding: 4px 0 4px 10px; }
+      .record-item strong { display: block; font-size: 13px; }
+      .record-item p { margin: 3px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+      .record-item small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+      .empty-copy { margin: 10px 0 0; color: var(--muted); font-size: 13px; }
+      .test-result { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+      .test-result p { margin: 4px 0 0; color: var(--muted); font-size: 13px; line-height: 1.4; }
+      .test-result small { display: block; margin-top: 5px; color: var(--muted); }
+      .request-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px; border: 1px solid var(--line); border-radius: 8px; padding: 14px; }
+      .request-item p { margin: 5px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+      .request-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+      .status-pill { border-radius: 999px; padding: 4px 8px; background: var(--cloud); color: var(--navy); font-size: 11px; font-weight: 800; text-transform: capitalize; }
+      .status-pill.approved, .status-pill.closed { background: #e8f7ef; color: var(--success); }
+      .status-pill.denied { background: #fff0ef; color: var(--error); }
+      .status-pill.pending, .status-pill.submitted, .status-pill.triaged, .status-pill.assigned, .status-pill.in_review { background: #fff7df; color: var(--warning); }
+      .loading { opacity: 0.62; pointer-events: none; }
+      @media (max-width: 840px) {
+        header { align-items: flex-start; padding: 16px; }
+        h1 { font-size: 23px; }
+        .header-actions { flex-wrap: wrap; justify-content: flex-end; }
+        main { width: min(100% - 24px, 720px); margin-top: 20px; }
+        .intro { align-items: stretch; flex-direction: column; gap: 16px; }
+        .search-form { width: 100%; }
+        .workspace { grid-template-columns: 1fr; }
+        .results-panel { border-right: 0; border-bottom: 1px solid var(--line); }
+        .results-list { max-height: 280px; overflow: auto; }
+        .placeholder { min-height: 320px; }
+        .patient-detail { padding: 18px; }
+        .identity-grid, .clinical-grid { grid-template-columns: 1fr; }
+        .request-item, .test-result { grid-template-columns: 1fr; }
+        .request-item .button, .test-result .button { width: 100%; }
+      }
+      @media (max-width: 480px) {
+        .search-form { grid-template-columns: 1fr; }
+        .search-form label { grid-column: auto; }
+        .search-form .button { width: 100%; }
+        .patient-heading { flex-direction: column; gap: 10px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Patient records</h1>
+      <div class="header-actions">
+        <a class="action-link" href="/doctor/queue">Queue</a>
+        <a class="action-link" href="/verify">Verify</a>
+        <button id="logout" class="action-link" type="button">Logout</button>
+      </div>
+    </header>
+
+    <main>
+      <div class="intro">
+        <div>
+          <h2>Find a patient</h2>
+          <p>Search by patient name to review previous requests and shared medical records.</p>
+        </div>
+        <form id="search-form" class="search-form">
+          <label for="patient-query">Patient name</label>
+          <input id="patient-query" type="search" minlength="2" maxlength="100" autocomplete="off" placeholder="Start typing a name" required />
+          <button id="search-button" class="button button-primary" type="submit">Search patients</button>
+        </form>
+      </div>
+
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+      <section id="workspace" class="workspace" aria-label="Patient search and record viewer">
+        <aside class="results-panel">
+          <div class="panel-heading">
+            <h3>Search results</h3>
+            <p id="result-count">Enter at least two characters.</p>
+          </div>
+          <div id="results-list" class="results-list"></div>
+        </aside>
+
+        <div class="detail-panel">
+          <div id="placeholder" class="placeholder">
+            <div>
+              <strong>No patient selected</strong>
+              Search by name, then choose a patient to open their record.
+            </div>
+          </div>
+          <article id="patient-detail" class="patient-detail" hidden></article>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const token = localStorage.getItem('onyaDoctorToken');
+      const searchForm = document.getElementById('search-form');
+      const searchButton = document.getElementById('search-button');
+      const queryInput = document.getElementById('patient-query');
+      const statusNode = document.getElementById('status');
+      const workspaceNode = document.getElementById('workspace');
+      const resultsListNode = document.getElementById('results-list');
+      const resultCountNode = document.getElementById('result-count');
+      const placeholderNode = document.getElementById('placeholder');
+      const patientDetailNode = document.getElementById('patient-detail');
+      let searchResults = [];
+      let selectedLookupKey = '';
+
+      if (!token) window.location.href = '/doctor/login?returnTo=%2Fdoctor%2Fpatients';
+
+      document.getElementById('logout').addEventListener('click', () => {
+        localStorage.removeItem('onyaDoctorToken');
+        window.location.href = '/doctor/login';
+      });
+
+      function escapeHtml(value) {
+        return String(value ?? '').replace(/[&<>"']/g, (character) => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
+        })[character]);
+      }
+
+      function formatDate(value, includeTime = false) {
+        if (!value) return 'Not provided';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return escapeHtml(value);
+        return date.toLocaleString('en-AU', includeTime
+          ? { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }
+          : { day: '2-digit', month: 'short', year: 'numeric' });
+      }
+
+      function setStatus(message, isError = false) {
+        statusNode.textContent = message || '';
+        statusNode.classList.toggle('error', Boolean(message && isError));
+      }
+
+      async function parseJsonResponse(response) {
+        const text = await response.text();
+        if (!text) return {};
+        try { return JSON.parse(text); } catch { return { error: text.slice(0, 180) || 'Unexpected response' }; }
+      }
+
+      async function doctorFetch(path) {
+        const response = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
+        const payload = await parseJsonResponse(response);
+        if (response.status === 401) {
+          localStorage.removeItem('onyaDoctorToken');
+          window.location.href = `/doctor/login?returnTo=${encodeURIComponent('/doctor/patients')}`;
+          throw new Error('Session expired');
+        }
+        if (!response.ok) throw new Error(payload.error || 'Request failed');
+        return payload;
+      }
+
+      function renderResults() {
+        if (!searchResults.length) {
+          resultsListNode.innerHTML = '<p class="empty-copy">No matching patients found.</p>';
+          return;
+        }
+        resultsListNode.innerHTML = searchResults.map((patient, index) => `
+          <button type="button" class="patient-result${patient.lookupKey === selectedLookupKey ? ' selected' : ''}" data-index="${index}">
+            <strong>${escapeHtml(patient.fullName || 'Unnamed patient')}</strong>
+            <span>${escapeHtml(patient.email || '')}</span>
+            <span>${escapeHtml(patient.requestCount || 0)} previous request${Number(patient.requestCount || 0) === 1 ? '' : 's'}${patient.latestRequestAt ? ` · Latest ${formatDate(patient.latestRequestAt)}` : ''}</span>
+          </button>
+        `).join('');
+      }
+
+      function renderTextEntries(entries, emptyMessage) {
+        if (!Array.isArray(entries) || !entries.length) return `<p class="empty-copy">${escapeHtml(emptyMessage)}</p>`;
+        return `<ul class="record-list">${entries.map((entry) => `
+          <li class="record-item">
+            <strong>${escapeHtml(entry.title || 'Untitled')}</strong>
+            ${entry.details ? `<p>${escapeHtml(entry.details)}</p>` : ''}
+            <small>Added ${formatDate(entry.createdAt)}</small>
+          </li>
+        `).join('')}</ul>`;
+      }
+
+      function statusClass(status) {
+        return String(status || '').trim().toLowerCase().replace(/[^a-z_]/g, '');
+      }
+
+      function renderPatient(payload) {
+        const patient = payload.patient || {};
+        const profile = payload.clinicalProfile || {};
+        const testResults = Array.isArray(profile.testResults) ? profile.testResults : [];
+        const requests = Array.isArray(payload.requests) ? payload.requests : [];
+        placeholderNode.hidden = true;
+        patientDetailNode.hidden = false;
+        patientDetailNode.innerHTML = `
+          <div class="patient-heading">
+            <div>
+              <h2>${escapeHtml(patient.fullName || 'Unnamed patient')}</h2>
+              <p>${escapeHtml(patient.email || '')}</p>
+            </div>
+            <span class="count-pill">${escapeHtml(payload.requestCount || 0)} request${Number(payload.requestCount || 0) === 1 ? '' : 's'}</span>
+          </div>
+
+          <div class="identity-grid">
+            <div class="identity-item"><span>Date of birth</span><strong>${formatDate(patient.dob)}</strong></div>
+            <div class="identity-item"><span>Phone</span><strong>${escapeHtml(patient.phone || 'Not provided')}</strong></div>
+            <div class="identity-item"><span>Address</span><strong>${escapeHtml(patient.address || 'Not provided')}</strong></div>
+          </div>
+
+          <section class="detail-section">
+            <h3>Medical history shared by patient</h3>
+            <p class="section-intro">Patient-entered information from their secure portal.</p>
+            <div class="clinical-grid">
+              <div class="clinical-group"><h3>Medical history</h3>${renderTextEntries(profile.medicalHistory, 'No medical history shared.')}</div>
+              <div class="clinical-group"><h3>Allergies</h3>${renderTextEntries(profile.allergies, 'No allergies shared.')}</div>
+              <div class="clinical-group"><h3>Medications</h3>${renderTextEntries(profile.medications, 'No medications shared.')}</div>
+              <div class="clinical-group"><h3>Lifestyle notes</h3>${renderTextEntries(profile.lifestyleNotes, 'No lifestyle notes shared.')}</div>
+            </div>
+          </section>
+
+          <section class="detail-section">
+            <h3>Tests and uploaded records</h3>
+            <p class="section-intro">Reports and supporting records added in the patient portal.</p>
+            ${testResults.length ? `<ul class="record-list">${testResults.map((entry, index) => `
+              <li class="test-result">
+                <div>
+                  <strong>${escapeHtml(entry.name || 'Untitled result')}</strong>
+                  ${entry.summary ? `<p>${escapeHtml(entry.summary)}</p>` : ''}
+                  <small>${formatDate(entry.testDate)}${entry.fileName ? ` · ${escapeHtml(entry.fileName)}` : ''}</small>
+                </div>
+                ${entry.hasAttachment && entry.downloadUrl ? `<button type="button" class="button attachment-button" data-record-index="${index}">Open attachment</button>` : ''}
+              </li>
+            `).join('')}</ul>` : '<p class="empty-copy">No test results or uploaded records shared.</p>'}
+          </section>
+
+          <section class="detail-section">
+            <h3>Previous requests</h3>
+            <p class="section-intro">Most recent request first.</p>
+            ${requests.length ? `<ul class="request-list">${requests.map((request) => `
+              <li class="request-item">
+                <div>
+                  <strong>${escapeHtml(request.purpose || 'Medical certificate request')}</strong>
+                  <p>${escapeHtml(request.symptom || 'No symptom summary')} ${request.description ? `· ${escapeHtml(request.description)}` : ''}</p>
+                  <div class="request-meta">
+                    <span class="status-pill ${statusClass(request.status)}">${escapeHtml(String(request.status || 'unknown').replace(/_/g, ' '))}</span>
+                    <span>${formatDate(request.createdAt, true)}</span>
+                    <span>${escapeHtml(request.durationDays || 1)} day${Number(request.durationDays || 1) === 1 ? '' : 's'}</span>
+                  </div>
+                </div>
+                <a class="button" href="/doctor/review?id=${encodeURIComponent(request.id)}">Open request</a>
+              </li>
+            `).join('')}</ul>` : '<p class="empty-copy">No previous certificate requests found.</p>'}
+          </section>
+        `;
+
+        patientDetailNode.querySelectorAll('.attachment-button').forEach((button) => {
+          button.addEventListener('click', () => {
+            const record = testResults[Number(button.dataset.recordIndex || -1)];
+            if (record) void openAttachment(record, button);
+          });
+        });
+      }
+
+      async function openAttachment(record, button) {
+        const originalText = button.textContent;
+        button.disabled = true;
+        button.textContent = 'Opening...';
+        try {
+          const payload = await doctorFetch(record.downloadUrl);
+          const anchor = document.createElement('a');
+          anchor.href = payload.url;
+          anchor.target = '_blank';
+          anchor.rel = 'noopener';
+          anchor.download = payload.fileName || record.fileName || 'medical-record';
+          document.body.appendChild(anchor);
+          anchor.click();
+          anchor.remove();
+        } catch (error) {
+          setStatus(error.message || 'Unable to open attachment.', true);
+        } finally {
+          button.disabled = false;
+          button.textContent = originalText;
+        }
+      }
+
+      async function openPatient(index) {
+        const patient = searchResults[index];
+        if (!patient) return;
+        selectedLookupKey = patient.lookupKey;
+        renderResults();
+        setStatus('Loading patient record...');
+        workspaceNode.classList.add('loading');
+        try {
+          const payload = await doctorFetch(`/api/doctor/patients/${encodeURIComponent(patient.lookupKey)}`);
+          renderPatient(payload);
+          setStatus('');
+        } catch (error) {
+          setStatus(error.message || 'Unable to load patient record.', true);
+        } finally {
+          workspaceNode.classList.remove('loading');
+        }
+      }
+
+      resultsListNode.addEventListener('click', (event) => {
+        const button = event.target.closest('.patient-result');
+        if (!button) return;
+        void openPatient(Number(button.dataset.index));
+      });
+
+      searchForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const query = queryInput.value.trim();
+        if (query.length < 2) {
+          setStatus('Enter at least two characters.', true);
+          return;
+        }
+        searchButton.disabled = true;
+        searchButton.textContent = 'Searching...';
+        setStatus('Searching patient records...');
+        try {
+          const payload = await doctorFetch(`/api/doctor/patients?query=${encodeURIComponent(query)}`);
+          searchResults = Array.isArray(payload.patients) ? payload.patients : [];
+          selectedLookupKey = '';
+          resultCountNode.textContent = `${searchResults.length} patient${searchResults.length === 1 ? '' : 's'} found`;
+          renderResults();
+          placeholderNode.hidden = false;
+          patientDetailNode.hidden = true;
+          setStatus(searchResults.length ? 'Choose a patient to view their record.' : 'No matching patients found.');
+        } catch (error) {
+          setStatus(error.message || 'Unable to search patient records.', true);
+        } finally {
+          searchButton.disabled = false;
+          searchButton.textContent = 'Search patients';
+        }
+      });
+    </script>
+  </body>
+</html>
