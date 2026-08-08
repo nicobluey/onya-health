@@ -85,9 +85,9 @@
     <header>
       <h1>Open Certificate Queue</h1>
       <div class="header-actions">
-        <a class="action-link" href="/doctor/patients">Patients</a>
+        <a class="action-link" href="/doctor/patients">Search</a>
         <a class="action-link" href="/verify">Verify</a>
-        <button id="toggle-accounts">Accounts</button>
+        <button id="toggle-accounts">Approvals</button>
         <button id="toggle-profile">Profile</button>
         <button id="logout">Logout</button>
       </div>
@@ -157,6 +157,11 @@
           loadDoctorAccounts();
         }
       });
+
+      if (new URLSearchParams(window.location.search).get('panel') === 'approvals') {
+        accountsCard.classList.remove('hidden');
+        loadDoctorAccounts();
+      }
 
       document.getElementById('logout').addEventListener('click', () => {
         localStorage.removeItem('onyaDoctorToken');

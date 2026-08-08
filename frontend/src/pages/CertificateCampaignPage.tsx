@@ -96,7 +96,7 @@ const LANDING_CONFIGS: Record<string, LandingConfig> = {
         purposeParam: 'work',
         metaTitle: 'Work Medical Certificate Online | OnyaHealth',
         metaDescription:
-            'Work medical certificate requests start at $9.71 for 1 day, then linearly scale up to $29.71 for 5-7 days with Australian doctor review.',
+            'Work medical certificate requests start at $11.21 for 1 day, then linearly scale up to $29.71 for 5-7 days with Australian doctor review.',
         heroHeadline: 'Online Work Medical Certificates Reviewed by Australian Doctors',
         heroSubheadline:
             'Fast, secure medical certificates for sick leave and work absences without needing to visit a clinic.',
@@ -157,7 +157,7 @@ const LANDING_CONFIGS: Record<string, LandingConfig> = {
         purposeParam: 'university',
         metaTitle: 'University Medical Certificate Online | OnyaHealth',
         metaDescription:
-            'University medical certificate requests start at $9.71 for 1 day, then linearly scale up to $29.71 for 5-7 days with doctor review.',
+            'University medical certificate requests start at $11.21 for 1 day, then linearly scale up to $29.71 for 5-7 days with doctor review.',
         heroHeadline: 'Online University Medical Certificates for Illness or Assessment Impact',
         heroSubheadline:
             'Fast, secure medical certificates for classes, exams, and assessment-related illness.',
@@ -218,7 +218,7 @@ const LANDING_CONFIGS: Record<string, LandingConfig> = {
         purposeParam: 'carers-leave',
         metaTitle: "Carer's Leave Certificate Online | OnyaHealth",
         metaDescription:
-            "Carer's leave certificate requests start at $9.71 for 1 day, then linearly scale up to $29.71 for 5-7 days with Australian doctor review.",
+            "Carer's leave certificate requests start at $11.21 for 1 day, then linearly scale up to $29.71 for 5-7 days with Australian doctor review.",
         heroHeadline: "Online Carer's Leave Certificates Reviewed by Australian Doctors",
         heroSubheadline:
             'Fast, secure certificates when you need leave to care for someone under your care.',
@@ -319,12 +319,12 @@ const HOW_IT_WORKS_STEPS = [
 const PRICING_TIERS: PricingTier[] = [
     {
         label: '1 day',
-        title: '$9.71 one-time',
+        title: '$11.21 one-time',
         note: 'For short absence periods. Final pricing is shown clearly before payment.',
     },
     {
         label: '2-7 days',
-        title: '$14.71-$29.71 one-time',
+        title: '$15.84-$29.71 one-time',
         note: 'Price scales linearly by duration up to 5 days and stays capped for 5-7 day certificates.',
     },
     {
@@ -474,7 +474,7 @@ function PricingSection() {
                         <h2 className="onya-heading mt-4 text-text-primary">Simple pricing that updates by duration</h2>
                     </div>
                     <p className="max-w-xl text-sm leading-relaxed text-text-secondary md:text-base">
-                        1-day requests start at $9.71. Longer requests are priced clearly before payment, capped at $29.71 for 5-7 days, or choose All Access at $19/month.
+                        1-day requests start at $11.21. Longer requests are priced clearly before payment, capped at $29.71 for 5-7 days, or choose All Access at $19/month.
                     </p>
                 </div>
                 <div className="mt-8 grid gap-4 md:grid-cols-3">

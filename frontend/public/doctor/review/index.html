@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Certificate Review - Onya Health</title>
+    <title>Certificate Review - Supadoc</title>
     <style>
       body { font-family: Inter, Arial, sans-serif; margin: 0; background: #f6fafd; color: #0a1931; }
       header { padding: 18px 24px; border-bottom: 1px solid #b3cfe5; background: #fff; display: flex; justify-content: space-between; align-items: center; }
@@ -12,7 +12,7 @@
       .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
       .label { font-size: 12px; text-transform: uppercase; color: #4a7fa7; letter-spacing: 0.08em; margin-bottom: 4px; }
       .value { font-weight: 600; }
-      textarea { width: 100%; min-height: 140px; border: 1px solid #b3cfe5; border-radius: 10px; padding: 10px; box-sizing: border-box; }
+      textarea { width: 100%; min-height: 140px; border: 1px solid #b3cfe5; border-radius: 10px; padding: 10px; box-sizing: border-box; font: inherit; line-height: 1.45; }
       .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
       button { border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 700; cursor: pointer; }
       .approve { background: #1a3d63; color: #fff; }
@@ -34,6 +34,8 @@
       .message-meta { margin-bottom: 4px; font-size: 11px; font-weight: 700; opacity: 0.75; }
       .message-body { white-space: pre-wrap; overflow-wrap: anywhere; }
       #reply { min-height: 96px; }
+      #certificate-statement { min-height: 126px; }
+      .field-spacer { margin-top: 16px; }
       @media (max-width: 640px) {
         header { align-items: flex-start; gap: 12px; }
         .message { max-width: 92%; }
@@ -61,7 +63,9 @@
         <div id="message-status" class="status muted"></div>
       </div>
       <div class="panel">
-        <label class="label" for="notes">Doctor Notes</label>
+        <label class="label" for="certificate-statement">Certificate wording</label>
+        <textarea id="certificate-statement" maxlength="1200"></textarea>
+        <label class="label field-spacer" for="notes">Doctor Notes</label>
         <textarea id="notes" placeholder="Add your clinical review notes here..."></textarea>
         <div class="actions">
           <button id="assign" class="secondary">Assign to me</button>
@@ -91,6 +95,7 @@
       const contentNode = document.getElementById('content');
       const statusNode = document.getElementById('status');
       const notesNode = document.getElementById('notes');
+      const certificateStatementNode = document.getElementById('certificate-statement');
       const replyNode = document.getElementById('reply');
       const messageThreadNode = document.getElementById('message-thread');
       const messageStatusNode = document.getElementById('message-status');
@@ -193,12 +198,16 @@
 
       function updateActionAvailability() {
         const open = isOpenStatus(currentStatus);
+        document.getElementById('preview-pdf').disabled = !currentStatus;
+        document.getElementById('auto-notes').disabled = !open;
         document.getElementById('approve').disabled = !open;
         document.getElementById('deny').disabled = !open;
         document.getElementById('more-info').disabled = !open;
         document.getElementById('assign').disabled = !open;
         document.getElementById('send-reply').disabled = !open;
         replyNode.disabled = !open;
+        notesNode.disabled = !open;
+        certificateStatementNode.disabled = !open;
         document.getElementById('close').disabled = !canCloseStatus(currentStatus);
       }
 
@@ -234,6 +243,7 @@
         if (cert.decision?.notes) {
           notesNode.value = cert.decision.notes;
         }
+        certificateStatementNode.value = cert.certificateStatement || '';
 
         contentNode.innerHTML = `
           <div class="grid">
@@ -309,7 +319,11 @@
               'Content-Type': 'application/json',
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ decision, notes: notesNode.value }),
+            body: JSON.stringify({
+              decision,
+              notes: notesNode.value,
+              certificateStatement: certificateStatementNode.value,
+            }),
           });
 
           const payload = await parseResponseJson(response);
@@ -457,7 +471,10 @@
               'Content-Type': 'application/json',
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ notes: notesNode.value }),
+            body: JSON.stringify({
+              notes: notesNode.value,
+              certificateStatement: certificateStatementNode.value,
+            }),
           });
 
           if (!response.ok) {
@@ -472,6 +489,7 @@
           previewObjectUrl = URL.createObjectURL(pdfBlob);
           previewFrame.src = previewObjectUrl;
           previewPanel.style.display = 'block';
+          document.getElementById('preview-pdf').textContent = 'Regenerate PDF preview';
           setStatus('Preview generated.', 'success');
         } catch (error) {
           setStatus(error.message || 'Failed to generate PDF preview.', 'error');
@@ -488,6 +506,11 @@
       document.getElementById('auto-notes').addEventListener('click', autoGenerateNotes);
       document.getElementById('more-info').addEventListener('click', addMoreInfoDraft);
       document.getElementById('preview-pdf').addEventListener('click', previewPdf);
+      certificateStatementNode.addEventListener('input', () => {
+        if (previewPanel.style.display !== 'none') {
+          setStatus('Certificate wording changed. Regenerate the preview to see the update.', 'muted');
+        }
+      });
 
       if (id) {
         loadCertificate().catch((err) => {

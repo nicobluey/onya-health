@@ -74,20 +74,6 @@ function addDays(date, dayCount) {
   return result;
 }
 
-function formatAttendanceTarget(purpose) {
-  const normalized = String(purpose || '').trim().toLowerCase();
-  if (!normalized) return 'their usual activities';
-  if (normalized.includes('work')) return 'work';
-  if (normalized.includes('school') || normalized.includes('university') || normalized.includes('study')) {
-    return 'study';
-  }
-  return normalized;
-}
-
-function normalizeSymptomVisibility(value) {
-  return String(value || '').trim().toLowerCase() === 'public' ? 'public' : 'private';
-}
-
 function formatPeriod(startDate, durationDays) {
   const parsedStart = parseDate(startDate);
   if (!parsedStart) {
@@ -119,19 +105,18 @@ function buildReadablePeriod(startDate, durationDays) {
   return `${formatLongDate(parsedStart)} to ${formatLongDate(endDate)} (${safeDuration} days)`;
 }
 
-function buildCertificateStatement({ issueDate, patientName, purpose, startDate, durationDays, symptom, symptomVisibility }) {
-  const attendanceTarget = formatAttendanceTarget(purpose);
-  const period = formatPeriod(startDate, durationDays);
-  const symptoms = String(symptom || '').trim();
-  const hasPublicSymptoms = normalizeSymptomVisibility(symptomVisibility) === 'public' && Boolean(symptoms);
-  const conditionPhrase = hasPublicSymptoms
-    ? `${patientName} is experiencing ${symptoms}`
-    : `${patientName} is suffering from a medical condition`;
+export function buildDefaultCertificateStatement(certificate, issuedAt = new Date()) {
+  const data = certificate?.certificateDraft || {};
+  const issueDate = formatLongDate(issuedAt);
+  const patientName = safeText(data.fullName, 'the patient');
+  const durationDaysRaw = Number(data.durationDays || 1);
+  const durationDays = Number.isFinite(durationDaysRaw) && durationDaysRaw > 0 ? Math.floor(durationDaysRaw) : 1;
+  const period = formatPeriod(data.startDate, durationDays);
 
   return (
-    `Following a telehealth consultation on ${issueDate}, ` +
-    `${conditionPhrase} and is currently unfit to attend ${attendanceTarget}${period}. ` +
-    'This certificate is based on clinician assessment.'
+    `Following a telehealth consultation on ${issueDate}, in my opinion ${patientName} was suffering from a medical condition ` +
+    `and was unfit to attend work${period}. ` +
+    'This certificate is based on my clinical assessment of the patient on the date of consultation as stated above.'
   );
 }
 
@@ -285,16 +270,10 @@ export async function buildCertificatePdf(certificate, options = {}) {
 
   const durationDaysRaw = Number(data.durationDays || 1);
   const durationDays = Number.isFinite(durationDaysRaw) && durationDaysRaw > 0 ? Math.floor(durationDaysRaw) : 1;
-  const symptomVisibility = normalizeSymptomVisibility(data.symptomVisibility);
-  const statement = buildCertificateStatement({
-    issueDate,
-    patientName,
-    purpose: data.purpose,
-    startDate: data.startDate,
-    durationDays,
-    symptom: data.symptom,
-    symptomVisibility,
-  });
+  const storedStatement =
+    certificate?.decision?.certificateStatement || certificate?.rawSubmission?.workflow?.certificateStatement || '';
+  const statement = String(options.certificateStatement ?? storedStatement).trim() ||
+    buildDefaultCertificateStatement(certificate, issuedAt);
 
   const logo = loadOnyaLogo();
   const qrBuffer = await buildQrBuffer(verifyUrl || verificationCode);
@@ -331,6 +310,18 @@ export async function buildCertificatePdf(certificate, options = {}) {
 
     let y = 34;
     let isFirstPage = true;
+
+    if (isPreview) {
+      doc.save();
+      doc.fillColor('#E6EBF0');
+      doc.font('Helvetica-Bold').fontSize(96);
+      doc.rotate(-30, { origin: [doc.page.width / 2, doc.page.height / 2] });
+      doc.text('PREVIEW', 92, 410, {
+        width: doc.page.width - 184,
+        align: 'center',
+      });
+      doc.restore();
+    }
 
     if (logo) {
       doc.image(logo, left, y, { fit: [176, 48], align: 'left', valign: 'top' });
@@ -542,18 +533,6 @@ export async function buildCertificatePdf(certificate, options = {}) {
         width: contentWidth - 106,
         lineBreak: false,
       });
-
-    if (isPreview) {
-      doc.save();
-      doc.fillColor('#E6EBF0');
-      doc.font('Helvetica-Bold').fontSize(96);
-      doc.rotate(-30, { origin: [doc.page.width / 2, doc.page.height / 2] });
-      doc.text('PREVIEW', 92, 410, {
-        width: doc.page.width - 184,
-        align: 'center',
-      });
-      doc.restore();
-    }
 
     doc.end();
   });

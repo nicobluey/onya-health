@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Patient Records - Onya Health</title>
+    <title>Patient Search - Supadoc</title>
     <style>
       :root {
         color-scheme: light;
@@ -22,7 +22,7 @@
       }
       * { box-sizing: border-box; }
       body { margin: 0; min-height: 100vh; background: var(--surface); color: var(--ink); font-family: Inter, system-ui, sans-serif; }
-      button, input { font: inherit; }
+      button, input, select { font: inherit; }
       button, a { -webkit-tap-highlight-color: transparent; }
       header {
         min-height: 72px;
@@ -56,17 +56,28 @@
       }
       .button-primary { border-color: var(--blue); background: var(--blue); color: var(--white); }
       .button-primary:hover { border-color: var(--blue-hover); background: var(--blue-hover); }
-      .action-link:focus-visible, .button:focus-visible, input:focus-visible, .patient-result:focus-visible {
+      .action-link:focus-visible, .button:focus-visible, input:focus-visible, select:focus-visible, .patient-result:focus-visible {
         outline: 3px solid rgba(17, 81, 255, 0.25);
         outline-offset: 2px;
       }
       main { width: min(1240px, calc(100% - 32px)); margin: 28px auto 48px; }
-      .intro { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-bottom: 20px; }
+      .intro { margin-bottom: 20px; }
       .intro > div { min-width: 0; }
       .intro p { margin: 8px 0 0; color: var(--muted); line-height: 1.5; }
-      .search-form { width: min(520px, 100%); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
-      .search-form label { grid-column: 1 / -1; font-size: 13px; font-weight: 700; }
-      .search-form input { height: 48px; min-width: 0; border: 1px solid #aabdd2; border-radius: 8px; background: var(--white); color: var(--ink); padding: 0 14px; }
+      .search-form { margin-top: 18px; display: grid; gap: 16px; }
+      .search-row { width: min(760px, 100%); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+      .field, .filter-field { min-width: 0; }
+      .field label, .filter-field label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 800; color: var(--navy); }
+      .field input, .filter-field input:not([type="range"]), .filter-field select {
+        width: 100%; height: 46px; min-width: 0; border: 1px solid #aabdd2; border-radius: 8px; background: var(--white); color: var(--ink); padding: 0 12px;
+      }
+      .filters { display: grid; grid-template-columns: minmax(150px, 0.9fr) repeat(2, minmax(150px, 0.9fr)) minmax(260px, 1.4fr) auto; gap: 12px; align-items: end; }
+      .duration-filter { min-width: 0; }
+      .range-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; min-height: 46px; align-items: center; }
+      .range-control { min-width: 0; }
+      .range-control span { display: block; color: var(--muted); font-size: 11px; font-weight: 700; }
+      .range-control input { width: 100%; height: 24px; margin: 0; padding: 0; accent-color: var(--blue); }
+      .clear-button { min-height: 46px; white-space: nowrap; }
       .status { min-height: 22px; margin: 0 0 12px; color: var(--muted); font-size: 13px; }
       .status.error { color: var(--error); }
       .workspace { display: grid; grid-template-columns: minmax(260px, 340px) minmax(0, 1fr); border: 1px solid var(--line); border-radius: 8px; background: var(--white); min-height: 560px; overflow: hidden; }
@@ -118,8 +129,9 @@
         h1 { font-size: 23px; }
         .header-actions { flex-wrap: wrap; justify-content: flex-end; }
         main { width: min(100% - 24px, 720px); margin-top: 20px; }
-        .intro { align-items: stretch; flex-direction: column; gap: 16px; }
-        .search-form { width: 100%; }
+        .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .duration-filter { grid-column: 1 / -1; }
+        .clear-button { justify-self: start; }
         .workspace { grid-template-columns: 1fr; }
         .results-panel { border-right: 0; border-bottom: 1px solid var(--line); }
         .results-list { max-height: 280px; overflow: auto; }
@@ -130,35 +142,74 @@
         .request-item .button, .test-result .button { width: 100%; }
       }
       @media (max-width: 480px) {
-        .search-form { grid-template-columns: 1fr; }
-        .search-form label { grid-column: auto; }
-        .search-form .button { width: 100%; }
+        .search-row, .filters { grid-template-columns: 1fr; }
+        .duration-filter { grid-column: auto; }
+        .search-row .button, .clear-button { width: 100%; }
         .patient-heading { flex-direction: column; gap: 10px; }
       }
     </style>
   </head>
   <body>
     <header>
-      <h1>Patient records</h1>
+      <h1>Patient search</h1>
       <div class="header-actions">
         <a class="action-link" href="/doctor/queue">Queue</a>
+        <a class="action-link" href="/doctor/queue?panel=approvals">Approvals</a>
         <a class="action-link" href="/verify">Verify</a>
         <button id="logout" class="action-link" type="button">Logout</button>
       </div>
     </header>
 
     <main>
-      <div class="intro">
+      <section class="intro">
         <div>
-          <h2>Find a patient</h2>
-          <p>Search by patient name to review previous requests and shared medical records.</p>
+          <h2>Search patient records</h2>
+          <p>Find a patient by name, then narrow their certificate requests by submission date or duration.</p>
         </div>
         <form id="search-form" class="search-form">
-          <label for="patient-query">Patient name</label>
-          <input id="patient-query" type="search" minlength="2" maxlength="100" autocomplete="off" placeholder="Start typing a name" required />
-          <button id="search-button" class="button button-primary" type="submit">Search patients</button>
+          <div class="search-row">
+            <div class="field">
+              <label for="patient-query">Patient name</label>
+              <input id="patient-query" type="search" minlength="2" maxlength="100" autocomplete="off" placeholder="Start typing a name" required />
+            </div>
+            <button id="search-button" class="button button-primary" type="submit">Search patients</button>
+          </div>
+          <div class="filters" aria-label="Request filters">
+            <div class="filter-field">
+              <label for="submitted-within">Submitted within</label>
+              <select id="submitted-within">
+                <option value="">Any time</option>
+                <option value="1">Past 24 hours</option>
+                <option value="7">Past 7 days</option>
+                <option value="30">Past 30 days</option>
+                <option value="90">Past 90 days</option>
+              </select>
+            </div>
+            <div class="filter-field">
+              <label for="date-from">From date</label>
+              <input id="date-from" type="date" />
+            </div>
+            <div class="filter-field">
+              <label for="date-to">To date</label>
+              <input id="date-to" type="date" />
+            </div>
+            <div class="filter-field duration-filter">
+              <label>Certificate duration</label>
+              <div class="range-grid">
+                <label class="range-control" for="duration-min">
+                  <span id="duration-min-label">Minimum 1 day</span>
+                  <input id="duration-min" type="range" min="1" max="7" step="1" value="1" />
+                </label>
+                <label class="range-control" for="duration-max">
+                  <span id="duration-max-label">Maximum 7 days</span>
+                  <input id="duration-max" type="range" min="1" max="7" step="1" value="7" />
+                </label>
+              </div>
+            </div>
+            <button id="clear-filters" class="button clear-button" type="button">Clear filters</button>
+          </div>
         </form>
-      </div>
+      </section>
 
       <p id="status" class="status" role="status" aria-live="polite"></p>
       <section id="workspace" class="workspace" aria-label="Patient search and record viewer">
@@ -187,6 +238,13 @@
       const searchForm = document.getElementById('search-form');
       const searchButton = document.getElementById('search-button');
       const queryInput = document.getElementById('patient-query');
+      const submittedWithinInput = document.getElementById('submitted-within');
+      const dateFromInput = document.getElementById('date-from');
+      const dateToInput = document.getElementById('date-to');
+      const durationMinInput = document.getElementById('duration-min');
+      const durationMaxInput = document.getElementById('duration-max');
+      const durationMinLabel = document.getElementById('duration-min-label');
+      const durationMaxLabel = document.getElementById('duration-max-label');
       const statusNode = document.getElementById('status');
       const workspaceNode = document.getElementById('workspace');
       const resultsListNode = document.getElementById('results-list');
@@ -195,6 +253,7 @@
       const patientDetailNode = document.getElementById('patient-detail');
       let searchResults = [];
       let selectedLookupKey = '';
+      let currentFilterQuery = '';
 
       if (!token) window.location.href = '/doctor/login?returnTo=%2Fdoctor%2Fpatients';
 
@@ -222,6 +281,58 @@
         statusNode.textContent = message || '';
         statusNode.classList.toggle('error', Boolean(message && isError));
       }
+
+      function durationLabel(prefix, value) {
+        const days = Number(value || 1);
+        return `${prefix} ${days} day${days === 1 ? '' : 's'}`;
+      }
+
+      function syncDurationControls(changedControl = '') {
+        let minimum = Number(durationMinInput.value || 1);
+        let maximum = Number(durationMaxInput.value || 7);
+        if (minimum > maximum) {
+          if (changedControl === 'maximum') minimum = maximum;
+          else maximum = minimum;
+        }
+        durationMinInput.value = String(minimum);
+        durationMaxInput.value = String(maximum);
+        durationMinLabel.textContent = durationLabel('Minimum', minimum);
+        durationMaxLabel.textContent = durationLabel('Maximum', maximum);
+      }
+
+      function buildFilterQuery() {
+        const params = new URLSearchParams();
+        if (submittedWithinInput.value) params.set('submittedWithin', submittedWithinInput.value);
+        if (dateFromInput.value) params.set('dateFrom', dateFromInput.value);
+        if (dateToInput.value) params.set('dateTo', dateToInput.value);
+        if (durationMinInput.value !== '1') params.set('durationMin', durationMinInput.value);
+        if (durationMaxInput.value !== '7') params.set('durationMax', durationMaxInput.value);
+        return params.toString();
+      }
+
+      submittedWithinInput.addEventListener('change', () => {
+        if (submittedWithinInput.value) {
+          dateFromInput.value = '';
+          dateToInput.value = '';
+        }
+      });
+      [dateFromInput, dateToInput].forEach((input) => {
+        input.addEventListener('change', () => {
+          if (input.value) submittedWithinInput.value = '';
+        });
+      });
+      durationMinInput.addEventListener('input', () => syncDurationControls('minimum'));
+      durationMaxInput.addEventListener('input', () => syncDurationControls('maximum'));
+      document.getElementById('clear-filters').addEventListener('click', () => {
+        submittedWithinInput.value = '';
+        dateFromInput.value = '';
+        dateToInput.value = '';
+        durationMinInput.value = '1';
+        durationMaxInput.value = '7';
+        syncDurationControls();
+        setStatus('Filters cleared. Search again to refresh results.');
+      });
+      syncDurationControls();
 
       async function parseJsonResponse(response) {
         const text = await response.text();
@@ -376,7 +487,8 @@
         setStatus('Loading patient record...');
         workspaceNode.classList.add('loading');
         try {
-          const payload = await doctorFetch(`/api/doctor/patients/${encodeURIComponent(patient.lookupKey)}`);
+          const filterSuffix = currentFilterQuery ? `?${currentFilterQuery}` : '';
+          const payload = await doctorFetch(`/api/doctor/patients/${encodeURIComponent(patient.lookupKey)}${filterSuffix}`);
           renderPatient(payload);
           setStatus('');
         } catch (error) {
@@ -403,7 +515,9 @@
         searchButton.textContent = 'Searching...';
         setStatus('Searching patient records...');
         try {
-          const payload = await doctorFetch(`/api/doctor/patients?query=${encodeURIComponent(query)}`);
+          currentFilterQuery = buildFilterQuery();
+          const filterSuffix = currentFilterQuery ? `&${currentFilterQuery}` : '';
+          const payload = await doctorFetch(`/api/doctor/patients?query=${encodeURIComponent(query)}${filterSuffix}`);
           searchResults = Array.isArray(payload.patients) ? payload.patients : [];
           selectedLookupKey = '';
           resultCountNode.textContent = `${searchResults.length} patient${searchResults.length === 1 ? '' : 's'} found`;

@@ -1117,3 +1117,58 @@
 6. Vercel assigned `supadoc.com.au`, `www.supadoc.com.au`, and `onya-health.vercel.app` to
    production commit `e689956`. Desktop and 390 px browser measurements found no
    horizontal overflow; both account decision buttons remained within the mobile card.
+
+## 2026-08-08 - Add patient filters, align Checkout, and make certificate previews editable
+
+### Symptoms
+
+- The doctor portal used ambiguous `Patients` and `Accounts` navigation and could not narrow
+  patient histories by request date or certificate duration.
+- Production Stripe amounts were `$11.21`, `$27.11`, and `$19.17`, while the public funnel
+  displayed `$9.71`, up to `$29.71`, and `$19.00` monthly.
+- Checkout used stale product presentation and no session-level Supadoc branding.
+- Certificate wording was fixed in code, and the PDF preview button became disabled after
+  the first preview.
+
+### Root causes
+
+1. Patient search accepted only a name and performed no request-level filtering.
+2. Vercel amount variables and Stripe default prices had drifted from the frontend pricing helper.
+3. Stripe Session creation did not provide `branding_settings`, and the existing WebP logo
+   format was not accepted by Stripe's logo slot.
+4. The certificate statement was assembled only inside the PDF generator, so doctors could
+   neither edit it nor persist approved wording.
+5. Review busy-state cleanup did not explicitly re-enable the preview and AI-summary buttons.
+
+### Files/areas changed
+
+- `frontend/public/doctor/*`, `backend/doctor-portal/*`
+  - rename patient navigation to `Search` and doctor onboarding to `Approvals`;
+  - add responsive submission-date, date-range, and duration filters;
+  - add editable certificate wording and repeatable preview state.
+- `backend/lib/doctor-patient-filters.js`, `backend/lib/storage.js`
+  - validate filters and apply them in local and Supabase request queries.
+- `backend/lib/stripe-pricing.js`, `api/index.js`, `backend/server.js`
+  - centralize 1-7 day, carer, and monthly pricing;
+  - add Supadoc Checkout branding and clinically safe payment copy.
+- `backend/lib/pdf.js`
+  - use the requested default clinical statement, accept approved custom wording, and render
+    the preview watermark behind certificate content.
+- `frontend/public/checkout-logo.png`
+  - add a trimmed 15 KB PNG logo compatible with Stripe Checkout.
+- `package.json`, `package-lock.json`
+  - add the focused test command and update vulnerable dependencies, including Sharp 0.35.3.
+
+### Verification
+
+1. Eight focused Node tests cover filters, Brisbane date boundaries, all 1-7 day prices,
+   the carer add-on, monthly recurrence, and default certificate wording.
+2. Build and lint pass; `npm audit --audit-level=high` reports zero vulnerabilities.
+3. A read-only Supabase query confirmed name, date, and duration filters execute successfully.
+4. Desktop and 390 px doctor search/review checks found no horizontal overflow.
+5. Two consecutive PDF previews produced different blob URLs and left the preview control enabled.
+6. PDF text extraction confirmed custom wording; rendered inspection confirmed the watermark no
+   longer obscures the clinical statement or doctor details.
+7. A live unpaid Stripe Session returned A$11.21, the homepage product image, Supadoc colors,
+   and the clinical review notice on desktop and mobile; it was expired after inspection.
+8. Production application and alias verification is pending deployment.

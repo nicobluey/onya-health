@@ -36,7 +36,13 @@ Current implementation state:
 - Patient-entered clinical history and private test-result attachments are persisted through
   `patient_clinical_profiles` and the private `patient-medical-records` storage bucket.
 - Approved doctors can search patients by name at `/doctor/patients`, review previous
-  certificate requests, and inspect patient-shared clinical records.
+  certificate requests, filter by submission date and certificate duration, and inspect
+  patient-shared clinical records.
+- Stripe Checkout uses Supadoc session branding and the homepage cover image. Canonical
+  prices are `$11.21` for 1 day, linear through `$29.71` at day 5, capped through day 7,
+  `$4.95` for a carer certificate, and `$19.00` monthly for All Access.
+- Doctors can edit the default clinical certificate statement and regenerate the PDF
+  preview repeatedly before approval; only the approved wording is persisted.
 - Booking flow in `frontend/src/consult-flow`.
 - Weight-loss reset and meal planning in `frontend/src/weight-loss-reset`.
 - Supabase migrations and helper scripts under `supabase/` and `scripts/`.
@@ -111,7 +117,7 @@ Status: completed on 2026-06-29.
 Deliverables:
 
 - Exact certificate pricing displayed consistently.
-- Confusing `from $9` wording removed where actual price is `$9.71`.
+- Confusing `from $9` wording removed; the current one-day price is `$11.21`.
 - Stripe/checkout pricing helpers align with displayed public pricing.
 - Carer's certificate add-on is cheaper than standalone one-day certificate.
 - Add-on selection collects carer name, DOB, relationship/caring context, and certificate dates before completion.
@@ -200,11 +206,34 @@ Verification:
 - Desktop and mobile doctor-portal visual checks.
 - Production migration verification, build, lint, and syntax checks.
 
+### M9 - Doctor Search, Checkout Consistency, And Certificate Wording
+
+Status: implementation and local validation completed on 2026-08-08; production validation pending deployment.
+
+Deliverables:
+
+- Doctor navigation uses `Search` for patient records and `Approvals` for practitioner access requests.
+- Patient search supports server-backed submitted-within, custom date-range, and 1-7 day duration filters.
+- Stripe prices, recurrence, product names, and product imagery match the public funnel.
+- Checkout Session branding uses Supadoc colors, logo, icon, and clinically safe submit copy.
+- The default certificate statement uses the requested consultation wording.
+- Doctors can edit the certificate statement and regenerate an in-place PDF preview more than once.
+
+Verification:
+
+- `npm test`, build, lint, audit, and Node syntax checks.
+- Read-only Supabase filter query checks.
+- Desktop and 390 px doctor search/review checks.
+- Stripe Checkout Session API inspection plus desktop/mobile Checkout screenshots.
+- Rendered PDF inspection and text extraction.
+- Production API, alias, and Checkout Session checks after deployment.
+
 ## Validation Commands
 
 ```bash
 npm run build
 npm run lint
+npm test
 npm audit --audit-level=high
 ```
 
@@ -235,7 +264,7 @@ npm run backend
 |   |-- README.md                     # Backend/API operational notes
 |   |-- server.js                     # Local backend server
 |   |-- data/                         # Local fallback JSON/outbox/log data
-|   `-- lib/                          # Auth, storage, email, PDF, risk, meal-plan helpers
+|   `-- lib/                          # Auth, storage, email, PDF, pricing, search-filter, risk, and meal-plan helpers
 |-- frontend/
 |   |-- index.html                    # Vite HTML shell
 |   |-- public/                       # Static images, doctor portal pages, robots, sitemap

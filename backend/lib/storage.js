@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import { certificateMatchesDoctorPatientFilters } from './doctor-patient-filters.js';
 import { warn } from './logger.js';
 
 const DATA_DIR = path.resolve(process.cwd(), 'backend', 'data');
@@ -439,6 +440,9 @@ function mapSupabaseRowToCertificate(row) {
 
   const createdAt = row.submitted_at || row.created_at || new Date().toISOString();
   const rawSubmission = med.raw_submission || null;
+  const workflow = rawSubmission?.workflow && typeof rawSubmission.workflow === 'object'
+    ? rawSubmission.workflow
+    : {};
   let status = normalizeCertificateStatus(row.status || 'submitted', 'submitted');
   if (
     ['submitted', 'pending', 'in_review', 'assigned', 'triaged'].includes(String(status).toLowerCase()) &&
@@ -491,9 +495,14 @@ function mapSupabaseRowToCertificate(row) {
     rawSubmission,
     decision: hasDecisionData
       ? {
-          by: row.assigned_provider_id || 'provider',
-          at: decisionTimestamp,
+          by: workflow.reviewedByName || row.assigned_provider_id || 'provider',
+          byEmail: workflow.reviewedByEmail || '',
+          providerType: workflow.providerType || '',
+          registrationNumber: workflow.registrationNumber || '',
+          at: workflow.reviewedAt || decisionTimestamp,
           notes: decisionNotes,
+          result: workflow.decisionResult || status,
+          certificateStatement: workflow.certificateStatement || '',
         }
       : null,
   };
@@ -1119,7 +1128,7 @@ async function listCertificatesByPatientEmailLocal(email) {
     .sort((a, b) => String(b?.createdAt || '').localeCompare(String(a?.createdAt || '')));
 }
 
-async function searchCertificatesByPatientNameLocal(query, limit = 250) {
+async function searchCertificatesByPatientNameLocal(query, limit = 250, filters = null) {
   const normalizedQuery = String(query || '').trim().toLocaleLowerCase('en-AU');
   if (normalizedQuery.length < 2) return [];
   const resolvedLimit = Math.min(500, Math.max(1, Number(limit || 250)));
@@ -1131,6 +1140,7 @@ async function searchCertificatesByPatientNameLocal(query, limit = 250) {
         .toLocaleLowerCase('en-AU')
         .includes(normalizedQuery)
     )
+    .filter((certificate) => !filters || certificateMatchesDoctorPatientFilters(certificate, filters))
     .sort((left, right) => String(right?.createdAt || '').localeCompare(String(left?.createdAt || '')))
     .slice(0, resolvedLimit);
 }
@@ -1436,7 +1446,7 @@ async function listCertificatesSupabase() {
   return (rows || []).map(mapSupabaseRowToCertificate);
 }
 
-async function searchCertificatesByPatientNameSupabase(query, limit = 250) {
+async function searchCertificatesByPatientNameSupabase(query, limit = 250, filters = null) {
   const normalizedQuery = String(query || '')
     .trim()
     .replace(/[%*(),]/g, ' ')
@@ -1444,11 +1454,24 @@ async function searchCertificatesByPatientNameSupabase(query, limit = 250) {
     .slice(0, 100);
   if (normalizedQuery.length < 2) return [];
   const resolvedLimit = Math.min(500, Math.max(1, Number(limit || 250)));
-  const rows = await supabaseRequest(
-    `service_requests?select=id,submitted_at,created_at,status,service_type,medical_certificate_requests!inner(patient_email,patient_full_name)&medical_certificate_requests.patient_full_name=ilike.${encodeURIComponent(
-      `*${normalizedQuery}*`
-    )}&order=submitted_at.desc,created_at.desc&limit=${resolvedLimit}`
-  );
+  const queryParts = [
+    'select=id,submitted_at,created_at,status,service_type,medical_certificate_requests!inner(patient_email,patient_full_name,days_requested)',
+    `medical_certificate_requests.patient_full_name=ilike.${encodeURIComponent(`*${normalizedQuery}*`)}`,
+  ];
+  if (filters?.submittedAfter) {
+    queryParts.push(`submitted_at=gte.${encodeURIComponent(filters.submittedAfter)}`);
+  }
+  if (filters?.submittedBefore) {
+    queryParts.push(`submitted_at=lte.${encodeURIComponent(filters.submittedBefore)}`);
+  }
+  if (filters?.durationMin > 1) {
+    queryParts.push(`medical_certificate_requests.days_requested=gte.${filters.durationMin}`);
+  }
+  if (filters?.durationMax < 7) {
+    queryParts.push(`medical_certificate_requests.days_requested=lte.${filters.durationMax}`);
+  }
+  queryParts.push('order=submitted_at.desc,created_at.desc', `limit=${resolvedLimit}`);
+  const rows = await supabaseRequest(`service_requests?${queryParts.join('&')}`);
   return (Array.isArray(rows) ? rows : []).map(mapSupabaseRowToCertificate);
 }
 
@@ -3074,11 +3097,11 @@ export async function listCertificatesByPatientEmail(email, options = {}) {
   return listCertificatesByPatientEmailLocal(email);
 }
 
-export async function searchCertificatesByPatientName(query, limit = 250) {
+export async function searchCertificatesByPatientName(query, limit = 250, filters = null) {
   if (getSupabaseConfig().enabled) {
-    return searchCertificatesByPatientNameSupabase(query, limit);
+    return searchCertificatesByPatientNameSupabase(query, limit, filters);
   }
-  return searchCertificatesByPatientNameLocal(query, limit);
+  return searchCertificatesByPatientNameLocal(query, limit, filters);
 }
 
 export async function getCertificateById(id) {

@@ -119,6 +119,17 @@ Avoid purple, beige-dominant palettes, gradient orbs, bokeh, glassmorphism, and 
 - Portal is denser than marketing.
 - Use blue clinical chrome, not green unless explicitly requested.
 - Sidebars and panels should feel like structured product UI, not soft wellness cards.
+- Patient record search filters stay visible, compact, and server-backed. Date and duration
+  filters must use the same query for result counts and the selected patient's request list.
+
+### Stripe Checkout
+
+- Use Supadoc as the Checkout display name with `#F6FAFD` background and `#1151FF` actions.
+- Use `checkout-logo.png` for Stripe's logo slot and `favicon.png` for its square icon slot.
+- Use the homepage cover image as the Stripe product image for certificate products.
+- Product names, descriptions, billing intervals, and amounts must match the booking funnel.
+- Checkout submit copy must state that payment submits a request for doctor review and that
+  certificates are issued only where clinically appropriate.
 
 ## Page Requirements
 
@@ -168,6 +179,7 @@ Avoid:
 
 - Use assets from `frontend/public`.
 - Prefer `.webp`.
+- Use optimized PNG only where an integration rejects WebP, including Stripe Checkout logos.
 - Use raw imagery by default.
 - No image tints, blur, opacity washes, haze, duotone, or decorative overlays unless explicitly requested.
 - Photo text contrast should be achieved through composition and placement first.

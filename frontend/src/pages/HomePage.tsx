@@ -8,13 +8,13 @@ import { HeaderDropdown } from '../components/HeaderDropdown';
 import { HeaderBrand } from '../components/HeaderBrand';
 
 const HERO_POINTS = [
-    '1-day requests from $9.71',
+    '1-day requests from $11.21',
     'No clinic queue for suitable cases',
     'Work, uni, and carer leave',
 ];
 
 const HOME_HIGHLIGHTS = [
-    { label: '$9.71', detail: 'For a 1-day request' },
+    { label: '$11.21', detail: 'For a 1-day request' },
     { label: '24/7', detail: 'Start when symptoms hit' },
     { label: 'Online', detail: 'Doctor-reviewed outcome' },
 ];
@@ -80,7 +80,7 @@ export default function HomePage() {
 
                             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                                 <a href="/doctor#book" className="onya-button bg-white text-[#06142b] hover:bg-[#edf2ff]">
-                                    Start from $9.71
+                                    Start from $11.21
                                     <ArrowRight size={18} />
                                 </a>
                                 <a href="#certificate-options" className="onya-button-secondary border-white/20 bg-white/10 text-white hover:bg-white/18">

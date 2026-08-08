@@ -34,7 +34,12 @@ import {
   upsertDoctorAccount,
 } from './lib/doctor-auth.js';
 import { calculateRisk } from './lib/risk.js';
-import { buildCertificatePdf } from './lib/pdf.js';
+import {
+  certificateMatchesDoctorPatientFilters,
+  parseDoctorPatientRequestFilters,
+} from './lib/doctor-patient-filters.js';
+import { buildCertificatePdf, buildDefaultCertificateStatement } from './lib/pdf.js';
+import { getStripePricing } from './lib/stripe-pricing.js';
 import { generateDoctorNotes, generateMoreInfoDraft } from './lib/notes.js';
 import {
   appendAudit,
@@ -127,13 +132,9 @@ const STRIPE_PRICE_PRODUCT_MULTI_DAY_ONE_OFF = process.env.STRIPE_PRICE_PRODUCT_
 const STRIPE_PRICE_PRODUCT_MULTI_DAY_RECURRING = process.env.STRIPE_PRICE_PRODUCT_MULTI_DAY_RECURRING || 'prod_U3xTbAyYCjVi3J';
 const CERTIFICATE_TIME_ZONE = process.env.CERTIFICATE_TIME_ZONE || 'Australia/Brisbane';
 
-const STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS || 971);
+const STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS || 1121);
 const STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS || 2971);
 const STRIPE_AMOUNT_RECURRING_AUD_CENTS = Number(process.env.STRIPE_AMOUNT_RECURRING_AUD_CENTS || 1900);
-const STRIPE_MULTI_DAY_MIN_DAYS = Math.max(
-  2,
-  Number(process.env.STRIPE_MULTI_DAY_MIN_DAYS || 2)
-);
 const configuredCarerCertificateAmountCents = Number(process.env.STRIPE_AMOUNT_CARER_CERT_AUD_CENTS || '');
 const STRIPE_AMOUNT_CARER_CERT_AUD_CENTS =
   Number.isFinite(configuredCarerCertificateAmountCents) &&
@@ -368,58 +369,26 @@ function sanitizeNameForStripe(value) {
   return String(value || '').trim().slice(0, 120);
 }
 
+function normalizeCertificateStatement(value) {
+  const statement = String(value || '').trim();
+  if (statement.length > 1200) {
+    const errorObject = new Error('Certificate wording must be 1,200 characters or fewer');
+    errorObject.status = 400;
+    throw errorObject;
+  }
+  return statement;
+}
+
 function stripePricingFromRequest(body) {
-  const isUnlimited = Boolean(body?.consult?.isUnlimited);
-  const durationDays = Math.min(7, Math.max(1, Number(body?.consult?.durationDays || 1)));
-  const includeCarerCertificate = !isUnlimited && Boolean(body?.consult?.includeCarerCertificate);
-  const carerCertificateAmount = includeCarerCertificate ? STRIPE_AMOUNT_CARER_CERT_AUD_CENTS : 0;
-
-  if (isUnlimited) {
-    return {
-      mode: 'subscription',
-      baseUnitAmount: STRIPE_AMOUNT_RECURRING_AUD_CENTS,
-      carerCertificateAmount: 0,
-      includeCarerCertificate: false,
-      unitAmount: STRIPE_AMOUNT_RECURRING_AUD_CENTS,
-      productId: STRIPE_PRICE_PRODUCT_MULTI_DAY_RECURRING,
-      displayName: 'Onyahealth Pro',
-      description: 'Recurring medical certificate support',
-      recurringInterval: 'day',
-      recurringIntervalCount: 26,
-    };
-  }
-
-  if (durationDays < STRIPE_MULTI_DAY_MIN_DAYS) {
-    const baseUnitAmount = STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS;
-    return {
-      mode: 'payment',
-      baseUnitAmount,
-      carerCertificateAmount,
-      includeCarerCertificate,
-      unitAmount: baseUnitAmount + carerCertificateAmount,
-      productId: STRIPE_PRICE_PRODUCT_SINGLE_DAY,
-      displayName: `Medical Consultation (${STRIPE_MULTI_DAY_MIN_DAYS - 1} days or less)`,
-      description: `Medical certificate request for ${STRIPE_MULTI_DAY_MIN_DAYS - 1} days or less`,
-    };
-  }
-
-  const linearRangeDays = 5 - 1;
-  const cappedDuration = Math.min(durationDays, 5);
-  const baseUnitAmount =
-    linearRangeDays <= 0
-      ? STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS
-      : STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS +
-        Math.round(((cappedDuration - 1) * (STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS - STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS)) / linearRangeDays);
-  return {
-    mode: 'payment',
-    baseUnitAmount,
-    carerCertificateAmount,
-    includeCarerCertificate,
-    unitAmount: baseUnitAmount + carerCertificateAmount,
-    productId: STRIPE_PRICE_PRODUCT_MULTI_DAY_ONE_OFF,
-    displayName: `Medical Consultation (${STRIPE_MULTI_DAY_MIN_DAYS}+ days)`,
-    description: `Medical certificate request for ${STRIPE_MULTI_DAY_MIN_DAYS}+ days`,
-  };
+  return getStripePricing(body, {
+    singleDayAmount: STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS,
+    multiDayAmount: STRIPE_AMOUNT_MULTI_DAY_AUD_CENTS,
+    recurringAmount: STRIPE_AMOUNT_RECURRING_AUD_CENTS,
+    carerAmount: STRIPE_AMOUNT_CARER_CERT_AUD_CENTS,
+    singleDayProductId: STRIPE_PRICE_PRODUCT_SINGLE_DAY,
+    multiDayProductId: STRIPE_PRICE_PRODUCT_MULTI_DAY_ONE_OFF,
+    recurringProductId: STRIPE_PRICE_PRODUCT_MULTI_DAY_RECURRING,
+  });
 }
 
 async function createStripeCheckoutSession({ certificate, pricing, uiMode = 'hosted' }) {
@@ -454,6 +423,18 @@ async function createStripeCheckoutSession({ certificate, pricing, uiMode = 'hos
   params.set('metadata[include_carer_certificate]', pricing.includeCarerCertificate ? 'true' : 'false');
   params.set('metadata[carer_certificate_amount]', String(pricing.carerCertificateAmount || 0));
   params.set('allow_promotion_codes', 'true');
+  params.set('custom_text[submit][message]', 'Payment submits your request for doctor review. A certificate is issued only when clinically appropriate.');
+
+  const checkoutAssetBase = /^https:\/\//i.test(frontendBase) ? frontendBase : 'https://supadoc.com.au';
+  params.set('branding_settings[display_name]', 'Supadoc');
+  params.set('branding_settings[background_color]', '#F6FAFD');
+  params.set('branding_settings[button_color]', '#1151FF');
+  params.set('branding_settings[border_style]', 'rounded');
+  params.set('branding_settings[font_family]', 'inter');
+  params.set('branding_settings[logo][type]', 'url');
+  params.set('branding_settings[logo][url]', `${checkoutAssetBase}/checkout-logo.png`);
+  params.set('branding_settings[icon][type]', 'url');
+  params.set('branding_settings[icon][url]', `${checkoutAssetBase}/favicon.png`);
 
   if (pricing.mode === 'subscription') {
     params.set('line_items[0][price_data][recurring][interval]', pricing.recurringInterval);
@@ -467,6 +448,7 @@ async function createStripeCheckoutSession({ certificate, pricing, uiMode = 'hos
     headers: {
       Authorization: `Bearer ${STRIPE_SECRET_KEY}`,
       'Content-Type': 'application/x-www-form-urlencoded',
+      'Stripe-Version': '2025-09-30.clover',
     },
     body: params.toString(),
   });
@@ -592,6 +574,9 @@ function doctorPayloadFromRequest(cert) {
     description: cert.certificateDraft.description,
     risk: cert.risk,
     decision: cert.decision || null,
+    certificateStatement:
+      String(cert?.decision?.certificateStatement || cert?.rawSubmission?.workflow?.certificateStatement || '').trim() ||
+      buildDefaultCertificateStatement(cert, cert?.decision?.at || new Date()),
   };
 }
 
@@ -3988,6 +3973,11 @@ async function handleApi(req, res, url) {
   if (req.method === 'GET' && url.pathname === '/api/doctor/patients') {
     const doctor = await requireDoctor(req, res);
     if (!doctor) return;
+    const filters = parseDoctorPatientRequestFilters(url.searchParams);
+    if (!filters.valid) {
+      sendJson(res, 400, { error: filters.errors[0] });
+      return;
+    }
     const query = String(url.searchParams.get('query') || '')
       .trim()
       .replace(/\s+/g, ' ')
@@ -3999,7 +3989,7 @@ async function handleApi(req, res, url) {
 
     const [directoryRows, certificates] = await Promise.all([
       searchPatientDirectory(query, 25),
-      searchCertificatesByPatientName(query, 250),
+      searchCertificatesByPatientName(query, 250, filters),
     ]);
     const certificatesByEmail = new Map();
     for (const certificate of certificates) {
@@ -4019,6 +4009,7 @@ async function handleApi(req, res, url) {
       const email = normalizeEmail(directoryEntry.email);
       if (!email) continue;
       const patientCertificates = certificatesByEmail.get(email) || [];
+      if (filters.hasRequestFilters && patientCertificates.length === 0) continue;
       const latestCertificate = patientCertificates[0] || null;
       matchesByEmail.set(email, {
         lookupKey: `patient:${directoryEntry.id}`,
@@ -4054,6 +4045,7 @@ async function handleApi(req, res, url) {
     info('doctor.patient_search.completed', {
       doctor: doctor.email,
       queryLength: query.length,
+      filtered: filters.hasRequestFilters,
       resultCount: patients.length,
     });
     return;
@@ -4090,6 +4082,11 @@ async function handleApi(req, res, url) {
   if (req.method === 'GET' && doctorPatientMatch) {
     const doctor = await requireDoctor(req, res);
     if (!doctor) return;
+    const filters = parseDoctorPatientRequestFilters(url.searchParams);
+    if (!filters.valid) {
+      sendJson(res, 400, { error: filters.errors[0] });
+      return;
+    }
     const lookupKey = decodeURIComponent(doctorPatientMatch[1]);
     const lookup = await resolveDoctorPatientLookup(lookupKey);
     if (!lookup) {
@@ -4103,11 +4100,14 @@ async function handleApi(req, res, url) {
       getPatientClinicalProfileByEmail(lookup.email),
     ]);
     const latestCertificate = patientCertificates[0] || lookup.certificate || null;
+    const filteredPatientCertificates = patientCertificates.filter((certificate) =>
+      certificateMatchesDoctorPatientFilters(certificate, filters)
+    );
     await appendAudit({
       type: 'DOCTOR_PATIENT_RECORD_VIEWED',
       by: normalizeEmail(doctor.email),
       patientReference: lookup.id,
-      requestCount: patientCertificates.length,
+      requestCount: filteredPatientCertificates.length,
     }).catch(() => undefined);
     sendJson(res, 200, {
       patient: {
@@ -4123,8 +4123,8 @@ async function handleApi(req, res, url) {
         (recordId) =>
           `/api/doctor/patients/${encodeURIComponent(lookupKey)}/test-results/${encodeURIComponent(recordId)}/file`
       ),
-      requestCount: patientCertificates.length,
-      requests: patientCertificates.map(doctorPatientRequestSummary),
+      requestCount: filteredPatientCertificates.length,
+      requests: filteredPatientCertificates.map(doctorPatientRequestSummary),
     });
     return;
   }
@@ -4283,6 +4283,7 @@ async function handleApi(req, res, url) {
 
     const body = await parseJsonBody(req);
     const notes = String(body.notes || '').trim();
+    const certificateStatement = normalizeCertificateStatement(body.certificateStatement);
 
     const previewCertificate = {
       ...certificate,
@@ -4302,6 +4303,7 @@ async function handleApi(req, res, url) {
     const pdfBuffer = await buildCertificatePdf(previewCertificate, {
       doctorName: reviewerName,
       doctorNotes: notes,
+      certificateStatement,
       providerType: String(previewCertificate?.decision?.providerType || '').trim(),
       registrationNumber: String(previewCertificate?.decision?.registrationNumber || '')
         .trim()
@@ -4412,6 +4414,7 @@ async function handleApi(req, res, url) {
     const body = await parseJsonBody(req);
     const decision = body.decision === 'approved' ? 'approved' : body.decision === 'denied' ? 'denied' : null;
     const notes = String(body.notes || '').trim();
+    const certificateStatement = normalizeCertificateStatement(body.certificateStatement);
 
     if (!decision) {
       sendJson(res, 400, { error: 'Decision must be approved or denied' });
@@ -4436,9 +4439,23 @@ async function handleApi(req, res, url) {
         return current;
       }
 
+      const decidedAt = new Date().toISOString();
       return {
         ...current,
         status: decision,
+        rawSubmission: {
+          ...(current.rawSubmission || {}),
+          workflow: {
+            ...(current.rawSubmission?.workflow || {}),
+            reviewedByName: reviewerName,
+            reviewedByEmail: normalizeEmail(doctor.email),
+            providerType: String(doctorProfile?.providerType || '').trim(),
+            registrationNumber: String(doctorProfile?.registrationNumber || '').trim().toUpperCase(),
+            reviewedAt: decidedAt,
+            decisionResult: decision,
+            ...(decision === 'approved' ? { certificateStatement } : {}),
+          },
+        },
         decision: {
           by: reviewerName,
           byEmail: normalizeEmail(doctor.email),
@@ -4446,9 +4463,10 @@ async function handleApi(req, res, url) {
           registrationNumber: String(doctorProfile?.registrationNumber || '')
             .trim()
             .toUpperCase(),
-          at: new Date().toISOString(),
+          at: decidedAt,
           notes,
           result: decision,
+          ...(decision === 'approved' ? { certificateStatement } : {}),
         },
       };
     });
