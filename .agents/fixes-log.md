@@ -1109,3 +1109,11 @@
    modules.
 4. `npm run build`, `npm run lint`, and
    `npm audit --omit=dev --audit-level=high` passed.
+5. Live `supadoc.com.au` checks returned `200` for the configured administrator and an
+   approved doctor, `403` for the pending demo doctor, `401` without authentication, and
+   `401` for the removed legacy static credentials. Both authorized accounts could list
+   pending applications and submit an approval action without changing the demo account's
+   pending state.
+6. Vercel assigned `supadoc.com.au`, `www.supadoc.com.au`, and `onya-health.vercel.app` to
+   production commit `e689956`. Desktop and 390 px browser measurements found no
+   horizontal overflow; both account decision buttons remained within the mobile card.

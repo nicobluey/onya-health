@@ -295,6 +295,10 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
 - Isolated approval tests passed for pending login denial, approved-doctor approval,
   post-approval login, rejection, and stale-token denial. Build, lint, production audit,
   and Node syntax checks passed.
+- Production commit `e689956` was current on every required alias. Live API checks confirmed
+  administrator and approved-doctor account review, pending-doctor denial, unauthenticated
+  denial, legacy-login denial, and the administrator's non-clinical profile. Desktop and
+  390 px portal measurements showed no horizontal overflow and both review actions fit.
 - Fixed doctor signup's async form-reset crash; successful public registrations now clear
   the form and show the required pending-admin-approval state.
 - Fixed checkout's Supabase foreign-key race by awaiting the Auth profile and patient rows
