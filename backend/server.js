@@ -2353,7 +2353,7 @@ async function handleApi(req, res, url) {
       ok: true,
       exists: Boolean(result.exists),
       reason: result.reason,
-      matchedEmail: result.email || '',
+      matchedEmail: result.reason === 'email' ? result.email || '' : '',
     });
     return;
   }

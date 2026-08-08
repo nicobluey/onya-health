@@ -28,6 +28,7 @@ import {
   resetDoctorPasswordWithToken,
   setDoctorAccountApprovalStatus,
   upsertDoctorAccount,
+  validateDoctorPassword,
 } from '../backend/lib/doctor-auth.js';
 import { calculateRisk } from '../backend/lib/risk.js';
 import { buildCertificatePdf } from '../backend/lib/pdf.js';
@@ -165,6 +166,7 @@ const OPENAI_TTS_MAX_SCRIPT_CHARS = Math.max(900, Number(process.env.OPENAI_TTS_
 const DEFAULT_DIETITIAN_ID = '9f1f2a68-3b9c-4f2f-8da9-3e7e1c7f1c11';
 const DEFAULT_DIETITIAN_NAME = 'Felicity';
 const PATIENT_SUPABASE_RESET_METADATA_KEY = 'onya_patient_password_reset';
+const DOCTOR_SUPABASE_RESET_METADATA_KEY = 'onya_doctor_password_reset';
 const DOCTOR_PASSWORD_RESET_TTL_MS = Math.max(
   1000 * 60 * 5,
   Number(process.env.DOCTOR_PASSWORD_RESET_TTL_MS || 1000 * 60 * 60)
@@ -4024,36 +4026,128 @@ async function findSupabaseDoctorByEmail(email) {
   const users = await listSupabaseAuthUsers(config);
 
   const normalized = normalizeEmail(email);
-  const match = users.find((entry) => normalizeEmail(entry?.email) === normalized && userHasDoctorRole(entry));
+  const match = users.find((entry) => normalizeEmail(entry?.email) === normalized);
   if (!match) return null;
 
+  return doctorAccountFromSupabaseUser(config, match);
+}
+
+function getSupabaseDoctorResetState(user) {
+  const metadata = user?.user_metadata || {};
+  const resetState = metadata?.[DOCTOR_SUPABASE_RESET_METADATA_KEY];
+  return resetState && typeof resetState === 'object' ? resetState : null;
+}
+
+async function doctorAccountFromSupabaseUser(config, user) {
+  if (!config?.enabled || !user?.id) return null;
+  const profileRows = await supabaseRestRequest(
+    config,
+    `profiles?id=eq.${encodeURIComponent(user.id)}&select=role&limit=1`,
+    {
+      method: 'GET',
+      prefer: 'return=representation',
+    }
+  );
+  const trustedRole = String(profileRows?.[0]?.role || '').trim().toLowerCase();
+  if (!['provider', 'doctor', 'admin'].includes(trustedRole)) return null;
+
+  const metadata = user.user_metadata || {};
   return {
-    id: match.id || null,
-    email: normalizeEmail(match.email),
-    fullName: String(match?.user_metadata?.full_name || '').trim(),
-    providerType: String(match?.user_metadata?.provider_type || '').trim(),
-    registrationNumber: String(match?.user_metadata?.registration_number || '').trim().toUpperCase(),
-    providerNumber: normalizeProviderNumber(match?.user_metadata?.provider_number),
+    id: String(user.id),
+    email: normalizeEmail(user.email),
+    fullName: String(metadata.full_name || '').trim(),
+    providerType: String(metadata.provider_type || '').trim(),
+    registrationNumber: String(metadata.registration_number || '').trim().toUpperCase(),
+    providerNumber: normalizeProviderNumber(metadata.provider_number),
     approvalStatus:
-      match?.user_metadata?.provider_approved === true
+      metadata.provider_approved === true
         ? 'approved'
-        : normalizeApprovalStatus(match?.user_metadata?.approval_status),
+        : normalizeApprovalStatus(metadata.approval_status),
+    user,
   };
 }
 
-async function updateSupabaseDoctorPasswordByEmail(email, password) {
+async function issueSupabaseDoctorPasswordResetToken(email) {
+  const config = getSupabaseConfig();
+  if (!config.enabled) return null;
+
   const doctor = await findSupabaseDoctorByEmail(email);
   if (!doctor?.id) return null;
+  const user = doctor.user;
+  const account = doctor;
+  if (!account?.email) return null;
 
-  const config = getSupabaseConfig();
-  await supabaseAuthAdminRequest(config, `users/${doctor.id}`, {
+  const token = issueScopedPatientResetToken(account.id);
+  const resetState = {
+    tokenHash: hashResetTokenValue(token),
+    issuedAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + DOCTOR_PASSWORD_RESET_TTL_MS).toISOString(),
+    usedAt: null,
+  };
+
+  await supabaseAuthAdminRequest(config, `users/${account.id}`, {
     method: 'PUT',
     body: {
-      password,
+      user_metadata: {
+        ...(user?.user_metadata || {}),
+        [DOCTOR_SUPABASE_RESET_METADATA_KEY]: resetState,
+      },
     },
   });
 
-  return doctor;
+  return {
+    email: account.email,
+    token,
+    expiresAt: resetState.expiresAt,
+  };
+}
+
+async function verifySupabaseDoctorPasswordResetToken(token) {
+  const parsed = parseScopedPatientResetToken(token);
+  if (!parsed?.subject || !parsed.rawToken) return null;
+
+  const config = getSupabaseConfig();
+  if (!config.enabled) return null;
+  const user = await getSupabaseAuthUserById(config, parsed.subject);
+  const account = await doctorAccountFromSupabaseUser(config, user);
+  if (!account?.email) return null;
+
+  const resetState = getSupabaseDoctorResetState(user);
+  if (!resetState || resetState.usedAt) return null;
+  const expiresAt = new Date(resetState.expiresAt || '').getTime();
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null;
+  if (!safeTimingCompare(resetState.tokenHash, hashResetTokenValue(parsed.rawToken))) return null;
+
+  return account;
+}
+
+async function completeSupabaseDoctorPasswordReset(account, password) {
+  if (!account?.id || !account?.user) return null;
+  const config = getSupabaseConfig();
+  if (!config.enabled) return null;
+
+  const nextMetadata = {
+    ...(account.user.user_metadata || {}),
+    [DOCTOR_SUPABASE_RESET_METADATA_KEY]: null,
+  };
+
+  await supabaseAuthAdminRequest(config, `users/${account.id}`, {
+    method: 'PUT',
+    body: {
+      password,
+      user_metadata: nextMetadata,
+    },
+  });
+
+  return upsertDoctorAccount({
+    email: account.email,
+    fullName: account.fullName,
+    providerType: account.providerType,
+    registrationNumber: account.registrationNumber,
+    providerNumber: account.providerNumber,
+    approvalStatus: account.approvalStatus,
+    source: 'supabase',
+  });
 }
 
 async function upsertSupabaseDoctorMetadata({
@@ -4407,8 +4501,8 @@ async function clearSupabasePatientPasswordResetToken(user) {
 
   const nextMetadata = {
     ...(user?.user_metadata || {}),
+    [PATIENT_SUPABASE_RESET_METADATA_KEY]: null,
   };
-  delete nextMetadata[PATIENT_SUPABASE_RESET_METADATA_KEY];
 
   await supabaseAuthAdminRequest(config, `users/${user.id}`, {
     method: 'PUT',
@@ -4945,7 +5039,7 @@ export default async function handler(req, res) {
         ok: true,
         exists: Boolean(result.exists),
         reason: result.reason,
-        matchedEmail: result.email || '',
+        matchedEmail: result.reason === 'email' ? result.email || '' : '',
       });
       return;
     }
@@ -7368,18 +7462,10 @@ export default async function handler(req, res) {
         return;
       }
 
-      const supabaseDoctor = await findSupabaseDoctorByEmail(email);
-      if (supabaseDoctor?.email) {
-        await upsertDoctorAccount({
-          email: supabaseDoctor.email,
-          fullName: supabaseDoctor.fullName || '',
-          providerType: supabaseDoctor.providerType || '',
-          registrationNumber: supabaseDoctor.registrationNumber || '',
-          source: 'supabase',
-        });
-      }
-
-      const resetPayload = await issueDoctorPasswordResetToken(email, DOCTOR_PASSWORD_RESET_TTL_MS);
+      const supabaseConfig = getSupabaseConfig();
+      const resetPayload = supabaseConfig.enabled
+        ? await issueSupabaseDoctorPasswordResetToken(email)
+        : await issueDoctorPasswordResetToken(email, DOCTOR_PASSWORD_RESET_TTL_MS);
       if (resetPayload) {
         const resetUrl = buildDoctorPasswordResetUrl(req, resetPayload.token);
         const resetEmail = renderDoctorPasswordResetEmail({
@@ -7409,6 +7495,11 @@ export default async function handler(req, res) {
         info('doctor.password_reset.requested', {
           email,
           provider: currentEmailProvider(),
+          tokenMode: supabaseConfig.enabled ? 'supabase' : 'local',
+        });
+      } else {
+        info('doctor.password_reset.requested_without_doctor_account', {
+          email,
         });
       }
 
@@ -7420,7 +7511,7 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST' && routePath === 'doctor/password/reset/confirm') {
       const body = await parseJsonBody(req);
-      const token = String(body.token || '').trim();
+      const token = normalizeResetToken(body.token);
       const nextPassword = String(body.password || body.newPassword || '');
 
       if (!token || !nextPassword) {
@@ -7428,34 +7519,43 @@ export default async function handler(req, res) {
         return;
       }
 
-      let account;
-      try {
-        account = await resetDoctorPasswordWithToken({
-          token,
-          newPassword: nextPassword,
-        });
-      } catch (errorObject) {
-        if (errorObject?.code === 'PASSWORD_INVALID') {
-          sendJson(res, 400, { error: errorObject.message });
-          return;
-        }
-        if (['TOKEN_INVALID', 'TOKEN_EXPIRED', 'ACCOUNT_NOT_FOUND'].includes(String(errorObject?.code || ''))) {
+      const supabaseConfig = getSupabaseConfig();
+      const passwordError = validateDoctorPassword(nextPassword);
+      if (passwordError) {
+        sendJson(res, 400, { error: passwordError });
+        return;
+      }
+
+      let account = null;
+      if (supabaseConfig.enabled) {
+        const verifiedReset = await verifySupabaseDoctorPasswordResetToken(token);
+        if (!verifiedReset) {
           sendJson(res, 400, { error: 'Invalid or expired reset token' });
           return;
         }
-        throw errorObject;
+        account = await completeSupabaseDoctorPasswordReset(verifiedReset, nextPassword);
+      } else {
+        try {
+          account = await resetDoctorPasswordWithToken({
+            token,
+            newPassword: nextPassword,
+          });
+        } catch (errorObject) {
+          if (errorObject?.code === 'PASSWORD_INVALID') {
+            sendJson(res, 400, { error: errorObject.message });
+            return;
+          }
+          if (['TOKEN_INVALID', 'TOKEN_EXPIRED', 'ACCOUNT_NOT_FOUND'].includes(String(errorObject?.code || ''))) {
+            sendJson(res, 400, { error: 'Invalid or expired reset token' });
+            return;
+          }
+          throw errorObject;
+        }
       }
 
-      const supabaseConfig = getSupabaseConfig();
-      if (supabaseConfig.enabled) {
-        try {
-          await updateSupabaseDoctorPasswordByEmail(account.email, nextPassword);
-        } catch (errorObject) {
-          info('doctor.password_reset.supabase_sync_failed', {
-            email: account.email,
-            message: errorObject?.message || String(errorObject),
-          });
-        }
+      if (!account?.email) {
+        sendJson(res, 400, { error: 'Invalid or expired reset token' });
+        return;
       }
 
       await appendAudit({

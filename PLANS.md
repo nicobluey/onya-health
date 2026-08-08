@@ -282,6 +282,10 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
 
 2026-08-08:
 
+- Replaced ephemeral Vercel doctor-reset tokens with hashed, expiring Supabase Auth metadata and required the trusted Supabase profile role before issuing or accepting a doctor reset.
+- Fixed consumed Supabase reset metadata clearing, verified single-use doctor links, and confirmed patient-role accounts cannot enter the doctor reset flow.
+- Fixed stale booking account warnings by invalidating checks on email edits and rechecking the current email/phone on submit; phone matches no longer reveal another account's email.
+- The exact screenshot email/phone returned `exists: false` from all production aliases, and a browser regression confirmed a previous warning clears for the new address.
 - Added private, server-backed patient clinical profiles and real test-result uploads.
 - Added authenticated doctor patient-name search, patient detail, full request history, and protected attachment access.
 - Applied and verified `20260808_add_patient_clinical_profiles.sql` in production, including private storage and trigram patient-name indexes.

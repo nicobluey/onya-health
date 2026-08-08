@@ -1,5 +1,38 @@
 # Fixes Log
 
+## 2026-08-08 - Durable doctor resets and accurate patient account checks
+
+### Symptoms
+
+- The doctor portal always reported that a reset link had been sent, but no email arrived for the address shown in the bug report.
+- A valid doctor reset link could fail when its request and confirmation reached different Vercel function instances.
+- The certificate details form could continue showing an earlier email's existing-account warning after the address changed, then block a new address that the live API reported as available.
+
+### Root causes
+
+1. The reported reset address belongs to a patient account, not a practitioner account; the generic response intentionally does not expose that distinction.
+2. Doctor reset tokens were stored in local JSON under Vercel's ephemeral `/tmp` filesystem instead of durable production storage.
+3. Supabase Admin metadata updates merge keys, so omitting a consumed reset key did not remove it.
+4. The booking form trusted its debounced advisory lookup during submission and did not synchronously invalidate that state when the email changed.
+
+### Files changed
+
+- `api/index.js`
+  - stores hashed doctor reset state and expiry in Supabase Auth metadata, validates it against the trusted `profiles.role`, clears it after use, and keeps the local JSON flow only for non-Supabase development.
+  - clears consumed patient reset metadata with an explicit `null` value and no longer returns another patient's email when a phone number matches.
+- `frontend/src/components/FlowSteps.tsx`
+  - invalidates stale email checks on edit, always performs an authoritative current-value check on submit, distinguishes email and phone matches, and removes the duplicate warning.
+- `backend/server.js`
+  - mirrors the account-check response privacy rule for local development.
+
+### Verification
+
+1. `npm run build`, `npm run lint`, `node --check api/index.js backend/server.js`, and `git diff --check` pass.
+2. A temporary approved practitioner in production Supabase completed reset request, mock email generation, password confirmation, new-password login, and single-use-token rejection; reset state was cleared afterward.
+3. A temporary auth user with doctor-like editable metadata but a trusted patient profile received no doctor reset state or email.
+4. All three production aliases reported `exists: false` for the exact email and phone in the booking screenshot before the fix, confirming that the block was stale browser state rather than a database match.
+5. A browser regression pass reproduced an existing-account warning, changed to the screenshot email, confirmed the warning cleared immediately, and received the available-account state with no console errors.
+
 ## 2026-08-08 - Doctor patient search and shared clinical records
 
 ### Symptoms

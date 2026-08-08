@@ -35,6 +35,7 @@ const CARER_CERT_UPSELL_DOLLARS =
         : CARER_CERT_ADDON_PRICE_AUD;
 
 type EmailAccountCheckState = 'idle' | 'checking' | 'available' | 'exists' | 'error';
+type AccountMatchReason = 'email' | 'phone' | '';
 
 function normalizeEmailInput(value: string) {
     return String(value || '').trim().toLowerCase();
@@ -471,6 +472,7 @@ export const DetailsStep = () => {
     const [checkingAccount, setCheckingAccount] = useState(false);
     const [emailAccountCheckState, setEmailAccountCheckState] = useState<EmailAccountCheckState>('idle');
     const [matchedAccountEmail, setMatchedAccountEmail] = useState('');
+    const [accountMatchReason, setAccountMatchReason] = useState<AccountMatchReason>('');
     const [genderOpen, setGenderOpen] = useState(false);
     const genderMenuRef = useRef<HTMLDivElement | null>(null);
     const emailCheckRequestRef = useRef(0);
@@ -503,36 +505,30 @@ export const DetailsStep = () => {
     const handleSubmit = async () => {
         setAccountCheckError('');
         if (!validate()) return;
-        if (emailAccountCheckState === 'checking') {
-            setAccountCheckError('Please wait while we verify your account details.');
-            return;
-        }
-        if (emailAccountCheckState === 'exists') {
-            setAccountCheckError('We found an existing account associated with this email. Please sign in to continue.');
-            const prefillEmail = normalizeEmailInput(matchedAccountEmail || details.email);
-            if (prefillEmail) {
-                window.localStorage.setItem('onya_patient_email', prefillEmail);
-            }
-            return;
-        }
+        const requestId = ++emailCheckRequestRef.current;
         setCheckingAccount(true);
         try {
+            const normalizedEmail = normalizeEmailInput(details.email);
             const { response, payload } = await fetchApiJson('/api/patient/account-exists', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                cache: 'no-store',
                 body: JSON.stringify({
-                    email: normalizeEmailInput(details.email),
+                    email: normalizedEmail,
                     phone: details.phone.trim(),
                 }),
             });
+            if (requestId !== emailCheckRequestRef.current) return;
             if (!response.ok) {
                 throw new Error(payload?.error || 'Unable to verify account details');
             }
             if (payload?.exists) {
-                const matchedEmail = String(payload?.matchedEmail || details.email || '').trim().toLowerCase();
-                setAccountCheckError(
-                    'We found an existing account associated with these details. Please sign in to continue.'
-                );
+                const reason: AccountMatchReason = payload?.reason === 'phone' ? 'phone' : 'email';
+                const matchedEmail = reason === 'email'
+                    ? normalizeEmailInput(String(payload?.matchedEmail || normalizedEmail))
+                    : '';
+                setAccountCheckError('');
+                setAccountMatchReason(reason);
                 setMatchedAccountEmail(matchedEmail);
                 setEmailAccountCheckState('exists');
                 if (matchedEmail) {
@@ -540,9 +536,17 @@ export const DetailsStep = () => {
                 }
                 return;
             }
+            setAccountMatchReason('');
+            setMatchedAccountEmail('');
             setEmailAccountCheckState('available');
+            lastEmailCheckRef.current = {
+                email: normalizedEmail,
+                state: 'available',
+                matchedEmail: '',
+            };
             nextStep();
         } catch (errorObject) {
+            if (requestId !== emailCheckRequestRef.current) return;
             setAccountCheckError(errorObject instanceof Error ? errorObject.message : 'Unable to verify account details');
         } finally {
             setCheckingAccount(false);
@@ -553,6 +557,7 @@ export const DetailsStep = () => {
         const requestId = ++emailCheckRequestRef.current;
         const normalizedEmail = normalizeEmailInput(details.email);
         setAccountCheckError('');
+        setAccountMatchReason('');
 
         if (!normalizedEmail) {
             setMatchedAccountEmail('');
@@ -582,6 +587,7 @@ export const DetailsStep = () => {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     signal: controller.signal,
+                    cache: 'no-store',
                     body: JSON.stringify({
                         email: normalizedEmail,
                     }),
@@ -594,6 +600,7 @@ export const DetailsStep = () => {
 
                 if (payload?.exists) {
                     const matchedEmail = normalizeEmailInput(String(payload?.matchedEmail || normalizedEmail));
+                    setAccountMatchReason('email');
                     setMatchedAccountEmail(matchedEmail);
                     setEmailAccountCheckState('exists');
                     lastEmailCheckRef.current = {
@@ -608,6 +615,7 @@ export const DetailsStep = () => {
                 }
 
                 setMatchedAccountEmail('');
+                setAccountMatchReason('');
                 setEmailAccountCheckState('available');
                 lastEmailCheckRef.current = {
                     email: normalizedEmail,
@@ -649,8 +657,29 @@ export const DetailsStep = () => {
         };
     }, [genderOpen]);
 
-    const signInEmail = normalizeEmailInput(matchedAccountEmail || details.email);
-    const showSignInLink = Boolean(signInEmail) && (emailAccountCheckState === 'exists' || /existing account/i.test(accountCheckError));
+    const handleEmailChange = (value: string) => {
+        emailCheckRequestRef.current += 1;
+        lastEmailCheckRef.current = null;
+        setMatchedAccountEmail('');
+        setAccountMatchReason('');
+        setEmailAccountCheckState('idle');
+        setAccountCheckError('');
+        setDetails({ email: value });
+    };
+
+    const handlePhoneChange = (value: string) => {
+        if (accountMatchReason === 'phone') {
+            setMatchedAccountEmail('');
+            setAccountMatchReason('');
+            setEmailAccountCheckState(lastEmailCheckRef.current?.state || 'idle');
+            setAccountCheckError('');
+        }
+        setDetails({ phone: value });
+    };
+
+    const signInEmail = accountMatchReason === 'phone'
+        ? ''
+        : normalizeEmailInput(matchedAccountEmail || details.email);
 
     return (
         <motion.div {...fade} className="space-y-6">
@@ -733,7 +762,7 @@ export const DetailsStep = () => {
                         label={COPY.steps.details.fields.email}
                         type="email"
                         value={details.email}
-                        onChange={(e) => setDetails({ email: e.target.value })}
+                        onChange={(e) => handleEmailChange(e.target.value)}
                         error={errors.email}
                         required
                     />
@@ -743,13 +772,13 @@ export const DetailsStep = () => {
                     {emailAccountCheckState === 'available' && (
                         <p className="text-xs font-semibold text-forest-700">No existing account found for this email.</p>
                     )}
-                    {emailAccountCheckState === 'exists' && (
+                    {emailAccountCheckState === 'exists' && accountMatchReason !== 'phone' && (
                         <div className="space-y-2 rounded-lg border border-[#f2d6a6] bg-[#fff8ec] p-3">
                             <p className="text-xs font-semibold text-amber-700">
                                 This email already has a patient account. Sign in now so you don&apos;t create a second account.
                             </p>
                             <a
-                                href={`/patient-login?email=${encodeURIComponent(signInEmail)}`}
+                                href={signInEmail ? `/patient-login?email=${encodeURIComponent(signInEmail)}` : '/patient-login'}
                                 className="inline-flex h-9 items-center justify-center rounded-lg border border-border bg-white px-3 text-xs font-semibold text-text-primary"
                             >
                                 Sign in now
@@ -767,11 +796,24 @@ export const DetailsStep = () => {
                         label={COPY.steps.details.fields.phone}
                         type="tel"
                         value={details.phone}
-                        onChange={(e) => setDetails({ phone: e.target.value })}
+                        onChange={(e) => handlePhoneChange(e.target.value)}
                         error={errors.phone}
                         required
                     />
                     {details.phone.trim() && <p className="text-xs font-semibold text-amber-600">Verification pending</p>}
+                    {emailAccountCheckState === 'exists' && accountMatchReason === 'phone' && (
+                        <div className="space-y-2 rounded-lg border border-[#f2d6a6] bg-[#fff8ec] p-3">
+                            <p className="text-xs font-semibold text-amber-700">
+                                This phone number is already linked to a patient account. Sign in to continue.
+                            </p>
+                            <a
+                                href="/patient-login"
+                                className="inline-flex h-9 items-center justify-center rounded-lg border border-border bg-white px-3 text-xs font-semibold text-text-primary"
+                            >
+                                Sign in now
+                            </a>
+                        </div>
+                    )}
                 </div>
                 <Input
                     label={COPY.steps.details.fields.address}
@@ -782,20 +824,12 @@ export const DetailsStep = () => {
                 />
             </div>
             {accountCheckError && (
-                <div className="space-y-2">
+                <div>
                     <p className="text-xs font-semibold text-red-600">{accountCheckError}</p>
-                    {showSignInLink ? (
-                        <a
-                            href={`/patient-login?email=${encodeURIComponent(signInEmail)}`}
-                            className="inline-flex h-9 items-center justify-center rounded-lg border border-border bg-white px-3 text-xs font-semibold text-text-primary"
-                        >
-                            Sign in to continue
-                        </a>
-                    ) : null}
                 </div>
             )}
-            <Button fullWidth onClick={handleSubmit} disabled={checkingAccount || emailAccountCheckState === 'checking'}>
-                {checkingAccount || emailAccountCheckState === 'checking' ? 'Checking your account...' : COPY.steps.details.cta}
+            <Button fullWidth onClick={handleSubmit} disabled={checkingAccount}>
+                {checkingAccount ? 'Checking your account...' : COPY.steps.details.cta}
             </Button>
         </motion.div>
     );

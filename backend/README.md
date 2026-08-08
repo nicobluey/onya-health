@@ -86,6 +86,10 @@ Keep secrets out of logs and documentation.
 ## Doctor Email Routing
 
 - Account welcome and password-reset messages are sent to the doctor's own account email.
+- In Supabase production mode, doctor reset tokens are stored as hashed, expiring Auth
+  metadata and accepted only when the server-managed `profiles.role` identifies a
+  practitioner. Patient accounts receive the same generic reset response but are never
+  issued a doctor reset link.
 - New certificate-review and patient-reply notifications are sent to the explicit
   `DOCTOR_NOTIFICATION_EMAILS` list plus approved practitioner accounts.
 - Patient-message notifications link directly to the relevant doctor review. After
