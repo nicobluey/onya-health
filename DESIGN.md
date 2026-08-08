@@ -124,9 +124,9 @@ Avoid purple, beige-dominant palettes, gradient orbs, bokeh, glassmorphism, and 
 
 ### Stripe Checkout
 
-- Use Supadoc as the Checkout display name with `#F6FAFD` background and `#1151FF` actions.
+- Use Supadoc as the Checkout display name with `#DDE8FF` background and `#1151FF` actions.
 - Use `checkout-logo.png` for Stripe's logo slot and `favicon.png` for its square icon slot.
-- Use the homepage cover image as the Stripe product image for certificate products.
+- Use `generated/medcert-checkout.webp` as the Stripe product image for certificate products.
 - Product names, descriptions, billing intervals, and amounts must match the booking funnel.
 - Checkout submit copy must state that payment submits a request for doctor review and that
   certificates are issued only where clinically appropriate.

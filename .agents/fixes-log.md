@@ -1126,7 +1126,8 @@
   patient histories by request date or certificate duration.
 - Production Stripe amounts were `$11.21`, `$27.11`, and `$19.17`, while the public funnel
   displayed `$9.71`, up to `$29.71`, and `$19.00` monthly.
-- Checkout used stale product presentation and no session-level Supadoc branding.
+- Checkout used stale product presentation, a generic lifestyle thumbnail, a near-white background,
+  and no session-level Supadoc branding.
 - Certificate wording was fixed in code, and the PDF preview button became disabled after
   the first preview.
 
@@ -1154,8 +1155,9 @@
 - `backend/lib/pdf.js`
   - use the requested default clinical statement, accept approved custom wording, and render
     the preview watermark behind certificate content.
-- `frontend/public/checkout-logo.png`
-  - add a trimmed 15 KB PNG logo compatible with Stripe Checkout.
+- `frontend/public/checkout-logo.png`, `frontend/public/generated/medcert-checkout.webp`
+  - add a trimmed 15 KB PNG logo compatible with Stripe Checkout and a certificate-specific
+    product thumbnail designed to remain legible at Stripe's compact image size.
 - `package.json`, `package-lock.json`
   - add the focused test command and update vulnerable dependencies, including Sharp 0.35.3.
 
@@ -1169,6 +1171,6 @@
 5. Two consecutive PDF previews produced different blob URLs and left the preview control enabled.
 6. PDF text extraction confirmed custom wording; rendered inspection confirmed the watermark no
    longer obscures the clinical statement or doctor details.
-7. A live unpaid Stripe Session returned A$11.21, the homepage product image, Supadoc colors,
+7. A live unpaid Stripe Session returned A$11.21, the certificate product image, Supadoc colors,
    and the clinical review notice on desktop and mobile; it was expired after inspection.
 8. Production application and alias verification is pending deployment.

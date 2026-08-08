@@ -2571,7 +2571,7 @@ async function createStripeCheckoutSession({ req, certificate, pricing, uiMode =
 
   const checkoutAssetBase = /^https:\/\//i.test(frontendBase) ? frontendBase : 'https://supadoc.com.au';
   params.set('branding_settings[display_name]', 'Supadoc');
-  params.set('branding_settings[background_color]', '#F6FAFD');
+  params.set('branding_settings[background_color]', '#DDE8FF');
   params.set('branding_settings[button_color]', '#1151FF');
   params.set('branding_settings[border_style]', 'rounded');
   params.set('branding_settings[font_family]', 'inter');
