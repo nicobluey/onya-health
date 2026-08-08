@@ -4925,25 +4925,18 @@ export default async function handler(req, res) {
           decision: null,
         };
 
+        const persistenceStartedAt = Date.now();
+        await createCertificate(certificate);
+        const persistenceDurationMs = Date.now() - persistenceStartedAt;
+
         const stripeStartedAt = Date.now();
-        const sessionPromise = createStripeCheckoutSession({
+        const session = await createStripeCheckoutSession({
           req,
           certificate,
           pricing,
           uiMode: requestedUiMode,
-        }).then((session) => ({
-          session,
-          durationMs: Date.now() - stripeStartedAt,
-        }));
-
-        const persistenceStartedAt = Date.now();
-        const persistPromise = createCertificate(certificate).then((createdCertificate) => ({
-          createdCertificate,
-          durationMs: Date.now() - persistenceStartedAt,
-        }));
-
-        const [sessionResult, persistenceResult] = await Promise.all([sessionPromise, persistPromise]);
-        const session = sessionResult.session;
+        });
+        const stripeDurationMs = Date.now() - stripeStartedAt;
 
         appendAudit({
           type: 'CHECKOUT_SESSION_CREATED',
@@ -4963,8 +4956,8 @@ export default async function handler(req, res) {
         const checkoutDurationMs = Date.now() - checkoutStartedAt;
         const timingStats = recordCheckoutTimingSample({
           totalMs: checkoutDurationMs,
-          stripeMs: sessionResult.durationMs,
-          persistenceMs: persistenceResult.durationMs,
+          stripeMs: stripeDurationMs,
+          persistenceMs: persistenceDurationMs,
         });
         info('checkout.session.created', {
           certificateId: certificate.id,
@@ -4973,8 +4966,8 @@ export default async function handler(req, res) {
           amount: pricing.unitAmount,
           includeCarerCertificate: pricing.includeCarerCertificate,
           uiMode: requestedUiMode,
-          stripeDurationMs: sessionResult.durationMs,
-          persistenceDurationMs: persistenceResult.durationMs,
+          stripeDurationMs,
+          persistenceDurationMs,
           checkoutDurationMs,
           timingWindowSize: timingStats.windowSize,
           totalSamples: timingStats.totalSamples,
@@ -5004,7 +4997,11 @@ export default async function handler(req, res) {
           message: checkoutError?.message || String(checkoutError),
           status: checkoutError?.status || null,
         });
-        throw checkoutError;
+        sendJson(res, 503, {
+          error: 'We could not start secure checkout. Please try again.',
+          code: 'CHECKOUT_UNAVAILABLE',
+        });
+        return;
       }
     }
 

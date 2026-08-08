@@ -340,9 +340,10 @@
       document.getElementById('signup-form').addEventListener('submit', async (event) => {
         event.preventDefault();
         setStatus('signup-status', '');
+        const form = event.currentTarget;
         const button = document.getElementById('signup-button');
         button.disabled = true;
-        const payload = Object.fromEntries(new FormData(event.currentTarget).entries());
+        const payload = Object.fromEntries(new FormData(form).entries());
 
         try {
           const data = await submitJson('/api/doctor/register', payload);
@@ -351,7 +352,7 @@
             window.location.href = portalDestination;
             return;
           }
-          event.currentTarget.reset();
+          form.reset();
           setStatus('signup-status', 'Account request received. An admin must approve it before you can sign in.');
         } catch (error) {
           setStatus('signup-status', error.message || 'Unable to create account', true);

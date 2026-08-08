@@ -1592,38 +1592,30 @@ async function createPatientForSubmission(certificate) {
     throw new Error('Patient email is required to create a linked auth user');
   }
 
-  const cachedPatientId = getCachedPatientId(patientEmail);
-  if (cachedPatientId) {
-    return cachedPatientId;
-  }
-
   const fullName = String(draft.fullName || '').trim();
   const [firstName = '', ...rest] = fullName.split(/\s+/);
   const lastName = rest.join(' ');
-  let patientId = null;
+  let patientId = getCachedPatientId(patientEmail);
 
-  try {
-    const created = await supabaseAuthAdminRequest('users', {
-      method: 'POST',
-      body: {
-        email: patientEmail,
-        password: `Onya-${Date.now()}-Temp!`,
-        email_confirm: true,
-        user_metadata: { role: 'patient' },
-      },
-    });
-    patientId = created?.user?.id || created?.id || created?.data?.user?.id || created?.data?.id || null;
-  } catch (error) {
-    const message = String(error?.message || '');
-    const alreadyExists = message.includes('already') || message.includes('registered');
-    if (!alreadyExists) {
-      throw error;
-    }
+  if (!patientId) {
+    try {
+      const created = await supabaseAuthAdminRequest('users', {
+        method: 'POST',
+        body: {
+          email: patientEmail,
+          password: `Onya-${Date.now()}-Temp!`,
+          email_confirm: true,
+          user_metadata: { role: 'patient' },
+        },
+      });
+      patientId = created?.user?.id || created?.id || created?.data?.user?.id || created?.data?.id || null;
+    } catch (error) {
+      const message = String(error?.message || '');
+      const alreadyExists = message.includes('already') || message.includes('registered');
+      if (!alreadyExists) {
+        throw error;
+      }
 
-    const cachedAfterConflict = getCachedPatientId(patientEmail);
-    if (cachedAfterConflict) {
-      patientId = cachedAfterConflict;
-    } else {
       const listed = await supabaseAuthAdminRequest('users?page=1&per_page=1000', {
         method: 'GET',
       });
@@ -1643,11 +1635,7 @@ async function createPatientForSubmission(certificate) {
     throw new Error('Failed to resolve patient auth user id');
   }
 
-  setCachedPatientId(patientEmail, patientId);
-
-  // These rows are useful metadata, but they are not required to open Stripe checkout.
-  // Run them in the background so checkout can redirect faster.
-  void supabaseRequest('profiles', {
+  await supabaseRequest('profiles', {
     method: 'POST',
     prefer: 'resolution=merge-duplicates,return=representation',
     body: {
@@ -1660,15 +1648,9 @@ async function createPatientForSubmission(certificate) {
       created_at: certificate.createdAt || new Date().toISOString(),
       updated_at: new Date().toISOString(),
     },
-  }).catch((errorObject) => {
-    warn('patient.profile.upsert_failed', {
-      patientId,
-      patientEmail,
-      message: errorObject?.message || String(errorObject),
-    });
   });
 
-  void supabaseRequest('patients', {
+  await supabaseRequest('patients', {
     method: 'POST',
     prefer: 'resolution=merge-duplicates,return=representation',
     body: {
@@ -1681,19 +1663,14 @@ async function createPatientForSubmission(certificate) {
       consent_telehealth: true,
       consent_marketing: false,
     },
-  }).catch((errorObject) => {
-    warn('patient.row.upsert_failed', {
-      patientId,
-      patientEmail,
-      message: errorObject?.message || String(errorObject),
-    });
   });
 
+  setCachedPatientId(patientEmail, patientId);
   return patientId;
 }
 
 async function createCertificateSupabase(certificate) {
-  const patientId = certificate.rawSubmission?.patientId || (await createPatientForSubmission(certificate));
+  const patientId = await createPatientForSubmission(certificate);
 
   const serviceInsert = {
     id: certificate.id,

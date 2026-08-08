@@ -2292,9 +2292,8 @@ async function handleApi(req, res, url) {
       decision: null,
     };
 
-    const sessionPromise = createStripeCheckoutSession({ certificate, pricing, uiMode: requestedUiMode });
-    const persistPromise = createCertificate(certificate);
-    const [session] = await Promise.all([sessionPromise, persistPromise]);
+    await createCertificate(certificate);
+    const session = await createStripeCheckoutSession({ certificate, pricing, uiMode: requestedUiMode });
 
     appendAudit({
       type: 'CHECKOUT_SESSION_CREATED',
