@@ -1201,4 +1201,10 @@ illustration where Stripe's fixed thumbnail size calls for a simple square brand
 
 ### Verification
 
-Production desktop/mobile Checkout verification is pending the replacement deployment.
+1. Vercel assigned `supadoc.com.au`, `www.supadoc.com.au`, and `onya-health.vercel.app` to
+   production deployment `dpl_BXdjNFNmVPryWNiFFqZvXMf8LWdJ`.
+2. A live unpaid A$11.21 Checkout Session returned `#1151FF` as the summary background,
+   `#0A1931` as the action color, `favicon.png` as the icon, and no wide logo.
+3. Desktop inspection confirmed the full blue summary panel, white summary text, compact
+   icon-and-name header, and favicon product image. The 390 px view had no horizontal overflow.
+4. The Stripe QA Session was expired after inspection.
