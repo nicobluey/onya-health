@@ -288,6 +288,7 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
 - `npm run build`, `npm run lint`, and Node syntax checks passed.
 - Local authenticated API smoke and doctor portal visual checks passed at `1440x1000` and `390x844`.
 - Replaced the initial full-certificate search and redundant detail reads with targeted indexed queries and parallel hydration; direct production-Supabase checks measured about `0.8s` and `1.4s` respectively.
+- Live `supadoc.com.au` doctor login, queue, search, and detail checks returned `200`; search measured about `0.7s`, full detail about `2.8s`, unauthenticated search returned `401`, and all required production aliases served the patient-record page.
 
 2026-08-04:
 

@@ -34,6 +34,7 @@
 4. Doctor patient records passed desktop `1440x1000` and mobile `390x844` visual checks with no horizontal overflow or browser-console errors.
 5. The production migration was applied and a read-only query confirmed the table plus a private 2.5 MB storage bucket.
 6. Direct production-Supabase checks measured the targeted name query at about `0.8s` and parallel history/profile hydration at about `1.4s`, replacing the initial full-table and redundant-read path.
+7. Live authenticated checks on `supadoc.com.au` returned `200` for login, queue, patient search, and patient detail; search completed in about `0.7s`, detail in about `2.8s`, unauthenticated search returned `401`, and private storage paths were absent from the API payload.
 
 ## 2026-06-29 - Remove meal-plan product surface and refocus production on med certs
 
