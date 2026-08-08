@@ -44,7 +44,7 @@
       a.review-link { background: #1a3d63; color: white; text-decoration: none; border-radius: 10px; padding: 9px 12px; font-size: 13px; font-weight: 700; }
       .empty { text-align: center; padding: 32px; border: 1px dashed #b3cfe5; border-radius: 12px; color: #4a7fa7; background: #fff; }
       .profile-card { background: #fff; border: 1px solid #b3cfe5; border-radius: 14px; padding: 16px; margin-bottom: 16px; }
-      .profile-card.hidden { display: none; }
+      .profile-card.hidden, .accounts-card.hidden { display: none; }
       .profile-grid { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
       label { display: block; font-size: 12px; font-weight: 700; color: #4a7fa7; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.08em; }
       input {
@@ -60,12 +60,22 @@
       .status { min-height: 18px; font-size: 13px; }
       .status.error { color: #a93736; }
       .status.success { color: #1a3d63; }
+      .accounts-card { background: #fff; border: 1px solid #b3cfe5; border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+      .accounts-list { display: grid; gap: 10px; margin-top: 12px; }
+      .account-row { border-top: 1px solid #dce8f2; padding-top: 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+      .account-row:first-child { border-top: 0; padding-top: 0; }
+      .account-details { min-width: 0; }
+      .account-email { color: #4a7fa7; font-size: 13px; overflow-wrap: anywhere; }
+      .account-actions { display: flex; gap: 8px; }
+      .reject-btn { color: #a93736; border-color: #e4b8b8; }
       @media (max-width: 620px) {
-        header { align-items: flex-start; padding: 16px; }
+        header { align-items: flex-start; flex-direction: column; padding: 16px; }
         h1 { font-size: 20px; }
-        .header-actions { flex-wrap: wrap; justify-content: flex-end; }
+        .header-actions { flex-wrap: wrap; justify-content: flex-start; width: 100%; }
         .wrap { margin-top: 18px; }
         .card { grid-template-columns: 1fr; align-items: stretch; }
+        .account-row { grid-template-columns: 1fr; }
+        .account-actions button { flex: 1; }
         .card-action { display: flex; }
         a.review-link { width: 100%; text-align: center; }
       }
@@ -77,6 +87,7 @@
       <div class="header-actions">
         <a class="action-link" href="/doctor/patients">Patients</a>
         <a class="action-link" href="/verify">Verify</a>
+        <button id="toggle-accounts">Accounts</button>
         <button id="toggle-profile">Profile</button>
         <button id="logout">Logout</button>
       </div>
@@ -111,6 +122,13 @@
         </form>
       </section>
 
+      <section id="accounts-card" class="accounts-card hidden">
+        <h2 style="margin:0 0 4px;font-size:20px;font-family:'Inter', Arial, sans-serif;">Doctor account requests</h2>
+        <p style="margin:0;color:#4a7fa7;font-size:13px;">Approved doctors can review new portal access requests.</p>
+        <div id="accounts-status" class="status"></div>
+        <div id="accounts-list" class="accounts-list"></div>
+      </section>
+
       <p class="meta">Pending requests are sorted by newest first. Risk factor helps prioritize reviews.</p>
       <div id="list" class="list"></div>
     </main>
@@ -121,6 +139,9 @@
       const profileForm = document.getElementById('profile-form');
       const profileStatus = document.getElementById('profile-status');
       const profileSaveButton = document.getElementById('profile-save');
+      const accountsCard = document.getElementById('accounts-card');
+      const accountsList = document.getElementById('accounts-list');
+      const accountsStatus = document.getElementById('accounts-status');
 
       if (!token) {
         window.location.href = '/doctor/login';
@@ -128,6 +149,13 @@
 
       document.getElementById('toggle-profile').addEventListener('click', () => {
         profileCard.classList.toggle('hidden');
+      });
+
+      document.getElementById('toggle-accounts').addEventListener('click', () => {
+        accountsCard.classList.toggle('hidden');
+        if (!accountsCard.classList.contains('hidden')) {
+          loadDoctorAccounts();
+        }
       });
 
       document.getElementById('logout').addEventListener('click', () => {
@@ -264,6 +292,71 @@
           `;
         }).join('');
       }
+
+      async function loadDoctorAccounts() {
+        accountsStatus.textContent = 'Loading account requests...';
+        accountsStatus.className = 'status';
+        accountsList.innerHTML = '';
+
+        const response = await fetch('/api/doctor/accounts?status=pending', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const payload = await parseJsonResponse(response);
+        if (!response.ok) {
+          accountsStatus.textContent = payload.error || 'Unable to load doctor accounts.';
+          accountsStatus.className = 'status error';
+          return;
+        }
+
+        const doctors = Array.isArray(payload.doctors) ? payload.doctors : [];
+        accountsStatus.textContent = doctors.length
+          ? `${doctors.length} account request${doctors.length === 1 ? '' : 's'} awaiting review.`
+          : 'No doctor accounts are awaiting review.';
+        accountsList.innerHTML = doctors.map((doctor) => `
+          <div class="account-row" data-email="${escapeHtml(doctor.email || '')}">
+            <div class="account-details">
+              <strong>${escapeHtml(doctor.fullName || 'Unnamed applicant')}</strong>
+              <div class="account-email">${escapeHtml(doctor.email || '')}</div>
+              <div class="account-email">${escapeHtml(doctor.providerType || 'Provider type not supplied')} · ${escapeHtml(doctor.registrationNumber || 'Registration not supplied')}</div>
+            </div>
+            <div class="account-actions">
+              <button class="primary-btn" type="button" data-approval="approved">Approve</button>
+              <button class="reject-btn" type="button" data-approval="rejected">Reject</button>
+            </div>
+          </div>
+        `).join('');
+      }
+
+      accountsList.addEventListener('click', async (event) => {
+        const button = event.target.closest('button[data-approval]');
+        if (!button) return;
+        const row = button.closest('[data-email]');
+        const email = row?.dataset?.email || '';
+        const approvalStatus = button.dataset.approval || '';
+        if (!email || !approvalStatus) return;
+
+        row.querySelectorAll('button').forEach((item) => { item.disabled = true; });
+        accountsStatus.textContent = `${approvalStatus === 'approved' ? 'Approving' : 'Rejecting'} ${email}...`;
+        const response = await fetch(`/api/doctor/accounts/${encodeURIComponent(email)}/approval`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ approvalStatus }),
+        });
+        const payload = await parseJsonResponse(response);
+        if (!response.ok) {
+          accountsStatus.textContent = payload.error || 'Unable to update the doctor account.';
+          accountsStatus.className = 'status error';
+          row.querySelectorAll('button').forEach((item) => { item.disabled = false; });
+          return;
+        }
+
+        accountsStatus.textContent = `${email} was ${approvalStatus}.`;
+        accountsStatus.className = 'status success';
+        await loadDoctorAccounts();
+      });
 
       loadProfile().catch((error) => {
         setProfileStatus(error?.message || 'Failed to load doctor profile.', true);

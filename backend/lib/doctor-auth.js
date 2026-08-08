@@ -172,6 +172,17 @@ export async function listDoctorEmails() {
   return Array.from(new Set(emails));
 }
 
+export async function listDoctorAccounts() {
+  const db = await readAuthDbRaw();
+  return db.accounts
+    .map((entry) => toPublicAccount(entry))
+    .sort((left, right) => {
+      const leftCreatedAt = new Date(left?.createdAt || 0).getTime();
+      const rightCreatedAt = new Date(right?.createdAt || 0).getTime();
+      return rightCreatedAt - leftCreatedAt;
+    });
+}
+
 export async function getDoctorAccountByEmail(email) {
   const normalizedEmail = normalizeEmail(email);
   if (!normalizedEmail) return null;

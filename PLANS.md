@@ -145,7 +145,7 @@ Status: completed on 2026-06-29.
 Deliverables:
 
 - Doctor password reset token/email flow works with configured email or mock outbox.
-- Practitioner account creation requires admin approval before queue access.
+- Practitioner account creation requires approval by the configured administrator or an already approved doctor before queue access.
 - Owner/test account path supports AHPRA/provider-number metadata and later provider-number updates.
 
 Verification:
@@ -282,6 +282,19 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
 
 2026-08-08:
 
+- Made `n.vanhoorick1@gmail.com` the explicit production portal administrator while also
+  allowing any currently approved doctor to review new doctor account requests.
+- Added a doctor-queue Accounts panel for pending applications, with Approve and Reject
+  actions backed by a current Supabase approval check; rejected doctors cannot reuse an
+  older token to approve accounts.
+- Preserved the administrator identity's historical patient row, changed its trusted auth
+  role to `provider`, and left clinical registration fields blank so the non-clinical
+  administrator cannot issue certificates.
+- Removed the obsolete Vercel static doctor-login variables and added a checkout guard so
+  provider/admin identities cannot be silently rewritten as patients.
+- Isolated approval tests passed for pending login denial, approved-doctor approval,
+  post-approval login, rejection, and stale-token denial. Build, lint, production audit,
+  and Node syntax checks passed.
 - Fixed doctor signup's async form-reset crash; successful public registrations now clear
   the form and show the required pending-admin-approval state.
 - Fixed checkout's Supabase foreign-key race by awaiting the Auth profile and patient rows
@@ -341,6 +354,6 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
 - Use existing Vite/React router logic instead of adding React Router.
 - Keep public certificate copy conservative and review-based.
 - Keep patient and dietitian identity database/API-backed, never hardcoded in UI.
-- Keep doctor accounts gated by admin approval rather than public self-activation.
+- Keep doctor accounts gated by approval from the configured administrator or an already approved doctor rather than public self-activation.
 - Keep generated meal-plan images and recipe data storage-backed and avoid large base64 payloads.
 - Treat `frontend/public/sitemap.xml` and `robots.txt` as deployable artifacts until a more complete prerender/SSR solution is adopted.

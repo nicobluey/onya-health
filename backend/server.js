@@ -27,6 +27,7 @@ import {
   isDoctorAccountApproved,
   isLikelyEmail as isLikelyDoctorEmail,
   issueDoctorPasswordResetToken,
+  listDoctorAccounts,
   listDoctorEmails,
   resetDoctorPasswordWithToken,
   setDoctorAccountApprovalStatus,
@@ -114,11 +115,7 @@ const DOCTOR_NOTIFICATION_EMAILS_CONFIGURED = (process.env.DOCTOR_NOTIFICATION_E
   .map((item) => item.trim())
   .filter(Boolean);
 const ADMIN_DOCTOR_EMAILS = new Set(
-  [
-    process.env.ADMIN_DOCTOR_EMAILS || '',
-    process.env.DOCTOR_LOGIN_EMAIL || 'doctor@onyahealth.com',
-  ]
-    .join(',')
+  String(process.env.ADMIN_DOCTOR_EMAILS || '')
     .split(',')
     .map((item) => normalizeEmail(item))
     .filter(Boolean)
@@ -659,7 +656,7 @@ async function requireDoctor(req, res) {
   }
   const profile = await resolveDoctorProfile(payload.email);
   if (!doctorProfileHasApproval(profile, payload.email)) {
-    sendJson(res, 403, { error: 'Doctor account is pending admin approval.' });
+    sendJson(res, 403, { error: 'Doctor account is pending approval.' });
     return null;
   }
   return payload;
@@ -693,6 +690,19 @@ function isDoctorAdminEmail(email) {
 
 function doctorProfileHasApproval(profile, email = '') {
   return isDoctorAdminEmail(email || profile?.email) || isDoctorAccountApproved(profile);
+}
+
+async function requireDoctorApprover(req, res) {
+  const doctor = await requireDoctor(req, res);
+  if (!doctor) return null;
+  if (isDoctorAdminEmail(doctor.email)) return doctor;
+
+  const currentProfile = await getDoctorAccountByEmail(doctor.email);
+  if (!isDoctorAccountApproved(currentProfile)) {
+    sendJson(res, 403, { error: 'Only an approved doctor or administrator can approve doctor accounts.' });
+    return null;
+  }
+  return doctor;
 }
 
 function normalizeCoreMealTypesForCache(value) {
@@ -3701,7 +3711,7 @@ async function handleApi(req, res, url) {
     if (!doctorProfileHasApproval(account, account.email)) {
       sendJson(res, 200, {
         approvalRequired: true,
-        message: 'Password updated. Your doctor account still needs admin approval before portal access.',
+        message: 'Password updated. Your doctor account still needs approval before portal access.',
         doctor: {
           email: account.email,
           name: account.fullName || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
@@ -3765,7 +3775,7 @@ async function handleApi(req, res, url) {
 
     if (!doctorIdentity) {
       if (pendingApproval) {
-        sendJson(res, 403, { error: 'Doctor account is pending admin approval.' });
+        sendJson(res, 403, { error: 'Doctor account is pending approval.' });
         return;
       }
       sendJson(res, 401, { error: 'Invalid credentials' });
@@ -3855,14 +3865,29 @@ async function handleApi(req, res, url) {
     return;
   }
 
-  const doctorApprovalMatch = url.pathname.match(/^\/api\/doctor\/accounts\/([^/]+)\/approval$/);
-  if (req.method === 'POST' && doctorApprovalMatch) {
-    const doctor = await requireDoctor(req, res);
+  if (req.method === 'GET' && url.pathname === '/api/doctor/accounts') {
+    const doctor = await requireDoctorApprover(req, res);
     if (!doctor) return;
-    if (!isDoctorAdminEmail(doctor.email)) {
-      sendJson(res, 403, { error: 'Only an admin doctor can approve doctor accounts.' });
+
+    const requestedStatus = String(url.searchParams.get('status') || '').trim().toLowerCase();
+    if (requestedStatus && !['approved', 'pending', 'rejected'].includes(requestedStatus)) {
+      sendJson(res, 400, { error: 'status must be approved, pending, or rejected' });
       return;
     }
+
+    const accounts = await listDoctorAccounts();
+    sendJson(res, 200, {
+      doctors: accounts.filter(
+        (account) => !requestedStatus || normalizeApprovalStatus(account.approvalStatus) === requestedStatus
+      ),
+    });
+    return;
+  }
+
+  const doctorApprovalMatch = url.pathname.match(/^\/api\/doctor\/accounts\/([^/]+)\/approval$/);
+  if (req.method === 'POST' && doctorApprovalMatch) {
+    const doctor = await requireDoctorApprover(req, res);
+    if (!doctor) return;
 
     const targetEmail = normalizeEmail(decodeURIComponent(doctorApprovalMatch[1] || ''));
     const body = await parseJsonBody(req);

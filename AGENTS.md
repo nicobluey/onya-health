@@ -146,7 +146,7 @@ Never imply:
 - a clinician will approve every request;
 - nutrition plans are medical advice or clinically safe for all users without review;
 - patient records can be deleted immediately in a way that conflicts with legal retention;
-- doctor/practitioner accounts can be self-approved without admin verification.
+- doctor/practitioner accounts can be self-approved; approval must come from the configured administrator or an already approved doctor.
 
 Preferred wording:
 

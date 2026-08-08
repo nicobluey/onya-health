@@ -24,6 +24,7 @@ import {
   isDoctorAccountApproved,
   isLikelyEmail as isLikelyDoctorEmail,
   issueDoctorPasswordResetToken,
+  listDoctorAccounts,
   listDoctorEmails,
   resetDoctorPasswordWithToken,
   setDoctorAccountApprovalStatus,
@@ -90,11 +91,7 @@ const DOCTOR_NOTIFICATION_EMAILS_CONFIGURED = (process.env.DOCTOR_NOTIFICATION_E
   .map((item) => item.trim())
   .filter(Boolean);
 const ADMIN_DOCTOR_EMAILS = new Set(
-  [
-    process.env.ADMIN_DOCTOR_EMAILS || '',
-    process.env.DOCTOR_LOGIN_EMAIL || 'doctor@onyahealth.com',
-  ]
-    .join(',')
+  String(process.env.ADMIN_DOCTOR_EMAILS || '')
     .split(',')
     .map((item) => normalizeEmail(item))
     .filter(Boolean)
@@ -402,6 +399,21 @@ function isDoctorAdminEmail(email) {
 
 function doctorProfileHasApproval(profile, email = '') {
   return isDoctorAdminEmail(email || profile?.email) || isDoctorAccountApproved(profile);
+}
+
+async function requireDoctorApprover(req, res) {
+  const doctor = await requireDoctor(req, res);
+  if (!doctor) return null;
+  if (isDoctorAdminEmail(doctor.email)) return doctor;
+
+  const currentProfile = getSupabaseConfig().enabled
+    ? await findSupabaseDoctorByEmail(doctor.email)
+    : await getDoctorAccountByEmail(doctor.email);
+  if (!isDoctorAccountApproved(currentProfile)) {
+    sendJson(res, 403, { error: 'Only an approved doctor or administrator can approve doctor accounts.' });
+    return null;
+  }
+  return doctor;
 }
 
 function normalizePhoneForLookup(value) {
@@ -1666,7 +1678,7 @@ async function requireDoctor(req, res) {
   }
   const profile = await resolveDoctorProfile(payload.email);
   if (!doctorProfileHasApproval(profile, payload.email)) {
-    sendJson(res, 403, { error: 'Doctor account is pending admin approval.' });
+    sendJson(res, 403, { error: 'Doctor account is pending approval.' });
     return null;
   }
   return payload;
@@ -1829,6 +1841,34 @@ async function listSupabaseDoctorEmails() {
     });
     return [];
   }
+}
+
+async function listSupabaseDoctorAccounts() {
+  const config = getSupabaseConfig();
+  if (!config.enabled) return [];
+
+  const users = await listSupabaseAuthUsers(config);
+  const candidates = users.filter((entry) => userHasDoctorRole(entry));
+  const accounts = await Promise.all(
+    candidates.map((entry) => doctorAccountFromSupabaseUser(config, entry))
+  );
+
+  return accounts
+    .filter((entry) => entry?.email)
+    .map((entry) => ({
+      email: entry.email,
+      fullName: entry.fullName || '',
+      providerType: entry.providerType || '',
+      registrationNumber: entry.registrationNumber || '',
+      providerNumber: entry.providerNumber || '',
+      approvalStatus: entry.approvalStatus || 'pending',
+      createdAt: String(entry.user?.created_at || ''),
+    }))
+    .sort((left, right) => {
+      const leftCreatedAt = new Date(left.createdAt || 0).getTime();
+      const rightCreatedAt = new Date(right.createdAt || 0).getTime();
+      return rightCreatedAt - leftCreatedAt;
+    });
 }
 
 async function resolveDoctorNotificationEmails() {
@@ -7564,7 +7604,7 @@ export default async function handler(req, res) {
       if (!doctorProfileHasApproval(account, account.email)) {
         sendJson(res, 200, {
           approvalRequired: true,
-          message: 'Password updated. Your doctor account still needs admin approval before portal access.',
+          message: 'Password updated. Your doctor account still needs approval before portal access.',
           doctor: {
             email: account.email,
             name: account.fullName || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
@@ -7656,7 +7696,7 @@ export default async function handler(req, res) {
 
       if (!authenticatedDoctor) {
         if (pendingApproval) {
-          sendJson(res, 403, { error: 'Doctor account is pending admin approval.' });
+          sendJson(res, 403, { error: 'Doctor account is pending approval.' });
           return;
         }
         sendJson(res, 401, { error: 'Invalid credentials' });
@@ -7764,6 +7804,27 @@ export default async function handler(req, res) {
       return;
     }
 
+    if (req.method === 'GET' && routePath === 'doctor/accounts') {
+      const doctor = await requireDoctorApprover(req, res);
+      if (!doctor) return;
+
+      const requestedStatus = String(url.searchParams.get('status') || '').trim().toLowerCase();
+      if (requestedStatus && !['approved', 'pending', 'rejected'].includes(requestedStatus)) {
+        sendJson(res, 400, { error: 'status must be approved, pending, or rejected' });
+        return;
+      }
+
+      const accounts = getSupabaseConfig().enabled
+        ? await listSupabaseDoctorAccounts()
+        : await listDoctorAccounts();
+      sendJson(res, 200, {
+        doctors: accounts.filter(
+          (account) => !requestedStatus || normalizeApprovalStatus(account.approvalStatus) === requestedStatus
+        ),
+      });
+      return;
+    }
+
     if (
       req.method === 'POST' &&
       segments.length === 4 &&
@@ -7771,12 +7832,8 @@ export default async function handler(req, res) {
       segments[1] === 'accounts' &&
       segments[3] === 'approval'
     ) {
-      const doctor = await requireDoctor(req, res);
+      const doctor = await requireDoctorApprover(req, res);
       if (!doctor) return;
-      if (!isDoctorAdminEmail(doctor.email)) {
-        sendJson(res, 403, { error: 'Only an admin doctor can approve doctor accounts.' });
-        return;
-      }
 
       const targetEmail = normalizeEmail(decodeURIComponent(segments[2] || ''));
       const body = await parseJsonBody(req);

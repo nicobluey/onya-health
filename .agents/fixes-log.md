@@ -1061,3 +1061,51 @@
     built-in fallback values; the obsolete Vercel variables were removed after deployment.
     The approved Isaac Supabase account passed direct Auth and portal API checks. No
     credential value is stored in the repository.
+
+## 2026-08-08 - Add controlled doctor account approvals
+
+### Symptoms
+
+- New doctor accounts remained pending, but the portal had no interface for an authorized
+  reviewer to approve them.
+- The approval API accepted only a configured admin email, excluding already approved
+  doctors from helping with onboarding.
+- The intended administrator email still had a patient auth role, so it could not enter
+  the doctor portal.
+
+### Root causes
+
+1. Approval authorization was tied to legacy static-login configuration rather than a
+   dedicated administrator list plus trusted doctor approval state.
+2. The approval endpoint did not refresh the approver's Supabase status before mutating a
+   target account, leaving a stale-token authorization risk.
+3. The checkout identity upsert could overwrite an existing provider/admin profile role
+   with `patient` when the same email was submitted.
+
+### Files/areas changed
+
+- `api/index.js`, `backend/server.js`, `backend/lib/doctor-auth.js`
+  - allow the explicit administrator and currently approved doctors to list and review
+    doctor account applications;
+  - re-check current trusted approval state for every approval operation;
+  - remove legacy static doctor-login values from administrator discovery.
+- `frontend/public/doctor/queue/index.html`, `backend/doctor-portal/queue.html`
+  - add a responsive Accounts panel with pending applicant details and Approve/Reject
+    controls.
+- `backend/lib/storage.js`
+  - block patient checkout persistence from changing provider/admin identities to patients.
+- Production Supabase and Vercel configuration
+  - migrated `n.vanhoorick1@gmail.com` to an approved non-clinical provider/admin identity
+    while preserving its historical patient row;
+  - configured `ADMIN_DOCTOR_EMAILS` and removed obsolete static doctor credentials.
+
+### Verification
+
+1. Isolated API flow confirmed a pending account receives `403`, an approved doctor can
+   list and approve it, and login succeeds after approval.
+2. After the same account was rejected, its previously issued token received `403` from
+   the account-list endpoint.
+3. `node --check` passed for the production API, local backend, storage, and doctor-auth
+   modules.
+4. `npm run build`, `npm run lint`, and
+   `npm audit --omit=dev --audit-level=high` passed.

@@ -201,7 +201,7 @@
           </div>
         </div>
         <h1>Doctor portal</h1>
-        <p>Sign in to review certificates. New doctor accounts require admin approval before portal access.</p>
+        <p>Sign in to review certificates. New doctor accounts require approval before portal access.</p>
       </section>
 
       <div class="tabs" id="tabs">
@@ -353,7 +353,7 @@
             return;
           }
           form.reset();
-          setStatus('signup-status', 'Account request received. An admin must approve it before you can sign in.');
+          setStatus('signup-status', 'Account request received. An approved doctor or administrator must approve it before you can sign in.');
         } catch (error) {
           setStatus('signup-status', error.message || 'Unable to create account', true);
         } finally {
@@ -397,7 +397,7 @@
             password: payload.password,
           });
           if (data.approvalRequired || !data.token) {
-            setStatus('reset-status', data.message || 'Password updated. Your account still needs admin approval before portal access.');
+            setStatus('reset-status', data.message || 'Password updated. Your account still needs approval before portal access.');
             return;
           }
           localStorage.setItem('onyaDoctorToken', data.token);

@@ -122,7 +122,7 @@ Mock email output is written to the local outbox/log paths when a real email pro
 ## Safety Requirements
 
 - Patient-facing auth routes must return controlled JSON and avoid leaking account existence in reset flows.
-- Practitioner accounts must not become active from public signup without admin approval.
+- Practitioner accounts must not become active from public signup without approval by the configured administrator or an already approved doctor.
 - Certificate issue must remain subject to clinician review and clinical appropriateness.
 - Pricing and certificate duration caps must be enforced server-side, not just in React.
 - Meal-plan generation must validate calories, macros, serving counts, and ingredient consistency before display.

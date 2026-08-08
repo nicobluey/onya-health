@@ -1596,6 +1596,8 @@ async function createPatientForSubmission(certificate) {
   const [firstName = '', ...rest] = fullName.split(/\s+/);
   const lastName = rest.join(' ');
   let patientId = getCachedPatientId(patientEmail);
+  let resolvedAuthUser = null;
+  let reusedExistingAuthUser = false;
 
   if (!patientId) {
     try {
@@ -1608,6 +1610,7 @@ async function createPatientForSubmission(certificate) {
           user_metadata: { role: 'patient' },
         },
       });
+      resolvedAuthUser = created?.user || created?.data?.user || created?.data || created || null;
       patientId = created?.user?.id || created?.id || created?.data?.user?.id || created?.data?.id || null;
     } catch (error) {
       const message = String(error?.message || '');
@@ -1627,12 +1630,30 @@ async function createPatientForSubmission(certificate) {
         ? listed.data.users
         : [];
       const match = allUsers.find((user) => normalizeEmail(user?.email) === patientEmail);
+      resolvedAuthUser = match || null;
       patientId = match?.id || null;
+      reusedExistingAuthUser = Boolean(match?.id);
     }
   }
 
   if (!patientId) {
     throw new Error('Failed to resolve patient auth user id');
+  }
+
+  let existingRole = String(
+    resolvedAuthUser?.user_metadata?.role || resolvedAuthUser?.app_metadata?.role || ''
+  )
+    .trim()
+    .toLowerCase();
+  if (reusedExistingAuthUser) {
+    const existingProfiles = await supabaseRequest(
+      `profiles?id=eq.${encodeURIComponent(patientId)}&select=role&limit=1`,
+      { method: 'GET' }
+    );
+    existingRole = String(existingProfiles?.[0]?.role || existingRole).trim().toLowerCase();
+  }
+  if (['provider', 'doctor', 'admin'].includes(existingRole)) {
+    throw new Error('This email is assigned to a doctor or administrator account');
   }
 
   await supabaseRequest('profiles', {
