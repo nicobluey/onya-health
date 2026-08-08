@@ -208,7 +208,7 @@ Verification:
 
 ### M9 - Doctor Search, Checkout Consistency, And Certificate Wording
 
-Status: implementation and local validation completed on 2026-08-08; production validation pending deployment.
+Status: completed and production-validated on 2026-08-08.
 
 Deliverables:
 
@@ -226,7 +226,8 @@ Verification:
 - Desktop and 390 px doctor search/review checks.
 - Stripe Checkout Session API inspection plus desktop/mobile Checkout screenshots.
 - Rendered PDF inspection and text extraction.
-- Production API, alias, and Checkout Session checks after deployment.
+- Production aliases serve the release, protected doctor search rejects unauthenticated access,
+  and a live unpaid Checkout Session was inspected and expired after validation.
 
 ## Validation Commands
 

@@ -1173,4 +1173,9 @@
    longer obscures the clinical statement or doctor details.
 7. A live unpaid Stripe Session returned A$11.21, the certificate product image, Supadoc colors,
    and the clinical review notice on desktop and mobile; it was expired after inspection.
-8. Production application and alias verification is pending deployment.
+8. Vercel assigned `supadoc.com.au`, `www.supadoc.com.au`, and `onya-health.vercel.app` to
+   production deployment `dpl_AfTBdF26PkA2CTMRwDuCFY2VJ6XE`. The homepage and new image assets
+   returned `200`; the protected patient-search API returned `401` without doctor authentication.
+9. A final live unpaid Checkout Session rendered the actual Stripe summary background as
+   `#DDE8FF`, displayed A$11.21 and the certificate thumbnail, and had no horizontal overflow
+   at 1440 px or 390 px. The session was expired after inspection.
