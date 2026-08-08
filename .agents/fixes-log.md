@@ -1052,3 +1052,7 @@
    overflow.
 9. `supadoc.com.au`, `www.supadoc.com.au`, and `onya-health.vercel.app` resolve to the
    current Vercel production deployment.
+10. The legacy production doctor fallback was still using its default account and
+    password. Both Vercel variables were rotated to the approved Isaac practitioner and a
+    strong temporary password, followed by a fresh production deployment and successful
+    authenticated API smoke checks. No credential value is stored in the repository.

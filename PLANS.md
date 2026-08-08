@@ -296,6 +296,9 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
 - Desktop and 390 px production browser checks passed for patient and doctor portals with
   no horizontal overflow or browser-console errors. All required live aliases resolve to
   the current deployment.
+- Rotated the legacy production doctor fallback away from its default credentials and
+  aligned it with the approved Isaac practitioner; the final login, profile, queue, and
+  patient-search smoke checks all returned `200` after the environment redeploy.
 - Replaced ephemeral Vercel doctor-reset tokens with hashed, expiring Supabase Auth metadata and required the trusted Supabase profile role before issuing or accepting a doctor reset.
 - Fixed consumed Supabase reset metadata clearing, verified single-use doctor links, and confirmed patient-role accounts cannot enter the doctor reset flow.
 - Fixed stale booking account warnings by invalidating checks on email edits and rechecking the current email/phone on submit; phone matches no longer reveal another account's email.
