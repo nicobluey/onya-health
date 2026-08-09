@@ -2,7 +2,10 @@ function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
 }
 
-function isValidIsoDate(value) {
+export const MINIMUM_CERTIFICATE_PATIENT_AGE = 16;
+export const EARLIEST_CERTIFICATE_DOB = '1900-01-01';
+
+export function isValidIsoDate(value) {
   const candidate = String(value || '').trim();
   const match = candidate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return false;
@@ -16,6 +19,44 @@ function isValidIsoDate(value) {
     parsed.getUTCMonth() === month - 1 &&
     parsed.getUTCDate() === day
   );
+}
+
+function calendarDateParts(value) {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    const parts = new Intl.DateTimeFormat('en-AU', {
+      timeZone: process.env.CERTIFICATE_TIME_ZONE || 'Australia/Brisbane',
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+    }).formatToParts(value);
+    const readPart = (type) => Number(parts.find((part) => part.type === type)?.value || 0);
+    return {
+      year: readPart('year'),
+      month: readPart('month'),
+      day: readPart('day'),
+    };
+  }
+
+  const match = String(value || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  return {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+  };
+}
+
+export function calculateAgeYears(dob, atDate = new Date()) {
+  const birth = calendarDateParts(dob);
+  const reference = calendarDateParts(atDate);
+  if (!birth || !reference) return null;
+
+  let age = reference.year - birth.year;
+  if (reference.month < birth.month || (reference.month === birth.month && reference.day < birth.day)) {
+    age -= 1;
+  }
+  return age;
 }
 
 export function validateCertificatePatientDetails(input, now = new Date()) {
@@ -36,10 +77,15 @@ export function validateCertificatePatientDetails(input, now = new Date()) {
   } else if (!isValidIsoDate(patient.dob)) {
     errors.push('Date of birth must be a valid date');
   } else {
-    const today = new Date(now);
-    const todayIso = Number.isNaN(today.getTime()) ? '' : today.toISOString().slice(0, 10);
-    if (todayIso && patient.dob > todayIso) {
+    const age = calculateAgeYears(patient.dob, now);
+    if (patient.dob < EARLIEST_CERTIFICATE_DOB) {
+      errors.push('Date of birth must be on or after 1 January 1900');
+    } else if (age === null) {
+      errors.push('Date of birth must be a valid date');
+    } else if (age < 0) {
       errors.push('Date of birth cannot be in the future');
+    } else if (age < MINIMUM_CERTIFICATE_PATIENT_AGE) {
+      errors.push(`You must be at least ${MINIMUM_CERTIFICATE_PATIENT_AGE} years old to submit a certificate request`);
     }
   }
 

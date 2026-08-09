@@ -34,6 +34,10 @@ Use when changing `/doctor`, landing aliases, pricing, checkout, or certificate 
 - Update Stripe-facing pricing code and public copy together.
 - Check carer certificate add-on flow separately from standalone certificate flow.
 - Required carer add-on details: carer name, date of birth, relationship/caring context, and certificate dates.
+- Require patient DOB and phone in both browser and server validation. Self-service certificate
+  requests require age 16 or older, and certificate start dates must be today or later.
+- Keep DOB in protected clinical records for identity and eligibility checks, but do not print it
+  on the issued certificate PDF.
 - Do not imply a certificate is issued before payment and clinician review are complete.
 
 ## Patient Auth And Portal Pass
@@ -54,6 +58,8 @@ Use when changing practitioner account creation, login, password reset, queue, r
 - Public doctor signup must not grant active practitioner access without admin approval.
 - Password reset must create a valid reset token and send through the configured email transport or mock outbox.
 - Doctor profile must support AHPRA/provider metadata and allow provider-number updates.
+- Administrator certificate corrections and reissues must be audited. Do not allow draft edits to
+  change patient account ownership, payment state, risk evidence, verification codes, or clinician credentials.
 - QA the static pages under `frontend/public/doctor` plus API routes.
 
 ## SEO And Crawlability Pass

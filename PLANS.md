@@ -44,6 +44,12 @@ Current implementation state:
   `$4.95` for a carer certificate, and `$19.00` monthly for All Access.
 - Doctors can edit the default clinical certificate statement and regenerate the PDF
   preview repeatedly before approval; only the approved wording is persisted.
+- Configured administrators can correct every certificate-draft field before approval and can
+  edit, regenerate, and reissue an approved certificate. Account email, request identity,
+  payment, risk, verification, and clinician credentials remain immutable ownership/audit data.
+- Certificate intake requires a valid patient date of birth and phone number. Self-service
+  requests require the patient to be at least 16, certificate dates begin today or later, and
+  date of birth is retained in the clinical record but omitted from issued PDFs.
 - Approved portal users can send a certificate-thread update as either the authenticated
   doctor or the fixed `Customer support` identity. Both remain visible to the doctor and
   patient, while the authenticated account remains in the server audit event.
@@ -354,6 +360,21 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
 
 ## Latest Validation
 
+2026-08-10:
+
+- Added shared browser/server validation for required DOB and phone, a self-service minimum age
+  of 16, a 1900 DOB floor, and certificate start dates from today onward. The API rejects invalid,
+  under-age, future, and backdated submissions even when browser controls are bypassed.
+- Added audited administrator correction and reissue routes. Open requests can be corrected
+  before approval; approved requests can be edited, regenerated, versioned, emailed, and reissued
+  while preserving the original patient account owner and issuing clinician identity.
+- Added the patient phone number to the doctor queue and a responsive certificate-field editor to
+  the review workspace. Desktop and 390 px checks found no horizontal overflow or console errors.
+- Removed DOB from the one-page certificate PDF while retaining age at consultation, clinician
+  registration/provider details, signature, verification code, issue date, and revision.
+- Unit, API lifecycle, PDF render/text, build, lint, syntax, audit, and production-alias results are
+  recorded below after the release verification completes.
+
 2026-08-09:
 
 - Routed patient-portal certificate actions into the shared medical-certificate form for
@@ -363,8 +384,8 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
 - Removed the direct cancellation control, corrected active-plan billing fallbacks, and
   repaired desktop/mobile queue milestone connectors.
 - Added private practitioner signature storage and profile upload controls. Certificate PDFs
-  now include the patient date of birth and age, clinician registration and Medicare provider
-  numbers, and the clinician's uploaded signature when present.
+  include patient age, clinician registration and Medicare provider numbers, and the clinician's
+  uploaded signature when present; DOB was subsequently removed from the PDF on 2026-08-10.
 - Applied and verified `20260809_add_private_doctor_signatures.sql`. Unit, build, lint, PDF
   render/text, responsive portal, authenticated signature, and Unlimited-bypass API checks
   passed locally.

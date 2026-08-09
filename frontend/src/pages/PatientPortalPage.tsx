@@ -24,6 +24,11 @@ import {
     buildPatientCertificateBookingUrl,
     storePatientCertificateDraft,
 } from '../consult-flow/patient-entry';
+import {
+    EARLIEST_CERTIFICATE_DOB,
+    latestEligibleDob,
+    validateCertificateDob,
+} from '../consult-flow/date-rules';
 import HomeTab from '../patient-portal/home/HomeTab';
 import {
     type CheckoutSetupContext,
@@ -557,6 +562,16 @@ function AccountTab({
             setProfileSaveError('Full name is required.');
             return;
         }
+        const dobError = validateCertificateDob(dob);
+        if (dobError) {
+            setProfileSaveError(`${dobError}.`);
+            return;
+        }
+        const phoneDigits = phone.replace(/\D+/g, '');
+        if (phoneDigits.length < 8 || phoneDigits.length > 15) {
+            setProfileSaveError('Enter a valid phone number with 8 to 15 digits.');
+            return;
+        }
         setSavingProfile(true);
         try {
             await onSaveProfile({
@@ -658,6 +673,9 @@ function AccountTab({
                             <input
                                 type="date"
                                 value={dob || ''}
+                                min={EARLIEST_CERTIFICATE_DOB}
+                                max={latestEligibleDob()}
+                                required
                                 onChange={(event) => setDob(event.target.value)}
                                 className="h-11 w-full rounded-xl border border-[#b3cfe5] bg-[#f6fafd] px-3 text-sm outline-none focus:border-[#b3cfe5]"
                             />
@@ -666,6 +684,7 @@ function AccountTab({
                             <span className="mb-1 block text-xs font-semibold uppercase tracking-[0.1em] text-[#4a7fa7]">Phone</span>
                             <input
                                 value={phone}
+                                required
                                 onChange={(event) => setPhone(event.target.value)}
                                 className="h-11 w-full rounded-xl border border-[#b3cfe5] bg-[#f6fafd] px-3 text-sm outline-none focus:border-[#b3cfe5]"
                             />

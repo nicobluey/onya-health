@@ -474,6 +474,7 @@ function mapSupabaseRowToCertificate(row) {
       address: med.patient_address || rawPatient.address || '',
       purpose: med.work_or_study_context || rawConsult.purpose || med.consult_reason || '',
       symptom: med.symptoms || rawConsult.symptom || '',
+      symptomVisibility: rawConsult.symptomVisibility === 'public' ? 'public' : 'private',
       description: med.supporting_notes || rawConsult.description || med.consult_reason || '',
       startDate: med.certificate_start_date || rawConsult.startDate || createdAt.split('T')[0],
       durationDays,
@@ -492,6 +493,9 @@ function mapSupabaseRowToCertificate(row) {
           notes: decisionNotes,
           result: workflow.decisionResult || status,
           certificateStatement: workflow.certificateStatement || '',
+          revision: Math.max(1, Number(workflow.certificateRevision || 1)),
+          reissuedAt: workflow.reissuedAt || null,
+          reissuedBy: workflow.reissuedBy || '',
         }
       : null,
   };
@@ -1693,14 +1697,15 @@ async function updateCertificateSupabase(id, updater, currentCertificate = null)
     updatedCandidate?.rawSubmission && typeof updatedCandidate.rawSubmission === 'object'
       ? updatedCandidate.rawSubmission
       : current.rawSubmission || null;
-  if (nextRawSubmission) {
-    await supabaseRequest(`medical_certificate_requests?request_id=eq.${encodeURIComponent(id)}`, {
-      method: 'PATCH',
-      body: {
-        raw_submission: nextRawSubmission,
-      },
-    });
-  }
+  const medicalPatch = toMedicalInsert(updatedCandidate);
+  delete medicalPatch.request_id;
+  await supabaseRequest(`medical_certificate_requests?request_id=eq.${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: {
+      ...medicalPatch,
+      raw_submission: nextRawSubmission,
+    },
+  });
 
   return {
     ...updatedCandidate,

@@ -1,5 +1,60 @@
 # Fixes Log
 
+## 2026-08-10 - Add controlled certificate corrections, reissue, and patient validation
+
+### Symptoms
+
+- Date of birth appeared on issued certificate PDFs even though it only needs to be available for
+  identity, eligibility, and clinical review.
+- Administrators could edit wording but could not correct the rest of a certificate draft before
+  approval or repair and reissue an already approved certificate.
+- Browser date controls could present backdated values, and the API did not consistently reject a
+  bypassed past certificate date or an impossible/under-age DOB.
+- The doctor queue omitted the patient's phone number.
+
+### Root causes
+
+1. Certificate draft fields had no shared normalizer or audited administrator update contract.
+2. Approval generated a terminal PDF/email outcome with no explicit revision and reissue workflow.
+3. DOB and certificate-date rules were duplicated across entry points and relied too heavily on
+   browser attributes instead of shared server validation.
+4. The queue response mapped identity and risk data but did not include `patientPhone`.
+5. Supabase updates patched the raw submission without consistently updating the corresponding
+   medical-certificate columns.
+
+### Files changed
+
+- `backend/lib/certificate-fields.js`, `backend/lib/certificate-fields.test.js`
+  - normalize every editable certificate-draft field and synchronize patient/consult raw data.
+- `backend/lib/patient-details.js`, `backend/lib/patient-details.test.js`
+  - enforce required phone, valid calendar DOB, 1900 floor, future-date rejection, and minimum age 16.
+- `api/index.js`, `backend/server.js`, `backend/lib/storage.js`
+  - validate start dates server-side, expose queue phone data, add audited admin correction/reissue
+    routes, preserve original clinician identity, persist revisions, and update Supabase columns.
+- `frontend/src/consult-flow/date-rules.ts`, `frontend/src/consult-flow/state.tsx`,
+  `frontend/src/components/FlowSteps.tsx`, `frontend/src/pages/PatientPortalPage.tsx`
+  - share local-calendar rules, require DOB/phone, constrain date inputs, and validate patient profiles.
+- `frontend/public/doctor/queue/index.html`, `frontend/public/doctor/review/index.html`,
+  `backend/doctor-portal/queue.html`, `backend/doctor-portal/review.html`
+  - show patient phone and provide responsive administrator save/reissue controls.
+- `backend/lib/pdf.js`, `backend/lib/pdf.test.js`, `backend/lib/email-templates.js`
+  - remove DOB from the one-page PDF, retain age/provider/signature data, show revisions, and send
+    an explicit updated-certificate email after reissue.
+- `frontend/src/pages/TermsConditionsPage.tsx`, `DESIGN.md`, `PLANS.md`, `SKILLS.md`
+  - document the self-service age boundary and protected-DOB/reissue rules.
+
+### Verification
+
+1. Shared validator and PDF tests cover exact age boundaries, impossible/future DOBs, pre-1900
+   values, required phone, editable-field normalization, and omission of DOB from PDF identity.
+2. An isolated local API lifecycle rejected a zero-age edit, saved valid administrator corrections,
+   approved the request, reissued revision 2, and generated the updated mock patient email.
+3. Rendered PDF inspection confirmed one A4 page, no DOB label/value, the original consultation
+   date, current issue date, revision, age, clinician identifiers, signature, and verification panel.
+4. Doctor review, doctor queue, and patient details passed desktop and 390 px browser checks with
+   no horizontal overflow or console errors; queue phone and admin reissue controls were visible.
+5. Final build, lint, audit, deployment, and live API verification are recorded after release.
+
 ## 2026-08-09 - Customer support replies in certificate conversations
 
 ### Symptoms

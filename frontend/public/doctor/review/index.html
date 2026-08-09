@@ -13,6 +13,9 @@
       .label { font-size: 12px; text-transform: uppercase; color: #4a7fa7; letter-spacing: 0.08em; margin-bottom: 4px; }
       .value { font-weight: 600; }
       textarea { width: 100%; min-height: 140px; border: 1px solid #b3cfe5; border-radius: 10px; padding: 10px; box-sizing: border-box; font: inherit; line-height: 1.45; }
+      input, select { width: 100%; min-height: 44px; border: 1px solid #b3cfe5; border-radius: 10px; padding: 10px; box-sizing: border-box; background: #fff; color: #0a1931; font: inherit; }
+      input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid #2879b9; outline-offset: 2px; }
+      input[readonly] { background: #f6fafd; color: #4a7fa7; }
       .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
       button { border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 700; cursor: pointer; }
       .approve { background: #1a3d63; color: #fff; }
@@ -47,9 +50,21 @@
       #reply { min-height: 96px; }
       #certificate-statement { min-height: 126px; }
       .field-spacer { margin-top: 16px; }
+      .admin-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+      .admin-heading h2 { margin: 0; font-size: 20px; }
+      .admin-heading p { margin: 5px 0 0; color: #4a7fa7; font-size: 13px; }
+      .admin-badge { border-radius: 999px; background: #e7f2ff; color: #1a3d63; padding: 6px 9px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
+      .edit-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+      .edit-field { min-width: 0; }
+      .edit-field.wide { grid-column: 1 / -1; }
+      .edit-field textarea { min-height: 112px; }
+      [hidden] { display: none !important; }
       @media (max-width: 640px) {
         header { align-items: flex-start; gap: 12px; }
         .message { max-width: 92%; }
+        .edit-grid { grid-template-columns: 1fr; }
+        .edit-field.wide { grid-column: auto; }
+        .admin-heading { align-items: flex-start; }
       }
     </style>
   </head>
@@ -63,6 +78,69 @@
     </header>
     <main>
       <div id="content" class="panel">Loading certificate...</div>
+      <div id="admin-edit-panel" class="panel" hidden>
+        <div class="admin-heading">
+          <div>
+            <h2>Certificate fields</h2>
+            <p>Administrator corrections are recorded in the request audit trail.</p>
+          </div>
+          <span class="admin-badge">Admin</span>
+        </div>
+        <div class="edit-grid">
+          <label class="edit-field">
+            <span class="label">Patient name</span>
+            <input id="edit-full-name" maxlength="160" />
+          </label>
+          <label class="edit-field">
+            <span class="label">Patient email (account)</span>
+            <input id="edit-email" type="email" readonly />
+          </label>
+          <label class="edit-field">
+            <span class="label">Date of birth</span>
+            <input id="edit-dob" type="date" min="1900-01-01" />
+          </label>
+          <label class="edit-field">
+            <span class="label">Phone</span>
+            <input id="edit-phone" maxlength="40" />
+          </label>
+          <label class="edit-field wide">
+            <span class="label">Address</span>
+            <input id="edit-address" maxlength="300" />
+          </label>
+          <label class="edit-field">
+            <span class="label">Purpose</span>
+            <input id="edit-purpose" maxlength="120" />
+          </label>
+          <label class="edit-field">
+            <span class="label">Symptom</span>
+            <input id="edit-symptom" maxlength="500" />
+          </label>
+          <label class="edit-field">
+            <span class="label">Symptom visibility</span>
+            <select id="edit-symptom-visibility">
+              <option value="private">Private</option>
+              <option value="public">Shown on certificate</option>
+            </select>
+          </label>
+          <label class="edit-field">
+            <span class="label">Certificate start date</span>
+            <input id="edit-start-date" type="date" />
+          </label>
+          <label class="edit-field">
+            <span class="label">Duration (days)</span>
+            <input id="edit-duration" type="number" min="1" max="7" step="1" />
+          </label>
+          <label class="edit-field wide">
+            <span class="label">Clinical notes from patient</span>
+            <textarea id="edit-description" maxlength="4000"></textarea>
+          </label>
+        </div>
+        <div class="actions">
+          <button id="save-fields" class="secondary">Save corrections</button>
+          <button id="reissue" class="approve">Reissue &amp; email patient</button>
+        </div>
+        <div id="admin-edit-status" class="status muted"></div>
+      </div>
       <div class="panel">
         <div class="label">Patient conversation</div>
         <div id="message-thread" class="message-thread"></div>
@@ -127,12 +205,41 @@
       const messageStatusNode = document.getElementById('message-status');
       const previewPanel = document.getElementById('preview-panel');
       const previewFrame = document.getElementById('preview-frame');
+      const adminEditPanel = document.getElementById('admin-edit-panel');
+      const adminEditStatusNode = document.getElementById('admin-edit-status');
+      const adminFieldNodes = {
+        fullName: document.getElementById('edit-full-name'),
+        email: document.getElementById('edit-email'),
+        dob: document.getElementById('edit-dob'),
+        phone: document.getElementById('edit-phone'),
+        address: document.getElementById('edit-address'),
+        purpose: document.getElementById('edit-purpose'),
+        symptom: document.getElementById('edit-symptom'),
+        symptomVisibility: document.getElementById('edit-symptom-visibility'),
+        startDate: document.getElementById('edit-start-date'),
+        durationDays: document.getElementById('edit-duration'),
+        description: document.getElementById('edit-description'),
+      };
 
-      const buttonIds = ['send-reply', 'assign', 'auto-notes', 'more-info', 'preview-pdf', 'approve', 'deny', 'close'];
+      const buttonIds = ['send-reply', 'assign', 'auto-notes', 'more-info', 'preview-pdf', 'approve', 'deny', 'close', 'save-fields', 'reissue'];
       const actionButtons = buttonIds.map((buttonId) => document.getElementById(buttonId));
       let previewObjectUrl = null;
       let currentStatus = null;
       let currentMessages = [];
+      let currentCertificate = null;
+      let canEditCertificate = false;
+      let canReissueCertificate = false;
+
+      function dateInputValue(date) {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+      }
+
+      const latestDob = new Date();
+      latestDob.setFullYear(latestDob.getFullYear() - 16);
+      adminFieldNodes.dob.max = dateInputValue(latestDob);
 
       if (!id) {
         contentNode.textContent = 'Missing certificate ID.';
@@ -226,6 +333,45 @@
         messageStatusNode.classList.add(tone === 'error' ? 'error' : tone === 'success' ? 'success' : 'muted');
       }
 
+      function setAdminEditStatus(message, tone) {
+        adminEditStatusNode.textContent = message;
+        adminEditStatusNode.className = 'status';
+        adminEditStatusNode.classList.add(tone === 'error' ? 'error' : tone === 'success' ? 'success' : 'muted');
+      }
+
+      function populateAdminFields(cert) {
+        adminFieldNodes.fullName.value = cert.patientName || '';
+        adminFieldNodes.email.value = cert.patientEmail || '';
+        adminFieldNodes.dob.value = cert.patientDob || '';
+        adminFieldNodes.phone.value = cert.patientPhone || '';
+        adminFieldNodes.address.value = cert.patientAddress || '';
+        adminFieldNodes.purpose.value = cert.purpose || '';
+        adminFieldNodes.symptom.value = cert.symptom || '';
+        adminFieldNodes.symptomVisibility.value = cert.symptomVisibility === 'public' ? 'public' : 'private';
+        adminFieldNodes.startDate.value = cert.startDate || '';
+        adminFieldNodes.durationDays.value = String(cert.durationDays || 1);
+        adminFieldNodes.description.value = cert.description || '';
+      }
+
+      function readAdminFields() {
+        return {
+          fullName: adminFieldNodes.fullName.value.trim(),
+          dob: adminFieldNodes.dob.value,
+          phone: adminFieldNodes.phone.value.trim(),
+          address: adminFieldNodes.address.value.trim(),
+          purpose: adminFieldNodes.purpose.value.trim(),
+          symptom: adminFieldNodes.symptom.value.trim(),
+          symptomVisibility: adminFieldNodes.symptomVisibility.value,
+          startDate: adminFieldNodes.startDate.value,
+          durationDays: Number(adminFieldNodes.durationDays.value),
+          description: adminFieldNodes.description.value.trim(),
+        };
+      }
+
+      function adminRequestFields() {
+        return canEditCertificate ? readAdminFields() : undefined;
+      }
+
       function getReplySenderType() {
         return replySenderNodes.find((node) => node.checked)?.value === 'support' ? 'support' : 'doctor';
       }
@@ -237,6 +383,7 @@
 
       function updateActionAvailability() {
         const open = isOpenStatus(currentStatus);
+        const issued = String(currentStatus || '').toLowerCase() === 'approved';
         document.getElementById('preview-pdf').disabled = !currentStatus;
         document.getElementById('auto-notes').disabled = !open;
         document.getElementById('approve').disabled = !open;
@@ -248,9 +395,14 @@
           node.disabled = !open;
         });
         replyNode.disabled = !open;
-        notesNode.disabled = !open;
-        certificateStatementNode.disabled = !open;
+        notesNode.disabled = !(open || (canEditCertificate && issued));
+        certificateStatementNode.disabled = !(open || (canEditCertificate && issued));
         document.getElementById('close').disabled = !canCloseStatus(currentStatus);
+        document.getElementById('save-fields').disabled = !(canEditCertificate && open);
+        document.getElementById('reissue').disabled = !(canReissueCertificate && issued);
+        Object.entries(adminFieldNodes).forEach(([fieldName, node]) => {
+          node.disabled = fieldName === 'email' || !(canEditCertificate && (open || issued));
+        });
       }
 
       async function parseResponseJson(response) {
@@ -280,7 +432,14 @@
         }
 
         const cert = payload.certificate;
+        currentCertificate = cert;
         currentStatus = cert.status;
+        canEditCertificate = Boolean(payload.permissions?.canEditCertificate);
+        canReissueCertificate = Boolean(payload.permissions?.canReissueCertificate);
+        adminEditPanel.hidden = !canEditCertificate;
+        if (canEditCertificate) {
+          populateAdminFields(cert);
+        }
         renderMessages(cert.messages);
         if (cert.decision?.notes) {
           notesNode.value = cert.decision.notes;
@@ -294,11 +453,13 @@
             <div><div class="label">DOB</div><div class="value">${escapeHtml(cert.patientDob || '-')}</div></div>
             <div><div class="label">Age</div><div class="value">${escapeHtml(cert.patientAge ?? '-')}</div></div>
             <div><div class="label">Phone</div><div class="value">${escapeHtml(cert.patientPhone || '-')}</div></div>
+            <div><div class="label">Address</div><div class="value">${escapeHtml(cert.patientAddress || '-')}</div></div>
             <div><div class="label">Purpose</div><div class="value">${escapeHtml(cert.purpose || '-')}</div></div>
             <div><div class="label">Symptom</div><div class="value">${escapeHtml(cert.symptom || '-')}</div></div>
             <div><div class="label">Start Date</div><div class="value">${escapeHtml(cert.startDate || '-')}</div></div>
             <div><div class="label">Duration</div><div class="value">${escapeHtml(cert.durationDays || 1)} day(s)</div></div>
             <div><div class="label">Verification</div><div class="value">${escapeHtml(cert.verificationCode || '-')}</div></div>
+            <div><div class="label">Certificate revision</div><div class="value">${escapeHtml(cert.certificateRevision || 1)}</div></div>
             <div><div class="label">Risk</div><div class="value">${escapeHtml(String(cert.risk?.level || '').toUpperCase())} (${escapeHtml(cert.risk?.score ?? 0)})</div></div>
             <div><div class="label">Risk Notes</div><div class="value">${escapeHtml(formatReasons(cert.risk?.reasons))}</div></div>
           </div>
@@ -368,6 +529,7 @@
               decision,
               notes: notesNode.value,
               certificateStatement: certificateStatementNode.value,
+              fields: adminRequestFields(),
             }),
           });
 
@@ -505,6 +667,76 @@
         }
       }
 
+      async function saveCertificateFields() {
+        if (!canEditCertificate || !isOpenStatus(currentStatus)) return;
+        setAdminEditStatus('Saving corrections...', 'muted');
+        setBusy(true);
+        try {
+          const response = await fetch(`/api/doctor/certificates/${encodeURIComponent(id)}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              fields: readAdminFields(),
+              notes: notesNode.value,
+              certificateStatement: certificateStatementNode.value,
+            }),
+          });
+          const payload = await parseResponseJson(response);
+          if (!response.ok) {
+            throw new Error(payload.error || 'Failed to save certificate fields');
+          }
+          currentCertificate = payload.certificate || currentCertificate;
+          if (payload.certificate) populateAdminFields(payload.certificate);
+          setAdminEditStatus(payload.message || 'Certificate fields saved.', 'success');
+          setStatus('Corrections saved. Regenerate the PDF preview before approval.', 'success');
+        } catch (error) {
+          setAdminEditStatus(error.message || 'Failed to save certificate fields.', 'error');
+        } finally {
+          setBusy(false);
+        }
+      }
+
+      async function reissueCertificate() {
+        if (!canReissueCertificate || String(currentStatus || '').toLowerCase() !== 'approved') return;
+        if (!window.confirm('Reissue this certificate and email the corrected PDF to the patient?')) return;
+
+        setAdminEditStatus('Reissuing certificate...', 'muted');
+        setBusy(true);
+        try {
+          const response = await fetch(`/api/doctor/certificates/${encodeURIComponent(id)}/reissue`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              fields: readAdminFields(),
+              notes: notesNode.value,
+              certificateStatement: certificateStatementNode.value,
+            }),
+          });
+          const payload = await parseResponseJson(response);
+          if (!response.ok) {
+            throw new Error(payload.error || 'Failed to reissue certificate');
+          }
+          currentCertificate = payload.certificate || currentCertificate;
+          if (payload.certificate) populateAdminFields(payload.certificate);
+          setAdminEditStatus(
+            payload.message || 'Certificate reissued.',
+            payload.patientNotificationFailed ? 'error' : 'success'
+          );
+          setStatus('The corrected certificate is now the active downloadable version.', 'success');
+          document.getElementById('preview-pdf').textContent = 'Regenerate PDF preview';
+        } catch (error) {
+          setAdminEditStatus(error.message || 'Failed to reissue certificate.', 'error');
+        } finally {
+          setBusy(false);
+        }
+      }
+
       async function previewPdf() {
         setStatus('Generating PDF preview...', 'muted');
         setBusy(true);
@@ -518,6 +750,7 @@
             body: JSON.stringify({
               notes: notesNode.value,
               certificateStatement: certificateStatementNode.value,
+              fields: adminRequestFields(),
             }),
           });
 
@@ -552,10 +785,20 @@
       document.getElementById('auto-notes').addEventListener('click', autoGenerateNotes);
       document.getElementById('more-info').addEventListener('click', addMoreInfoDraft);
       document.getElementById('preview-pdf').addEventListener('click', previewPdf);
+      document.getElementById('save-fields').addEventListener('click', saveCertificateFields);
+      document.getElementById('reissue').addEventListener('click', reissueCertificate);
       certificateStatementNode.addEventListener('input', () => {
         if (previewPanel.style.display !== 'none') {
           setStatus('Certificate wording changed. Regenerate the preview to see the update.', 'muted');
         }
+      });
+      Object.values(adminFieldNodes).forEach((node) => {
+        node.addEventListener('input', () => {
+          setAdminEditStatus('Unsaved corrections.', 'muted');
+          if (previewPanel.style.display !== 'none') {
+            setStatus('Certificate fields changed. Regenerate the preview to see the update.', 'muted');
+          }
+        });
       });
 
       if (id) {

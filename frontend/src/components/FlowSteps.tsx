@@ -17,6 +17,14 @@ import {
 import { fetchApiJson } from '../lib/api';
 import { warmCheckoutPath } from '../lib/performanceWarmup';
 import { clearPatientCertificateDraft } from '../consult-flow/patient-entry';
+import {
+    EARLIEST_CERTIFICATE_DOB,
+    latestEligibleDob,
+    parseLocalDateInput,
+    startOfLocalToday,
+    toLocalDateInputValue,
+    validateCertificateDob,
+} from '../consult-flow/date-rules';
 import type { CertificatePurpose, Symptom } from '../types';
 
 // Transitions
@@ -313,8 +321,7 @@ export const DescriptionStep = () => {
 
 export const DatesStep = () => {
     const { setDates, nextStep, startDate, durationDays } = useBooking();
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const today = startOfLocalToday();
     const [durationOpen, setDurationOpen] = useState(false);
     const durationMenuRef = useRef<HTMLDivElement | null>(null);
     const durationOptions = [
@@ -333,9 +340,7 @@ export const DatesStep = () => {
     const pricingBandLabel = getOneOffPricingBandLabel(durationDays);
 
     const dateToInputValue = (value: Date | null) => {
-        const source = value || today;
-        const normalized = new Date(source.getTime() - source.getTimezoneOffset() * 60000);
-        return normalized.toISOString().split('T')[0];
+        return toLocalDateInputValue(value || today);
     };
 
     const normalizeNotPast = (value: Date) => {
@@ -380,7 +385,11 @@ export const DatesStep = () => {
                         className="w-full p-3 rounded-lg border border-border bg-white"
                         value={dateToInputValue(startDate)}
                         min={dateToInputValue(today)}
-                        onChange={(e) => setDates(normalizeNotPast(new Date(e.target.value)), durationDays)}
+                        onChange={(event) => {
+                            const normalizedDate = normalizeNotPast(parseLocalDateInput(event.target.value) || today);
+                            event.currentTarget.value = dateToInputValue(normalizedDate);
+                            setDates(normalizedDate, durationDays);
+                        }}
                     />
                 </div>
 
@@ -494,7 +503,8 @@ export const DetailsStep = () => {
         const address = details.address.trim();
 
         if (!fullName) newErrors.fullName = "Full legal name is required";
-        if (!dob) newErrors.dob = "Date of birth is required";
+        const dobError = validateCertificateDob(dob);
+        if (dobError) newErrors.dob = dobError;
         if (!gender) newErrors.gender = "Gender is required";
         if (!email || !email.includes('@')) newErrors.email = "Valid email is required";
         if (!phone) newErrors.phone = "Phone is required";
@@ -698,6 +708,8 @@ export const DetailsStep = () => {
                         label={COPY.steps.details.fields.dob}
                         type="date"
                         value={details.dob}
+                        min={EARLIEST_CERTIFICATE_DOB}
+                        max={latestEligibleDob()}
                         onChange={(e) => setDetails({ dob: e.target.value })}
                         error={errors.dob}
                         required
@@ -888,10 +900,18 @@ export const CheckoutStep = () => {
         };
 
         if (!normalized.fullName) nextErrors.fullName = 'Carer name is required';
-        if (!normalized.dob) nextErrors.dob = 'Carer date of birth is required';
+        const dobError = validateCertificateDob(normalized.dob);
+        if (dobError) nextErrors.dob = dobError.replace('Date of birth', 'Carer date of birth');
         if (!normalized.relationship) nextErrors.relationship = 'Relationship or caring context is required';
         if (!normalized.startDate) nextErrors.startDate = 'Certificate start date is required';
         if (!normalized.endDate) nextErrors.endDate = 'Certificate end date is required';
+        const todayIso = toLocalDateInputValue(startOfLocalToday());
+        if (normalized.startDate && normalized.startDate < todayIso) {
+            nextErrors.startDate = 'Certificate start date must be today or later';
+        }
+        if (normalized.endDate && normalized.endDate < todayIso) {
+            nextErrors.endDate = 'Certificate end date must be today or later';
+        }
         if (normalized.startDate && normalized.endDate && normalized.endDate < normalized.startDate) {
             nextErrors.endDate = 'End date must be on or after the start date';
         }
@@ -1084,6 +1104,8 @@ export const CheckoutStep = () => {
                         label="Carer date of birth"
                         type="date"
                         value={carerCertificateDetails.dob}
+                        min={EARLIEST_CERTIFICATE_DOB}
+                        max={latestEligibleDob()}
                         onChange={(event) => setCarerCertificateDetails({ dob: event.target.value })}
                         error={carerDetailsErrors.dob}
                         required
@@ -1101,6 +1123,7 @@ export const CheckoutStep = () => {
                             label="Certificate start date"
                             type="date"
                             value={carerCertificateDetails.startDate}
+                            min={toLocalDateInputValue(startOfLocalToday())}
                             onChange={(event) => setCarerCertificateDetails({ startDate: event.target.value })}
                             error={carerDetailsErrors.startDate}
                             required
@@ -1109,6 +1132,7 @@ export const CheckoutStep = () => {
                             label="Certificate end date"
                             type="date"
                             value={carerCertificateDetails.endDate}
+                            min={carerCertificateDetails.startDate || toLocalDateInputValue(startOfLocalToday())}
                             onChange={(event) => setCarerCertificateDetails({ endDate: event.target.value })}
                             error={carerDetailsErrors.endDate}
                             required

@@ -35,7 +35,6 @@ test('builds the patient identity details shown on the certificate', () => {
     ),
     {
       patientName: 'Alex Smith',
-      dateOfBirth: '9 August 1990',
       ageAtConsultation: '36 years',
     }
   );

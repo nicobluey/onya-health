@@ -95,6 +95,12 @@ function calendarDateParts(value) {
   };
 }
 
+function formatIsoCalendarDate(value) {
+  const parts = calendarDateParts(value);
+  if (!parts) return '';
+  return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
+}
+
 export function calculatePatientAge(dob, atDate = new Date()) {
   const birth = calendarDateParts(dob);
   const reference = calendarDateParts(atDate);
@@ -112,7 +118,6 @@ export function buildCertificateIdentityDetails(certificate, issuedAt = new Date
   const age = calculatePatientAge(data.dob, issuedAt);
   return {
     patientName: safeText(data.fullName, 'Patient name unavailable'),
-    dateOfBirth: formatLongDate(data.dob),
     ageAtConsultation: age === null ? 'Not provided' : `${age} years`,
   };
 }
@@ -295,11 +300,12 @@ export async function buildCertificatePdf(certificate, options = {}) {
     String(options.verifyUrl || '').trim() ||
     (baseUrl ? `${baseUrl}/verify?code=${encodeURIComponent(verificationCode)}` : '');
 
-  const issuedAt = certificate?.decision?.at || certificate?.createdAt || new Date().toISOString();
+  const consultationAt = certificate?.decision?.at || certificate?.createdAt || new Date().toISOString();
+  const issuedAt = certificate?.decision?.reissuedAt || consultationAt;
   const issueDate = formatLongDate(issuedAt);
-  const issueDateIso = parseDate(issuedAt)?.toISOString().slice(0, 10) || '';
+  const issueDateIso = formatIsoCalendarDate(issuedAt);
 
-  const patientIdentity = buildCertificateIdentityDetails(certificate, issuedAt);
+  const patientIdentity = buildCertificateIdentityDetails(certificate, consultationAt);
   const patientName = patientIdentity.patientName;
   const doctorName = safeText(
     options.doctorName || certificate?.decision?.by || process.env.DOCTOR_DISPLAY_NAME,
@@ -327,7 +333,11 @@ export async function buildCertificatePdf(certificate, options = {}) {
   const storedStatement =
     certificate?.decision?.certificateStatement || certificate?.rawSubmission?.workflow?.certificateStatement || '';
   const statement = String(options.certificateStatement ?? storedStatement).trim() ||
-    buildDefaultCertificateStatement(certificate, issuedAt);
+    buildDefaultCertificateStatement(certificate, consultationAt);
+  const revision = Math.max(
+    1,
+    Number(certificate?.decision?.revision || certificate?.rawSubmission?.workflow?.certificateRevision || 1)
+  );
 
   const logo = loadOnyaLogo();
   const qrBuffer = await buildQrBuffer(verifyUrl || verificationCode);
@@ -484,17 +494,12 @@ export async function buildCertificatePdf(certificate, options = {}) {
     });
     y += 22;
 
-    doc.font('Helvetica-Bold').fontSize(12).text('Date of birth:', left, y, { width: 100, lineBreak: false });
-    doc.font('Helvetica').fontSize(12).text(patientIdentity.dateOfBirth, left + 110, y, {
-      width: 178,
+    doc.font('Helvetica-Bold').fontSize(12).text('Age at consultation:', left, y, {
+      width: 126,
       lineBreak: false,
     });
-    doc.font('Helvetica-Bold').fontSize(12).text('Age at consultation:', left + 300, y, {
-      width: 122,
-      lineBreak: false,
-    });
-    doc.font('Helvetica').fontSize(12).text(patientIdentity.ageAtConsultation, left + 428, y, {
-      width: contentWidth - 428,
+    doc.font('Helvetica').fontSize(12).text(patientIdentity.ageAtConsultation, left + 130, y, {
+      width: contentWidth - 130,
       lineBreak: false,
     });
     y += 22;
@@ -572,8 +577,8 @@ export async function buildCertificatePdf(certificate, options = {}) {
     }
     y += 46;
 
-    const verificationHeight = 122;
-    const verificationBottomSpace = 28;
+    const verificationHeight = 112;
+    const verificationBottomSpace = 44;
     const maxVerificationY = doc.page.height - 38 - verificationHeight - verificationBottomSpace;
     if (y > maxVerificationY) {
       doc.addPage();
@@ -610,15 +615,15 @@ export async function buildCertificatePdf(certificate, options = {}) {
     drawHolographicSeal(doc, right - 66, verificationY + 62, 82, verificationCode);
 
     const footerY = verificationY + verificationHeight + 8;
-    doc.font('Helvetica-Bold').fontSize(11).fillColor(colors.text).text('Verification support:', left, footerY, {
+    doc.font('Helvetica-Bold').fontSize(10).fillColor(colors.text).text('Verification support', left, footerY, {
       lineBreak: false,
     });
     doc
       .font('Helvetica')
-      .fontSize(11)
+      .fontSize(9.5)
       .fillColor(colors.text)
-      .text(`Certificate ID ${certificateId}${issueDateIso ? ` • Issued ${issueDateIso}` : ''}`, left + 116, footerY, {
-        width: contentWidth - 116,
+      .text(`Certificate ID ${certificateId}${issueDateIso ? ` | Issued ${issueDateIso}` : ''}${revision > 1 ? ` | Revision ${revision}` : ''}`, left, footerY + 15, {
+        width: contentWidth,
         lineBreak: false,
       });
 

@@ -136,10 +136,13 @@ Avoid purple, beige-dominant palettes, gradient orbs, bokeh, glassmorphism, and 
 
 - Keep certificates to one A4 page with patient identity, clinical statement, clinician details,
   verification, and footer clearly separated.
-- Patient identity includes date of birth and age at consultation.
+- Patient identity includes the patient's name and age at consultation. Date of birth remains in
+  the protected patient and doctor records and must not be printed on the certificate.
 - Clinician identity includes registration number and Medicare provider number.
 - Uploaded signatures are private profile assets. Render the signature without stretching it and
   keep the clinician note beside it so neither element collides with the footer.
+- Reissued certificates show their current issue date and revision while retaining the original
+  consultation date and issuing clinician identity.
 
 ### Stripe Checkout
 

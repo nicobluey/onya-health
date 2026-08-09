@@ -79,7 +79,7 @@ const TERMS_SECTIONS: TermsSection[] = [
         title: '8. Family or dependent access',
         paragraphs: [
             'If account features allow you to manage services for family members or dependants, you must have lawful authority to do so.',
-            'Adults manage their own health information unless they explicitly grant access. For minors, parent or guardian involvement may be required.',
+            'Self-service certificate requests are available from age 16. Parent or guardian involvement may be required for younger patients or where decision-making capacity is uncertain.',
         ],
     },
     {

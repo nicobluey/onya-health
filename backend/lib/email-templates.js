@@ -120,7 +120,12 @@ export function renderDoctorReviewEmail({ baseUrl, requestId, patientName, riskL
   };
 }
 
-export function renderPatientCertificateReadyEmail({ baseUrl, requestId, attachmentIncluded = true }) {
+export function renderPatientCertificateReadyEmail({
+  baseUrl,
+  requestId,
+  attachmentIncluded = true,
+  isReissue = false,
+}) {
   const normalizedBaseUrl = String(baseUrl || '').replace(/\/$/, '');
   const patientPortalUrl = normalizedBaseUrl ? `${normalizedBaseUrl}/patient-login` : '/patient-login';
   const bodyHtml = attachmentIncluded
@@ -129,9 +134,11 @@ export function renderPatientCertificateReadyEmail({ baseUrl, requestId, attachm
 
   const html = renderShell({
     baseUrl,
-    badge: 'Certificate Ready',
-    title: 'Your medical certificate is ready',
-    subtitle: 'Your request has been reviewed and approved by an Onya doctor.',
+    badge: isReissue ? 'Updated Certificate' : 'Certificate Ready',
+    title: isReissue ? 'Your updated medical certificate is ready' : 'Your medical certificate is ready',
+    subtitle: isReissue
+      ? 'A corrected copy has been issued following an authorised review.'
+      : 'Your request has been reviewed and approved by an Onya doctor.',
     bodyHtml,
     ctaLabel: 'Open patient portal',
     ctaUrl: patientPortalUrl,
@@ -140,8 +147,8 @@ export function renderPatientCertificateReadyEmail({ baseUrl, requestId, attachm
   return {
     html,
     text: attachmentIncluded
-      ? `Your medical certificate is ready.\nRequest ID: ${requestId}\nA PDF copy is attached to this email.\nOpen patient portal: ${patientPortalUrl}`
-      : `Your medical certificate is ready.\nRequest ID: ${requestId}\nIf no attachment is visible, download your certificate from: ${patientPortalUrl}`,
+      ? `${isReissue ? 'Your updated medical certificate' : 'Your medical certificate'} is ready.\nRequest ID: ${requestId}\nA PDF copy is attached to this email.\nOpen patient portal: ${patientPortalUrl}`
+      : `${isReissue ? 'Your updated medical certificate' : 'Your medical certificate'} is ready.\nRequest ID: ${requestId}\nIf no attachment is visible, download your certificate from: ${patientPortalUrl}`,
   };
 }
 

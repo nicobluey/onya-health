@@ -402,6 +402,7 @@
                 <strong>${escapeHtml(item.patientName || 'Unnamed patient')}</strong>
                 <div class="id">Request ${escapeHtml(item.id)} · ${escapeHtml(new Date(item.createdAt).toLocaleString())}</div>
                 <div class="id">Verification ${escapeHtml(item.verificationCode || '-')}</div>
+                <div class="id">Phone ${escapeHtml(item.patientPhone || 'Not provided')}</div>
                 <div class="card-badges">
                   <span class="risk ${riskClass(risk.level)}">${escapeHtml(String(risk.level || 'low').toUpperCase())} RISK (${escapeHtml(risk.score ?? 0)})</span>
                   ${messageBadge}
