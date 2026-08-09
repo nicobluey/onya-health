@@ -121,6 +121,10 @@ Avoid purple, beige-dominant palettes, gradient orbs, bokeh, glassmorphism, and 
 - Sidebars and panels should feel like structured product UI, not soft wellness cards.
 - Patient record search filters stay visible, compact, and server-backed. Date and duration
   filters must use the same query for result counts and the selected patient's request list.
+- Certificate conversations use one shared thread. Patient messages align opposite staff messages;
+  doctor replies use deep navy and `Customer support` replies use a distinct accessible blue.
+- Sender controls must name `Doctor` and `Customer support` explicitly. Support messages never use
+  a clinician name, but the authenticated portal account remains available in the server audit log.
 
 ### Stripe Checkout
 

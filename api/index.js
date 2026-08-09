@@ -36,6 +36,7 @@ import {
   certificateMatchesDoctorPatientFilters,
   parseDoctorPatientRequestFilters,
 } from '../backend/lib/doctor-patient-filters.js';
+import { resolveStaffMessageSender } from '../backend/lib/certificate-messages.js';
 import { buildCertificatePdf, buildDefaultCertificateStatement } from '../backend/lib/pdf.js';
 import { getStripePricing } from '../backend/lib/stripe-pricing.js';
 import { generateDoctorNotes, generateMoreInfoDraft } from '../backend/lib/notes.js';
@@ -3628,28 +3629,32 @@ async function sendPatientMoreInfoEmail(certificate, doctorEmail, notes) {
   });
 }
 
-async function sendPatientDoctorMessageEmail(certificate, doctorName, message) {
+async function sendPatientStaffMessageEmail(certificate, senderIdentity, message) {
   const patientEmail = certificate?.certificateDraft?.email;
   if (!patientEmail) return;
 
   const emailContent = renderPatientDoctorMessageEmail({
     baseUrl: FRONTEND_BASE_URL || APP_BASE_URL || '',
     requestId: certificate.id,
-    doctorName,
+    senderName: senderIdentity.senderName,
+    senderType: senderIdentity.sender,
     message,
   });
 
   await sendEmail({
     to: patientEmail,
-    subject: 'New message from your doctor',
+    subject: senderIdentity.sender === 'support'
+      ? 'New message from Customer support'
+      : 'New message from your doctor',
     html: emailContent.html,
     text: emailContent.text,
   });
 
-  info('certificate.doctor_message_email.sent', {
+  info('certificate.staff_message_email.sent', {
     certificateId: certificate.id,
     provider: currentEmailProvider(),
     patientEmail,
+    senderType: senderIdentity.sender,
   });
 }
 
@@ -7333,7 +7338,7 @@ export default async function handler(req, res) {
 
       const messages = await listCertificateMessages(certId);
       sendJson(res, 200, {
-        message: emailSent ? 'Message sent to doctor' : 'Message saved; doctor notification email is pending',
+        message: emailSent ? 'Message sent to care team' : 'Message saved; care team notification email is pending',
         emailSent,
         messages,
       });
@@ -8155,6 +8160,7 @@ export default async function handler(req, res) {
       const certId = decodeURIComponent(segments[2]);
       const body = await parseJsonBody(req);
       const message = String(body.message || '').trim();
+      const senderIdentity = resolveStaffMessageSender(body.senderType, doctorName);
       if (!message) {
         sendJson(res, 400, { error: 'Message is required' });
         return;
@@ -8178,22 +8184,24 @@ export default async function handler(req, res) {
       }
 
       await appendAudit({
-        type: 'DOCTOR_MESSAGE_SENT',
+        type: senderIdentity.eventType,
         certificateId: certId,
         by: normalizeEmail(doctor.email),
         messageId: crypto.randomUUID(),
-        senderName: doctorName,
+        senderName: senderIdentity.senderName,
+        senderType: senderIdentity.sender,
         message,
       });
 
       let patientNotificationFailed = false;
       try {
-        await sendPatientDoctorMessageEmail(certificate, doctorName, message);
+        await sendPatientStaffMessageEmail(certificate, senderIdentity, message);
       } catch (errorObject) {
         patientNotificationFailed = true;
-        error('doctor.message.patient_email_failed', {
+        error('staff.message.patient_email_failed', {
           doctor: doctor.email,
           certificateId: certId,
+          senderType: senderIdentity.sender,
           message: errorObject?.message || String(errorObject),
         });
       }
@@ -8202,9 +8210,10 @@ export default async function handler(req, res) {
       sendJson(res, 200, {
         message: patientNotificationFailed
           ? 'Reply saved, but patient email delivery failed. Please check email provider logs.'
-          : 'Reply sent to patient',
+          : `Reply sent to patient as ${senderIdentity.senderName}`,
         messages,
         patientNotificationFailed,
+        senderType: senderIdentity.sender,
       });
       return;
     }

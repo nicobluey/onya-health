@@ -44,6 +44,9 @@ Current implementation state:
   `$4.95` for a carer certificate, and `$19.00` monthly for All Access.
 - Doctors can edit the default clinical certificate statement and regenerate the PDF
   preview repeatedly before approval; only the approved wording is persisted.
+- Approved portal users can send a certificate-thread update as either the authenticated
+  doctor or the fixed `Customer support` identity. Both remain visible to the doctor and
+  patient, while the authenticated account remains in the server audit event.
 - Booking flow in `frontend/src/consult-flow`.
 - Weight-loss reset and meal planning in `frontend/src/weight-loss-reset`.
 - Supabase migrations and helper scripts under `supabase/` and `scripts/`.
@@ -230,6 +233,25 @@ Verification:
 - Production aliases serve the release, protected doctor search rejects unauthenticated access,
   and a live unpaid Checkout Session was inspected and expired after validation.
 
+### M10 - Customer Support Certificate Replies
+
+Status: completed locally on 2026-08-09; production validation pending.
+
+Deliverables:
+
+- Doctor review includes an explicit `Doctor` / `Customer support` sender control.
+- Support replies use a fixed display identity and a distinct audit event without hiding the
+  authenticated portal account that sent them.
+- Doctors and patients retain one complete shared conversation with visually distinct sender states.
+- Support replies notify the patient by email and clear the queue's pending-reply indicator.
+
+Verification:
+
+- Shared message mapping and support email unit tests.
+- Isolated authenticated API reply and mock-email smoke test.
+- Desktop and 390 px doctor review visual checks.
+- Build, lint, Node syntax, audit, and production alias checks.
+
 ## Validation Commands
 
 ```bash
@@ -310,6 +332,13 @@ Use this tree before substantial changes so the relevant docs are read in order 
 The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed because active workflows now live in `SKILLS.md`.
 
 ## Latest Validation
+
+2026-08-09:
+
+- Added a fixed `Customer support` reply identity alongside doctor replies in certificate conversations.
+- Support replies remain visible in the shared doctor/patient thread, retain the authenticated
+  portal account in the audit event, notify the patient by email, and clear `Needs reply`.
+- Local unit, API, email, desktop, and 390 px visual checks passed; production deployment is pending.
 
 2026-08-08:
 

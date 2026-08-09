@@ -1020,16 +1020,21 @@ function QueuedWaitingScreen({
                     ) : (
                         messages.map((entry) => {
                             const fromPatient = entry.sender === 'patient';
+                            const fromSupport = entry.sender === 'support';
                             return (
                                 <div
                                     key={entry.id}
                                     className={`max-w-[88%] rounded-xl border p-3 ${
                                         fromPatient
                                             ? 'ml-auto border-[#1a3d63] bg-[#1a3d63] text-white'
-                                            : 'border-[#b3cfe5] bg-[#f6fafd] text-[#0a1931]'
+                                            : fromSupport
+                                              ? 'border-[#83b6dc] bg-[#eaf4ff] text-[#0a1931]'
+                                              : 'border-[#b3cfe5] bg-[#f6fafd] text-[#0a1931]'
                                     }`}
                                 >
-                                    <p className="text-[11px] font-extrabold opacity-70">{entry.senderName || (fromPatient ? 'You' : 'Doctor')}</p>
+                                    <p className="text-[11px] font-extrabold opacity-70">
+                                        {entry.senderName || (fromPatient ? 'You' : fromSupport ? 'Customer support' : 'Doctor')}
+                                    </p>
                                     <p className="mt-1 whitespace-pre-wrap break-words text-sm">{entry.message}</p>
                                     {entry.createdAt && (
                                         <p className="mt-1 text-[11px] opacity-60">{formatDate(entry.createdAt)}</p>
@@ -1047,7 +1052,7 @@ function QueuedWaitingScreen({
                 className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#1a3d63] text-sm font-semibold text-white"
             >
                 <MessageCircle size={16} />
-                Message Doctor
+                Message care team
             </button>
         </section>
     );
@@ -1891,10 +1896,10 @@ export default function PatientPortalPage() {
         return String(apiPayload?.message || `Verification link sent to ${nextEmail}.`);
     };
 
-    const sendMessageToDoctor = async () => {
+    const sendMessageToCareTeam = async () => {
         const activeToken = token || window.localStorage.getItem('onya_patient_token') || '';
         if (!queuedRequest || !activeToken) return;
-        const message = window.prompt('Message for the doctor');
+        const message = window.prompt('Message for the care team');
         if (!message || !message.trim()) return;
 
         try {
@@ -1915,7 +1920,7 @@ export default function PatientPortalPage() {
             if (Array.isArray(payload.messages)) {
                 setActiveQueuedRequest((current) => current ? { ...current, messages: payload.messages } : current);
             }
-            window.alert(String(payload.message || 'Message sent to doctor.'));
+            window.alert(String(payload.message || 'Message sent to care team.'));
         } catch (errorObject) {
             window.alert(errorObject instanceof Error ? errorObject.message : 'Unable to send message');
         }
@@ -2054,7 +2059,7 @@ export default function PatientPortalPage() {
                 <QueuedWaitingScreen
                     request={queuedRequest}
                     onBack={closeOverlayScreen}
-                    onSendMessage={sendMessageToDoctor}
+                    onSendMessage={sendMessageToCareTeam}
                 />
             );
         }

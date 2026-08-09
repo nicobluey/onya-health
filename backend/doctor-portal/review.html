@@ -30,9 +30,20 @@
       .message-thread { display: grid; gap: 10px; margin: 12px 0; }
       .message-empty { padding: 14px; border: 1px dashed #b3cfe5; border-radius: 10px; color: #4a7fa7; }
       .message { max-width: 78%; border: 1px solid #b3cfe5; border-radius: 12px; padding: 10px 12px; background: #f6fafd; }
-      .message.doctor { margin-left: auto; background: #1a3d63; border-color: #1a3d63; color: #fff; }
+      .message.doctor, .message.support { margin-left: auto; color: #fff; }
+      .message.doctor { background: #1a3d63; border-color: #1a3d63; }
+      .message.support { background: #2879b9; border-color: #2879b9; }
       .message-meta { margin-bottom: 4px; font-size: 11px; font-weight: 700; opacity: 0.75; }
       .message-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+      .reply-as { border: 0; padding: 0; margin: 0 0 14px; }
+      .reply-as-options { display: inline-grid; grid-template-columns: repeat(2, minmax(120px, 1fr)); gap: 4px; padding: 4px; border: 1px solid #b3cfe5; border-radius: 10px; background: #f6fafd; }
+      .reply-option { position: relative; cursor: pointer; }
+      .reply-option input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+      .reply-option span { display: flex; min-height: 36px; align-items: center; justify-content: center; border-radius: 7px; padding: 0 12px; color: #1a3d63; font-size: 13px; font-weight: 700; }
+      .reply-option input:checked + span { background: #1a3d63; color: #fff; }
+      .reply-option input[value="support"]:checked + span { background: #2879b9; }
+      .reply-option input:focus-visible + span { outline: 2px solid #2879b9; outline-offset: 2px; }
+      .reply-option input:disabled + span { cursor: not-allowed; opacity: 0.55; }
       #reply { min-height: 96px; }
       #certificate-statement { min-height: 126px; }
       .field-spacer { margin-top: 16px; }
@@ -55,10 +66,23 @@
       <div class="panel">
         <div class="label">Patient conversation</div>
         <div id="message-thread" class="message-thread"></div>
+        <fieldset class="reply-as">
+          <legend class="label">Reply as</legend>
+          <div class="reply-as-options">
+            <label class="reply-option">
+              <input type="radio" name="reply-sender" value="doctor" checked />
+              <span>Doctor</span>
+            </label>
+            <label class="reply-option">
+              <input type="radio" name="reply-sender" value="support" />
+              <span>Customer support</span>
+            </label>
+          </div>
+        </fieldset>
         <label class="label" for="reply">Reply to patient</label>
         <textarea id="reply" maxlength="4000" placeholder="Write a clear message for the patient..."></textarea>
         <div class="actions">
-          <button id="send-reply" class="approve">Send reply to patient</button>
+          <button id="send-reply" class="approve">Send as Doctor</button>
         </div>
         <div id="message-status" class="status muted"></div>
       </div>
@@ -97,6 +121,8 @@
       const notesNode = document.getElementById('notes');
       const certificateStatementNode = document.getElementById('certificate-statement');
       const replyNode = document.getElementById('reply');
+      const replySenderNodes = Array.from(document.querySelectorAll('input[name="reply-sender"]'));
+      const sendReplyButton = document.getElementById('send-reply');
       const messageThreadNode = document.getElementById('message-thread');
       const messageStatusNode = document.getElementById('message-status');
       const previewPanel = document.getElementById('preview-panel');
@@ -144,10 +170,11 @@
         messageThreadNode.innerHTML = currentMessages
           .map((entry) => {
             const fromDoctor = entry?.sender === 'doctor';
-            const senderName = entry?.senderName || (fromDoctor ? 'Doctor' : 'Patient');
+            const fromSupport = entry?.sender === 'support';
+            const senderName = entry?.senderName || (fromDoctor ? 'Doctor' : fromSupport ? 'Customer support' : 'Patient');
             const sentAt = formatMessageDate(entry?.createdAt);
             return `
-              <div class="message ${fromDoctor ? 'doctor' : ''}">
+              <div class="message ${fromDoctor ? 'doctor' : fromSupport ? 'support' : ''}">
                 <div class="message-meta">${escapeHtml(senderName)}${sentAt ? ` · ${escapeHtml(sentAt)}` : ''}</div>
                 <div class="message-body">${escapeHtml(entry?.message || '')}</div>
               </div>
@@ -170,6 +197,9 @@
         if (isBusy) {
           actionButtons.forEach((button) => {
             button.disabled = true;
+          });
+          replySenderNodes.forEach((node) => {
+            node.disabled = true;
           });
           return;
         }
@@ -196,6 +226,15 @@
         messageStatusNode.classList.add(tone === 'error' ? 'error' : tone === 'success' ? 'success' : 'muted');
       }
 
+      function getReplySenderType() {
+        return replySenderNodes.find((node) => node.checked)?.value === 'support' ? 'support' : 'doctor';
+      }
+
+      function updateReplyMode() {
+        const senderType = getReplySenderType();
+        sendReplyButton.textContent = senderType === 'support' ? 'Send as Customer support' : 'Send as Doctor';
+      }
+
       function updateActionAvailability() {
         const open = isOpenStatus(currentStatus);
         document.getElementById('preview-pdf').disabled = !currentStatus;
@@ -204,7 +243,10 @@
         document.getElementById('deny').disabled = !open;
         document.getElementById('more-info').disabled = !open;
         document.getElementById('assign').disabled = !open;
-        document.getElementById('send-reply').disabled = !open;
+        sendReplyButton.disabled = !open;
+        replySenderNodes.forEach((node) => {
+          node.disabled = !open;
+        });
         replyNode.disabled = !open;
         notesNode.disabled = !open;
         certificateStatementNode.disabled = !open;
@@ -273,12 +315,14 @@
 
       async function sendReply() {
         const message = replyNode.value.trim();
+        const senderType = getReplySenderType();
+        const senderLabel = senderType === 'support' ? 'Customer support' : 'Doctor';
         if (!message) {
           setMessageStatus('Write a message before sending.', 'error');
           return;
         }
 
-        setMessageStatus('Sending reply...', 'muted');
+        setMessageStatus(`Sending as ${senderLabel}...`, 'muted');
         setBusy(true);
         try {
           const response = await fetch(`/api/doctor/certificates/${encodeURIComponent(id)}/message`, {
@@ -287,7 +331,7 @@
               'Content-Type': 'application/json',
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ message }),
+            body: JSON.stringify({ message, senderType }),
           });
           const payload = await parseResponseJson(response);
           if (!response.ok) {
@@ -500,6 +544,8 @@
 
       document.getElementById('assign').addEventListener('click', assignCertificate);
       document.getElementById('send-reply').addEventListener('click', sendReply);
+      replySenderNodes.forEach((node) => node.addEventListener('change', updateReplyMode));
+      updateReplyMode();
       document.getElementById('approve').addEventListener('click', () => submitDecision('approved'));
       document.getElementById('deny').addEventListener('click', () => submitDecision('denied'));
       document.getElementById('close').addEventListener('click', closeCertificate);

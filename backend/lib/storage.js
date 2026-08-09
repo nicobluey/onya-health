@@ -1,6 +1,11 @@
 import fs from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
+import {
+  buildCertificateMessageSummaries,
+  CERTIFICATE_MESSAGE_EVENT_TYPES,
+  mapCertificateMessageEvent,
+} from './certificate-messages.js';
 import { certificateMatchesDoctorPatientFilters } from './doctor-patient-filters.js';
 import { warn } from './logger.js';
 
@@ -44,12 +49,6 @@ const SUPPORTED_MEAL_RECIPE_IMAGE_MIME_TO_EXTENSION = {
   'image/gif': 'gif',
   'image/avif': 'avif',
 };
-const CERTIFICATE_MESSAGE_EVENT_TYPES = new Set([
-  'PATIENT_MESSAGE_SENT',
-  'DOCTOR_MESSAGE_SENT',
-  'MORE_INFO_REQUESTED',
-]);
-
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
 }
@@ -1192,57 +1191,6 @@ async function appendAuditLocal(entry) {
   });
 }
 
-function mapCertificateMessageEvent(entry, index = 0) {
-  const payload = entry?.payload && typeof entry.payload === 'object' ? entry.payload : entry || {};
-  const eventType = String(entry?.event_type || entry?.type || payload?.type || '').trim().toUpperCase();
-  if (!CERTIFICATE_MESSAGE_EVENT_TYPES.has(eventType)) return null;
-
-  const message = String(payload.message || payload.notes || '').trim();
-  if (!message) return null;
-
-  const createdAt = String(entry?.created_at || entry?.at || payload?.createdAt || payload?.at || '').trim();
-  const sender = eventType === 'PATIENT_MESSAGE_SENT' ? 'patient' : 'doctor';
-  return {
-    id: String(payload.messageId || `${eventType.toLowerCase()}-${createdAt || index}`).trim(),
-    sender,
-    senderName: String(payload.senderName || (sender === 'doctor' ? 'Doctor' : 'Patient')).trim(),
-    message,
-    createdAt,
-  };
-}
-
-function buildCertificateMessageSummaries(entries = []) {
-  const summaries = Object.create(null);
-
-  entries.forEach((entry, index) => {
-    const requestId = String(entry?.request_id || entry?.certificateId || entry?.requestId || '').trim();
-    const message = mapCertificateMessageEvent(entry, index);
-    if (!requestId || !message) return;
-
-    const summary = summaries[requestId] || {
-      messageCount: 0,
-      latestSender: null,
-      latestMessageAt: null,
-      needsReply: false,
-    };
-    summary.messageCount += 1;
-
-    if (
-      !summary.latestMessageAt ||
-      !message.createdAt ||
-      String(message.createdAt).localeCompare(String(summary.latestMessageAt)) >= 0
-    ) {
-      summary.latestSender = message.sender;
-      summary.latestMessageAt = message.createdAt || null;
-      summary.needsReply = message.sender === 'patient';
-    }
-
-    summaries[requestId] = summary;
-  });
-
-  return summaries;
-}
-
 function truncateClinicalText(value, maxLength) {
   return String(value || '').trim().slice(0, maxLength);
 }
@@ -1833,7 +1781,7 @@ async function listCertificateMessagesSupabase(requestId) {
   const rows = await supabaseRequest(
     `request_events?request_id=eq.${encodeURIComponent(
       normalizedId
-    )}&event_type=in.(PATIENT_MESSAGE_SENT,DOCTOR_MESSAGE_SENT,MORE_INFO_REQUESTED)&select=event_type,payload,created_at&order=created_at.asc&limit=100`,
+    )}&event_type=in.(${CERTIFICATE_MESSAGE_EVENT_TYPES.join(',')})&select=event_type,payload,created_at&order=created_at.asc&limit=100`,
     {
       method: 'GET',
       prefer: 'return=representation',
@@ -1868,7 +1816,7 @@ async function getCertificateMessageSummariesSupabase(requestIds) {
       const page = await supabaseRequest(
         `request_events?request_id=in.${encodeURIComponent(
           inFilter
-        )}&event_type=in.(PATIENT_MESSAGE_SENT,DOCTOR_MESSAGE_SENT,MORE_INFO_REQUESTED)&select=request_id,event_type,payload,created_at&order=created_at.asc&limit=${pageSize}&offset=${offset}`,
+        )}&event_type=in.(${CERTIFICATE_MESSAGE_EVENT_TYPES.join(',')})&select=request_id,event_type,payload,created_at&order=created_at.asc&limit=${pageSize}&offset=${offset}`,
         {
           method: 'GET',
           prefer: 'return=representation',

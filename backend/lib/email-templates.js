@@ -287,17 +287,32 @@ export function renderDoctorPatientMessageEmail({ baseUrl, certId, patientEmail,
   };
 }
 
-export function renderPatientDoctorMessageEmail({ baseUrl, requestId, doctorName, message }) {
+export function renderPatientDoctorMessageEmail({
+  baseUrl,
+  requestId,
+  doctorName,
+  senderName,
+  senderType = 'doctor',
+  message,
+}) {
   const normalizedBaseUrl = String(baseUrl || '').replace(/\/$/, '');
   const patientPortalUrl = normalizedBaseUrl ? `${normalizedBaseUrl}/patient-login` : '/patient-login';
+  const fromCustomerSupport = senderType === 'support';
+  const displayName = fromCustomerSupport
+    ? 'Customer support'
+    : String(senderName || doctorName || 'Your doctor').trim();
+  const badge = fromCustomerSupport ? 'Customer Support' : 'Doctor Message';
+  const title = fromCustomerSupport
+    ? 'Customer support sent you a message'
+    : 'Your doctor sent you a message';
   const html = renderShell({
     baseUrl,
-    badge: 'Doctor Message',
-    title: 'Your doctor sent you a message',
+    badge,
+    title,
     subtitle: 'Open your patient portal to review the conversation and reply.',
     bodyHtml: `
       <p style="margin:0 0 10px;"><strong>Request ID:</strong> ${escapeHtml(requestId)}</p>
-      <p style="margin:0 0 10px;"><strong>From:</strong> ${escapeHtml(doctorName || 'Your doctor')}</p>
+      <p style="margin:0 0 10px;"><strong>From:</strong> ${escapeHtml(displayName)}</p>
       <p style="margin:0 0 8px;"><strong>Message:</strong></p>
       <p style="margin:0;padding:12px 14px;border:1px solid ${BRAND.border};border-radius:12px;background:#f6fafd;">${escapeHtml(message)}</p>
     `,
@@ -306,6 +321,6 @@ export function renderPatientDoctorMessageEmail({ baseUrl, requestId, doctorName
   });
   return {
     html,
-    text: `Doctor message for request ${requestId}\nFrom: ${doctorName || 'Your doctor'}\nMessage: ${message}\nOpen patient portal: ${patientPortalUrl}`,
+    text: `${fromCustomerSupport ? 'Customer support' : 'Doctor'} message for request ${requestId}\nFrom: ${displayName}\nMessage: ${message}\nOpen patient portal: ${patientPortalUrl}`,
   };
 }

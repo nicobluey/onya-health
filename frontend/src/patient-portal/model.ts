@@ -43,7 +43,7 @@ export interface PortalRequest {
   certificatePdfUrl?: string | null;
   messages?: Array<{
     id: string;
-    sender: 'patient' | 'doctor';
+    sender: 'patient' | 'doctor' | 'support';
     senderName: string;
     message: string;
     createdAt: string;

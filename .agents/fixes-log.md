@@ -1,5 +1,39 @@
 # Fixes Log
 
+## 2026-08-09 - Customer support replies in certificate conversations
+
+### Symptoms
+
+- The doctor review workspace could send patient updates only under a doctor identity.
+- Administrative delay updates required a doctor to intervene even though the doctor still needed visibility of the conversation.
+- The patient portal and notification email had no distinct customer-support sender state.
+
+### Root causes
+
+1. Certificate message events collapsed every non-patient message into the doctor sender type.
+2. The doctor reply API and UI hardcoded the clinician identity and did not accept a controlled reply mode.
+3. Queue reply summaries did not know that a support response also resolves a pending patient message.
+
+### Files changed
+
+- `backend/lib/certificate-messages.js`, `backend/lib/certificate-messages.test.js`
+  - centralize message event mapping, enforce the fixed `Customer support` identity, and keep queue reply summaries sender-aware.
+- `api/index.js`, `backend/server.js`, `backend/lib/storage.js`
+  - persist support replies as distinct audit events while retaining the authenticated portal account in `by`, include them in thread reads, and notify the patient.
+- `backend/lib/email-templates.js`
+  - gives support replies distinct patient-safe email subject, heading, sender, and plain-text copy.
+- `frontend/public/doctor/review/index.html`, `backend/doctor-portal/review.html`
+  - add the `Doctor` / `Customer support` reply selector and visually distinguish both staff identities in the shared thread.
+- `frontend/src/pages/PatientPortalPage.tsx`, `frontend/src/patient-portal/model.ts`
+  - render customer-support replies as a distinct care-team message and use care-team wording for patient replies.
+
+### Verification
+
+1. `npm test`, `npm run build`, `npm run lint`, Node syntax checks, and `git diff --check` pass.
+2. An isolated local doctor session sent a reply as Customer support, reloaded it from the API thread, and produced a mock patient email with the support identity and patient-portal link.
+3. Message-summary tests confirm a support response clears `Needs reply`, while the authenticated portal account remains recorded separately for audit accountability.
+4. The doctor review conversation and sender control passed visual checks at `1440x1000` and `390x844` with no horizontal overflow.
+
 ## 2026-08-08 - Durable doctor resets and accurate patient account checks
 
 ### Symptoms
