@@ -235,7 +235,7 @@ Verification:
 
 ### M10 - Customer Support Certificate Replies
 
-Status: completed locally on 2026-08-09; production validation pending.
+Status: completed and production-validated on 2026-08-09.
 
 Deliverables:
 
@@ -338,7 +338,9 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
 - Added a fixed `Customer support` reply identity alongside doctor replies in certificate conversations.
 - Support replies remain visible in the shared doctor/patient thread, retain the authenticated
   portal account in the audit event, notify the patient by email, and clear `Needs reply`.
-- Local unit, API, email, desktop, and 390 px visual checks passed; production deployment is pending.
+- Local unit, API, email, desktop, and 390 px visual checks passed.
+- Vercel deployed commit `ddddadb` from `main`; all required aliases returned `200`, served
+  the same support-enabled review page, and rejected unauthenticated support-message posts.
 
 2026-08-08:
 

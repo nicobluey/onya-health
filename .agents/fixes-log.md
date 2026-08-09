@@ -33,6 +33,7 @@
 2. An isolated local doctor session sent a reply as Customer support, reloaded it from the API thread, and produced a mock patient email with the support identity and patient-portal link.
 3. Message-summary tests confirm a support response clears `Needs reply`, while the authenticated portal account remains recorded separately for audit accountability.
 4. The doctor review conversation and sender control passed visual checks at `1440x1000` and `390x844` with no horizontal overflow.
+5. Vercel promoted commit `ddddadb` through the connected `main` CI/CD deployment. `supadoc.com.au`, `www.supadoc.com.au`, and `onya-health.vercel.app` returned `200`, served byte-identical support-enabled review pages, and rejected unauthenticated support-message posts with `401`.
 
 ## 2026-08-08 - Durable doctor resets and accurate patient account checks
 
