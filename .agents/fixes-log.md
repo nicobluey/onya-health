@@ -1370,4 +1370,9 @@ illustration where Stripe's fixed thumbnail size calls for a simple square brand
    `git diff --check` passed.
 5. Pre-release production timing confirmed the old Washington function path: patient bootstrap
    took 3.7s and doctor queue 2.0s, while direct indexed PostgreSQL execution remained sub-
-   millisecond. Post-deployment timing and alias validation are recorded after promotion.
+   millisecond. The promoted deployment runs in `hnd1`; warm live calls measured 349-471ms for
+   patient bootstrap, 261-320ms for the doctor queue, and 195-213ms for certificate detail.
+6. `supadoc.com.au`, `www.supadoc.com.au`, and `onya-health.vercel.app` served the current
+   deployment with `200` API health responses. Production API checks returned DOB/phone,
+   omitted retired dietitian data, and rejected missing DOB/phone with
+   `400 PATIENT_DETAILS_REQUIRED`.

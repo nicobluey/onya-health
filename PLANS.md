@@ -254,7 +254,7 @@ Verification:
 
 ### M11 - Required Patient Identity And Database Latency
 
-Status: implementation and production validation in progress on 2026-08-09.
+Status: completed and production-validated on 2026-08-09.
 
 Deliverables:
 
@@ -270,6 +270,8 @@ Verification:
 - Unit, build, lint, syntax, migration, local production-data smoke, and live API timing checks.
 - Production doctor review exposes DOB, age, and phone for populated records.
 - All required production aliases serve the promoted deployment.
+- Warm production calls are below 500ms for patient bootstrap, doctor queue, and doctor detail
+  in the validated sample; first cold calls remained below one second.
 
 ## Validation Commands
 
