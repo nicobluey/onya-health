@@ -346,7 +346,11 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
   numbers, and the clinician's uploaded signature when present.
 - Applied and verified `20260809_add_private_doctor_signatures.sql`. Unit, build, lint, PDF
   render/text, responsive portal, authenticated signature, and Unlimited-bypass API checks
-  passed locally; production deployment verification is pending.
+  passed locally.
+- Vercel deployed commit `643fbfe` from `main`; `supadoc.com.au`, `www.supadoc.com.au`,
+  and `onya-health.vercel.app` mapped to deployment `dpl_6jEg92TQk3jnSEw85bdnbNBPhyj3`.
+  Live health, approved-doctor profile/queue, protected signature, static doctor portal, and
+  one-page PDF-preview checks passed. Desktop and 390 px booking views had no overflow.
 - Added a fixed `Customer support` reply identity alongside doctor replies in certificate conversations.
 - Support replies remain visible in the shared doctor/patient thread, retain the authenticated
   portal account in the audit event, notify the patient by email, and clear `Needs reply`.

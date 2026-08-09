@@ -1298,5 +1298,15 @@ illustration where Stripe's fixed thumbnail size calls for a simple square brand
    the Account view contains no direct cancellation action.
 5. PDF tests, text extraction, and a rendered A4 inspection confirmed one page with DOB, age,
    provider number, signature, and verification content without overlap.
-6. Final repository validation and production alias/API checks are recorded in `PLANS.md` after
-   deployment.
+6. `npm test`, `npm run lint`, `npm run build`, production dependency audit, Node syntax checks,
+   mirrored doctor-page comparisons, and `git diff --check` passed.
+7. Vercel deployment `dpl_6jEg92TQk3jnSEw85bdnbNBPhyj3` became current on
+   `supadoc.com.au`, `www.supadoc.com.au`, and `onya-health.vercel.app`. All aliases returned
+   `200`, and the live health API reported Supabase storage and configured SMTP.
+8. A live approved-doctor token returned `200` for profile and queue, included a provider number,
+   returned authenticated `404` for the new signature route because no signature is currently on
+   that profile, and returned `401` without authentication.
+9. A non-mutating live PDF preview returned `200 application/pdf`; extraction confirmed one page
+   with date of birth, age at consultation, Medicare provider number, and authenticity verification.
+10. Live desktop and 390 px booking views had no horizontal overflow, and the deployed doctor
+    pages contained the provider/signature controls and queue redirect.
