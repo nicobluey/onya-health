@@ -34,6 +34,7 @@ import {
   upsertDoctorAccount,
 } from './lib/doctor-auth.js';
 import { calculateRisk } from './lib/risk.js';
+import { validateCertificatePatientDetails } from './lib/patient-details.js';
 import {
   certificateMatchesDoctorPatientFilters,
   parseDoctorPatientRequestFilters,
@@ -561,6 +562,21 @@ function validateCarerCertificateDetails(details) {
 }
 
 function doctorPayloadFromRequest(cert) {
+  const dob = cert?.certificateDraft?.dob || '';
+  let age = null;
+
+  if (dob) {
+    const birthday = new Date(dob);
+    if (!Number.isNaN(birthday.getTime())) {
+      const now = new Date();
+      age = now.getFullYear() - birthday.getFullYear();
+      const monthDiff = now.getMonth() - birthday.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < birthday.getDate())) {
+        age -= 1;
+      }
+    }
+  }
+
   return {
     id: cert.id,
     createdAt: cert.createdAt,
@@ -568,6 +584,9 @@ function doctorPayloadFromRequest(cert) {
     serviceType: cert.serviceType,
     patientName: cert.certificateDraft.fullName,
     patientEmail: cert.certificateDraft.email,
+    patientDob: dob,
+    patientAge: age,
+    patientPhone: cert.certificateDraft.phone || '',
     purpose: cert.certificateDraft.purpose,
     symptom: cert.certificateDraft.symptom,
     symptomVisibility: cert.certificateDraft.symptomVisibility || 'private',
@@ -647,6 +666,7 @@ async function requireDoctor(req, res) {
     sendJson(res, 403, { error: 'Doctor account is pending approval.' });
     return null;
   }
+  payload.profile = profile;
   return payload;
 }
 
@@ -1505,7 +1525,7 @@ async function markPaidFromStripeSession(session, trigger = 'stripe_event') {
         currency: session.currency || 'aud',
       },
     },
-  }));
+  }), { current });
 
   if (updated && isOpenForReview(updated.status)) {
     await appendAudit({
@@ -2130,12 +2150,16 @@ async function handleApi(req, res, url) {
 
   if (req.method === 'POST' && url.pathname === '/api/certificates') {
     const body = await parseJsonBody(req);
-    const patient = body.patient || {};
-
-    if (!patient.fullName || !patient.email) {
-      sendJson(res, 400, { error: 'fullName and email are required' });
+    const patientValidation = validateCertificatePatientDetails(body.patient);
+    if (!patientValidation.valid) {
+      sendJson(res, 400, {
+        error: `Patient details incomplete: ${patientValidation.errors.join(', ')}`,
+        code: 'PATIENT_DETAILS_REQUIRED',
+        details: patientValidation.errors,
+      });
       return;
     }
+    body.patient = patientValidation.patient;
 
     const risk = calculateRisk(body);
     const certificateId = crypto.randomUUID();
@@ -2180,7 +2204,17 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && url.pathname === '/api/checkout/session') {
     const body = await parseJsonBody(req);
     const requestedUiMode = body?.uiMode === 'embedded' ? 'embedded' : 'hosted';
-    const patient = body.patient || {};
+    const patientValidation = validateCertificatePatientDetails(body.patient);
+    if (!patientValidation.valid) {
+      sendJson(res, 400, {
+        error: `Patient details incomplete: ${patientValidation.errors.join(', ')}`,
+        code: 'PATIENT_DETAILS_REQUIRED',
+        details: patientValidation.errors,
+      });
+      return;
+    }
+    body.patient = patientValidation.patient;
+    const patient = body.patient;
     const certificateDraft = buildDraftCertificate(body);
     if (certificateDraft.includeCarerCertificate) {
       const carerValidation = validateCarerCertificateDetails(certificateDraft.carerCertificateDetails);
@@ -2207,11 +2241,6 @@ async function handleApi(req, res, url) {
       return;
     }
 
-    if (!patient.fullName || !patient.email) {
-      sendJson(res, 400, { error: 'fullName and email are required' });
-      return;
-    }
-
     const risk = calculateRisk(body);
     const pricing = stripePricingFromRequest(body);
     const normalizedPatientEmail = normalizeEmail(patient.email);
@@ -2220,8 +2249,7 @@ async function handleApi(req, res, url) {
       Boolean(patientAuth?.email) && normalizedPatientEmail === normalizeEmail(patientAuth.email);
 
     if (canUseSubscriptionBypass) {
-      const certificates = await listCertificates();
-      const billing = await resolvePatientBillingProfile(normalizedPatientEmail, certificates);
+      const billing = await resolvePatientBillingProfile(normalizedPatientEmail);
       if (billing.hasActiveUnlimited) {
         const certificateId = crypto.randomUUID();
         const verificationCode = buildCertificateVerificationCode(certificateId);
@@ -3841,7 +3869,7 @@ async function handleApi(req, res, url) {
     const doctor = await requireDoctor(req, res);
     if (!doctor) return;
 
-    const profile = await resolveDoctorProfile(doctor.email);
+    const profile = doctor.profile || (await resolveDoctorProfile(doctor.email));
     const signature = await getDoctorSignatureMetadata(doctor.email);
     sendJson(res, 200, {
       doctor: {
@@ -4211,14 +4239,16 @@ async function handleApi(req, res, url) {
     if (!doctor) return;
 
     const certId = decodeURIComponent(certificateIdMatch[1]);
-    const certificate = await getCertificateById(certId);
+    const [certificate, messages] = await Promise.all([
+      getCertificateById(certId),
+      listCertificateMessages(certId),
+    ]);
 
     if (!certificate) {
       sendJson(res, 404, { error: 'Certificate not found' });
       return;
     }
 
-    const messages = await listCertificateMessages(certId);
     sendJson(res, 200, {
       doctor: doctor.email,
       certificate: {
@@ -4233,7 +4263,7 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && doctorMessageMatch) {
     const doctor = await requireDoctor(req, res);
     if (!doctor) return;
-    const doctorProfile = await resolveDoctorProfile(doctor.email);
+    const doctorProfile = doctor.profile || (await resolveDoctorProfile(doctor.email));
     const doctorName = resolveDoctorDisplayName(doctorProfile, doctor.email);
 
     const certId = decodeURIComponent(doctorMessageMatch[1]);
@@ -4345,7 +4375,7 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && previewMatch) {
     const doctor = await requireDoctor(req, res);
     if (!doctor) return;
-    const doctorProfile = await resolveDoctorProfile(doctor.email);
+    const doctorProfile = doctor.profile || (await resolveDoctorProfile(doctor.email));
     if (!doctorProfile?.providerType || !doctorProfile?.registrationNumber || !doctorProfile?.providerNumber) {
       sendJson(res, 400, {
         error: 'Please complete provider type, registration number, and provider number in your doctor profile first.',
@@ -4414,7 +4444,7 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && requestMoreInfoMatch) {
     const doctor = await requireDoctor(req, res);
     if (!doctor) return;
-    const doctorProfile = await resolveDoctorProfile(doctor.email);
+    const doctorProfile = doctor.profile || (await resolveDoctorProfile(doctor.email));
     const reviewerName = resolveDoctorDisplayName(doctorProfile, doctor.email);
 
     const certId = decodeURIComponent(requestMoreInfoMatch[1]);
@@ -4454,7 +4484,7 @@ async function handleApi(req, res, url) {
         at: new Date().toISOString(),
         notes,
       },
-    }));
+    }), { current: currentCertificate });
 
     if (!updated) {
       sendJson(res, 404, { error: 'Certificate not found' });
@@ -4486,7 +4516,7 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && decisionMatch) {
     const doctor = await requireDoctor(req, res);
     if (!doctor) return;
-    const doctorProfile = await resolveDoctorProfile(doctor.email);
+    const doctorProfile = doctor.profile || (await resolveDoctorProfile(doctor.email));
     if (!doctorProfile?.providerType || !doctorProfile?.registrationNumber || !doctorProfile?.providerNumber) {
       sendJson(res, 400, {
         error: 'Please complete provider type, registration number, and provider number in your doctor profile first.',
@@ -4562,7 +4592,7 @@ async function handleApi(req, res, url) {
           ...(decision === 'approved' ? { certificateStatement } : {}),
         },
       };
-    });
+    }, { current: currentCertificate });
 
     if (!updated) {
       sendJson(res, 404, { error: 'Certificate not found' });

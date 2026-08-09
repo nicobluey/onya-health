@@ -1,5 +1,7 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
+  "regions": ["hnd1"],
   "headers": [
     {
       "source": "/(.*)\\.(webp|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|otf)",

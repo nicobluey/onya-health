@@ -64,7 +64,6 @@ For frontend work, usually inspect:
 - `frontend/src/pages/*`
 - `frontend/src/components/*`
 - `frontend/src/consult-flow/*`
-- `frontend/src/weight-loss-reset/*`
 
 For backend/API work, usually inspect:
 
@@ -78,7 +77,7 @@ For backend/API work, usually inspect:
 
 ## Project Context
 
-Onya Health is an Australian telehealth platform for online medical-certificate consults, patient portal access, practitioner review, and nutrition/weight-loss support.
+Onya Health is an Australian telehealth platform for online medical-certificate consults, patient portal access, and practitioner review.
 
 Active product surfaces:
 
@@ -91,11 +90,15 @@ Active product surfaces:
 
 Core integrations:
 
-- Supabase for production patient, dietitian, certificate, billing, and generated meal-plan data when configured.
+- Supabase for production patient, practitioner, certificate, and billing data when configured.
 - Local JSON storage under `backend/data/` as a fallback for development.
 - Stripe for checkout and billing.
 - Resend or SMTP-compatible email dispatch, with mock outbox fallback.
-- OpenAI for doctor-note drafting, generated meal-plan support, and image-generation scripts when configured.
+- OpenAI for doctor-note drafting and image-generation scripts when configured.
+
+The former dietitian, meal-plan, nutritionist, and weight-loss-reset surfaces are retired. Their
+historical source and migrations may remain for audit/history, but active patient requests and
+API bootstrap payloads must not query or expose dietitian data.
 
 ## Workflow Selection
 
@@ -117,7 +120,6 @@ Keep frontend changes simple and consistent:
 - `frontend/src/components/` - shared sections and UI primitives.
 - `frontend/src/consult-flow/` - booking flow state, service config, pricing, and desktop/mobile views.
 - `frontend/src/patient-portal/` - patient portal shared model and home components.
-- `frontend/src/weight-loss-reset/` - onboarding, meal planning, dashboard, recipe catalog, and local state helpers.
 - `frontend/src/blogs/` - Markdown article content and post metadata.
 - `frontend/src/index.css` - global Onya tokens, utilities, and major responsive rules.
 
@@ -133,7 +135,6 @@ API and backend source is intentionally compact:
 - `backend/lib/email*.js` - email transport and templates.
 - `backend/lib/*auth*.js` - patient and doctor auth helpers.
 - `backend/lib/pdf.js` - certificate PDF generation.
-- `backend/lib/meal-plan-ai.js` - AI meal-plan support.
 - `supabase/migrations/` - schema changes that must be applied before relying on new DB fields.
 
 When touching auth, payment, profile, or certificate workflow code, preserve existing API contracts unless the UI and docs are updated in the same change.
@@ -144,7 +145,6 @@ Never imply:
 
 - medical certificates are instant, automatic, or guaranteed;
 - a clinician will approve every request;
-- nutrition plans are medical advice or clinically safe for all users without review;
 - patient records can be deleted immediately in a way that conflicts with legal retention;
 - doctor/practitioner accounts can be self-approved; approval must come from the configured administrator or an already approved doctor.
 
@@ -155,7 +155,7 @@ Preferred wording:
 - `Issued where clinically appropriate`
 - `A clinician reviews your information before an outcome is provided`
 
-Any high-risk nutrition, auth, payment, or certificate workflow must fail closed with clear user-safe copy and server-side validation.
+Any high-risk auth, payment, or certificate workflow must fail closed with clear user-safe copy and server-side validation.
 
 ## Documentation Rules
 
@@ -201,3 +201,6 @@ The team currently has had both `onya-health` and `repo` Vercel projects connect
 same GitHub repository. Treat `onya-health` as the production project because it owns the
 public domains. Keep Onya Health mail settings on the existing Onya Health domain unless
 the mail system is explicitly migrated.
+
+Production Supabase is hosted in Tokyo. Keep Vercel Functions in `hnd1` unless the database
+region changes; cross-region function/database calls materially slow every authenticated API.

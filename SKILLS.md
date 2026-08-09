@@ -56,17 +56,6 @@ Use when changing practitioner account creation, login, password reset, queue, r
 - Doctor profile must support AHPRA/provider metadata and allow provider-number updates.
 - QA the static pages under `frontend/public/doctor` plus API routes.
 
-## Nutrition And Meal-Plan Safety Pass
-
-Use when changing weight-loss reset, meal plan generation, recipe catalog, or dietitian dashboard behavior.
-
-- Read `AGENTS.md`, `PLANS.md`, `.agents/README.md`, `backend/README.md`, and relevant files in `frontend/src/weight-loss-reset`.
-- Calculate and validate calories/macros deterministically where possible.
-- Enforce minimum daily calorie guardrails and serving count consistency.
-- Validate ingredient/description/step consistency before showing a generated plan.
-- Show clear dietitian-review/disclaimer copy for clinically sensitive plans.
-- Test edge cases, including high body weight and low/high activity levels.
-
 ## SEO And Crawlability Pass
 
 Use when changing public content, metadata, robots, sitemap, or static crawl support.

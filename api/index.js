@@ -32,6 +32,7 @@ import {
   validateDoctorPassword,
 } from '../backend/lib/doctor-auth.js';
 import { calculateRisk } from '../backend/lib/risk.js';
+import { validateCertificatePatientDetails } from '../backend/lib/patient-details.js';
 import {
   certificateMatchesDoctorPatientFilters,
   parseDoctorPatientRequestFilters,
@@ -151,10 +152,6 @@ const PATIENT_EMAIL_CHANGE_TTL_MS = Math.max(
   1000 * 60 * 5,
   Number(process.env.PATIENT_EMAIL_CHANGE_TTL_MS || 1000 * 60 * 30)
 );
-const PATIENT_PROFILE_CACHE_TTL_MS = Math.max(
-  1000 * 10,
-  Number(process.env.PATIENT_PROFILE_CACHE_TTL_MS || 1000 * 60)
-);
 const MEAL_PLAN_IMAGE_PROXY_SIGNING_SECRET =
   process.env.MEAL_PLAN_IMAGE_PROXY_SIGNING_SECRET ||
   PATIENT_PASSWORD_RESET_SIGNING_SECRET ||
@@ -170,8 +167,6 @@ const OPENAI_TTS_ENDPOINT = 'https://api.openai.com/v1/audio/speech';
 const OPENAI_TTS_MODEL = String(process.env.OPENAI_TTS_MODEL || 'gpt-4o-mini-tts').trim() || 'gpt-4o-mini-tts';
 const OPENAI_TTS_RESPONSE_FORMAT = 'mp3';
 const OPENAI_TTS_MAX_SCRIPT_CHARS = Math.max(900, Number(process.env.OPENAI_TTS_MAX_SCRIPT_CHARS || 3200));
-const DEFAULT_DIETITIAN_ID = '9f1f2a68-3b9c-4f2f-8da9-3e7e1c7f1c11';
-const DEFAULT_DIETITIAN_NAME = 'Felicity';
 const PATIENT_SUPABASE_RESET_METADATA_KEY = 'onya_patient_password_reset';
 const DOCTOR_SUPABASE_RESET_METADATA_KEY = 'onya_doctor_password_reset';
 const DOCTOR_PASSWORD_RESET_TTL_MS = Math.max(
@@ -201,7 +196,6 @@ const checkoutTimingWindows = {
   stripe: [],
   persistence: [],
 };
-const patientProfileCache = new Map();
 let mealPlanAiModulePromise = null;
 
 function loadMealPlanAiModule() {
@@ -1691,6 +1685,7 @@ async function requireDoctor(req, res) {
     sendJson(res, 403, { error: 'Doctor account is pending approval.' });
     return null;
   }
+  payload.profile = profile;
   return payload;
 }
 
@@ -2053,6 +2048,18 @@ async function resolveDoctorPatientLookup(lookupKey) {
   return null;
 }
 
+function normalizePatientAddress(value) {
+  if (typeof value === 'string') return value.trim();
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return '';
+
+  const formatted = String(value.formatted || value.formattedAddress || value.display || '').trim();
+  if (formatted) return formatted;
+  return [value.line1, value.line2, value.suburb, value.state, value.postcode, value.country]
+    .map((part) => String(part || '').trim())
+    .filter(Boolean)
+    .join(', ');
+}
+
 function buildPatientIdentity({ email, latestCertificate, account }) {
   const draft = latestCertificate?.certificateDraft || {};
   const fullName = String(account?.fullName || draft.fullName || '').trim();
@@ -2064,7 +2071,7 @@ function buildPatientIdentity({ email, latestCertificate, account }) {
     email: normalizeEmail(email || account?.email || draft.email || ''),
     dob: String(account?.dob || draft.dob || '').trim(),
     phone: String(account?.phone || draft.phone || '').trim(),
-    address: String(account?.address || draft.address || '').trim(),
+    address: normalizePatientAddress(account?.address || draft.address || ''),
     profilePhotoPath: normalizeStoragePath(account?.profilePhotoPath || ''),
     profilePhotoUrl: buildPublicStorageUrl(normalizeStoragePath(account?.profilePhotoPath || ''), PROFILE_IMAGE_BUCKET),
   };
@@ -2182,148 +2189,10 @@ async function uploadPatientProfilePhotoDataUrl({ email, dataUrl, userId = '' })
   };
 }
 
-function normalizeDietitianProfile(row) {
-  if (!row || typeof row !== 'object') return null;
-  const fullName = String(row.full_name || '').trim();
-  if (!fullName) return null;
-  const profilePhotoPath = normalizeStoragePath(row.profile_photo_path);
-  return {
-    id: String(row.id || '').trim(),
-    fullName,
-    phone: String(row.phone || '').trim(),
-    credentials: String(row.credentials || '').trim(),
-    bio: String(row.bio || '').trim(),
-    profilePhotoPath,
-    profilePhotoUrl: buildPublicStorageUrl(profilePhotoPath),
-  };
-}
-
-function buildDietitianFallback() {
-  const fallbackPath = `dietitians/felicity-profile.webp`;
-  return {
-    id: DEFAULT_DIETITIAN_ID,
-    fullName: DEFAULT_DIETITIAN_NAME,
-    phone: '',
-    credentials: 'Accredited Dietitian',
-    bio: 'Practical, kind, realistic support.',
-    profilePhotoPath: fallbackPath,
-    profilePhotoUrl: buildPublicStorageUrl(fallbackPath),
-  };
-}
-
-function getCachedPatientProfile(email) {
-  const key = normalizeEmail(email);
-  if (!key) return null;
-  const cached = patientProfileCache.get(key);
-  if (!cached) return null;
-  if (cached.expiresAt <= Date.now()) {
-    patientProfileCache.delete(key);
-    return null;
-  }
-  return cached.value || null;
-}
-
-function setCachedPatientProfile(email, value) {
-  const key = normalizeEmail(email);
-  if (!key || !value) return;
-  patientProfileCache.set(key, {
-    expiresAt: Date.now() + PATIENT_PROFILE_CACHE_TTL_MS,
-    value,
-  });
-}
-
 async function resolvePatientProfileByEmail({ email, latestCertificate, account }) {
-  const fallbackPatient = buildPatientIdentity({ email, latestCertificate, account });
-  const resolvedEmail = normalizeEmail(email || fallbackPatient.email || '');
-  const config = getSupabaseConfig();
-  if (!config.enabled || !resolvedEmail) {
-    return {
-      patient: fallbackPatient,
-      dietitian: buildDietitianFallback(),
-    };
-  }
-
-  const cachedProfile = getCachedPatientProfile(resolvedEmail);
-  if (cachedProfile) {
-    return {
-      patient: {
-        ...fallbackPatient,
-        ...(cachedProfile.patient || {}),
-        email: resolvedEmail,
-      },
-      dietitian: cachedProfile.dietitian || buildDietitianFallback(),
-    };
-  }
-
-  try {
-    const [patientRows, defaultDietitianRows] = await Promise.all([
-      supabaseRestRequest(
-        config,
-        `patients?email=eq.${encodeURIComponent(resolvedEmail)}&select=id,full_name,phone,address,profile_photo_path&limit=1`,
-        {
-          method: 'GET',
-          prefer: 'return=representation',
-        }
-      ),
-      supabaseRestRequest(
-        config,
-        `dietitians?is_active=eq.true&select=id,full_name,phone,credentials,bio,profile_photo_path&order=created_at.asc&limit=1`,
-        {
-          method: 'GET',
-          prefer: 'return=representation',
-        }
-      ),
-    ]);
-
-    const patientRow = patientRows?.[0] || null;
-    const fallbackDietitian = normalizeDietitianProfile(defaultDietitianRows?.[0] || null) || buildDietitianFallback();
-    if (!patientRow?.id) {
-      const fallbackResult = {
-        patient: fallbackPatient,
-        dietitian: fallbackDietitian,
-      };
-      setCachedPatientProfile(resolvedEmail, fallbackResult);
-      return fallbackResult;
-    }
-
-    const accountFullName = String(account?.fullName || '').trim();
-    const accountDob = String(account?.dob || '').trim();
-    const accountPhone = String(account?.phone || '').trim();
-    const accountAddress = String(account?.address || '').trim();
-    const accountPhotoPath = normalizeStoragePath(account?.profilePhotoPath || '');
-    const patientFullName = String(patientRow.full_name || accountFullName || fallbackPatient.fullName).trim();
-    const patientNameParts = splitFullName(patientFullName);
-    const patientPhone = String(patientRow.phone || accountPhone || fallbackPatient.phone).trim();
-    const patientDob = String(accountDob || fallbackPatient.dob).trim();
-    const patientAddress = String(patientRow.address || accountAddress || fallbackPatient.address || '').trim();
-    const patientPhotoPath = normalizeStoragePath(patientRow.profile_photo_path || accountPhotoPath);
-
-    const result = {
-      patient: {
-        fullName: patientFullName,
-        firstName: patientNameParts.firstName,
-        lastName: patientNameParts.lastName,
-        email: resolvedEmail,
-        dob: patientDob,
-        phone: patientPhone,
-        address: patientAddress,
-        profilePhotoPath: patientPhotoPath,
-        profilePhotoUrl: buildPublicStorageUrl(patientPhotoPath, PROFILE_IMAGE_BUCKET),
-      },
-      dietitian: fallbackDietitian,
-    };
-    setCachedPatientProfile(resolvedEmail, result);
-    return result;
-  } catch (errorObject) {
-    error('patient.profile.resolve_failed', {
-      email: resolvedEmail,
-      message: errorObject?.message || String(errorObject),
-    });
-    return {
-      patient: fallbackPatient,
-      dietitian: buildDietitianFallback(),
-    };
-  }
+  return {
+    patient: buildPatientIdentity({ email, latestCertificate, account }),
+  };
 }
 
 function patientProfileFromCertificate(certificate) {
@@ -2415,6 +2284,7 @@ function doctorPayloadFromRequest(cert) {
     patientEmail: cert.certificateDraft.email,
     patientDob: dob,
     patientAge: age,
+    patientPhone: cert.certificateDraft.phone || '',
     purpose: cert.certificateDraft.purpose,
     symptom: cert.certificateDraft.symptom,
     symptomVisibility: cert.certificateDraft.symptomVisibility || 'private',
@@ -3376,7 +3246,7 @@ async function migratePatientCertificateEmailReferences({ currentEmail, nextEmai
         },
         rawSubmission: nextRawSubmission,
       };
-    });
+    }, { current: certificate });
     if (migrated) migratedCount += 1;
   }
 
@@ -3751,7 +3621,7 @@ async function markPaidFromStripeSession(session, trigger, req) {
         currency: session.currency || 'aud',
       },
     },
-  }));
+  }), { current });
 
   if (updated && isOpenForReview(updated.status)) {
     await appendAudit({
@@ -4271,60 +4141,61 @@ async function findSupabasePatientUserByEmail(email) {
   const normalized = normalizeEmail(email);
   if (!normalized) return null;
 
-  try {
-    const patientRows = await supabaseRestRequest(
-      config,
-      `patients?email=eq.${encodeURIComponent(normalized)}&select=id&limit=1`,
-      {
-        method: 'GET',
-        prefer: 'return=representation',
-      }
-    );
-    const patientId = String(patientRows?.[0]?.id || '').trim();
-    if (patientId) {
-      const user = await getSupabaseAuthUserById(config, patientId);
-      if (user && userHasPatientRole(user)) return user;
+  const patientRows = await supabaseRestRequest(
+    config,
+    `patients?email=eq.${encodeURIComponent(normalized)}&select=id&limit=1`,
+    {
+      method: 'GET',
+      prefer: 'return=representation',
     }
-  } catch {
-    // Fall through to the broader lookup.
-  }
+  );
+  const patientId = String(patientRows?.[0]?.id || '').trim();
+  if (!patientId) return null;
 
-  const users = await listSupabaseAuthUsers(config);
-  return users.find((entry) => normalizeEmail(entry?.email) === normalized && userHasPatientRole(entry)) || null;
+  const user = await getSupabaseAuthUserById(config, patientId);
+  return user && userHasPatientRole(user) ? user : null;
 }
 
 async function findSupabasePatientByEmail(email) {
   const normalizedEmail = normalizeEmail(email);
-  const match = await findSupabasePatientUserByEmail(normalizedEmail);
-  if (!match) return null;
-
-  const account = {
-    id: match.id || null,
-    ...toPatientAccountFromSupabaseUser(match, normalizedEmail),
-  };
   const config = getSupabaseConfig();
-  if (!config.enabled || !account?.id) return account;
+  if (!config.enabled || !normalizedEmail) return null;
 
-  try {
-    const rows = await supabaseRestRequest(
-      config,
-      `patients?id=eq.${encodeURIComponent(account.id)}&select=address,profile_photo_path&limit=1`,
-      {
-        method: 'GET',
-        prefer: 'return=representation',
-      }
-    );
-    const row = rows?.[0] || null;
-    if (!row) return account;
-    const profilePhotoPath = normalizeStoragePath(row.profile_photo_path || account.profilePhotoPath || '');
-    return {
-      ...account,
-      address: String(row.address || account.address || '').trim(),
-      profilePhotoPath,
-    };
-  } catch {
-    return account;
-  }
+  const rows = await supabaseRestRequest(
+    config,
+    `patients?email=eq.${encodeURIComponent(
+      normalizedEmail
+    )}&select=id,email,full_name,phone,address,profile_photo_path,created_at,updated_at,profiles(first_name,last_name,phone,dob,role)&limit=1`,
+    {
+      method: 'GET',
+      prefer: 'return=representation',
+    }
+  );
+  const row = rows?.[0] || null;
+  if (!row?.id) return null;
+
+  const profile = Array.isArray(row.profiles) ? row.profiles[0] || null : row.profiles || null;
+  const role = String(profile?.role || 'patient').trim().toLowerCase();
+  if (['provider', 'doctor', 'admin'].includes(role)) return null;
+
+  const fullName = String(
+    row.full_name || joinName(profile?.first_name, profile?.last_name) || ''
+  ).trim();
+  return {
+    id: String(row.id).trim(),
+    email: normalizeEmail(row.email || normalizedEmail),
+    fullName,
+    dob: String(profile?.dob || '').trim(),
+    phone: String(row.phone || profile?.phone || '').trim(),
+    address: normalizePatientAddress(row.address),
+    profilePhotoPath: normalizeStoragePath(row.profile_photo_path || ''),
+    source: 'supabase',
+    createdAt: String(row.created_at || ''),
+    updatedAt: String(row.updated_at || ''),
+    lastLoginAt: '',
+    lastPasswordResetAt: '',
+    hasPassword: true,
+  };
 }
 
 async function createPatientAccountViaSupabase({
@@ -4831,14 +4702,19 @@ export default async function handler(req, res) {
       let checkoutCertificateId = null;
 
       try {
-        if (!isStripeEnabled()) {
-          sendJson(res, 500, { error: 'Stripe is not configured on the server' });
-          return;
-        }
-
         const body = await parseJsonBody(req);
         const requestedUiMode = body?.uiMode === 'embedded' ? 'embedded' : 'hosted';
-        const patient = body?.patient || {};
+        const patientValidation = validateCertificatePatientDetails(body?.patient);
+        if (!patientValidation.valid) {
+          sendJson(res, 400, {
+            error: `Patient details incomplete: ${patientValidation.errors.join(', ')}`,
+            code: 'PATIENT_DETAILS_REQUIRED',
+            details: patientValidation.errors,
+          });
+          return;
+        }
+        body.patient = patientValidation.patient;
+        const patient = body.patient;
         const certificateDraft = buildDraftCertificate(body);
         if (certificateDraft.includeCarerCertificate) {
           const carerValidation = validateCarerCertificateDetails(certificateDraft.carerCertificateDetails);
@@ -4860,8 +4736,8 @@ export default async function handler(req, res) {
           carerCertificateDetails: certificateDraft.carerCertificateDetails,
         };
 
-        if (!patient.fullName || !patient.email) {
-          sendJson(res, 400, { error: 'fullName and email are required' });
+        if (!isStripeEnabled()) {
+          sendJson(res, 500, { error: 'Stripe is not configured on the server' });
           return;
         }
 
@@ -4874,8 +4750,7 @@ export default async function handler(req, res) {
 
         if (canUseSubscriptionBypass) {
           const bypassLookupStartedAt = Date.now();
-          const certificates = await listCertificates();
-          const billing = await resolvePatientBillingProfile(normalizedPatientEmail, certificates);
+          const billing = await resolvePatientBillingProfile(normalizedPatientEmail);
           const bypassLookupDurationMs = Date.now() - bypassLookupStartedAt;
 
           if (billing.hasActiveUnlimited) {
@@ -5339,7 +5214,6 @@ export default async function handler(req, res) {
         token: patientToken,
         patientEmail: expectedEmail,
         patient: profilePayload.patient,
-        dietitian: profilePayload.dietitian,
       });
       info('patient.checkout_account_setup.completed', {
         email: expectedEmail,
@@ -5445,14 +5319,12 @@ export default async function handler(req, res) {
           latestCertificate: null,
           account: account || null,
         }),
-        dietitian: buildDietitianFallback(),
       };
 
       sendJson(res, 200, {
         ok: true,
         token: patientToken,
         patient: profilePayload.patient,
-        dietitian: profilePayload.dietitian,
       });
       return;
     }
@@ -5509,7 +5381,6 @@ export default async function handler(req, res) {
           profilePhotoPath: normalizeStoragePath(account?.profilePhotoPath || ''),
           profilePhotoUrl: buildPublicStorageUrl(normalizeStoragePath(account?.profilePhotoPath || ''), PROFILE_IMAGE_BUCKET),
         },
-        dietitian: buildDietitianFallback(),
       });
       info('patient.login.success', {
         email,
@@ -5614,7 +5485,6 @@ export default async function handler(req, res) {
       sendJson(res, 201, {
         token,
         patient: profilePayload.patient,
-        dietitian: profilePayload.dietitian,
       });
       info('patient.register.success', { email });
       return;
@@ -5908,7 +5778,6 @@ export default async function handler(req, res) {
         sendJson(res, 200, {
           token: patientToken,
           patient: profilePayload.patient,
-          dietitian: profilePayload.dietitian,
         });
         info('patient.password_reset.completed', { email });
         return;
@@ -5959,7 +5828,6 @@ export default async function handler(req, res) {
       sendJson(res, 200, {
         token: patientToken,
         patient: profilePayload.patient,
-        dietitian: profilePayload.dietitian,
       });
       info('patient.password_reset.completed', { email });
       return;
@@ -5995,7 +5863,6 @@ export default async function handler(req, res) {
 
       sendJson(res, 200, {
         patient: profilePayload.patient,
-        dietitian: profilePayload.dietitian,
         billing: snapshot.billing,
         queueCount: snapshot.queueCount,
         latestRequest: snapshot.latest ? patientSummaryFromCertificate(snapshot.latest) : null,
@@ -6048,7 +5915,6 @@ export default async function handler(req, res) {
 
       sendJson(res, 200, {
         patient: profilePayload.patient,
-        dietitian: profilePayload.dietitian,
         billing: snapshot.billing,
         queueCount: snapshot.queueCount,
         latestRequest: snapshot.latest ? patientSummaryFromCertificate(snapshot.latest) : null,
@@ -6178,7 +6044,6 @@ export default async function handler(req, res) {
           ok: true,
           token: issuePatientToken(nextEmail),
           patient: profilePayload.patient,
-          dietitian: profilePayload.dietitian,
           alreadyApplied: true,
         });
         return;
@@ -6248,7 +6113,6 @@ export default async function handler(req, res) {
         ok: true,
         token: issuePatientToken(nextEmail),
         patient: profilePayload.patient,
-        dietitian: profilePayload.dietitian,
         migratedCertificates,
       });
       return;
@@ -6352,7 +6216,6 @@ export default async function handler(req, res) {
       sendJson(res, 200, {
         ok: true,
         patient: profilePayload.patient,
-        dietitian: profilePayload.dietitian,
         token: null,
       });
       return;
@@ -7769,7 +7632,7 @@ export default async function handler(req, res) {
       const doctor = await requireDoctor(req, res);
       if (!doctor) return;
 
-      const profile = await resolveDoctorProfile(doctor.email);
+      const profile = doctor.profile || (await resolveDoctorProfile(doctor.email));
       const signature = await getDoctorSignatureMetadata(doctor.email);
       sendJson(res, 200, {
         doctor: {
@@ -8210,13 +8073,15 @@ export default async function handler(req, res) {
       if (!doctor) return;
 
       const certId = decodeURIComponent(segments[2]);
-      const certificate = await getCertificateById(certId);
+      const [certificate, messages] = await Promise.all([
+        getCertificateById(certId),
+        listCertificateMessages(certId),
+      ]);
       if (!certificate) {
         sendJson(res, 404, { error: 'Certificate not found' });
         return;
       }
 
-      const messages = await listCertificateMessages(certId);
       sendJson(res, 200, {
         doctor: doctor.email,
         certificate: {
@@ -8230,7 +8095,7 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && segments.length === 4 && segments[0] === 'doctor' && segments[1] === 'certificates' && segments[3] === 'message') {
       const doctor = await requireDoctor(req, res);
       if (!doctor) return;
-      const doctorProfile = await resolveDoctorProfile(doctor.email);
+      const doctorProfile = doctor.profile || (await resolveDoctorProfile(doctor.email));
       const doctorName = resolveDoctorDisplayName(doctorProfile, doctor.email);
 
       const certId = decodeURIComponent(segments[2]);
@@ -8320,7 +8185,7 @@ export default async function handler(req, res) {
             assignedAt: new Date().toISOString(),
           },
         },
-      }));
+      }), { current });
 
       await appendAudit({
         type: 'CERTIFICATE_ASSIGNED',
@@ -8364,7 +8229,7 @@ export default async function handler(req, res) {
             closedAt: new Date().toISOString(),
           },
         },
-      }));
+      }), { current });
 
       await appendAudit({
         type: 'CERTIFICATE_CLOSED',
@@ -8424,7 +8289,7 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && segments.length === 4 && segments[0] === 'doctor' && segments[1] === 'certificates' && segments[3] === 'request-more-info') {
       const doctor = await requireDoctor(req, res);
       if (!doctor) return;
-      const doctorProfile = await resolveDoctorProfile(doctor.email);
+      const doctorProfile = doctor.profile || (await resolveDoctorProfile(doctor.email));
       const reviewerName = resolveDoctorDisplayName(doctorProfile, doctor.email);
 
       const certId = decodeURIComponent(segments[2]);
@@ -8464,7 +8329,7 @@ export default async function handler(req, res) {
           at: new Date().toISOString(),
           notes,
         },
-      }));
+      }), { current });
 
       await appendAudit({
         type: 'MORE_INFO_REQUESTED',
@@ -8486,7 +8351,7 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && segments.length === 4 && segments[0] === 'doctor' && segments[1] === 'certificates' && segments[3] === 'pdf-preview') {
       const doctor = await requireDoctor(req, res);
       if (!doctor) return;
-      const doctorProfile = await resolveDoctorProfile(doctor.email);
+      const doctorProfile = doctor.profile || (await resolveDoctorProfile(doctor.email));
       if (!doctorProfile?.providerType || !doctorProfile?.registrationNumber || !doctorProfile?.providerNumber) {
         sendJson(res, 400, {
           error: 'Please complete provider type, registration number, and provider number in your doctor profile first.',
@@ -8548,7 +8413,7 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && segments.length === 4 && segments[0] === 'doctor' && segments[1] === 'certificates' && segments[3] === 'decision') {
       const doctor = await requireDoctor(req, res);
       if (!doctor) return;
-      const doctorProfile = await resolveDoctorProfile(doctor.email);
+      const doctorProfile = doctor.profile || (await resolveDoctorProfile(doctor.email));
       if (!doctorProfile?.providerType || !doctorProfile?.registrationNumber || !doctorProfile?.providerNumber) {
         sendJson(res, 400, {
           error: 'Please complete provider type, registration number, and provider number in your doctor profile first.',
@@ -8623,7 +8488,7 @@ export default async function handler(req, res) {
             ...(decision === 'approved' ? { certificateStatement } : {}),
           },
         };
-      });
+      }, { current });
 
       if (updated.status !== decision) {
         sendJson(res, 409, {

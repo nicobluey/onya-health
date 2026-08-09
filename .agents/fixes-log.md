@@ -1310,3 +1310,64 @@ illustration where Stripe's fixed thumbnail size calls for a simple square brand
    with date of birth, age at consultation, Medicare provider number, and authenticity verification.
 10. Live desktop and 390 px booking views had no horizontal overflow, and the deployed doctor
     pages contained the provider/signature controls and queue redirect.
+
+## 2026-08-09 - Persist required patient identity and remove cross-region API latency
+
+### Symptoms
+
+- Medical-certificate requests could reach checkout without server-enforced date of birth or
+  phone validation.
+- The doctor review showed `-` for DOB/age and did not show phone, even when those values had
+  been entered and were present on the patient profile.
+- Patient login/bootstrap and doctor queue/detail actions regularly took 2-4 seconds.
+- Patient bootstrap still queried and returned a dietitian even though that product is retired.
+
+### Root causes
+
+1. The browser form required DOB and phone, but both certificate API entry points only required
+   name and email.
+2. Production `medical_certificate_requests` lacked `patient_dob`, `patient_phone`,
+   `patient_address`, and `raw_submission`. Storage responded by retrying requests once per
+   missing column and silently dropping those values on insert.
+3. Historical patient identity was split between `patients` and `profiles`, while bootstrap
+   performed an Auth admin scan and still preferred incomplete Auth metadata.
+4. Vercel Functions used the default Washington region (`iad1`) while Supabase is in Tokyo,
+   adding a trans-Pacific round trip to every sequential database call.
+5. The retired dietitian resolver added another database query and response field to patient
+   bootstrap.
+
+### Files/areas changed
+
+- `backend/lib/patient-details.js`, `api/index.js`, `backend/server.js`
+  - add shared server-side patient identity validation and controlled `400` errors;
+  - hydrate patients directly from joined `patients`/`profiles` rows;
+  - remove active dietitian lookup and payload fields;
+  - parallelize independent doctor detail reads and reuse resolved profiles/current requests.
+- `backend/lib/storage.js`
+  - persist the complete identity/raw payload without missing-column retry loops;
+  - query certificates once using the current schema;
+  - avoid redundant read-after-write and duplicate request reads.
+- `supabase/migrations/20260809_capture_medcert_patient_identity.sql`
+  - add and backfill request identity/raw fields, repair empty patient-directory phone values,
+    and add patient-email/phone indexes.
+- `frontend/public/doctor/review/index.html`, `backend/doctor-portal/review.html`
+  - show the captured phone number beside DOB and age in production and local portals.
+- `vercel.json`
+  - run production functions in Tokyo (`hnd1`) beside Supabase.
+- `AGENTS.md`, `PLANS.md`, `SKILLS.md`, `.agents/README.md`
+  - record the retired dietitian surface and region/data-contract requirements.
+
+### Verification
+
+1. The production migration added all four columns and both indexes. All 85 historical medical
+   requests received a structured raw payload; backfill checks found zero DOB or phone misses
+   where the linked profile/patient row contained a value and zero patient-directory phone
+   misses where a profile phone exists.
+2. Shared validator tests reject missing DOB/phone, invalid/future DOB, and malformed phone;
+   the local checkout route returned `400 PATIENT_DETAILS_REQUIRED` before contacting Stripe.
+3. Local API checks against production data returned patient DOB/phone and doctor DOB/age/phone.
+4. `npm test` passed 21 tests; `npm run build`, `npm run lint`, Node syntax checks, and
+   `git diff --check` passed.
+5. Pre-release production timing confirmed the old Washington function path: patient bootstrap
+   took 3.7s and doctor queue 2.0s, while direct indexed PostgreSQL execution remained sub-
+   millisecond. Post-deployment timing and alias validation are recorded after promotion.

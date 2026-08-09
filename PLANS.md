@@ -22,7 +22,7 @@ Do not turn this into a full changelog. Use `.agents/fixes-log.md` for incident/
 
 ## Current Objective
 
-Stabilize the Onya Health launch surface: public medical-certificate pages, booking and pricing, patient auth/account creation, doctor portal access, patient portal messaging, privacy copy, SEO crawlability, and nutrition meal-plan safety.
+Stabilize the Onya Health launch surface: public medical-certificate pages, booking and pricing, patient auth/account creation, doctor portal access, patient portal messaging, privacy copy, and SEO crawlability.
 
 Current implementation state:
 
@@ -48,7 +48,7 @@ Current implementation state:
   doctor or the fixed `Customer support` identity. Both remain visible to the doctor and
   patient, while the authenticated account remains in the server audit event.
 - Booking flow in `frontend/src/consult-flow`.
-- Weight-loss reset and meal planning in `frontend/src/weight-loss-reset`.
+- Former dietitian, meal-plan, nutritionist, and weight-loss-reset surfaces are retired and redirect to the medical-certificate product.
 - Supabase migrations and helper scripts under `supabase/` and `scripts/`.
 - Public SEO artifacts in `frontend/public/robots.txt` and `frontend/public/sitemap.xml`.
 
@@ -177,9 +177,9 @@ Verification:
 - Trace submit handler and route response handling.
 - Browser or API smoke check where feasible.
 
-### M7 - Meal-Plan Safety
+### M7 - Meal-Plan Safety (Historical)
 
-Status: completed on 2026-06-29.
+Status: completed on 2026-06-29; the feature was subsequently retired.
 
 Deliverables:
 
@@ -252,6 +252,25 @@ Verification:
 - Desktop and 390 px doctor review visual checks.
 - Build, lint, Node syntax, audit, and production alias checks.
 
+### M11 - Required Patient Identity And Database Latency
+
+Status: implementation and production validation in progress on 2026-08-09.
+
+Deliverables:
+
+- Date of birth and phone are required by both the browser form and certificate APIs.
+- Certificate rows persist DOB, phone, address, and the raw submission without schema-fallback data loss.
+- Patient directory rows persist phone, with profile-backed repair for historical empty values.
+- Patient bootstrap hydrates identity directly from indexed patient/profile rows.
+- Active patient APIs no longer query or return retired dietitian data.
+- Vercel Functions run in Tokyo (`hnd1`) beside production Supabase.
+
+Verification:
+
+- Unit, build, lint, syntax, migration, local production-data smoke, and live API timing checks.
+- Production doctor review exposes DOB, age, and phone for populated records.
+- All required production aliases serve the promoted deployment.
+
 ## Validation Commands
 
 ```bash
@@ -288,7 +307,7 @@ npm run backend
 |   |-- README.md                     # Backend/API operational notes
 |   |-- server.js                     # Local backend server
 |   |-- data/                         # Local fallback JSON/outbox/log data
-|   `-- lib/                          # Auth, storage, email, PDF, pricing, search-filter, risk, and meal-plan helpers
+|   `-- lib/                          # Auth, storage, email, PDF, pricing, search-filter, and risk helpers
 |-- frontend/
 |   |-- index.html                    # Vite HTML shell
 |   |-- public/                       # Static images, doctor portal pages, robots, sitemap
@@ -298,10 +317,10 @@ npm run backend
 |       |-- consult-flow/             # Booking flow state, pricing, services, views
 |       |-- pages/                    # Route-level React pages
 |       |-- patient-portal/           # Portal model and home widgets
-|       |-- weight-loss-reset/        # Onboarding, meal planning, recipes, dashboard
+|       |-- weight-loss-reset/        # Deprecated historical source; routes are inactive
 |       |-- blogs/                    # Markdown articles and metadata
 |       `-- index.css                 # Global tokens and styling
-|-- scripts/                          # SEO, Supabase, image, billing, nutrition utilities
+|-- scripts/                          # SEO, Supabase, image, billing, and historical utilities
 |-- supabase/migrations/              # Production DB migrations
 `-- .agents/                          # Operational guides and fixes log
 ```
@@ -435,9 +454,10 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
 
 - Use existing Vite/React router logic instead of adding React Router.
 - Keep public certificate copy conservative and review-based.
-- Keep patient and dietitian identity database/API-backed, never hardcoded in UI.
+- Keep patient identity database/API-backed, never hardcoded in UI.
 - Keep doctor accounts gated by approval from the configured administrator or an already approved doctor rather than public self-activation.
 - Keep practitioner signatures in private storage and snapshot their immutable object path on
   approval so historical certificates do not change when a profile signature is replaced.
-- Keep generated meal-plan images and recipe data storage-backed and avoid large base64 payloads.
+- Keep retired dietitian and meal-plan data out of active patient API queries and payloads.
+- Keep Vercel Functions in Tokyo (`hnd1`) while production Supabase remains in Tokyo.
 - Treat `frontend/public/sitemap.xml` and `robots.txt` as deployable artifacts until a more complete prerender/SSR solution is adopted.

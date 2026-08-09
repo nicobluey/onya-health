@@ -42,7 +42,12 @@ Use this tree before substantial work so the active context is clear. The old FE
     `-- ai-landing-image-prompts.md
 ```
 
-## Meal-Plan Database Architecture (Current)
+## Retired Meal-Plan Database Notes
+
+The dietitian and meal-plan product is retired. Active routes redirect to the medical-
+certificate product, and patient bootstrap/auth payloads must not query or expose dietitian
+records. The tables below remain only as historical data architecture unless the product is
+explicitly reactivated.
 
 - Primary recipe table: `meal_planner_recipes`
   - Core columns used by product:

@@ -264,46 +264,16 @@ const SUPABASE_CERTIFICATE_MEDICAL_FIELDS = [
   'supporting_notes',
 ];
 const SUPABASE_CERTIFICATE_OPTIONAL_MEDICAL_FIELDS = ['raw_submission'];
-const supabaseMissingCertificateServiceFields = new Set();
-const supabaseMissingCertificateMedicalFields = new Set();
-const supabaseCertificateServiceFieldLookup = new Set(SUPABASE_CERTIFICATE_SERVICE_FIELDS);
-const supabaseCertificateMedicalFieldLookup = new Set([
-  ...SUPABASE_CERTIFICATE_MEDICAL_FIELDS,
-  ...SUPABASE_CERTIFICATE_OPTIONAL_MEDICAL_FIELDS,
-]);
 
 function getSupabaseCertificateSelectFields(includeRawSubmission) {
-  const serviceFields = SUPABASE_CERTIFICATE_SERVICE_FIELDS.filter(
-    (fieldName) => !supabaseMissingCertificateServiceFields.has(fieldName)
-  );
-  const medicalFields = SUPABASE_CERTIFICATE_MEDICAL_FIELDS.filter(
-    (fieldName) => !supabaseMissingCertificateMedicalFields.has(fieldName)
-  );
+  const serviceFields = [...SUPABASE_CERTIFICATE_SERVICE_FIELDS];
+  const medicalFields = [...SUPABASE_CERTIFICATE_MEDICAL_FIELDS];
 
-  if (includeRawSubmission && !supabaseMissingCertificateMedicalFields.has('raw_submission')) {
-    medicalFields.push('raw_submission');
+  if (includeRawSubmission) {
+    medicalFields.push(...SUPABASE_CERTIFICATE_OPTIONAL_MEDICAL_FIELDS);
   }
 
   return { serviceFields, medicalFields };
-}
-
-function markSupabaseCertificateFieldMissing(fieldName) {
-  const normalized = String(fieldName || '').trim();
-  if (!normalized) return false;
-
-  if (supabaseCertificateServiceFieldLookup.has(normalized)) {
-    const previousSize = supabaseMissingCertificateServiceFields.size;
-    supabaseMissingCertificateServiceFields.add(normalized);
-    return supabaseMissingCertificateServiceFields.size !== previousSize;
-  }
-
-  if (supabaseCertificateMedicalFieldLookup.has(normalized)) {
-    const previousSize = supabaseMissingCertificateMedicalFields.size;
-    supabaseMissingCertificateMedicalFields.add(normalized);
-    return supabaseMissingCertificateMedicalFields.size !== previousSize;
-  }
-
-  return false;
 }
 
 function pruneSupabaseMealPlannerRecipeByIdCache() {
@@ -450,6 +420,12 @@ function mapSupabaseRowToCertificate(row) {
 
   const createdAt = row.submitted_at || row.created_at || new Date().toISOString();
   const rawSubmission = med.raw_submission || null;
+  const rawPatient = rawSubmission?.patient && typeof rawSubmission.patient === 'object'
+    ? rawSubmission.patient
+    : {};
+  const rawConsult = rawSubmission?.consult && typeof rawSubmission.consult === 'object'
+    ? rawSubmission.consult
+    : {};
   const workflow = rawSubmission?.workflow && typeof rawSubmission.workflow === 'object'
     ? rawSubmission.workflow
     : {};
@@ -491,15 +467,15 @@ function mapSupabaseRowToCertificate(row) {
       reasons: [],
     },
     certificateDraft: {
-      fullName: med.patient_full_name || '',
-      dob: med.patient_dob || '',
-      email: med.patient_email || '',
-      phone: med.patient_phone || '',
-      address: med.patient_address || '',
-      purpose: med.work_or_study_context || med.consult_reason || '',
-      symptom: med.symptoms || '',
-      description: med.supporting_notes || med.consult_reason || '',
-      startDate: med.certificate_start_date || createdAt.split('T')[0],
+      fullName: med.patient_full_name || rawPatient.fullName || '',
+      dob: med.patient_dob || rawPatient.dob || '',
+      email: med.patient_email || rawPatient.email || '',
+      phone: med.patient_phone || rawPatient.phone || '',
+      address: med.patient_address || rawPatient.address || '',
+      purpose: med.work_or_study_context || rawConsult.purpose || med.consult_reason || '',
+      symptom: med.symptoms || rawConsult.symptom || '',
+      description: med.supporting_notes || rawConsult.description || med.consult_reason || '',
+      startDate: med.certificate_start_date || rawConsult.startDate || createdAt.split('T')[0],
       durationDays,
     },
     rawSubmission,
@@ -1449,52 +1425,17 @@ async function listCertificatesByPatientEmailSupabase(email, options = {}) {
 
   const includeRawSubmission = options?.includeRawSubmission !== false;
   const limit = clampPatientCertificateLimit(options?.limit);
-  let { medicalFields, serviceFields } = getSupabaseCertificateSelectFields(includeRawSubmission);
+  const { medicalFields, serviceFields } = getSupabaseCertificateSelectFields(includeRawSubmission);
   if (medicalFields.length === 0 || serviceFields.length === 0) {
     return [];
   }
 
-  let rows = [];
-  for (let attempt = 0; attempt < 16; attempt += 1) {
-    const select = `${serviceFields.join(',')},medical_certificate_requests!inner(${medicalFields.join(',')})`;
-    try {
-      rows = await supabaseRequest(
-        `service_requests?select=${select}&medical_certificate_requests.patient_email=eq.${encodeURIComponent(
-          normalizedEmail
-        )}&order=submitted_at.desc,created_at.desc&limit=${limit}`
-      );
-      break;
-    } catch (errorObject) {
-      const status = errorObject?.status;
-      const code = errorObject?.data?.code;
-      const missingColumn = extractMissingColumnName(errorObject?.data?.message || errorObject?.message);
-      const isMissingColumnError =
-        status === 400 &&
-        Boolean(missingColumn) &&
-        (code === 'PGRST204' || code === '42703' || String(errorObject?.message || '').toLowerCase().includes('does not exist'));
-
-      if (isMissingColumnError) {
-        const hadMedicalColumn = medicalFields.includes(missingColumn);
-        const hadServiceColumn = serviceFields.includes(missingColumn);
-        if (hadMedicalColumn) {
-          medicalFields = medicalFields.filter((entry) => entry !== missingColumn);
-        }
-        if (hadServiceColumn) {
-          serviceFields = serviceFields.filter((entry) => entry !== missingColumn);
-        }
-
-        const cachedMissingField = markSupabaseCertificateFieldMissing(missingColumn);
-        if (hadMedicalColumn || hadServiceColumn || cachedMissingField) {
-          if (medicalFields.length === 0 || serviceFields.length === 0) {
-            rows = [];
-            break;
-          }
-          continue;
-        }
-      }
-      throw errorObject;
-    }
-  }
+  const select = `${serviceFields.join(',')},medical_certificate_requests!inner(${medicalFields.join(',')})`;
+  const rows = await supabaseRequest(
+    `service_requests?select=${select}&medical_certificate_requests.patient_email=eq.${encodeURIComponent(
+      normalizedEmail
+    )}&order=submitted_at.desc,created_at.desc&limit=${limit}`
+  );
   return (rows || []).map(mapSupabaseRowToCertificate);
 }
 
@@ -1546,28 +1487,12 @@ function extractMissingColumnName(message) {
   return null;
 }
 
-async function insertMedicalRequestResilient(payload) {
-  const body = { ...payload };
-  for (let attempt = 0; attempt < 20; attempt += 1) {
-    try {
-      await supabaseRequest('medical_certificate_requests', {
-        method: 'POST',
-        body,
-      });
-      return body;
-    } catch (error) {
-      const code = error?.data?.code;
-      const status = error?.status;
-      const missingColumn = extractMissingColumnName(error?.data?.message);
-      if (status === 400 && code === 'PGRST204' && missingColumn && missingColumn in body) {
-        delete body[missingColumn];
-        continue;
-      }
-      throw error;
-    }
-  }
-
-  throw new Error('Failed to insert medical certificate request after schema fallback attempts');
+async function insertMedicalRequest(payload) {
+  await supabaseRequest('medical_certificate_requests', {
+    method: 'POST',
+    body: payload,
+  });
+  return payload;
 }
 
 async function createPatientForSubmission(certificate) {
@@ -1585,6 +1510,15 @@ async function createPatientForSubmission(certificate) {
   let reusedExistingAuthUser = false;
 
   if (!patientId) {
+    const existingPatients = await supabaseRequest(
+      `patients?email=eq.${encodeURIComponent(patientEmail)}&select=id&limit=1`,
+      { method: 'GET' }
+    );
+    patientId = String(existingPatients?.[0]?.id || '').trim() || null;
+    reusedExistingAuthUser = Boolean(patientId);
+  }
+
+  if (!patientId) {
     try {
       const created = await supabaseAuthAdminRequest('users', {
         method: 'POST',
@@ -1592,7 +1526,13 @@ async function createPatientForSubmission(certificate) {
           email: patientEmail,
           password: `Onya-${Date.now()}-Temp!`,
           email_confirm: true,
-          user_metadata: { role: 'patient' },
+          user_metadata: {
+            role: 'patient',
+            full_name: fullName,
+            dob: String(draft.dob || '').trim(),
+            phone: String(draft.phone || '').trim(),
+            address: String(draft.address || '').trim(),
+          },
         },
       });
       resolvedAuthUser = created?.user || created?.data?.user || created?.data || created || null;
@@ -1665,6 +1605,7 @@ async function createPatientForSubmission(certificate) {
       email: patientEmail || null,
       full_name: [firstName, lastName].filter(Boolean).join(' ') || null,
       phone: draft.phone || null,
+      address: draft.address || null,
       profile_photo_path: null,
       consent_telehealth: true,
       consent_marketing: false,
@@ -1695,7 +1636,7 @@ async function createCertificateSupabase(certificate) {
     body: serviceInsert,
   });
 
-  const insertedMedical = await insertMedicalRequestResilient(toMedicalInsert(certificate));
+  const insertedMedical = await insertMedicalRequest(toMedicalInsert(certificate));
 
   return mapSupabaseRowToCertificate({
     ...serviceRows[0],
@@ -1703,8 +1644,8 @@ async function createCertificateSupabase(certificate) {
   });
 }
 
-async function updateCertificateSupabase(id, updater) {
-  const current = await getCertificateByIdSupabase(id);
+async function updateCertificateSupabase(id, updater, currentCertificate = null) {
+  const current = currentCertificate || (await getCertificateByIdSupabase(id));
   if (!current) return null;
 
   const updatedCandidate = updater(current);
@@ -1753,25 +1694,18 @@ async function updateCertificateSupabase(id, updater) {
       ? updatedCandidate.rawSubmission
       : current.rawSubmission || null;
   if (nextRawSubmission) {
-    try {
-      await supabaseRequest(`medical_certificate_requests?request_id=eq.${encodeURIComponent(id)}`, {
-        method: 'PATCH',
-        body: {
-          raw_submission: nextRawSubmission,
-        },
-      });
-    } catch (errorObject) {
-      warn('medical_request.raw_submission_patch_failed', {
-        requestId: id,
-        message: errorObject?.message || String(errorObject),
-      });
-    }
+    await supabaseRequest(`medical_certificate_requests?request_id=eq.${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: {
+        raw_submission: nextRawSubmission,
+      },
+    });
   }
 
-  const refreshed = await getCertificateByIdSupabase(id);
-  if (!refreshed) return null;
-  refreshed.status = fromSupabaseRequestStatus(refreshed.status);
-  return refreshed;
+  return {
+    ...updatedCandidate,
+    status: fromSupabaseRequestStatus(patchRows[0]?.status || updatedCandidate.status),
+  };
 }
 
 async function appendAuditSupabase(entry) {
@@ -3258,9 +3192,9 @@ export async function createCertificate(certificate) {
   return createCertificateLocal(certificate);
 }
 
-export async function updateCertificate(id, updater) {
+export async function updateCertificate(id, updater, options = {}) {
   if (getSupabaseConfig().enabled) {
-    return updateCertificateSupabase(id, updater);
+    return updateCertificateSupabase(id, updater, options?.current || null);
   }
   return updateCertificateLocal(id, updater);
 }
