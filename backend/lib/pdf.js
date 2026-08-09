@@ -68,6 +68,55 @@ function formatLongDate(value) {
   }).format(parsed);
 }
 
+function calendarDateParts(value) {
+  const raw = String(value || '').trim();
+  const dateOnlyMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (dateOnlyMatch) {
+    return {
+      year: Number(dateOnlyMatch[1]),
+      month: Number(dateOnlyMatch[2]),
+      day: Number(dateOnlyMatch[3]),
+    };
+  }
+
+  const parsed = parseDate(value);
+  if (!parsed) return null;
+  const parts = new Intl.DateTimeFormat('en-AU', {
+    timeZone: process.env.CERTIFICATE_TIME_ZONE || 'Australia/Brisbane',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+  }).formatToParts(parsed);
+  const partValue = (type) => Number(parts.find((part) => part.type === type)?.value || 0);
+  return {
+    year: partValue('year'),
+    month: partValue('month'),
+    day: partValue('day'),
+  };
+}
+
+export function calculatePatientAge(dob, atDate = new Date()) {
+  const birth = calendarDateParts(dob);
+  const reference = calendarDateParts(atDate);
+  if (!birth || !reference || birth.year < 1900 || birth.year > reference.year) return null;
+
+  let age = reference.year - birth.year;
+  if (reference.month < birth.month || (reference.month === birth.month && reference.day < birth.day)) {
+    age -= 1;
+  }
+  return age >= 0 && age <= 130 ? age : null;
+}
+
+export function buildCertificateIdentityDetails(certificate, issuedAt = new Date()) {
+  const data = certificate?.certificateDraft || {};
+  const age = calculatePatientAge(data.dob, issuedAt);
+  return {
+    patientName: safeText(data.fullName, 'Patient name unavailable'),
+    dateOfBirth: formatLongDate(data.dob),
+    ageAtConsultation: age === null ? 'Not provided' : `${age} years`,
+  };
+}
+
 function addDays(date, dayCount) {
   const result = new Date(date.getTime());
   result.setDate(result.getDate() + dayCount);
@@ -250,7 +299,8 @@ export async function buildCertificatePdf(certificate, options = {}) {
   const issueDate = formatLongDate(issuedAt);
   const issueDateIso = parseDate(issuedAt)?.toISOString().slice(0, 10) || '';
 
-  const patientName = safeText(data.fullName, 'Patient name unavailable');
+  const patientIdentity = buildCertificateIdentityDetails(certificate, issuedAt);
+  const patientName = patientIdentity.patientName;
   const doctorName = safeText(
     options.doctorName || certificate?.decision?.by || process.env.DOCTOR_DISPLAY_NAME,
     'Onya Health Doctor'
@@ -264,6 +314,10 @@ export async function buildCertificatePdf(certificate, options = {}) {
       .trim()
       .toUpperCase(),
     'Registration number not recorded'
+  );
+  const providerNumber = safeText(
+    String(options.providerNumber || certificate?.decision?.providerNumber || '').trim().toUpperCase(),
+    'Provider number not recorded'
   );
   const doctorNotes = safeText(options.doctorNotes ?? certificate?.decision?.notes, 'No additional doctor notes.');
   const certificateId = safeText(certificate?.id, '-');
@@ -342,7 +396,7 @@ export async function buildCertificatePdf(certificate, options = {}) {
       width: 210,
       align: 'right',
     });
-    doc.font('Helvetica').fontSize(10.5).fillColor(colors.muted).text('www.onyahealth.com.au', companyX, y + 52, {
+    doc.font('Helvetica').fontSize(10.5).fillColor(colors.muted).text('www.supadoc.com.au', companyX, y + 52, {
       width: 210,
       align: 'right',
     });
@@ -363,7 +417,7 @@ export async function buildCertificatePdf(certificate, options = {}) {
     doc.lineWidth(2.5).strokeColor(colors.accent).moveTo(left, y).lineTo(right, y).stroke();
     y += 16;
 
-    const headerCardHeight = 118;
+    const headerCardHeight = 112;
     const headerTopY = y;
     drawHolographicPanel(doc, left, headerTopY, contentWidth, headerCardHeight, '#B9D3F7');
 
@@ -422,11 +476,26 @@ export async function buildCertificatePdf(certificate, options = {}) {
     y += headerCardHeight + 20;
 
     doc.font('Helvetica-Bold').fontSize(14).fillColor(colors.text).text('Patient details', left, y);
-    y += 22;
+    y += 20;
 
     doc.font('Helvetica-Bold').fontSize(13).text('Name:', left, y);
     doc.font('Helvetica').fontSize(13).text(patientName, left + 130, y, {
       width: contentWidth - 130,
+    });
+    y += 22;
+
+    doc.font('Helvetica-Bold').fontSize(12).text('Date of birth:', left, y, { width: 100, lineBreak: false });
+    doc.font('Helvetica').fontSize(12).text(patientIdentity.dateOfBirth, left + 110, y, {
+      width: 178,
+      lineBreak: false,
+    });
+    doc.font('Helvetica-Bold').fontSize(12).text('Age at consultation:', left + 300, y, {
+      width: 122,
+      lineBreak: false,
+    });
+    doc.font('Helvetica').fontSize(12).text(patientIdentity.ageAtConsultation, left + 428, y, {
+      width: contentWidth - 428,
+      lineBreak: false,
     });
     y += 22;
 
@@ -437,13 +506,13 @@ export async function buildCertificatePdf(certificate, options = {}) {
     });
     y += 28;
 
-    doc.font('Helvetica-Bold').fontSize(22).fillColor(colors.text).text('Medical Certificate Statement', left, y, {
+    doc.font('Helvetica-Bold').fontSize(20).fillColor(colors.text).text('Medical Certificate Statement', left, y, {
       width: contentWidth,
     });
-    y += 30;
+    y += 26;
 
     doc.font('Helvetica-Bold').fontSize(12).fillColor(colors.text).text('Clinical statement', left, y);
-    y += 20;
+    y += 18;
 
     doc.font('Helvetica').fontSize(12.5).fillColor(colors.text).text(statement, left, y, {
       width: contentWidth,
@@ -452,7 +521,7 @@ export async function buildCertificatePdf(certificate, options = {}) {
     y = doc.y + 10;
 
     doc.font('Helvetica-Bold').fontSize(12).fillColor(colors.text).text('Doctor verification', left, y);
-    y += 18;
+    y += 16;
 
     doc.font('Helvetica-Bold').fontSize(13).fillColor(colors.text).text(`Doctor: ${doctorName}`, left, y, { width: contentWidth });
     y = doc.y + 2;
@@ -466,36 +535,53 @@ export async function buildCertificatePdf(certificate, options = {}) {
       .font('Helvetica')
       .fontSize(12)
       .fillColor(colors.text)
+      .text(`Medicare provider number: ${providerNumber}`, left, y, { width: contentWidth });
+    y = doc.y + 2;
+    doc
+      .font('Helvetica')
+      .fontSize(12)
+      .fillColor(colors.text)
       .text(`Provider type: ${providerType}`, left, y, { width: contentWidth });
     y = doc.y + 8;
 
     doc.font('Helvetica-Bold').fontSize(14).fillColor(colors.text).text('Signature', left, y);
-    drawSignatureMark(doc, left, y + 10);
-    y += 40;
+    if (Buffer.isBuffer(options.signatureImage) && options.signatureImage.length > 0) {
+      try {
+        doc.image(options.signatureImage, left, y + 8, {
+          fit: [190, 36],
+          align: 'left',
+          valign: 'center',
+        });
+      } catch {
+        drawSignatureMark(doc, left, y + 10);
+      }
+    } else {
+      drawSignatureMark(doc, left, y + 10);
+    }
 
     if (doctorNotes && doctorNotes !== 'No additional doctor notes.') {
       doc
         .font('Helvetica')
         .fontSize(9.5)
         .fillColor(colors.muted)
-        .text(`Clinician note: ${truncateText(doctorNotes, 130)}`, left, y, {
-          width: contentWidth,
-          lineBreak: false,
+        .text(`Clinician note: ${truncateText(doctorNotes, 130)}`, left + 230, y + 9, {
+          width: contentWidth - 230,
+          height: 34,
+          ellipsis: true,
         });
-      y += 16;
     }
+    y += 46;
 
     const verificationHeight = 122;
-    const verificationBottomPadding = 12;
-    const maxVerificationY = doc.page.height - 38 - verificationHeight - verificationBottomPadding;
-    const verificationTargetY = y + 20;
-    if (verificationTargetY > maxVerificationY) {
+    const verificationBottomSpace = 28;
+    const maxVerificationY = doc.page.height - 38 - verificationHeight - verificationBottomSpace;
+    if (y > maxVerificationY) {
       doc.addPage();
       y = 48;
       isFirstPage = false;
     }
 
-    let verificationY = y + 20;
+    let verificationY = Math.min(y + 12, maxVerificationY);
     const minVerificationY = 540;
     if (isFirstPage && verificationY < minVerificationY) verificationY = minVerificationY;
 
@@ -511,7 +597,7 @@ export async function buildCertificatePdf(certificate, options = {}) {
       .font('Helvetica')
       .fontSize(10)
       .fillColor(colors.muted)
-      .text('Use the code below at onyahealth.com.au/verify to confirm this certificate.', left + 16, verificationY + 32, {
+      .text('Use the code below at supadoc.com.au/verify to confirm this certificate.', left + 16, verificationY + 32, {
         width: contentWidth - 150,
         lineBreak: false,
       });
@@ -523,14 +609,16 @@ export async function buildCertificatePdf(certificate, options = {}) {
 
     drawHolographicSeal(doc, right - 66, verificationY + 62, 82, verificationCode);
 
-    const footerY = verificationY + verificationHeight + 12;
-    doc.font('Helvetica-Bold').fontSize(11).fillColor(colors.text).text('Verification support:', left, footerY);
+    const footerY = verificationY + verificationHeight + 8;
+    doc.font('Helvetica-Bold').fontSize(11).fillColor(colors.text).text('Verification support:', left, footerY, {
+      lineBreak: false,
+    });
     doc
       .font('Helvetica')
       .fontSize(11)
       .fillColor(colors.text)
-      .text(`Certificate ID ${certificateId}${issueDateIso ? ` • Issued ${issueDateIso}` : ''}`, left + 106, footerY, {
-        width: contentWidth - 106,
+      .text(`Certificate ID ${certificateId}${issueDateIso ? ` • Issued ${issueDateIso}` : ''}`, left + 116, footerY, {
+        width: contentWidth - 116,
         lineBreak: false,
       });
 

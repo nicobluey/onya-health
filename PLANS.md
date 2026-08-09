@@ -335,6 +335,18 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
 
 2026-08-09:
 
+- Routed patient-portal certificate actions into the shared medical-certificate form for
+  both pay-as-you-go and Unlimited patients. Active Unlimited coverage now bypasses Stripe
+  only after the completed intake is submitted, preventing card taps from creating duplicate
+  queue records.
+- Removed the direct cancellation control, corrected active-plan billing fallbacks, and
+  repaired desktop/mobile queue milestone connectors.
+- Added private practitioner signature storage and profile upload controls. Certificate PDFs
+  now include the patient date of birth and age, clinician registration and Medicare provider
+  numbers, and the clinician's uploaded signature when present.
+- Applied and verified `20260809_add_private_doctor_signatures.sql`. Unit, build, lint, PDF
+  render/text, responsive portal, authenticated signature, and Unlimited-bypass API checks
+  passed locally; production deployment verification is pending.
 - Added a fixed `Customer support` reply identity alongside doctor replies in certificate conversations.
 - Support replies remain visible in the shared doctor/patient thread, retain the authenticated
   portal account in the audit event, notify the patient by email, and clear `Needs reply`.
@@ -421,5 +433,7 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
 - Keep public certificate copy conservative and review-based.
 - Keep patient and dietitian identity database/API-backed, never hardcoded in UI.
 - Keep doctor accounts gated by approval from the configured administrator or an already approved doctor rather than public self-activation.
+- Keep practitioner signatures in private storage and snapshot their immutable object path on
+  approval so historical certificates do not change when a profile signature is replaced.
 - Keep generated meal-plan images and recipe data storage-backed and avoid large base64 payloads.
 - Treat `frontend/public/sitemap.xml` and `robots.txt` as deployable artifacts until a more complete prerender/SSR solution is adopted.

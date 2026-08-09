@@ -16,6 +16,7 @@ import {
 } from '../consult-flow/pricing';
 import { fetchApiJson } from '../lib/api';
 import { warmCheckoutPath } from '../lib/performanceWarmup';
+import { clearPatientCertificateDraft } from '../consult-flow/patient-entry';
 import type { CertificatePurpose, Symptom } from '../types';
 
 // Transitions
@@ -838,6 +839,7 @@ export const DetailsStep = () => {
 export const CheckoutStep = () => {
     const {
         isUnlimited,
+        hasActiveUnlimitedCoverage,
         includeCarerCertificate,
         setCarerCertificate,
         carerCertificateDetails,
@@ -852,10 +854,15 @@ export const CheckoutStep = () => {
         details
     } = useBooking();
     const [submitting, setSubmitting] = useState(false);
+    const checkoutInFlightRef = useRef(false);
     const [submitError, setSubmitError] = useState('');
     const [carerDetailsErrors, setCarerDetailsErrors] = useState<Record<string, string>>({});
-    const showCarerUpsell = !isUnlimited;
-    const baseAmount = isUnlimited ? UNLIMITED_MONTHLY_PRICE_AUD : getOneOffCertificatePrice(durationDays);
+    const showCarerUpsell = !isUnlimited && !hasActiveUnlimitedCoverage;
+    const baseAmount = hasActiveUnlimitedCoverage
+        ? 0
+        : isUnlimited
+            ? UNLIMITED_MONTHLY_PRICE_AUD
+            : getOneOffCertificatePrice(durationDays);
     const carerAddonAmount = showCarerUpsell && includeCarerCertificate ? CARER_CERT_UPSELL_DOLLARS : 0;
     const totalAmount = baseAmount + carerAddonAmount;
     const oneOffLabel = getOneOffCertificateBandLabel(durationDays);
@@ -897,12 +904,14 @@ export const CheckoutStep = () => {
     };
 
     const handleCheckout = async () => {
+        if (checkoutInFlightRef.current) return;
         setSubmitError('');
         if (!validateCarerDetails()) {
             setSubmitError('Please complete the carer certificate details before payment.');
             return;
         }
 
+        checkoutInFlightRef.current = true;
         setSubmitting(true);
 
         try {
@@ -938,6 +947,7 @@ export const CheckoutStep = () => {
                         startDate: startDate?.toISOString() || null,
                         durationDays,
                         isUnlimited,
+                        coveredByUnlimitedPlan: hasActiveUnlimitedCoverage,
                         includeCarerCertificate: showCarerUpsell ? includeCarerCertificate : false,
                         carerCertificateDetails:
                             showCarerUpsell && includeCarerCertificate
@@ -960,6 +970,7 @@ export const CheckoutStep = () => {
             if (details.email) {
                 window.localStorage.setItem('onya_patient_email', details.email);
             }
+            clearPatientCertificateDraft();
 
             if (payload?.checkoutBypassed) {
                 window.location.assign('/patient');
@@ -979,6 +990,7 @@ export const CheckoutStep = () => {
         } catch (error) {
             setSubmitError(error instanceof Error ? error.message : 'Unable to submit your certificate right now.');
         } finally {
+            checkoutInFlightRef.current = false;
             setSubmitting(false);
         }
     };
@@ -990,14 +1002,25 @@ export const CheckoutStep = () => {
             <div className="bg-sand-50 border border-border rounded-xl p-4">
                 <div className="flex justify-between items-center mb-2">
                     <span className="font-medium text-text-primary">
-                        {isUnlimited ? "Unlimited Certificates" : "One-off Certificate"}
+                        {hasActiveUnlimitedCoverage
+                            ? 'Medical certificate request'
+                            : isUnlimited
+                                ? 'Unlimited Certificates'
+                                : 'One-off Certificate'}
                     </span>
                     <span className="font-bold text-text-primary">
                         ${baseAmount.toFixed(2)}
                     </span>
                 </div>
-                {isUnlimited && <div className="text-xs text-forest-700 font-medium">Billed monthly</div>}
-                {!isUnlimited && <div className="text-xs text-text-secondary font-medium">{oneOffLabel}</div>}
+                {hasActiveUnlimitedCoverage && (
+                    <div className="text-xs font-medium text-forest-700">Included with your active Unlimited plan</div>
+                )}
+                {!hasActiveUnlimitedCoverage && isUnlimited && (
+                    <div className="text-xs text-forest-700 font-medium">Billed monthly</div>
+                )}
+                {!hasActiveUnlimitedCoverage && !isUnlimited && (
+                    <div className="text-xs text-text-secondary font-medium">{oneOffLabel}</div>
+                )}
             </div>
 
             {showCarerUpsell && (
@@ -1117,12 +1140,18 @@ export const CheckoutStep = () => {
                 onFocus={warmCheckoutPath}
                 disabled={submitting}
             >
-                {submitting ? 'Redirecting to secure checkout...' : COPY.steps.checkout.cta}
+                {submitting
+                    ? hasActiveUnlimitedCoverage
+                        ? 'Submitting request...'
+                        : 'Redirecting to secure checkout...'
+                    : hasActiveUnlimitedCoverage
+                        ? 'Submit for doctor review'
+                        : COPY.steps.checkout.cta}
             </Button>
             {submitError && (
                 <p className="text-sm text-red-600 font-medium">{submitError}</p>
             )}
-            {submitting && (
+            {submitting && !hasActiveUnlimitedCoverage && (
                 <p className="text-sm text-text-secondary">Opening Stripe checkout...</p>
             )}
 

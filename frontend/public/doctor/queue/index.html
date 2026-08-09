@@ -56,6 +56,13 @@
         font: inherit;
       }
       .profile-actions { margin-top: 12px; display: flex; align-items: center; gap: 10px; }
+      .signature-field { margin-top: 12px; }
+      .signature-control { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+      .signature-upload { display: inline-flex; align-items: center; margin: 0; padding: 9px 12px; border: 1px solid #b3cfe5; border-radius: 10px; color: #1a3d63; cursor: pointer; letter-spacing: 0; text-transform: none; }
+      .signature-upload input { display: none; }
+      .signature-preview { display: none; width: 210px; height: 64px; object-fit: contain; object-position: left center; border: 1px solid #dce8f2; background: #fff; padding: 6px; box-sizing: border-box; }
+      .signature-preview.visible { display: block; }
+      .signature-help { margin: 6px 0 0; color: #4a7fa7; font-size: 12px; }
       .primary-btn { border-color: #1a3d63; background: #1a3d63; color: #fff; }
       .status { min-height: 18px; font-size: 13px; }
       .status.error { color: #a93736; }
@@ -115,6 +122,18 @@
               <input id="profile-provider-number" name="providerNumber" type="text" placeholder="1234561A" required />
             </div>
           </div>
+          <div class="signature-field">
+            <label for="profile-signature">Certificate signature</label>
+            <div class="signature-control">
+              <img id="profile-signature-preview" class="signature-preview" alt="Doctor signature preview" />
+              <label class="signature-upload" for="profile-signature">
+                Upload signature
+                <input id="profile-signature" type="file" accept=".jpg,.jpeg,.png,.svg,image/jpeg,image/png,image/svg+xml" />
+              </label>
+              <button id="profile-signature-remove" type="button">Remove</button>
+            </div>
+            <p class="signature-help">Use a tightly cropped JPEG, PNG, or SVG. It is stored privately and placed on issued certificates.</p>
+          </div>
           <div class="profile-actions">
             <button id="profile-save" class="primary-btn" type="submit">Save profile</button>
             <div id="profile-status" class="status"></div>
@@ -139,9 +158,15 @@
       const profileForm = document.getElementById('profile-form');
       const profileStatus = document.getElementById('profile-status');
       const profileSaveButton = document.getElementById('profile-save');
+      const profileSignatureInput = document.getElementById('profile-signature');
+      const profileSignaturePreview = document.getElementById('profile-signature-preview');
+      const profileSignatureRemove = document.getElementById('profile-signature-remove');
       const accountsCard = document.getElementById('accounts-card');
       const accountsList = document.getElementById('accounts-list');
       const accountsStatus = document.getElementById('accounts-status');
+      let signatureDataUrl = '';
+      let removeSignature = false;
+      let signaturePreviewObjectUrl = '';
 
       if (!token) {
         window.location.href = '/doctor/login';
@@ -201,6 +226,66 @@
         }
       }
 
+      function setSignaturePreview(source) {
+        profileSignaturePreview.src = source || '';
+        profileSignaturePreview.classList.toggle('visible', Boolean(source));
+        profileSignatureRemove.disabled = !source;
+      }
+
+      async function normalizeSignatureFile(file) {
+        const supportedTypes = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/svg+xml']);
+        const extension = String(file?.name || '').toLowerCase().split('.').pop();
+        if (!supportedTypes.has(String(file?.type || '').toLowerCase()) && !['jpg', 'jpeg', 'png', 'svg'].includes(extension)) {
+          throw new Error('Choose a JPEG, PNG, or SVG signature.');
+        }
+        if (file.size > 3_000_000) {
+          throw new Error('Choose a signature file smaller than 3 MB.');
+        }
+
+        const objectUrl = URL.createObjectURL(file);
+        try {
+          const image = new Image();
+          await new Promise((resolve, reject) => {
+            image.onload = resolve;
+            image.onerror = () => reject(new Error('The signature image could not be read.'));
+            image.src = objectUrl;
+          });
+          const sourceWidth = Math.max(1, image.naturalWidth || image.width || 1);
+          const sourceHeight = Math.max(1, image.naturalHeight || image.height || 1);
+          const scale = Math.min(1, 900 / sourceWidth, 260 / sourceHeight);
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(sourceWidth * scale));
+          canvas.height = Math.max(1, Math.round(sourceHeight * scale));
+          const context = canvas.getContext('2d');
+          if (!context) throw new Error('The signature image could not be processed.');
+          context.clearRect(0, 0, canvas.width, canvas.height);
+          context.drawImage(image, 0, 0, canvas.width, canvas.height);
+          return canvas.toDataURL('image/png');
+        } finally {
+          URL.revokeObjectURL(objectUrl);
+        }
+      }
+
+      async function loadSignaturePreview(hasSignature) {
+        if (signaturePreviewObjectUrl) {
+          URL.revokeObjectURL(signaturePreviewObjectUrl);
+          signaturePreviewObjectUrl = '';
+        }
+        if (!hasSignature) {
+          setSignaturePreview('');
+          return;
+        }
+        const response = await fetch('/api/doctor/profile/signature', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) {
+          setSignaturePreview('');
+          return;
+        }
+        signaturePreviewObjectUrl = URL.createObjectURL(await response.blob());
+        setSignaturePreview(signaturePreviewObjectUrl);
+      }
+
       async function loadProfile() {
         const response = await fetch('/api/doctor/profile', {
           headers: { Authorization: `Bearer ${token}` },
@@ -220,14 +305,42 @@
         document.getElementById('profile-provider-type').value = doctor.providerType || '';
         document.getElementById('profile-registration').value = doctor.registrationNumber || '';
         document.getElementById('profile-provider-number').value = doctor.providerNumber || '';
+        await loadSignaturePreview(Boolean(doctor.hasSignature));
       }
+
+      profileSignatureInput.addEventListener('change', async () => {
+        const file = profileSignatureInput.files?.[0];
+        if (!file) return;
+        try {
+          signatureDataUrl = await normalizeSignatureFile(file);
+          removeSignature = false;
+          setSignaturePreview(signatureDataUrl);
+          setProfileStatus('Signature ready to save.');
+        } catch (error) {
+          signatureDataUrl = '';
+          profileSignatureInput.value = '';
+          setProfileStatus(error.message || 'Unable to process signature.', true);
+        }
+      });
+
+      profileSignatureRemove.addEventListener('click', () => {
+        signatureDataUrl = '';
+        removeSignature = true;
+        profileSignatureInput.value = '';
+        setSignaturePreview('');
+        setProfileStatus('Signature will be removed when you save.');
+      });
 
       profileForm.addEventListener('submit', async (event) => {
         event.preventDefault();
         setProfileStatus('');
         profileSaveButton.disabled = true;
 
-        const payload = Object.fromEntries(new FormData(profileForm).entries());
+        const payload = {
+          ...Object.fromEntries(new FormData(profileForm).entries()),
+          ...(signatureDataUrl ? { signatureDataUrl } : {}),
+          ...(removeSignature ? { removeSignature: true } : {}),
+        };
         try {
           const response = await fetch('/api/doctor/profile', {
             method: 'POST',
@@ -246,6 +359,10 @@
           document.getElementById('profile-provider-type').value = data?.doctor?.providerType || payload.providerType || '';
           document.getElementById('profile-registration').value = data?.doctor?.registrationNumber || payload.registrationNumber || '';
           document.getElementById('profile-provider-number').value = data?.doctor?.providerNumber || payload.providerNumber || '';
+          signatureDataUrl = '';
+          removeSignature = false;
+          profileSignatureInput.value = '';
+          await loadSignaturePreview(Boolean(data?.doctor?.hasSignature));
         } catch (error) {
           setProfileStatus(error.message || 'Failed to update profile.', true);
         } finally {

@@ -1243,3 +1243,60 @@ illustration where Stripe's fixed thumbnail size calls for a simple square brand
 3. Desktop inspection confirmed the full blue summary panel, white summary text, compact
    icon-and-name header, and favicon product image. The 390 px view had no horizontal overflow.
 4. The Stripe QA Session was expired after inspection.
+
+## 2026-08-09 - Repair repeat certificate requests and complete certificate identity
+
+### Symptoms
+
+- Tapping `Get a medical certificate` from an Unlimited patient account created requests
+  immediately and could spam the doctor queue instead of opening the intake form.
+- Closing a certificate review did not return the doctor directly to the patient queue.
+- Queue progress connectors ran through milestone circles, and Account exposed an unwanted
+  `Cancel at period end` action.
+- Certificates omitted patient date of birth and age, the doctor's Medicare provider number,
+  and the doctor's own uploaded signature.
+
+### Root causes
+
+1. The Unlimited portal card called the certificate API directly instead of handing the patient
+   to the existing booking state machine; entitlement and intake navigation were coupled.
+2. Timeline connectors spanned the full milestone width without reserving the circle diameter or
+   controlling stacking order.
+3. Practitioner profile assets had no private persistence model, and the PDF payload captured only
+   the registration number.
+4. Review close used in-place completion state rather than a deterministic queue redirect.
+
+### Files/areas changed
+
+- `frontend/src/consult-flow/*`, `frontend/src/components/*`,
+  `frontend/src/pages/PatientPortalPage.tsx`
+  - add a short-lived patient-form handoff, prefill patient details, and defer Unlimited bypass
+    until the final authenticated checkout request;
+  - remove direct cancellation, correct billing fallback actions, and fix queue connectors.
+- `frontend/public/doctor/*`, `backend/doctor-portal/*`
+  - return closed reviews to `/doctor/queue` and add JPEG/PNG/SVG signature selection with
+    browser-side normalization and private authenticated preview.
+- `api/index.js`, `backend/server.js`, `backend/lib/storage.js`,
+  `backend/lib/doctor-signature.js`
+  - validate and store private signatures, expose protected profile endpoints, and snapshot the
+    signature and provider number used for an approval.
+- `backend/lib/pdf.js`, `frontend/public/logo.png`
+  - render DOB, age, provider number, and uploaded signature in a compact one-page certificate.
+- `supabase/migrations/20260809_add_private_doctor_signatures.sql`
+  - add the private signature bucket and service-role-only metadata table.
+
+### Verification
+
+1. `20260809_add_private_doctor_signatures.sql` was applied to production Supabase; the table and
+   private bucket both exist.
+2. Local authenticated API smoke confirmed profile save/read, provider-number persistence, private
+   non-cacheable signature download, and an active Unlimited submission that returns
+   `checkoutBypassed: true` without a Stripe URL.
+3. A portal card tap left the local patient's request count unchanged and opened
+   `/doctor?source=patient&coverage=unlimited#book` at the shared intake form.
+4. Desktop and 390 px screenshots confirmed queue connectors no longer overlap milestone circles;
+   the Account view contains no direct cancellation action.
+5. PDF tests, text extraction, and a rendered A4 inspection confirmed one page with DOB, age,
+   provider number, signature, and verification content without overlap.
+6. Final repository validation and production alias/API checks are recorded in `PLANS.md` after
+   deployment.

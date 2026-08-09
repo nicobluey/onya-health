@@ -18,7 +18,7 @@ const PROGRESS_STEPS: BookingStep[] = [
 ];
 
 export function Stepper({ currentStep, showPricing = false }: { currentStep: BookingStep; showPricing?: boolean }) {
-    const { durationDays, isUnlimited } = useBooking();
+    const { durationDays, isUnlimited, hasActiveUnlimitedCoverage } = useBooking();
     if (currentStep === 'confirmation') return null;
     if (currentStep === 'upsell') return null; // Modal workflow, usually keeps underlying step visible or just progress bar
 
@@ -35,7 +35,9 @@ export function Stepper({ currentStep, showPricing = false }: { currentStep: Boo
     const pricingRevealed = displayIndex >= PROGRESS_STEPS.indexOf('dates');
     const oneOffPrice = getOneOffCertificatePrice(durationDays);
 
-    const priceTitle = isUnlimited
+    const priceTitle = hasActiveUnlimitedCoverage
+        ? 'Included with Unlimited'
+        : isUnlimited
         ? `${formatAud(UNLIMITED_MONTHLY_PRICE_AUD)} / month`
         : pricingRevealed
             ? formatAud(oneOffPrice)

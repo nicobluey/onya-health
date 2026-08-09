@@ -125,6 +125,21 @@ Avoid purple, beige-dominant palettes, gradient orbs, bokeh, glassmorphism, and 
   doctor replies use deep navy and `Customer support` replies use a distinct accessible blue.
 - Sender controls must name `Doctor` and `Customer support` explicitly. Support messages never use
   a clinician name, but the authenticated portal account remains available in the server audit log.
+- Patient certificate actions always enter the shared intake form. Unlimited coverage changes the
+  checkout outcome after submission; it must not create a request from a portal card tap.
+- Queue milestone connectors stop at the edge of each milestone circle and sit behind the circles;
+  completed segments use navy while upcoming segments use the hairline color.
+- Active subscriptions without a Stripe portal identifier show a billing-support action rather
+  than offering the patient another Unlimited plan.
+
+### Certificate PDFs
+
+- Keep certificates to one A4 page with patient identity, clinical statement, clinician details,
+  verification, and footer clearly separated.
+- Patient identity includes date of birth and age at consultation.
+- Clinician identity includes registration number and Medicare provider number.
+- Uploaded signatures are private profile assets. Render the signature without stretching it and
+  keep the clinician note beside it so neither element collides with the footer.
 
 ### Stripe Checkout
 

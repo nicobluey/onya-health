@@ -42,9 +42,12 @@ import { getStripePricing } from '../backend/lib/stripe-pricing.js';
 import { generateDoctorNotes, generateMoreInfoDraft } from '../backend/lib/notes.js';
 import {
   appendAudit,
+  clearDoctorSignature,
   createCertificate,
   createPatientMedicalRecordDownload,
   getPatientClinicalProfileByEmail,
+  getDoctorSignature,
+  getDoctorSignatureMetadata,
   getPatientDirectoryEntryById,
   getCertificateById,
   getMealPlanGenerationCache,
@@ -62,6 +65,7 @@ import {
   normalizePatientClinicalProfile,
   searchCertificatesByPatientName,
   searchPatientDirectory,
+  saveDoctorSignature,
   uploadPatientMedicalRecord,
   upsertMealPlanGenerationCache,
   upsertMealPlannerRecipes,
@@ -3505,6 +3509,27 @@ async function sendDoctorReviewEmail(certificate, req) {
   });
 }
 
+async function resolveCertificateDoctorSignature(certificate) {
+  const doctorEmail = normalizeEmail(certificate?.decision?.byEmail || '');
+  const signaturePath = String(certificate?.decision?.signaturePath || '').trim();
+  if (!doctorEmail && !signaturePath) return null;
+
+  try {
+    return await getDoctorSignature({
+      doctorEmail,
+      signaturePath,
+      signatureMimeType: certificate?.decision?.signatureMimeType || '',
+    });
+  } catch (errorObject) {
+    error('certificate.signature.load_failed', {
+      certificateId: certificate?.id || '',
+      doctorEmail,
+      message: errorObject?.message || String(errorObject),
+    });
+    return null;
+  }
+}
+
 async function sendPatientDecisionEmail(certificate) {
   const patientEmail = certificate?.certificateDraft?.email;
   if (!patientEmail) return;
@@ -3513,11 +3538,14 @@ async function sendPatientDecisionEmail(certificate) {
     const verificationCode = getCertificateVerificationCode(certificate);
     const verifyBaseUrl = FRONTEND_BASE_URL || APP_BASE_URL || '';
     try {
+      const doctorSignature = await resolveCertificateDoctorSignature(certificate);
       const pdfBuffer = await buildCertificatePdf(certificate, {
         doctorName: certificate?.decision?.by || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
         doctorNotes: certificate?.decision?.notes || '',
         providerType: certificate?.decision?.providerType || '',
         registrationNumber: certificate?.decision?.registrationNumber || '',
+        providerNumber: certificate?.decision?.providerNumber || '',
+        signatureImage: doctorSignature?.buffer || null,
         verificationCode,
         verifyUrl: verifyBaseUrl
           ? `${verifyBaseUrl}/verify?code=${encodeURIComponent(verificationCode)}`
@@ -7364,11 +7392,14 @@ export default async function handler(req, res) {
         return;
       }
 
+      const doctorSignature = await resolveCertificateDoctorSignature(certificate);
       const pdfBuffer = await buildCertificatePdf(certificate, {
         doctorName: certificate?.decision?.by || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
         doctorNotes: certificate?.decision?.notes || '',
         providerType: certificate?.decision?.providerType || '',
         registrationNumber: certificate?.decision?.registrationNumber || '',
+        providerNumber: certificate?.decision?.providerNumber || '',
+        signatureImage: doctorSignature?.buffer || null,
         verificationCode: getCertificateVerificationCode(certificate),
         verifyUrl: `${getFrontendBaseUrl(req)}/verify?code=${encodeURIComponent(getCertificateVerificationCode(certificate))}`,
       });
@@ -7403,6 +7434,10 @@ export default async function handler(req, res) {
       }
       if (!registrationNumber) {
         sendJson(res, 400, { error: 'Registration number is required' });
+        return;
+      }
+      if (!providerNumber) {
+        sendJson(res, 400, { error: 'Provider number is required' });
         return;
       }
 
@@ -7711,11 +7746,31 @@ export default async function handler(req, res) {
       return;
     }
 
+    if (req.method === 'GET' && routePath === 'doctor/profile/signature') {
+      const doctor = await requireDoctor(req, res);
+      if (!doctor) return;
+
+      const signature = await getDoctorSignature({ doctorEmail: doctor.email });
+      if (!signature?.buffer) {
+        sendJson(res, 404, { error: 'No signature is on file' });
+        return;
+      }
+
+      setCors(res);
+      res.statusCode = 200;
+      res.setHeader('Content-Type', signature.signatureMimeType || 'image/png');
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.setHeader('Content-Length', String(signature.buffer.length));
+      res.end(signature.buffer);
+      return;
+    }
+
     if (req.method === 'GET' && routePath === 'doctor/profile') {
       const doctor = await requireDoctor(req, res);
       if (!doctor) return;
 
       const profile = await resolveDoctorProfile(doctor.email);
+      const signature = await getDoctorSignatureMetadata(doctor.email);
       sendJson(res, 200, {
         doctor: {
           email: normalizeEmail(doctor.email),
@@ -7723,6 +7778,7 @@ export default async function handler(req, res) {
           providerType: String(profile?.providerType || '').trim(),
           registrationNumber: String(profile?.registrationNumber || '').trim().toUpperCase(),
           providerNumber: normalizeProviderNumber(profile?.providerNumber || ''),
+          hasSignature: Boolean(signature?.signaturePath),
           approvalStatus: profile?.approvalStatus || (isDoctorAdminEmail(doctor.email) ? 'approved' : 'pending'),
         },
       });
@@ -7742,6 +7798,8 @@ export default async function handler(req, res) {
         .trim()
         .toUpperCase();
       const providerNumber = normalizeProviderNumber(body.providerNumber || body.medicareProviderNumber || '');
+      const signatureDataUrl = String(body.signatureDataUrl || '').trim();
+      const removeSignature = body.removeSignature === true;
 
       if (!providerType) {
         sendJson(res, 400, { error: 'Provider type is required' });
@@ -7749,6 +7807,10 @@ export default async function handler(req, res) {
       }
       if (!registrationNumber) {
         sendJson(res, 400, { error: 'Registration number is required' });
+        return;
+      }
+      if (!providerNumber) {
+        sendJson(res, 400, { error: 'Provider number is required' });
         return;
       }
 
@@ -7779,6 +7841,19 @@ export default async function handler(req, res) {
         }
       }
 
+      try {
+        if (removeSignature) {
+          await clearDoctorSignature(doctor.email);
+        } else if (signatureDataUrl) {
+          await saveDoctorSignature({ doctorEmail: doctor.email, signatureDataUrl });
+        }
+      } catch (errorObject) {
+        sendJson(res, 400, { error: errorObject?.message || 'Unable to save doctor signature' });
+        return;
+      }
+
+      const signature = await getDoctorSignatureMetadata(doctor.email);
+
       sendJson(res, 200, {
         doctor: {
           email: normalizeEmail(doctor.email),
@@ -7790,6 +7865,7 @@ export default async function handler(req, res) {
             .trim()
             .toUpperCase(),
           providerNumber: normalizeProviderNumber(updated?.providerNumber || providerNumber || ''),
+          hasSignature: Boolean(signature?.signaturePath),
           approvalStatus: updated?.approvalStatus || 'approved',
         },
       });
@@ -8384,6 +8460,7 @@ export default async function handler(req, res) {
           registrationNumber: String(doctorProfile?.registrationNumber || '')
             .trim()
             .toUpperCase(),
+          providerNumber: normalizeProviderNumber(doctorProfile?.providerNumber || ''),
           at: new Date().toISOString(),
           notes,
         },
@@ -8410,9 +8487,9 @@ export default async function handler(req, res) {
       const doctor = await requireDoctor(req, res);
       if (!doctor) return;
       const doctorProfile = await resolveDoctorProfile(doctor.email);
-      if (!doctorProfile?.providerType || !doctorProfile?.registrationNumber) {
+      if (!doctorProfile?.providerType || !doctorProfile?.registrationNumber || !doctorProfile?.providerNumber) {
         sendJson(res, 400, {
-          error: 'Please complete provider type and registration number in your doctor profile first.',
+          error: 'Please complete provider type, registration number, and provider number in your doctor profile first.',
         });
         return;
       }
@@ -8439,11 +8516,13 @@ export default async function handler(req, res) {
           registrationNumber: String(doctorProfile?.registrationNumber || '')
             .trim()
             .toUpperCase(),
+          providerNumber: normalizeProviderNumber(doctorProfile?.providerNumber || ''),
           at: new Date().toISOString(),
           notes,
         },
       };
 
+      const doctorSignature = await resolveCertificateDoctorSignature(previewCertificate);
       const pdfBuffer = await buildCertificatePdf(previewCertificate, {
         doctorName: reviewerName,
         doctorNotes: notes,
@@ -8452,6 +8531,8 @@ export default async function handler(req, res) {
         registrationNumber: String(previewCertificate?.decision?.registrationNumber || '')
           .trim()
           .toUpperCase(),
+        providerNumber: normalizeProviderNumber(previewCertificate?.decision?.providerNumber || ''),
+        signatureImage: doctorSignature?.buffer || null,
         verificationCode: getCertificateVerificationCode(previewCertificate),
         verifyUrl: `${getFrontendBaseUrl(req)}/verify?code=${encodeURIComponent(getCertificateVerificationCode(previewCertificate))}`,
         isPreview: true,
@@ -8468,9 +8549,9 @@ export default async function handler(req, res) {
       const doctor = await requireDoctor(req, res);
       if (!doctor) return;
       const doctorProfile = await resolveDoctorProfile(doctor.email);
-      if (!doctorProfile?.providerType || !doctorProfile?.registrationNumber) {
+      if (!doctorProfile?.providerType || !doctorProfile?.registrationNumber || !doctorProfile?.providerNumber) {
         sendJson(res, 400, {
-          error: 'Please complete provider type and registration number in your doctor profile first.',
+          error: 'Please complete provider type, registration number, and provider number in your doctor profile first.',
         });
         return;
       }
@@ -8500,6 +8581,8 @@ export default async function handler(req, res) {
         return;
       }
 
+      const signatureMetadata = await getDoctorSignatureMetadata(doctor.email);
+
       const updated = await updateCertificate(certId, (item) => {
         if (!isCertificateOpenForReview(item)) return item;
 
@@ -8516,6 +8599,9 @@ export default async function handler(req, res) {
               reviewedByEmail: normalizeEmail(doctor.email),
               providerType: String(doctorProfile?.providerType || '').trim(),
               registrationNumber: String(doctorProfile?.registrationNumber || '').trim().toUpperCase(),
+              providerNumber: normalizeProviderNumber(doctorProfile?.providerNumber || ''),
+              signaturePath: String(signatureMetadata?.signaturePath || ''),
+              signatureMimeType: String(signatureMetadata?.signatureMimeType || ''),
               reviewedAt: decidedAt,
               decisionResult: decision,
               ...(decision === 'approved' ? { certificateStatement } : {}),
@@ -8528,6 +8614,9 @@ export default async function handler(req, res) {
             registrationNumber: String(doctorProfile?.registrationNumber || '')
               .trim()
               .toUpperCase(),
+            providerNumber: normalizeProviderNumber(doctorProfile?.providerNumber || ''),
+            signaturePath: String(signatureMetadata?.signaturePath || ''),
+            signatureMimeType: String(signatureMetadata?.signatureMimeType || ''),
             at: decidedAt,
             notes,
             result: decision,

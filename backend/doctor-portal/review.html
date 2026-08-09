@@ -428,8 +428,7 @@
           if (!response.ok) {
             throw new Error(payload.error || 'Failed to close certificate');
           }
-          setStatus(payload.message || 'Certificate closed.', 'success');
-          updateActionAvailability();
+          window.location.replace('/doctor/queue');
         } catch (error) {
           setStatus(error.message || 'Failed to close certificate.', 'error');
         } finally {

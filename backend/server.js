@@ -44,9 +44,12 @@ import { getStripePricing } from './lib/stripe-pricing.js';
 import { generateDoctorNotes, generateMoreInfoDraft } from './lib/notes.js';
 import {
   appendAudit,
+  clearDoctorSignature,
   createCertificate,
   createPatientMedicalRecordDownload,
   getPatientClinicalProfileByEmail,
+  getDoctorSignature,
+  getDoctorSignatureMetadata,
   getPatientDirectoryEntryById,
   getCertificateById,
   getMealPlanGenerationCache,
@@ -64,6 +67,7 @@ import {
   normalizePatientClinicalProfile,
   searchCertificatesByPatientName,
   searchPatientDirectory,
+  saveDoctorSignature,
   uploadPatientMedicalRecord,
   upsertMealPlanGenerationCache,
   upsertMealPlannerRecipes,
@@ -1265,6 +1269,27 @@ async function sendDoctorReviewEmail(certificate) {
   });
 }
 
+async function resolveCertificateDoctorSignature(certificate) {
+  const doctorEmail = normalizeEmail(certificate?.decision?.byEmail || '');
+  const signaturePath = String(certificate?.decision?.signaturePath || '').trim();
+  if (!doctorEmail && !signaturePath) return null;
+
+  try {
+    return await getDoctorSignature({
+      doctorEmail,
+      signaturePath,
+      signatureMimeType: certificate?.decision?.signatureMimeType || '',
+    });
+  } catch (errorObject) {
+    error('certificate.signature.load_failed', {
+      certificateId: certificate?.id || '',
+      doctorEmail,
+      message: errorObject?.message || String(errorObject),
+    });
+    return null;
+  }
+}
+
 async function sendPatientDecisionEmail(certificate) {
   const patientEmail = certificate.certificateDraft.email;
   if (!patientEmail) {
@@ -1274,11 +1299,14 @@ async function sendPatientDecisionEmail(certificate) {
   if (certificate.status === 'approved') {
     const verificationCode = getCertificateVerificationCode(certificate);
     try {
+      const doctorSignature = await resolveCertificateDoctorSignature(certificate);
       const pdfBuffer = await buildCertificatePdf(certificate, {
         doctorName: certificate?.decision?.by || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
         doctorNotes: certificate?.decision?.notes || '',
         providerType: certificate?.decision?.providerType || '',
         registrationNumber: certificate?.decision?.registrationNumber || '',
+        providerNumber: certificate?.decision?.providerNumber || '',
+        signatureImage: doctorSignature?.buffer || null,
         verificationCode,
         verifyUrl: `${getFrontendBaseUrl()}/verify?code=${encodeURIComponent(verificationCode)}`,
       });
@@ -3552,6 +3580,10 @@ async function handleApi(req, res, url) {
       sendJson(res, 400, { error: 'Registration number is required' });
       return;
     }
+    if (!providerNumber) {
+      sendJson(res, 400, { error: 'Provider number is required' });
+      return;
+    }
 
     let account;
     try {
@@ -3786,11 +3818,31 @@ async function handleApi(req, res, url) {
     return;
   }
 
+  if (req.method === 'GET' && url.pathname === '/api/doctor/profile/signature') {
+    const doctor = await requireDoctor(req, res);
+    if (!doctor) return;
+
+    const signature = await getDoctorSignature({ doctorEmail: doctor.email });
+    if (!signature?.buffer) {
+      sendJson(res, 404, { error: 'No signature is on file' });
+      return;
+    }
+
+    setCors(res);
+    res.statusCode = 200;
+    res.setHeader('Content-Type', signature.signatureMimeType || 'image/png');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Content-Length', String(signature.buffer.length));
+    res.end(signature.buffer);
+    return;
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/doctor/profile') {
     const doctor = await requireDoctor(req, res);
     if (!doctor) return;
 
     const profile = await resolveDoctorProfile(doctor.email);
+    const signature = await getDoctorSignatureMetadata(doctor.email);
     sendJson(res, 200, {
       doctor: {
         email: normalizeEmail(doctor.email),
@@ -3798,6 +3850,7 @@ async function handleApi(req, res, url) {
         providerType: String(profile?.providerType || '').trim(),
         registrationNumber: String(profile?.registrationNumber || '').trim().toUpperCase(),
         providerNumber: normalizeProviderNumber(profile?.providerNumber || ''),
+        hasSignature: Boolean(signature?.signaturePath),
         approvalStatus: profile?.approvalStatus || (isDoctorAdminEmail(doctor.email) ? 'approved' : 'pending'),
       },
     });
@@ -3817,6 +3870,8 @@ async function handleApi(req, res, url) {
       .trim()
       .toUpperCase();
     const providerNumber = normalizeProviderNumber(body.providerNumber || body.medicareProviderNumber || '');
+    const signatureDataUrl = String(body.signatureDataUrl || '').trim();
+    const removeSignature = body.removeSignature === true;
 
     if (!providerType) {
       sendJson(res, 400, { error: 'Provider type is required' });
@@ -3824,6 +3879,10 @@ async function handleApi(req, res, url) {
     }
     if (!registrationNumber) {
       sendJson(res, 400, { error: 'Registration number is required' });
+      return;
+    }
+    if (!providerNumber) {
+      sendJson(res, 400, { error: 'Provider number is required' });
       return;
     }
 
@@ -3836,6 +3895,19 @@ async function handleApi(req, res, url) {
       source: 'portal-profile',
     });
 
+    try {
+      if (removeSignature) {
+        await clearDoctorSignature(doctor.email);
+      } else if (signatureDataUrl) {
+        await saveDoctorSignature({ doctorEmail: doctor.email, signatureDataUrl });
+      }
+    } catch (errorObject) {
+      sendJson(res, 400, { error: errorObject?.message || 'Unable to save doctor signature' });
+      return;
+    }
+
+    const signature = await getDoctorSignatureMetadata(doctor.email);
+
     sendJson(res, 200, {
       doctor: {
         email: normalizeEmail(doctor.email),
@@ -3847,6 +3919,7 @@ async function handleApi(req, res, url) {
           .trim()
           .toUpperCase(),
         providerNumber: normalizeProviderNumber(updated?.providerNumber || providerNumber || ''),
+        hasSignature: Boolean(signature?.signaturePath),
         approvalStatus: updated?.approvalStatus || 'approved',
       },
     });
@@ -4273,9 +4346,9 @@ async function handleApi(req, res, url) {
     const doctor = await requireDoctor(req, res);
     if (!doctor) return;
     const doctorProfile = await resolveDoctorProfile(doctor.email);
-    if (!doctorProfile?.providerType || !doctorProfile?.registrationNumber) {
+    if (!doctorProfile?.providerType || !doctorProfile?.registrationNumber || !doctorProfile?.providerNumber) {
       sendJson(res, 400, {
-        error: 'Please complete provider type and registration number in your doctor profile first.',
+        error: 'Please complete provider type, registration number, and provider number in your doctor profile first.',
       });
       return;
     }
@@ -4302,11 +4375,13 @@ async function handleApi(req, res, url) {
         registrationNumber: String(doctorProfile?.registrationNumber || '')
           .trim()
           .toUpperCase(),
+        providerNumber: normalizeProviderNumber(doctorProfile?.providerNumber || ''),
         at: new Date().toISOString(),
         notes,
       },
     };
 
+    const doctorSignature = await resolveCertificateDoctorSignature(previewCertificate);
     const pdfBuffer = await buildCertificatePdf(previewCertificate, {
       doctorName: reviewerName,
       doctorNotes: notes,
@@ -4315,6 +4390,8 @@ async function handleApi(req, res, url) {
       registrationNumber: String(previewCertificate?.decision?.registrationNumber || '')
         .trim()
         .toUpperCase(),
+      providerNumber: normalizeProviderNumber(previewCertificate?.decision?.providerNumber || ''),
+      signatureImage: doctorSignature?.buffer || null,
       verificationCode: getCertificateVerificationCode(previewCertificate),
       verifyUrl: `${getFrontendBaseUrl()}/verify?code=${encodeURIComponent(getCertificateVerificationCode(previewCertificate))}`,
       isPreview: true,
@@ -4373,6 +4450,7 @@ async function handleApi(req, res, url) {
         registrationNumber: String(doctorProfile?.registrationNumber || '')
           .trim()
           .toUpperCase(),
+        providerNumber: normalizeProviderNumber(doctorProfile?.providerNumber || ''),
         at: new Date().toISOString(),
         notes,
       },
@@ -4409,9 +4487,9 @@ async function handleApi(req, res, url) {
     const doctor = await requireDoctor(req, res);
     if (!doctor) return;
     const doctorProfile = await resolveDoctorProfile(doctor.email);
-    if (!doctorProfile?.providerType || !doctorProfile?.registrationNumber) {
+    if (!doctorProfile?.providerType || !doctorProfile?.registrationNumber || !doctorProfile?.providerNumber) {
       sendJson(res, 400, {
-        error: 'Please complete provider type and registration number in your doctor profile first.',
+        error: 'Please complete provider type, registration number, and provider number in your doctor profile first.',
       });
       return;
     }
@@ -4441,6 +4519,8 @@ async function handleApi(req, res, url) {
       return;
     }
 
+    const signatureMetadata = await getDoctorSignatureMetadata(doctor.email);
+
     const updated = await updateCertificate(certId, (current) => {
       if (!isCertificateOpenForReview(current)) {
         return current;
@@ -4458,6 +4538,9 @@ async function handleApi(req, res, url) {
             reviewedByEmail: normalizeEmail(doctor.email),
             providerType: String(doctorProfile?.providerType || '').trim(),
             registrationNumber: String(doctorProfile?.registrationNumber || '').trim().toUpperCase(),
+            providerNumber: normalizeProviderNumber(doctorProfile?.providerNumber || ''),
+            signaturePath: String(signatureMetadata?.signaturePath || ''),
+            signatureMimeType: String(signatureMetadata?.signatureMimeType || ''),
             reviewedAt: decidedAt,
             decisionResult: decision,
             ...(decision === 'approved' ? { certificateStatement } : {}),
@@ -4470,6 +4553,9 @@ async function handleApi(req, res, url) {
           registrationNumber: String(doctorProfile?.registrationNumber || '')
             .trim()
             .toUpperCase(),
+          providerNumber: normalizeProviderNumber(doctorProfile?.providerNumber || ''),
+          signaturePath: String(signatureMetadata?.signaturePath || ''),
+          signatureMimeType: String(signatureMetadata?.signatureMimeType || ''),
           at: decidedAt,
           notes,
           result: decision,

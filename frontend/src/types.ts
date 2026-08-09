@@ -55,6 +55,7 @@ export interface BookingState {
     startDate: Date | null;
     durationDays: number;
     isUnlimited: boolean; // false = one-off, true = subscription
+    hasActiveUnlimitedCoverage: boolean;
     includeCarerCertificate: boolean;
     carerCertificateDetails: CarerCertificateDetails;
     details: UserDetails;

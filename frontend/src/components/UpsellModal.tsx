@@ -10,10 +10,10 @@ import { Check } from 'lucide-react';
 import { ShineButton } from './lightswind/ShineButton';
 
 export function UpsellModal() {
-    const { showUpsell, setUnlimited, nextStep, durationDays } = useBooking();
+    const { showUpsell, setUnlimited, nextStep, durationDays, hasActiveUnlimitedCoverage } = useBooking();
     // We use nextStep to proceed. nextStep handles transition from 'upsell' -> 'details'.
 
-    if (!showUpsell) return null;
+    if (!showUpsell || hasActiveUnlimitedCoverage) return null;
 
     const handleChoice = (unlimited: boolean) => {
         setUnlimited(unlimited);

@@ -7,6 +7,10 @@ import {
   mapCertificateMessageEvent,
 } from './certificate-messages.js';
 import { certificateMatchesDoctorPatientFilters } from './doctor-patient-filters.js';
+import {
+  normalizeDoctorSignatureMimeType,
+  parseDoctorSignatureDataUrl,
+} from './doctor-signature.js';
 import { warn } from './logger.js';
 
 const DATA_DIR = path.resolve(process.cwd(), 'backend', 'data');
@@ -24,6 +28,11 @@ const MEAL_RECIPE_IMAGE_BUCKET = String(
 const PATIENT_MEDICAL_RECORDS_BUCKET = String(
   process.env.PATIENT_MEDICAL_RECORDS_BUCKET || 'patient-medical-records'
 ).trim();
+const DOCTOR_SIGNATURES_BUCKET = String(process.env.DOCTOR_SIGNATURES_BUCKET || 'doctor-signatures').trim();
+const MAX_DOCTOR_SIGNATURE_BYTES = Math.max(
+  64_000,
+  Number(process.env.MAX_DOCTOR_SIGNATURE_BYTES || 750_000)
+);
 const MAX_PATIENT_MEDICAL_RECORD_BYTES = Math.max(
   128_000,
   Number(process.env.MAX_PATIENT_MEDICAL_RECORD_BYTES || 2_500_000)
@@ -197,6 +206,7 @@ const EMPTY_DB = {
   auditLog: [],
   patientBilling: [],
   patientClinicalProfiles: [],
+  doctorProfileAssets: [],
   mealPlanGenerationCache: [],
 };
 
@@ -378,6 +388,7 @@ async function readDbRaw() {
     auditLog: Array.isArray(parsed?.auditLog) ? parsed.auditLog : [],
     patientBilling: Array.isArray(parsed?.patientBilling) ? parsed.patientBilling : [],
     patientClinicalProfiles: Array.isArray(parsed?.patientClinicalProfiles) ? parsed.patientClinicalProfiles : [],
+    doctorProfileAssets: Array.isArray(parsed?.doctorProfileAssets) ? parsed.doctorProfileAssets : [],
     mealPlanGenerationCache: Array.isArray(parsed?.mealPlanGenerationCache) ? parsed.mealPlanGenerationCache : [],
   };
 }
@@ -498,6 +509,9 @@ function mapSupabaseRowToCertificate(row) {
           byEmail: workflow.reviewedByEmail || '',
           providerType: workflow.providerType || '',
           registrationNumber: workflow.registrationNumber || '',
+          providerNumber: workflow.providerNumber || '',
+          signaturePath: workflow.signaturePath || '',
+          signatureMimeType: workflow.signatureMimeType || '',
           at: workflow.reviewedAt || decisionTimestamp,
           notes: decisionNotes,
           result: workflow.decisionResult || status,
@@ -1998,6 +2012,184 @@ async function uploadPatientMedicalRecordSupabase({ email, fileName, fileDataUrl
   };
 }
 
+function mapDoctorProfileAsset(value) {
+  if (!value || typeof value !== 'object') return null;
+  const doctorEmail = normalizeEmail(value.doctorEmail || value.doctor_email);
+  const signaturePath = normalizeStoragePath(value.signaturePath || value.current_signature_path);
+  if (!doctorEmail) return null;
+  return {
+    doctorEmail,
+    signaturePath,
+    signatureMimeType: normalizeDoctorSignatureMimeType(
+      value.signatureMimeType || value.current_signature_mime_type,
+      signaturePath
+    ),
+    updatedAt: String(value.updatedAt || value.updated_at || ''),
+  };
+}
+
+async function getDoctorSignatureMetadataLocal(doctorEmail) {
+  const normalizedEmail = normalizeEmail(doctorEmail);
+  if (!normalizedEmail) return null;
+  const db = await readDbRaw();
+  return mapDoctorProfileAsset(
+    db.doctorProfileAssets.find((entry) => normalizeEmail(entry?.doctorEmail) === normalizedEmail)
+  );
+}
+
+async function saveDoctorSignatureLocal({ doctorEmail, signatureDataUrl }) {
+  const normalizedEmail = normalizeEmail(doctorEmail);
+  if (!normalizedEmail) throw new Error('Doctor email is required');
+  const upload = parseDoctorSignatureDataUrl(signatureDataUrl, MAX_DOCTOR_SIGNATURE_BYTES);
+  const doctorHash = createHash('sha256').update(normalizedEmail).digest('hex').slice(0, 20);
+  const fileHash = createHash('sha256').update(upload.buffer).digest('hex').slice(0, 20);
+  const signaturePath = `doctor-signatures/${doctorHash}/${Date.now()}-${fileHash}.${upload.extension}`;
+  const absolutePath = path.resolve(DATA_DIR, signaturePath);
+  await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+  await fs.writeFile(absolutePath, upload.buffer);
+
+  return mutateDb((db) => {
+    const nextAsset = {
+      doctorEmail: normalizedEmail,
+      signaturePath,
+      signatureMimeType: upload.mimeType,
+      updatedAt: new Date().toISOString(),
+    };
+    const index = db.doctorProfileAssets.findIndex(
+      (entry) => normalizeEmail(entry?.doctorEmail) === normalizedEmail
+    );
+    if (index >= 0) db.doctorProfileAssets[index] = nextAsset;
+    else db.doctorProfileAssets.push(nextAsset);
+    return mapDoctorProfileAsset(nextAsset);
+  });
+}
+
+async function clearDoctorSignatureLocal(doctorEmail) {
+  const normalizedEmail = normalizeEmail(doctorEmail);
+  if (!normalizedEmail) return null;
+  return mutateDb((db) => {
+    const index = db.doctorProfileAssets.findIndex(
+      (entry) => normalizeEmail(entry?.doctorEmail) === normalizedEmail
+    );
+    if (index === -1) return null;
+    db.doctorProfileAssets[index] = {
+      ...db.doctorProfileAssets[index],
+      signaturePath: '',
+      signatureMimeType: '',
+      updatedAt: new Date().toISOString(),
+    };
+    return mapDoctorProfileAsset(db.doctorProfileAssets[index]);
+  });
+}
+
+async function getDoctorSignatureLocal({ doctorEmail, signaturePath, signatureMimeType }) {
+  const metadata = signaturePath
+    ? {
+        doctorEmail: normalizeEmail(doctorEmail),
+        signaturePath: normalizeStoragePath(signaturePath),
+        signatureMimeType: normalizeDoctorSignatureMimeType(signatureMimeType, signaturePath),
+      }
+    : await getDoctorSignatureMetadataLocal(doctorEmail);
+  if (!metadata?.signaturePath || !metadata.signaturePath.startsWith('doctor-signatures/')) return null;
+
+  const absolutePath = path.resolve(DATA_DIR, metadata.signaturePath);
+  const allowedRoot = `${path.resolve(DATA_DIR, 'doctor-signatures')}${path.sep}`;
+  if (!absolutePath.startsWith(allowedRoot)) return null;
+  const buffer = await fs.readFile(absolutePath);
+  return { ...metadata, buffer };
+}
+
+async function getDoctorSignatureMetadataSupabase(doctorEmail) {
+  const normalizedEmail = normalizeEmail(doctorEmail);
+  if (!normalizedEmail) return null;
+  const rows = await supabaseRequest(
+    `doctor_profile_assets?doctor_email=eq.${encodeURIComponent(
+      normalizedEmail
+    )}&select=doctor_email,current_signature_path,current_signature_mime_type,updated_at&limit=1`,
+    { method: 'GET', prefer: 'return=representation' }
+  );
+  return mapDoctorProfileAsset(Array.isArray(rows) ? rows[0] : null);
+}
+
+async function saveDoctorSignatureSupabase({ doctorEmail, signatureDataUrl }) {
+  const normalizedEmail = normalizeEmail(doctorEmail);
+  if (!normalizedEmail) throw new Error('Doctor email is required');
+  const upload = parseDoctorSignatureDataUrl(signatureDataUrl, MAX_DOCTOR_SIGNATURE_BYTES);
+  const doctorHash = createHash('sha256').update(normalizedEmail).digest('hex').slice(0, 20);
+  const fileHash = createHash('sha256').update(upload.buffer).digest('hex').slice(0, 20);
+  const signaturePath = `doctors/${doctorHash}/${Date.now()}-${fileHash}.${upload.extension}`;
+
+  await uploadBufferToSupabaseStorage({
+    config: getSupabaseConfig(),
+    bucket: DOCTOR_SIGNATURES_BUCKET,
+    objectPath: signaturePath,
+    contentType: upload.mimeType,
+    bodyBuffer: upload.buffer,
+  });
+
+  const rows = await supabaseRequest('doctor_profile_assets', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates,return=representation',
+    body: {
+      doctor_email: normalizedEmail,
+      current_signature_path: signaturePath,
+      current_signature_mime_type: upload.mimeType,
+      updated_at: new Date().toISOString(),
+    },
+  });
+  return mapDoctorProfileAsset(Array.isArray(rows) ? rows[0] : null);
+}
+
+async function clearDoctorSignatureSupabase(doctorEmail) {
+  const normalizedEmail = normalizeEmail(doctorEmail);
+  if (!normalizedEmail) return null;
+  const rows = await supabaseRequest(
+    `doctor_profile_assets?doctor_email=eq.${encodeURIComponent(normalizedEmail)}`,
+    {
+      method: 'PATCH',
+      prefer: 'return=representation',
+      body: {
+        current_signature_path: null,
+        current_signature_mime_type: null,
+        updated_at: new Date().toISOString(),
+      },
+    }
+  );
+  return mapDoctorProfileAsset(Array.isArray(rows) ? rows[0] : null);
+}
+
+async function getDoctorSignatureSupabase({ doctorEmail, signaturePath, signatureMimeType }) {
+  const metadata = signaturePath
+    ? {
+        doctorEmail: normalizeEmail(doctorEmail),
+        signaturePath: normalizeStoragePath(signaturePath),
+        signatureMimeType: normalizeDoctorSignatureMimeType(signatureMimeType, signaturePath),
+      }
+    : await getDoctorSignatureMetadataSupabase(doctorEmail);
+  if (!metadata?.signaturePath) return null;
+
+  const config = getSupabaseConfig();
+  const response = await fetch(
+    `${config.url}/storage/v1/object/authenticated/${encodeURIComponent(DOCTOR_SIGNATURES_BUCKET)}/${metadata.signaturePath
+      .split('/')
+      .map((part) => encodeURIComponent(part))
+      .join('/')}`,
+    {
+      headers: {
+        apikey: config.key,
+        Authorization: `Bearer ${config.key}`,
+      },
+    }
+  );
+  if (!response.ok) {
+    throw new Error(`Doctor signature download failed (${response.status})`);
+  }
+  return {
+    ...metadata,
+    buffer: Buffer.from(await response.arrayBuffer()),
+  };
+}
+
 async function createPatientMedicalRecordDownloadLocal(email, recordId) {
   const profile = await getPatientClinicalProfileLocal(email);
   const record = profile.testResults.find((entry) => String(entry.id) === String(recordId));
@@ -3138,6 +3330,34 @@ export async function createPatientMedicalRecordDownload(email, recordId) {
     return createPatientMedicalRecordDownloadSupabase(email, recordId);
   }
   return createPatientMedicalRecordDownloadLocal(email, recordId);
+}
+
+export async function getDoctorSignatureMetadata(doctorEmail) {
+  if (getSupabaseConfig().enabled) {
+    return getDoctorSignatureMetadataSupabase(doctorEmail);
+  }
+  return getDoctorSignatureMetadataLocal(doctorEmail);
+}
+
+export async function saveDoctorSignature(input) {
+  if (getSupabaseConfig().enabled) {
+    return saveDoctorSignatureSupabase(input);
+  }
+  return saveDoctorSignatureLocal(input);
+}
+
+export async function clearDoctorSignature(doctorEmail) {
+  if (getSupabaseConfig().enabled) {
+    return clearDoctorSignatureSupabase(doctorEmail);
+  }
+  return clearDoctorSignatureLocal(doctorEmail);
+}
+
+export async function getDoctorSignature(input) {
+  if (getSupabaseConfig().enabled) {
+    return getDoctorSignatureSupabase(input);
+  }
+  return getDoctorSignatureLocal(input);
 }
 
 export async function getPatientBillingByEmail(email) {

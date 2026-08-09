@@ -243,9 +243,9 @@ function QueueStatusCard({
                         const pulse = active && index === 2;
 
                         return (
-                            <div key={label} className="relative text-center">
+                            <div key={label} className="relative min-w-0 text-center">
                                 <span
-                                    className={`mx-auto flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-semibold ${
+                                    className={`relative z-10 mx-auto flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-semibold ${
                                         completed
                                             ? 'border-[#1a3d63] bg-[#1a3d63] text-white'
                                             : active
@@ -258,8 +258,8 @@ function QueueStatusCard({
                                 <span className="mt-1 block text-[11px] font-semibold text-[#1a3d63]">{label}</span>
                                 {index < queueSteps.length - 1 && (
                                     <span
-                                        className={`absolute left-[58%] top-3 h-[2px] w-[84%] ${
-                                            completed ? 'bg-[#b3cfe5]' : 'bg-[#b3cfe5]'
+                                        className={`absolute left-[calc(50%+14px)] right-[calc(-50%+14px)] top-[13px] z-0 h-px ${
+                                            completed ? 'bg-[#1a3d63]' : 'bg-[#b3cfe5]'
                                         }`}
                                         aria-hidden="true"
                                     />

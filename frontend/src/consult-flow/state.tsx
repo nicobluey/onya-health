@@ -9,6 +9,11 @@ import type {
     SymptomVisibility,
     UserDetails,
 } from '../types';
+import {
+    hasActiveUnlimitedCoverageFromSearch,
+    isPatientPortalBookingEntry,
+    readPatientCertificateDraft,
+} from './patient-entry';
 
 interface BookingContextType extends BookingState {
     setPurpose: (p: CertificatePurpose) => void;
@@ -94,6 +99,8 @@ export function BookingProvider({ children }: { children: ReactNode }) {
     const preselectedPurpose = getPurposeFromSearch();
     const initialStep: BookingStep = preselectedPurpose ? 'compliance' : 'purpose';
     const initialView = getInitialViewFromSearch();
+    const patientDraft = readPatientCertificateDraft();
+    const hasActiveUnlimitedCoverage = hasActiveUnlimitedCoverageFromSearch();
 
     const [state, setState] = useState<BookingState>({
         step: initialStep,
@@ -105,6 +112,7 @@ export function BookingProvider({ children }: { children: ReactNode }) {
         startDate: startOfToday(),
         durationDays: 1,
         isUnlimited: false,
+        hasActiveUnlimitedCoverage,
         includeCarerCertificate: false,
         carerCertificateDetails: {
             fullName: '',
@@ -115,12 +123,12 @@ export function BookingProvider({ children }: { children: ReactNode }) {
             email: '',
         },
         details: {
-            fullName: '',
-            dob: '',
-            gender: '',
-            email: readStoredPatientEmail(),
-            phone: '',
-            address: ''
+            fullName: patientDraft.fullName || '',
+            dob: patientDraft.dob || '',
+            gender: patientDraft.gender || '',
+            email: patientDraft.email || readStoredPatientEmail(),
+            phone: patientDraft.phone || '',
+            address: patientDraft.address || ''
         },
         showUpsell: false,
         view: initialView,
@@ -131,6 +139,11 @@ export function BookingProvider({ children }: { children: ReactNode }) {
     };
 
     const goHome = () => {
+        if (isPatientPortalBookingEntry()) {
+            window.location.href = '/patient';
+            return;
+        }
+
         const normalizedPath = window.location.pathname.toLowerCase().replace(/\/+$/, '');
         const hash = (window.location.hash || '').trim().toLowerCase();
 
@@ -154,7 +167,11 @@ export function BookingProvider({ children }: { children: ReactNode }) {
         const currentIndex = FLOW_ORDER.indexOf(state.step);
         if (currentIndex < FLOW_ORDER.length - 1) {
             if (state.step === 'dates') {
-                setState(prev => ({ ...prev, step: 'upsell', showUpsell: true }));
+                setState(prev => ({
+                    ...prev,
+                    step: prev.hasActiveUnlimitedCoverage ? 'details' : 'upsell',
+                    showUpsell: !prev.hasActiveUnlimitedCoverage,
+                }));
             } else if (state.step === 'upsell') {
                 setState(prev => ({ ...prev, step: 'details', showUpsell: false }));
             } else {
@@ -166,7 +183,13 @@ export function BookingProvider({ children }: { children: ReactNode }) {
     const prevStep = () => {
         const currentIndex = FLOW_ORDER.indexOf(state.step);
         if (currentIndex > 0) {
-            setState(prev => ({ ...prev, step: FLOW_ORDER[currentIndex - 1] }));
+            setState(prev => ({
+                ...prev,
+                step:
+                    prev.step === 'details' && prev.hasActiveUnlimitedCoverage
+                        ? 'dates'
+                        : FLOW_ORDER[currentIndex - 1],
+            }));
         }
     };
 

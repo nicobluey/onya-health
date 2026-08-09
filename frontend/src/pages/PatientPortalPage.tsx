@@ -20,6 +20,10 @@ import {
 } from 'lucide-react';
 import { fetchApiJson, getApiBase } from '../lib/api';
 import { warmCheckoutPath } from '../lib/performanceWarmup';
+import {
+    buildPatientCertificateBookingUrl,
+    storePatientCertificateDraft,
+} from '../consult-flow/patient-entry';
 import HomeTab from '../patient-portal/home/HomeTab';
 import {
     type CheckoutSetupContext,
@@ -338,7 +342,7 @@ function ConsultTab({
                         </p>
                         <p className="mt-1 text-sm text-[#1a3d63]">
                             {billing?.hasActiveUnlimited
-                                ? 'Your next medical certificate request will go straight to doctor review with no checkout screen.'
+                                ? 'Complete the medical certificate form, then submit directly for doctor review with no checkout screen.'
                                 : 'Start a medical certificate request and you can choose one-off payment or unlimited at checkout.'}
                         </p>
                     </div>
@@ -479,7 +483,6 @@ function AccountTab({
     data,
     onDownloadCertificate,
     onManageBilling,
-    onCancelSubscription,
     billingActionState,
     billingError,
     emailChangeNotice,
@@ -492,8 +495,7 @@ function AccountTab({
     data: PortalProfileData;
     onDownloadCertificate: (request: PortalRequest) => void;
     onManageBilling: () => void;
-    onCancelSubscription: () => void;
-    billingActionState: 'idle' | 'opening_portal' | 'cancelling';
+    billingActionState: 'idle' | 'opening_portal';
     billingError: string;
     emailChangeNotice: string;
     onSaveProfile: (payload: {
@@ -744,6 +746,13 @@ function AccountTab({
                             >
                                 {billingActionState === 'opening_portal' ? 'Opening billing...' : 'Manage subscription'}
                             </button>
+                        ) : billing?.hasActiveUnlimited ? (
+                            <a
+                                href="mailto:support@onyahealth.com.au"
+                                className="inline-flex h-10 items-center justify-center rounded-xl border border-[#b3cfe5] bg-white px-4 text-sm font-semibold text-[#0a1931]"
+                            >
+                                Contact billing support
+                            </a>
                         ) : (
                             <a
                                 href="/doctor"
@@ -755,16 +764,6 @@ function AccountTab({
                             </a>
                         )}
 
-                        {billing?.hasActiveUnlimited && !billing.cancelAtPeriodEnd && (
-                            <button
-                                type="button"
-                                onClick={onCancelSubscription}
-                                disabled={billingActionState !== 'idle'}
-                                className="inline-flex h-10 items-center justify-center rounded-xl border border-[#b3cfe5] bg-white px-4 text-sm font-semibold text-[#0a1931] disabled:cursor-not-allowed disabled:opacity-70"
-                            >
-                                {billingActionState === 'cancelling' ? 'Updating...' : 'Cancel at period end'}
-                            </button>
-                        )}
                     </div>
 
                     {billing?.cancelAtPeriodEnd && (
@@ -951,9 +950,9 @@ function QueuedWaitingScreen({
                             const active = index === stageIndex && stageIndex < 3;
                             const pulse = active && index === 2;
                             return (
-                                <div key={step} className="relative text-center">
+                                <div key={step} className="relative min-w-0 text-center">
                                     <span
-                                        className={`mx-auto flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-semibold ${
+                                        className={`relative z-10 mx-auto flex h-7 w-7 items-center justify-center rounded-full border text-[11px] font-semibold ${
                                             completed
                                                 ? 'border-[#1a3d63] bg-[#1a3d63] text-white'
                                                 : active
@@ -966,8 +965,8 @@ function QueuedWaitingScreen({
                                     <span className="mt-1 block text-[11px] font-semibold text-[#4a7fa7]">{step}</span>
                                     {index < queueSteps.length - 1 && (
                                         <span
-                                            className={`absolute left-[58%] top-3 h-[2px] w-[84%] ${
-                                                completed ? 'bg-[#b3cfe5]' : 'bg-[#b3cfe5]'
+                                            className={`absolute left-[calc(50%+14px)] right-[calc(-50%+14px)] top-[13px] z-0 h-px ${
+                                                completed ? 'bg-[#1a3d63]' : 'bg-[#b3cfe5]'
                                             }`}
                                             aria-hidden="true"
                                         />
@@ -1287,7 +1286,7 @@ export default function PatientPortalPage() {
     );
     const [requests, setRequests] = useState<PortalRequest[]>([]);
     const [billing, setBilling] = useState<PatientBillingInfo | null>(null);
-    const [billingActionState, setBillingActionState] = useState<'idle' | 'opening_portal' | 'cancelling'>('idle');
+    const [billingActionState, setBillingActionState] = useState<'idle' | 'opening_portal'>('idle');
     const [billingError, setBillingError] = useState('');
     const [activeQueuedRequest, setActiveQueuedRequest] = useState<PortalRequest | null>(null);
     const [recordTab, setRecordTab] = useState<RecordTab>('medical-history');
@@ -1637,93 +1636,6 @@ export default function PatientPortalPage() {
         setTab('home');
     };
 
-    const startUnlimitedCertificateRequest = async () => {
-        warmCheckoutPath();
-        if (!token) {
-            window.location.href = '/patient-login';
-            return;
-        }
-
-        const patientEmail = (patient.email || window.localStorage.getItem('onya_patient_email') || '').trim().toLowerCase();
-        if (!patientEmail) {
-            window.alert('Your account email is missing. Refresh and try again.');
-            return;
-        }
-
-        const startDateIso = new Date().toISOString();
-        const fallbackPurpose = latestRequest?.purpose || 'Personal leave';
-        const fallbackSymptom = latestRequest?.symptom || 'General medical condition';
-        const fallbackDescription = 'Requested from patient portal using active unlimited plan.';
-
-        try {
-            const { response, payload } = await fetchApiJson('/api/checkout/session', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                    uiMode: 'hosted',
-                    serviceType: 'doctor',
-                    patient: {
-                        fullName: patient.fullName || 'Patient',
-                        email: patientEmail,
-                        dob: patient.dob || '',
-                        phone: patient.phone || '',
-                    },
-                    consult: {
-                        purpose: fallbackPurpose,
-                        symptom: fallbackSymptom,
-                        symptomVisibility: 'private',
-                        description: fallbackDescription,
-                        startDate: startDateIso,
-                        durationDays: 1,
-                        complianceChecked: true,
-                        isUnlimited: true,
-                        includeCarerCertificate: false,
-                    },
-                }),
-            });
-
-            if (!response.ok) {
-                throw new Error(payload?.error || 'Unable to start your certificate request right now.');
-            }
-
-            if (payload?.checkoutBypassed) {
-                const syntheticRequest: PortalRequest = {
-                    id: String(payload?.certificateId || `local-${createId()}`),
-                    createdAt: new Date().toISOString(),
-                    status: String(payload?.status || 'pending'),
-                    serviceType: 'doctor',
-                    purpose: fallbackPurpose,
-                    symptom: fallbackSymptom,
-                    symptomVisibility: 'private',
-                    description: fallbackDescription,
-                    startDate: startDateIso,
-                    durationDays: 1,
-                };
-                setRequests((current) => [syntheticRequest, ...current.filter((item) => item.id !== syntheticRequest.id)]);
-                setActiveQueuedRequest(syntheticRequest);
-                setPortalScreen('queued');
-                return;
-            }
-
-            if (payload?.checkoutUrl) {
-                window.location.assign(String(payload.checkoutUrl));
-                return;
-            }
-
-            if (payload?.redirectUrl) {
-                window.location.assign(String(payload.redirectUrl));
-                return;
-            }
-
-            throw new Error('Unable to start your certificate request right now.');
-        } catch (errorObject) {
-            window.alert(errorObject instanceof Error ? errorObject.message : 'Unable to start your certificate request right now.');
-        }
-    };
-
     const openConsultOption = (optionId: ConsultOptionId) => {
         const option = CONSULT_OPTIONS.find((item) => item.id === optionId);
         if (!option) return;
@@ -1731,11 +1643,14 @@ export default function PatientPortalPage() {
         setLastMainTab('consult');
         if (option.status === 'available') {
             if (option.id === 'medical-certificate') {
-                if (billing?.hasActiveUnlimited) {
-                    void startUnlimitedCertificateRequest();
-                    return;
-                }
-                window.location.href = '/doctor';
+                storePatientCertificateDraft({
+                    fullName: patient.fullName,
+                    dob: patient.dob,
+                    email: patient.email,
+                    phone: patient.phone,
+                    address: patient.address,
+                });
+                window.location.href = buildPatientCertificateBookingUrl(Boolean(billing?.hasActiveUnlimited));
                 return;
             }
 
@@ -2028,28 +1943,6 @@ export default function PatientPortalPage() {
         }
     };
 
-    const cancelSubscriptionAtPeriodEnd = async () => {
-        if (!token) return;
-        try {
-            setBillingError('');
-            setBillingActionState('cancelling');
-            const { response, payload } = await fetchApiJson('/api/patient/subscription/cancel', {
-                method: 'POST',
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                },
-            });
-            if (!response.ok) {
-                throw new Error(payload?.error || 'Unable to update subscription right now.');
-            }
-            setBilling(normalizeBillingInfo(payload?.billing));
-            setBillingActionState('idle');
-        } catch (errorObject) {
-            setBillingError(errorObject instanceof Error ? errorObject.message : 'Unable to update subscription right now.');
-            setBillingActionState('idle');
-        }
-    };
-
     const renderPortalContent = (mode: LayoutMode) => {
         if (portalScreen === 'call-prep') {
             return <CallPrepScreen onBack={closeOverlayScreen} onStartCall={startCallAndQueue} />;
@@ -2108,7 +2001,6 @@ export default function PatientPortalPage() {
                 data={portalData}
                 onDownloadCertificate={downloadCertificatePdf}
                 onManageBilling={openBillingPortal}
-                onCancelSubscription={cancelSubscriptionAtPeriodEnd}
                 billingActionState={billingActionState}
                 billingError={billingError}
                 emailChangeNotice={emailChangeNotice}
