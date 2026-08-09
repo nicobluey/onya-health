@@ -372,8 +372,16 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
   the review workspace. Desktop and 390 px checks found no horizontal overflow or console errors.
 - Removed DOB from the one-page certificate PDF while retaining age at consultation, clinician
   registration/provider details, signature, verification code, issue date, and revision.
-- Unit, API lifecycle, PDF render/text, build, lint, syntax, audit, and production-alias results are
-  recorded below after the release verification completes.
+- `npm test` passed 29 tests; build, lint, Node syntax, static-mirror, diff, and PDF render/text
+  checks passed; `npm audit --audit-level=high` reported zero vulnerabilities.
+- Vercel promoted commit `43a2564` to deployment `dpl_E6FfYYBuTAYw7g15seX6fGUFdvzC` and
+  assigned `supadoc.com.au`, `www.supadoc.com.au`, and `onya-health.vercel.app`. Every alias
+  returned `200` for health and the updated doctor review page.
+- Live production checks rejected a backdated request with `CERTIFICATE_START_DATE_INVALID` and
+  a zero-age DOB with `PATIENT_DETAILS_REQUIRED`. The configured administrator received edit
+  permission, all 57 current queue rows exposed `patientPhone`, fake edit/reissue IDs returned
+  `404`, unauthenticated reissue returned `401`, and a read-only approved PDF preview returned one
+  page with zero DOB text matches.
 
 2026-08-09:
 

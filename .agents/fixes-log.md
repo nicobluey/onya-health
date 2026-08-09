@@ -53,7 +53,14 @@
    date, current issue date, revision, age, clinician identifiers, signature, and verification panel.
 4. Doctor review, doctor queue, and patient details passed desktop and 390 px browser checks with
    no horizontal overflow or console errors; queue phone and admin reissue controls were visible.
-5. Final build, lint, audit, deployment, and live API verification are recorded after release.
+5. `npm test` passed 29 tests; build, lint, Node syntax, static mirror, diff, and PDF checks passed;
+   `npm audit --audit-level=high` reported zero vulnerabilities.
+6. Vercel promoted commit `43a2564` as deployment `dpl_E6FfYYBuTAYw7g15seX6fGUFdvzC` to
+   `supadoc.com.au`, `www.supadoc.com.au`, and `onya-health.vercel.app`; all health and updated
+   doctor review requests returned `200`.
+7. Live validation rejected backdated and zero-age submissions, returned administrator edit
+   permission and phone keys for all 57 current queue rows, returned `404` for authenticated fake
+   edit/reissue IDs and `401` without auth, and rendered a one-page approved PDF with no DOB text.
 
 ## 2026-08-09 - Customer support replies in certificate conversations
 
