@@ -139,16 +139,19 @@ Avoid purple, beige-dominant palettes, gradient orbs, bokeh, glassmorphism, and 
 
 - Keep certificates to one A4 page with patient identity, clinical statement, clinician details,
   verification, and footer clearly separated.
-- Patient identity includes the patient's name and age at consultation. Date of birth remains in
-  the protected patient and doctor records and must not be printed on the certificate.
-- If an administrator removes DOB from a corrected certificate draft, omit the derived age row too.
+- Patient name and certificate dates are required. Date of birth, age at consultation, purpose,
+  and reason are explicit clinician-controlled fields; DOB is hidden by default and must never
+  appear merely because it exists in the protected patient record.
+- Disable an optional-field control when its source value is unavailable. Record the selected
+  field visibility with every issued revision so historical PDFs reproduce exactly.
 - Private doctor notes remain in the clinical record only and must never be rendered into previews,
   downloads, reissues, or emailed certificate attachments.
 - Clinician identity includes registration number and Medicare provider number.
 - Uploaded signatures are private profile assets. Render the signature without stretching it and
   keep it clear of the certificate body, verification block, and footer.
 - Reissued certificates show their current issue date and revision while retaining the original
-  consultation date and issuing clinician identity.
+  consultation date and issuing clinician identity. Superseded revisions remain independently
+  previewable from the doctor history and must not change when the active revision is edited.
 - Mobile doctor review must provide an explicit browser-native `Open PDF` action plus download;
   embedded PDF frames are desktop enhancement only because phone browsers render them inconsistently.
 

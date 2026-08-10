@@ -46,6 +46,20 @@ import {
   validateRequestedCertificateStartDate,
 } from '../backend/lib/certificate-fields.js';
 import {
+  archiveCurrentCertificateRevision,
+  buildCertificateFromRevisionSnapshot,
+  buildCertificateRevisionHistory,
+  changedCertificateRevisionFields,
+  createCertificateRevisionSnapshot,
+  getCertificateConsultationDate,
+  getCertificateIssueDate,
+  getCertificatePdfFieldVisibility,
+  getCertificateRevision,
+  getCertificateRevisionContent,
+  getCertificateRevisionSnapshot,
+  normalizeCertificatePresentation,
+} from '../backend/lib/certificate-revisions.js';
+import {
   certificateMatchesDoctorPatientFilters,
   parseDoctorPatientRequestFilters,
 } from '../backend/lib/doctor-patient-filters.js';
@@ -1913,6 +1927,19 @@ function isApprovedCertificate(certificate) {
   return false;
 }
 
+function canDoctorReissueCertificate(email, certificate) {
+  if (!isApprovedCertificate(certificate)) return false;
+  const normalizedEmail = normalizeEmail(email);
+  return (
+    isDoctorAdminEmail(normalizedEmail) ||
+    Boolean(normalizedEmail && normalizedEmail === normalizeEmail(certificate?.decision?.byEmail))
+  );
+}
+
+function canDoctorEditCertificate(email, certificate) {
+  return isCertificateOpenForReview(certificate) || canDoctorReissueCertificate(email, certificate);
+}
+
 function normalizeVerificationCode(value) {
   return String(value || '')
     .toUpperCase()
@@ -2302,10 +2329,11 @@ function doctorPayloadFromRequest(cert) {
     description: cert.certificateDraft.description,
     risk: cert.risk,
     decision: cert.decision || null,
-    certificateRevision: Math.max(
-      1,
-      Number(cert?.decision?.revision || cert?.rawSubmission?.workflow?.certificateRevision || 1)
-    ),
+    certificateRevision: getCertificateRevision(cert),
+    certificateConsultationDate: getCertificateConsultationDate(cert),
+    certificateIssueDate: getCertificateIssueDate(cert),
+    certificatePdfFieldVisibility: getCertificatePdfFieldVisibility(cert),
+    certificateRevisionHistory: isApprovedCertificate(cert) ? buildCertificateRevisionHistory(cert) : [],
     certificateStatement:
       String(cert?.decision?.certificateStatement || cert?.rawSubmission?.workflow?.certificateStatement || '').trim() ||
       buildDefaultCertificateStatement(cert, cert?.decision?.at || new Date()),
@@ -8122,6 +8150,67 @@ export default async function handler(req, res) {
       return;
     }
 
+    if (
+      req.method === 'GET' &&
+      segments.length === 6 &&
+      segments[0] === 'doctor' &&
+      segments[1] === 'certificates' &&
+      segments[3] === 'revisions' &&
+      segments[5] === 'pdf'
+    ) {
+      const doctor = await requireDoctor(req, res);
+      if (!doctor) return;
+
+      const certId = decodeURIComponent(segments[2]);
+      const revision = Number(decodeURIComponent(segments[4]));
+      if (!Number.isInteger(revision) || revision < 1) {
+        sendJson(res, 400, { error: 'Certificate revision must be a positive integer.' });
+        return;
+      }
+
+      const certificate = await getCertificateById(certId);
+      if (!certificate) {
+        sendJson(res, 404, { error: 'Certificate not found' });
+        return;
+      }
+      if (!isApprovedCertificate(certificate)) {
+        sendJson(res, 409, { error: 'Certificate has not been issued.' });
+        return;
+      }
+
+      const snapshot = getCertificateRevisionSnapshot(certificate, revision);
+      const revisionCertificate = buildCertificateFromRevisionSnapshot(certificate, snapshot);
+      if (!revisionCertificate) {
+        sendJson(res, 404, { error: 'Certificate revision not found' });
+        return;
+      }
+
+      const doctorSignature = await resolveCertificateDoctorSignature(revisionCertificate);
+      const verificationCode = getCertificateVerificationCode(revisionCertificate);
+      const pdfBuffer = await buildCertificatePdf(revisionCertificate, {
+        doctorName: revisionCertificate?.decision?.by || 'Onya Health Doctor',
+        providerType: revisionCertificate?.decision?.providerType || '',
+        registrationNumber: revisionCertificate?.decision?.registrationNumber || '',
+        providerNumber: revisionCertificate?.decision?.providerNumber || '',
+        signatureImage: doctorSignature?.buffer || null,
+        verificationCode,
+        verifyUrl: `${getFrontendBaseUrl(req)}/verify?code=${encodeURIComponent(verificationCode)}`,
+      });
+
+      await appendAudit({
+        type: 'CERTIFICATE_REVISION_VIEWED',
+        certificateId: certId,
+        revision,
+        by: normalizeEmail(doctor.email),
+      }).catch(() => undefined);
+      res.status(200);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="medical-certificate-${certId}-revision-${revision}.pdf"`);
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.send(pdfBuffer);
+      return;
+    }
+
     if (req.method === 'GET' && segments.length === 3 && segments[0] === 'doctor' && segments[1] === 'certificates') {
       const doctor = await requireDoctor(req, res);
       if (!doctor) return;
@@ -8139,8 +8228,8 @@ export default async function handler(req, res) {
       sendJson(res, 200, {
         doctor: doctor.email,
         permissions: {
-          canEditCertificate: isDoctorAdminEmail(doctor.email),
-          canReissueCertificate: isDoctorAdminEmail(doctor.email),
+          canEditCertificate: canDoctorEditCertificate(doctor.email, certificate),
+          canReissueCertificate: canDoctorReissueCertificate(doctor.email, certificate),
         },
         certificate: {
           ...doctorPayloadFromRequest(certificate),
@@ -8153,10 +8242,6 @@ export default async function handler(req, res) {
     if (req.method === 'PATCH' && segments.length === 3 && segments[0] === 'doctor' && segments[1] === 'certificates') {
       const doctor = await requireDoctor(req, res);
       if (!doctor) return;
-      if (!isDoctorAdminEmail(doctor.email)) {
-        sendJson(res, 403, { error: 'Only an administrator can edit certificate fields.' });
-        return;
-      }
 
       const certId = decodeURIComponent(segments[2]);
       const current = await getCertificateById(certId);
@@ -8169,6 +8254,10 @@ export default async function handler(req, res) {
           error: 'Issued certificates must be updated with the reissue action.',
           status: current.status,
         });
+        return;
+      }
+      if (!canDoctorEditCertificate(doctor.email, current)) {
+        sendJson(res, 403, { error: 'You do not have permission to edit this certificate.' });
         return;
       }
 
@@ -8190,7 +8279,23 @@ export default async function handler(req, res) {
       const notes = Object.prototype.hasOwnProperty.call(body, 'notes')
         ? String(body.notes || '').trim().slice(0, 4000)
         : String(current?.decision?.notes || '');
-      const changedFields = changedEditableCertificateFields(current.certificateDraft, fieldValidation.draft);
+      const presentation = normalizeCertificatePresentation(body, current, fieldValidation.draft);
+      if (!presentation.valid) {
+        sendJson(res, 400, {
+          error: presentation.errors[0],
+          code: 'CERTIFICATE_PRESENTATION_INVALID',
+          details: presentation.errors,
+        });
+        return;
+      }
+      const beforeContent = getCertificateRevisionContent(current);
+      const afterContent = {
+        certificateDraft: fieldValidation.draft,
+        certificateStatement,
+        issueDate: presentation.issueDate,
+        pdfFieldVisibility: presentation.pdfFieldVisibility,
+      };
+      const changedFields = changedCertificateRevisionFields(beforeContent, afterContent);
       const editedAt = new Date().toISOString();
 
       const updated = await updateCertificate(certId, (item) => ({
@@ -8198,24 +8303,30 @@ export default async function handler(req, res) {
         certificateDraft: fieldValidation.draft,
         rawSubmission: mergeCertificateDraftIntoSubmission(item.rawSubmission, fieldValidation.draft, {
           certificateStatement,
-          adminEditedAt: editedAt,
-          adminEditedBy: normalizeEmail(doctor.email),
+          certificateIssueDate: presentation.issueDate,
+          certificatePdfFieldVisibility: presentation.pdfFieldVisibility,
+          certificateEditedAt: editedAt,
+          certificateEditedBy: normalizeEmail(doctor.email),
         }),
         decision: {
           ...(item.decision || {}),
           notes,
           certificateStatement,
+          issueDate: presentation.issueDate,
+          pdfFieldVisibility: presentation.pdfFieldVisibility,
         },
       }), { current });
 
       await appendAudit({
-        type: 'CERTIFICATE_ADMIN_FIELDS_UPDATED',
+        type: 'CERTIFICATE_FIELDS_UPDATED',
         certificateId: certId,
         by: normalizeEmail(doctor.email),
         changedFields,
+        before: beforeContent,
+        after: afterContent,
       });
       sendJson(res, 200, {
-        message: 'Certificate fields saved',
+        message: 'Certificate draft saved',
         certificate: doctorPayloadFromRequest(updated),
       });
       return;
@@ -8230,10 +8341,6 @@ export default async function handler(req, res) {
     ) {
       const doctor = await requireDoctor(req, res);
       if (!doctor) return;
-      if (!isDoctorAdminEmail(doctor.email)) {
-        sendJson(res, 403, { error: 'Only an administrator can reissue certificates.' });
-        return;
-      }
 
       const certId = decodeURIComponent(segments[2]);
       const current = await getCertificateById(certId);
@@ -8245,6 +8352,12 @@ export default async function handler(req, res) {
         sendJson(res, 409, {
           error: 'Only approved certificates can be reissued.',
           status: current.status,
+        });
+        return;
+      }
+      if (!canDoctorReissueCertificate(doctor.email, current)) {
+        sendJson(res, 403, {
+          error: 'Only the issuing doctor or an administrator can reissue this certificate.',
         });
         return;
       }
@@ -8270,19 +8383,48 @@ export default async function handler(req, res) {
       const notes = Object.prototype.hasOwnProperty.call(body, 'notes')
         ? String(body.notes || '').trim().slice(0, 4000)
         : String(current?.decision?.notes || '');
-      const changedFields = changedEditableCertificateFields(current.certificateDraft, fieldValidation.draft);
+      const presentation = normalizeCertificatePresentation(body, current, fieldValidation.draft);
+      if (!presentation.valid) {
+        sendJson(res, 400, {
+          error: presentation.errors[0],
+          code: 'CERTIFICATE_PRESENTATION_INVALID',
+          details: presentation.errors,
+        });
+        return;
+      }
+      const beforeContent = getCertificateRevisionContent(current);
+      const afterContent = {
+        certificateDraft: fieldValidation.draft,
+        certificateStatement,
+        issueDate: presentation.issueDate,
+        pdfFieldVisibility: presentation.pdfFieldVisibility,
+      };
+      const changedFields = changedCertificateRevisionFields(beforeContent, afterContent);
       const reissuedAt = new Date().toISOString();
-      const revision = Math.max(
-        1,
-        Number(current?.decision?.revision || current?.rawSubmission?.workflow?.certificateRevision || 1)
-      ) + 1;
+      const revision = getCertificateRevision(current) + 1;
+      const archivedWorkflow = archiveCurrentCertificateRevision(current, {
+        archivedAt: reissuedAt,
+        archivedBy: normalizeEmail(doctor.email),
+        supersededByRevision: revision,
+        changesToNextRevision: changedFields,
+      });
+      const beforeVersion = createCertificateRevisionSnapshot(current, {
+        archivedAt: reissuedAt,
+        archivedBy: normalizeEmail(doctor.email),
+        supersededByRevision: revision,
+        changesToNextRevision: changedFields,
+      });
 
       const updated = await updateCertificate(certId, (item) => ({
         ...item,
         certificateDraft: fieldValidation.draft,
         rawSubmission: mergeCertificateDraftIntoSubmission(item.rawSubmission, fieldValidation.draft, {
+          ...archivedWorkflow,
           certificateStatement,
           certificateRevision: revision,
+          certificateRevisionChangedFields: changedFields,
+          certificateIssueDate: presentation.issueDate,
+          certificatePdfFieldVisibility: presentation.pdfFieldVisibility,
           reissuedAt,
           reissuedBy: normalizeEmail(doctor.email),
         }),
@@ -8291,6 +8433,8 @@ export default async function handler(req, res) {
           notes,
           certificateStatement,
           revision,
+          issueDate: presentation.issueDate,
+          pdfFieldVisibility: presentation.pdfFieldVisibility,
           reissuedAt,
           reissuedBy: normalizeEmail(doctor.email),
         },
@@ -8302,6 +8446,8 @@ export default async function handler(req, res) {
         by: normalizeEmail(doctor.email),
         revision,
         changedFields,
+        beforeVersion,
+        afterVersion: createCertificateRevisionSnapshot(updated),
       });
       let patientNotificationFailed = false;
       try {
@@ -8591,7 +8737,7 @@ export default async function handler(req, res) {
         sendJson(res, 404, { error: 'Certificate not found' });
         return;
       }
-      const useIssuedDoctorIdentity = isDoctorAdminEmail(doctor.email) && isApprovedCertificate(certificate);
+      const useIssuedDoctorIdentity = isApprovedCertificate(certificate);
       if (
         !useIssuedDoctorIdentity &&
         (!doctorProfile?.providerType || !doctorProfile?.registrationNumber || !doctorProfile?.providerNumber)
@@ -8608,11 +8754,16 @@ export default async function handler(req, res) {
 
       const body = await parseJsonBody(req);
       const notes = String(body.notes || '').trim();
-      const certificateStatement = normalizeCertificateStatement(body.certificateStatement);
+      const currentContent = getCertificateRevisionContent(certificate);
+      const certificateStatement = normalizeCertificateStatement(
+        Object.prototype.hasOwnProperty.call(body, 'certificateStatement')
+          ? body.certificateStatement
+          : currentContent.certificateStatement
+      );
       let previewDraft = certificate.certificateDraft;
       if (body.fields && typeof body.fields === 'object') {
-        if (!isDoctorAdminEmail(doctor.email)) {
-          sendJson(res, 403, { error: 'Only an administrator can preview edited certificate fields.' });
+        if (!canDoctorEditCertificate(doctor.email, certificate)) {
+          sendJson(res, 403, { error: 'You do not have permission to preview certificate edits.' });
           return;
         }
         const fieldValidation = normalizeEditableCertificateFields(body.fields, certificate.certificateDraft);
@@ -8625,6 +8776,28 @@ export default async function handler(req, res) {
           return;
         }
         previewDraft = fieldValidation.draft;
+      }
+      const presentation = normalizeCertificatePresentation(body, certificate, previewDraft);
+      if (!presentation.valid) {
+        sendJson(res, 400, {
+          error: presentation.errors[0],
+          code: 'CERTIFICATE_PRESENTATION_INVALID',
+          details: presentation.errors,
+        });
+        return;
+      }
+      const previewContent = {
+        certificateDraft: previewDraft,
+        certificateStatement,
+        issueDate: presentation.issueDate,
+        pdfFieldVisibility: presentation.pdfFieldVisibility,
+      };
+      if (
+        !canDoctorEditCertificate(doctor.email, certificate) &&
+        changedCertificateRevisionFields(currentContent, previewContent).length > 0
+      ) {
+        sendJson(res, 403, { error: 'You do not have permission to preview certificate edits.' });
+        return;
       }
 
       const previewCertificate = {
@@ -8648,8 +8821,10 @@ export default async function handler(req, res) {
           at: useIssuedDoctorIdentity
             ? certificate?.decision?.at || certificate.createdAt || previewedAt
             : previewedAt,
-          ...(useIssuedDoctorIdentity ? { reissuedAt: previewedAt } : {}),
           notes,
+          certificateStatement,
+          issueDate: presentation.issueDate,
+          pdfFieldVisibility: presentation.pdfFieldVisibility,
         },
       };
 
@@ -8711,22 +8886,43 @@ export default async function handler(req, res) {
         return;
       }
 
-      let adminFieldValidation = null;
+      let fieldValidation = null;
       if (body.fields && typeof body.fields === 'object') {
-        if (!isDoctorAdminEmail(doctor.email)) {
-          sendJson(res, 403, { error: 'Only an administrator can edit certificate fields.' });
-          return;
-        }
-        adminFieldValidation = normalizeEditableCertificateFields(body.fields, current.certificateDraft);
-        if (!adminFieldValidation.valid) {
+        fieldValidation = normalizeEditableCertificateFields(body.fields, current.certificateDraft);
+        if (!fieldValidation.valid) {
           sendJson(res, 400, {
-            error: adminFieldValidation.errors[0],
+            error: fieldValidation.errors[0],
             code: 'CERTIFICATE_FIELDS_INVALID',
-            details: adminFieldValidation.errors,
+            details: fieldValidation.errors,
           });
           return;
         }
       }
+
+      const nextDraft = fieldValidation?.draft || current.certificateDraft;
+      const presentation = decision === 'approved'
+        ? normalizeCertificatePresentation(body, current, nextDraft)
+        : null;
+      if (presentation && !presentation.valid) {
+        sendJson(res, 400, {
+          error: presentation.errors[0],
+          code: 'CERTIFICATE_PRESENTATION_INVALID',
+          details: presentation.errors,
+        });
+        return;
+      }
+      const currentContent = getCertificateRevisionContent(current);
+      const approvedContent = presentation
+        ? {
+            certificateDraft: nextDraft,
+            certificateStatement,
+            issueDate: presentation.issueDate,
+            pdfFieldVisibility: presentation.pdfFieldVisibility,
+          }
+        : null;
+      const changedFields = approvedContent
+        ? changedCertificateRevisionFields(currentContent, approvedContent)
+        : changedEditableCertificateFields(current.certificateDraft, nextDraft);
 
       const signatureMetadata = await getDoctorSignatureMetadata(doctor.email);
 
@@ -8734,7 +8930,6 @@ export default async function handler(req, res) {
         if (!isCertificateOpenForReview(item)) return item;
 
         const decidedAt = new Date().toISOString();
-        const nextDraft = adminFieldValidation?.draft || item.certificateDraft;
         const workflowPatch = {
           reviewedByName: reviewerName,
           reviewedByEmail: normalizeEmail(doctor.email),
@@ -8745,7 +8940,15 @@ export default async function handler(req, res) {
           signatureMimeType: String(signatureMetadata?.signatureMimeType || ''),
           reviewedAt: decidedAt,
           decisionResult: decision,
-          ...(decision === 'approved' ? { certificateStatement } : {}),
+          ...(decision === 'approved'
+            ? {
+                certificateStatement,
+                certificateRevision: 1,
+                certificateRevisionChangedFields: changedFields,
+                certificateIssueDate: presentation.issueDate,
+                certificatePdfFieldVisibility: presentation.pdfFieldVisibility,
+              }
+            : {}),
         };
 
         return {
@@ -8766,7 +8969,14 @@ export default async function handler(req, res) {
             at: decidedAt,
             notes,
             result: decision,
-            ...(decision === 'approved' ? { certificateStatement } : {}),
+            ...(decision === 'approved'
+              ? {
+                  certificateStatement,
+                  revision: 1,
+                  issueDate: presentation.issueDate,
+                  pdfFieldVisibility: presentation.pdfFieldVisibility,
+                }
+              : {}),
           },
         };
       }, { current });
@@ -8784,9 +8994,10 @@ export default async function handler(req, res) {
         certificateId: updated.id,
         decision,
         by: doctor.email,
-        changedFields: adminFieldValidation
-          ? changedEditableCertificateFields(current.certificateDraft, adminFieldValidation.draft)
-          : [],
+        changedFields,
+        ...(decision === 'approved'
+          ? { issuedVersion: createCertificateRevisionSnapshot(updated) }
+          : {}),
       });
       let patientNotificationFailed = false;
       try {

@@ -1,5 +1,47 @@
 # Fixes Log
 
+## 2026-08-10 - Preserve certificate revisions and expose doctor reissue history
+
+### Symptoms
+
+- Reissuing a certificate replaced the active certificate data without preserving a renderable
+  copy of the prior PDF inputs.
+- Doctors could not set the date of issue or explicitly choose whether DOB, age, purpose, and
+  reason appeared on a certificate.
+- The portal showed only the latest revision, so clinicians had no direct way to preview the
+  original certificate after a correction.
+
+### Root causes
+
+1. The existing revision counter and audit event recorded changed field names but not an immutable
+   patient-facing snapshot.
+2. PDF presentation choices were inferred from available data rather than persisted explicitly.
+3. The doctor API exposed only the active certificate and had no authenticated historical-PDF route.
+
+### Files changed
+
+- `backend/lib/certificate-revisions.js`, `backend/lib/certificate-revisions.test.js`
+  - normalize issue dates and PDF field visibility, archive immutable snapshots, reconstruct prior
+    revisions, and generate current/superseded history summaries without private doctor notes.
+- `api/index.js`, `backend/server.js`, `backend/lib/storage.js`
+  - expose presentation/history data, enforce open-versus-issued edit permissions, archive before
+    reissue, preserve the issuing clinician, and serve authenticated historical revision PDFs.
+- `backend/lib/pdf.js`, `backend/lib/pdf.test.js`
+  - render the selected optional fields and explicit issue date in a compact one-page layout.
+- `frontend/public/doctor/review/index.html`, `backend/doctor-portal/review.html`
+  - add issue-date and optional-field controls, repeatable preview, reissue, and current/superseded
+    history rows with browser-native Open/Download actions.
+
+### Verification
+
+- Unit tests cover visibility defaults, issue-date boundaries, immutable archival, note exclusion,
+  reconstruction, history ordering, and the dense one-page PDF variant.
+- An isolated API flow approved revision 1, reissued revisions 2 and 3, opened all three historical
+  PDFs, proved superseded names/content stayed unchanged, and confirmed an unrelated approved doctor
+  could edit an open request but received `403` when attempting to reissue another doctor's certificate.
+- Rendered A4 inspection confirmed all optional fields fit without overlap and private doctor notes
+  were absent from revision snapshots and audit payloads.
+
 ## 2026-08-10 - Make reissues removable, messages role-based, and PDFs mobile-safe
 
 ### Symptoms

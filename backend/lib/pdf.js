@@ -5,6 +5,11 @@ import { fileURLToPath } from 'node:url';
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
 
+import {
+  getCertificateIssueDate,
+  getCertificatePdfFieldVisibility,
+} from './certificate-revisions.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -294,9 +299,16 @@ export async function buildCertificatePdf(certificate, options = {}) {
     (baseUrl ? `${baseUrl}/verify?code=${encodeURIComponent(verificationCode)}` : '');
 
   const consultationAt = certificate?.decision?.at || certificate?.createdAt || new Date().toISOString();
-  const issuedAt = certificate?.decision?.reissuedAt || consultationAt;
-  const issueDate = formatLongDate(issuedAt);
-  const issueDateIso = formatIsoCalendarDate(issuedAt);
+  const issueDateIso = getCertificateIssueDate(certificate);
+  const issueDate = formatLongDate(issueDateIso);
+  const pdfFieldVisibility = getCertificatePdfFieldVisibility(certificate);
+  const optionalDetailCount = [
+    pdfFieldVisibility.dateOfBirth && data.dob,
+    pdfFieldVisibility.age && data.dob,
+    pdfFieldVisibility.purpose && data.purpose,
+    pdfFieldVisibility.symptom && data.symptom,
+  ].filter(Boolean).length;
+  const useCompactLayout = optionalDetailCount >= 3;
 
   const patientIdentity = buildCertificateIdentityDetails(certificate, consultationAt);
   const patientName = patientIdentity.patientName;
@@ -403,27 +415,27 @@ export async function buildCertificatePdf(certificate, options = {}) {
       align: 'right',
     });
 
-    y = 92;
-    doc.font('Helvetica-Bold').fontSize(38).fillColor(colors.text).text('Medical Certificate', left, y, {
+    y = useCompactLayout ? 84 : 92;
+    doc.font('Helvetica-Bold').fontSize(useCompactLayout ? 34 : 38).fillColor(colors.text).text('Medical Certificate', left, y, {
       width: contentWidth,
     });
     doc
       .font('Helvetica')
       .fontSize(11)
       .fillColor(colors.muted)
-      .text('Doctor-reviewed telehealth certificate', left, y + 44, {
+      .text('Doctor-reviewed telehealth certificate', left, y + (useCompactLayout ? 39 : 44), {
         width: contentWidth,
       });
-    y += 62;
+    y += useCompactLayout ? 54 : 62;
 
     doc.lineWidth(2.5).strokeColor(colors.accent).moveTo(left, y).lineTo(right, y).stroke();
     y += 16;
 
-    const headerCardHeight = 112;
+    const headerCardHeight = useCompactLayout ? 104 : 112;
     const headerTopY = y;
     drawHolographicPanel(doc, left, headerTopY, contentWidth, headerCardHeight, '#B9D3F7');
 
-    const qrTileSize = 74;
+    const qrTileSize = useCompactLayout ? 68 : 74;
     const qrTileX = right - qrTileSize - 18;
     const qrTileY = headerTopY + (headerCardHeight - qrTileSize) / 2;
 
@@ -475,35 +487,44 @@ export async function buildCertificatePdf(certificate, options = {}) {
       .fillColor(colors.text)
       .text(verificationCode, codeX, codeY + 68, { width: metaWidth, lineBreak: false });
 
-    y += headerCardHeight + 20;
+    y += headerCardHeight + (useCompactLayout ? 16 : 20);
 
     doc.font('Helvetica-Bold').fontSize(14).fillColor(colors.text).text('Patient details', left, y);
     y += 20;
 
-    doc.font('Helvetica-Bold').fontSize(13).text('Name:', left, y);
-    doc.font('Helvetica').fontSize(13).text(patientName, left + 130, y, {
-      width: contentWidth - 130,
-    });
-    y += 22;
-
-    if (patientIdentity.ageAtConsultation) {
-      doc.font('Helvetica-Bold').fontSize(12).text('Age at consultation:', left, y, {
-        width: 126,
-        lineBreak: false,
-      });
-      doc.font('Helvetica').fontSize(12).text(patientIdentity.ageAtConsultation, left + 130, y, {
-        width: contentWidth - 130,
-        lineBreak: false,
-      });
-      y += 22;
-    }
-
-    doc.font('Helvetica-Bold').fontSize(12).text('Certificate Period:', left, y);
     const readablePeriod = buildReadablePeriod(data.startDate, durationDays);
-    doc.font('Helvetica').fontSize(12).text(readablePeriod, left + 130, y, {
-      width: contentWidth - 130,
-    });
-    y += 28;
+    const detailLabelWidth = 150;
+    const detailRowGap = useCompactLayout ? 17 : 21;
+    const drawPatientDetail = (label, value, options = {}) => {
+      const displayValue = String(value || '').trim();
+      if (!displayValue) return;
+      const fontSize = options.fontSize || 11.5;
+      doc.font('Helvetica-Bold').fontSize(fontSize).fillColor(colors.text).text(label, left, y, {
+        width: detailLabelWidth - 4,
+        lineBreak: false,
+      });
+      doc.font('Helvetica').fontSize(fontSize).fillColor(colors.text).text(displayValue, left + detailLabelWidth, y, {
+        width: contentWidth - detailLabelWidth,
+        lineGap: 1,
+      });
+      y = Math.max(y + detailRowGap, doc.y + 3);
+    };
+
+    drawPatientDetail('Name:', patientName, { fontSize: 12.5 });
+    if (pdfFieldVisibility.dateOfBirth && data.dob) {
+      drawPatientDetail('Date of birth:', formatLongDate(data.dob));
+    }
+    if (pdfFieldVisibility.age && patientIdentity.ageAtConsultation) {
+      drawPatientDetail('Age at consultation:', patientIdentity.ageAtConsultation);
+    }
+    if (pdfFieldVisibility.purpose && data.purpose) {
+      drawPatientDetail('Purpose:', data.purpose);
+    }
+    if (pdfFieldVisibility.symptom && data.symptom) {
+      drawPatientDetail('Reason provided:', data.symptom);
+    }
+    drawPatientDetail('Certificate period:', readablePeriod);
+    y += 5;
 
     doc.font('Helvetica-Bold').fontSize(20).fillColor(colors.text).text('Medical Certificate Statement', left, y, {
       width: contentWidth,
@@ -558,10 +579,10 @@ export async function buildCertificatePdf(certificate, options = {}) {
       drawSignatureMark(doc, left, y + 10);
     }
 
-    y += 46;
+    y += useCompactLayout ? 44 : 46;
 
-    const verificationHeight = 112;
-    const verificationBottomSpace = 44;
+    const verificationHeight = useCompactLayout ? 96 : 112;
+    const verificationBottomSpace = useCompactLayout ? 40 : 44;
     const maxVerificationY = doc.page.height - 38 - verificationHeight - verificationBottomSpace;
     if (y > maxVerificationY) {
       doc.addPage();
@@ -570,7 +591,7 @@ export async function buildCertificatePdf(certificate, options = {}) {
     }
 
     let verificationY = Math.min(y + 12, maxVerificationY);
-    const minVerificationY = 540;
+    const minVerificationY = useCompactLayout ? 520 : 540;
     if (isFirstPage && verificationY < minVerificationY) verificationY = minVerificationY;
 
     drawHolographicPanel(doc, left, verificationY, contentWidth, verificationHeight, colors.border);
@@ -579,23 +600,29 @@ export async function buildCertificatePdf(certificate, options = {}) {
       .font('Helvetica-Bold')
       .fontSize(12)
       .fillColor(colors.text)
-      .text('AUTHENTICITY VERIFICATION', left + 16, verificationY + 14, { lineBreak: false });
+      .text('AUTHENTICITY VERIFICATION', left + 16, verificationY + (useCompactLayout ? 11 : 14), { lineBreak: false });
 
     doc
       .font('Helvetica')
       .fontSize(10)
       .fillColor(colors.muted)
-      .text('Use the code below at supadoc.com.au/verify to confirm this certificate.', left + 16, verificationY + 32, {
+      .text('Use the code below at supadoc.com.au/verify to confirm this certificate.', left + 16, verificationY + (useCompactLayout ? 28 : 32), {
         width: contentWidth - 150,
         lineBreak: false,
       });
 
-    doc.font('Helvetica-Bold').fontSize(20).fillColor(colors.text).text(verificationCode, left + 16, verificationY + 64, {
+    doc.font('Helvetica-Bold').fontSize(20).fillColor(colors.text).text(verificationCode, left + 16, verificationY + (useCompactLayout ? 56 : 64), {
       width: contentWidth - 170,
       lineBreak: false,
     });
 
-    drawHolographicSeal(doc, right - 66, verificationY + 62, 82, verificationCode);
+    drawHolographicSeal(
+      doc,
+      right - (useCompactLayout ? 58 : 66),
+      verificationY + (useCompactLayout ? 50 : 62),
+      useCompactLayout ? 68 : 82,
+      verificationCode
+    );
 
     const footerY = verificationY + verificationHeight + 8;
     doc.font('Helvetica-Bold').fontSize(10).fillColor(colors.text).text('Verification support', left, footerY, {

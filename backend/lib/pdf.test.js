@@ -85,3 +85,51 @@ test('keeps private doctor notes out of patient-facing PDF text', async (context
   assert.doesNotMatch(extraction.stdout, /PRIVATE CLINICAL NOTE MUST NOT APPEAR/);
   assert.doesNotMatch(extraction.stdout, /Clinician note:/);
 });
+
+test('renders the editable issue date and only the optional PDF fields selected by the doctor', async (context) => {
+  const pdf = await buildCertificatePdf({
+    id: 'visibility-test',
+    createdAt: '2026-08-08T02:00:00.000Z',
+    status: 'approved',
+    certificateDraft: {
+      fullName: 'Alex Smith',
+      dob: '1990-08-09',
+      purpose: 'Work',
+      symptom: 'Respiratory illness',
+      startDate: '2026-08-10',
+      durationDays: 2,
+    },
+    decision: {
+      at: '2026-08-08T02:00:00.000Z',
+      issueDate: '2026-08-09',
+      by: 'Dr Taylor',
+      providerType: 'Medical practitioner',
+      registrationNumber: 'MED000001',
+      providerNumber: '123456A',
+      pdfFieldVisibility: {
+        dateOfBirth: true,
+        age: false,
+        purpose: true,
+        symptom: true,
+      },
+    },
+  });
+  const extraction = spawnSync('pdftotext', ['-', '-'], { input: pdf, encoding: 'utf8' });
+  if (extraction.error?.code === 'ENOENT') {
+    context.skip('pdftotext is not installed');
+    return;
+  }
+
+  assert.equal(extraction.status, 0, extraction.stderr);
+  assert.match(extraction.stdout, /DATE OF ISSUE\s+9 August 2026/);
+  assert.match(extraction.stdout, /Date of birth:\s+9 August 1990/);
+  assert.doesNotMatch(extraction.stdout, /Age at consultation:/);
+  assert.match(extraction.stdout, /Purpose:\s+Work/);
+  assert.match(extraction.stdout, /Reason provided:\s+Respiratory illness/);
+
+  const pageInfo = spawnSync('pdfinfo', ['-'], { input: pdf, encoding: 'utf8' });
+  if (!pageInfo.error) {
+    assert.equal(pageInfo.status, 0, pageInfo.stderr);
+    assert.match(pageInfo.stdout, /Pages:\s+1/);
+  }
+});

@@ -44,17 +44,19 @@ Current implementation state:
   `$4.95` for a carer certificate, and `$19.00` monthly for All Access.
 - Doctors can edit the default clinical certificate statement and regenerate the PDF
   preview repeatedly before approval; only the approved wording is persisted.
-- Configured administrators can correct every certificate-draft field before approval and can
-  edit, regenerate, and reissue an approved certificate. Account email, request identity,
-  payment, risk, verification, and clinician credentials remain immutable ownership/audit data.
+- Approved doctors can correct certificate fields on open requests. Once issued, only the issuing
+  doctor or a configured administrator can edit and reissue the certificate. Account email,
+  request identity, payment, risk, verification, and clinician credentials remain immutable
+  ownership/audit data.
 - Certificate intake requires a valid patient date of birth and phone number. Self-service
   requests require the patient to be at least 16, certificate dates begin today or later, and
-  date of birth is retained in the clinical record but omitted from issued PDFs.
+  date of birth is retained in the clinical record and hidden on PDFs by default.
 - Approved portal users can send a certificate-thread update as either the authenticated
   clinical team or the fixed `Customer support` identity. Patient-facing threads and emails use
   role identities only, while the authenticated account remains in the server audit event.
-- Administrators can remove optional fields from corrected/reissued certificates while retaining
-  required patient name and certificate dates. Private doctor notes are excluded from every PDF.
+- Doctors can explicitly include or omit date of birth, age, purpose, and reason on the PDF while
+  retaining required patient name and certificate dates. Each issue/reissue records the selected
+  fields, issue date, content, issuer, and change summary; private doctor notes are excluded.
 - Patient queue status is workflow-based without synthetic minute estimates. Doctor and patient
   certificate actions open PDFs through the phone's browser document viewer.
 - Booking flow in `frontend/src/consult-flow`.
@@ -366,6 +368,12 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
 
 2026-08-10:
 
+- Added immutable certificate revision snapshots and an authenticated revision-PDF endpoint.
+  Doctor review now exposes issue-date editing, explicit optional-field controls, repeatable PDF
+  preview, and a full current/superseded history with mobile-safe Open/Download actions.
+- Approved doctors can edit open requests. An issued certificate can only be reissued by its
+  original issuing doctor or a configured administrator, preserving the original clinical owner.
+  Every reissue archives the previous patient-facing PDF inputs before revision numbers advance.
 - Removed the synthetic queue timer, replaced personal doctor identities with the fixed
   `Clinical team` identity in patient threads/emails, and removed private decision notes from
   patient request summaries and every certificate PDF generation path.
@@ -377,13 +385,14 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
 - Added shared browser/server validation for required DOB and phone, a self-service minimum age
   of 16, a 1900 DOB floor, and certificate start dates from today onward. The API rejects invalid,
   under-age, future, and backdated submissions even when browser controls are bypassed.
-- Added audited administrator correction and reissue routes. Open requests can be corrected
-  before approval; approved requests can be edited, regenerated, versioned, emailed, and reissued
-  while preserving the original patient account owner and issuing clinician identity.
+- Added audited correction and reissue routes. Open requests can be corrected by approved doctors;
+  approved requests can be edited, regenerated, versioned, emailed, and reissued by the original
+  issuer or an administrator while preserving patient ownership and issuing-clinician identity.
 - Added the patient phone number to the doctor queue and a responsive certificate-field editor to
   the review workspace. Desktop and 390 px checks found no horizontal overflow or console errors.
-- Removed DOB from the one-page certificate PDF while retaining age at consultation, clinician
-  registration/provider details, signature, verification code, issue date, and revision.
+- Kept DOB hidden by default while allowing an explicit clinician selection to include DOB, age,
+  purpose, or reason on the one-page PDF. Registration/provider details, signature, verification
+  code, issue date, and revision remain present.
 - `npm test` passed 29 tests; build, lint, Node syntax, static-mirror, diff, and PDF render/text
   checks passed; `npm audit --audit-level=high` reported zero vulnerabilities.
 - Vercel promoted commit `43a2564` to deployment `dpl_E6FfYYBuTAYw7g15seX6fGUFdvzC` and

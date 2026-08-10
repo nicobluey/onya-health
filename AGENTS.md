@@ -134,10 +134,13 @@ API and backend source is intentionally compact:
 - `backend/lib/storage.js` - local/Supabase storage mapping.
 - `backend/lib/email*.js` - email transport and templates.
 - `backend/lib/*auth*.js` - patient and doctor auth helpers.
+- `backend/lib/certificate-revisions.js` - certificate presentation rules, immutable revision snapshots, and history summaries.
 - `backend/lib/pdf.js` - certificate PDF generation.
 - `supabase/migrations/` - schema changes that must be applied before relying on new DB fields.
 
 When touching auth, payment, profile, or certificate workflow code, preserve existing API contracts unless the UI and docs are updated in the same change.
+Certificate reissues must archive the prior patient-facing certificate snapshot before replacing the
+active revision. Historical snapshots exclude private doctor notes and remain independently renderable.
 
 ## Clinical, Compliance, And Safety Boundaries
 

@@ -494,6 +494,12 @@ function mapSupabaseRowToCertificate(row) {
           result: workflow.decisionResult || status,
           certificateStatement: workflow.certificateStatement || '',
           revision: Math.max(1, Number(workflow.certificateRevision || 1)),
+          issueDate: workflow.certificateIssueDate || '',
+          pdfFieldVisibility:
+            workflow.certificatePdfFieldVisibility &&
+            typeof workflow.certificatePdfFieldVisibility === 'object'
+              ? workflow.certificatePdfFieldVisibility
+              : null,
           reissuedAt: workflow.reissuedAt || null,
           reissuedBy: workflow.reissuedBy || '',
         }

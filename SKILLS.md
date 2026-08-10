@@ -60,10 +60,16 @@ Use when changing practitioner account creation, login, password reset, queue, r
 - Public doctor signup must not grant active practitioner access without admin approval.
 - Password reset must create a valid reset token and send through the configured email transport or mock outbox.
 - Doctor profile must support AHPRA/provider metadata and allow provider-number updates.
-- Administrator certificate corrections and reissues must be audited. Do not allow draft edits to
-  change patient account ownership, payment state, risk evidence, verification codes, or clinician credentials.
-- Administrators may remove optional certificate fields, but patient name, certificate date, and
-  duration remain required. Intake DOB/phone requirements are separate from certificate corrections.
+- Certificate corrections and reissues must be audited. Approved doctors may edit open requests;
+  only the original issuing doctor or a configured administrator may reissue an issued certificate.
+  Do not allow edits to change patient account ownership, payment state, risk evidence, verification
+  codes, or issuing-clinician credentials.
+- Patient name and certificate dates remain required. Date of birth, age, purpose, and reason use
+  explicit PDF visibility controls, with DOB off by default. Intake DOB/phone requirements remain
+  separate from certificate presentation choices.
+- Archive the complete prior patient-facing revision before every reissue, excluding private doctor
+  notes. Historical revisions must stay independently renderable and list issuer, timestamps, and
+  changed fields in the doctor portal.
 - Staff replies use the fixed `Clinical team` or `Customer support` identity in every patient-facing
   thread and email; retain the authenticated staff account only in audit data.
 - Mobile review must expose browser-native Open/Download PDF controls after preview generation.

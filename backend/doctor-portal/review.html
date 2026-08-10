@@ -66,6 +66,21 @@
       .preview-link { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; border: 1px solid #b3cfe5; border-radius: 10px; padding: 0 14px; background: #fff; color: #1a3d63; font-size: 14px; font-weight: 700; text-decoration: none; }
       .preview-link.primary { border-color: #1a3d63; background: #1a3d63; color: #fff; }
       .preview-mobile-note { display: none; margin: 0 0 12px; color: #4a7fa7; font-size: 13px; line-height: 1.5; }
+      .visibility-fieldset { grid-column: 1 / -1; border: 0; border-top: 1px solid #dce9f4; margin: 4px 0 0; padding: 16px 0 0; }
+      .visibility-fieldset legend { padding: 0 8px 0 0; }
+      .visibility-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 18px; }
+      .visibility-option { display: flex; min-height: 40px; align-items: center; gap: 10px; color: #1a3d63; font-size: 14px; font-weight: 700; cursor: pointer; }
+      .visibility-option input { width: 18px; min-height: 18px; height: 18px; margin: 0; padding: 0; accent-color: #1a3d63; }
+      .visibility-option input:disabled + span { color: #7d91a7; }
+      .history-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+      .history-heading h2 { margin: 0; font-size: 20px; }
+      .revision-list { margin-top: 10px; }
+      .revision-entry { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px 0; border-top: 1px solid #dce9f4; }
+      .revision-entry:first-child { border-top: 0; }
+      .revision-title { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-weight: 800; }
+      .revision-state { border-radius: 999px; padding: 3px 7px; background: #e7f2ff; color: #1a3d63; font-size: 10px; text-transform: uppercase; }
+      .revision-state.superseded { background: #eef2f5; color: #53677b; }
+      .revision-meta { margin-top: 4px; color: #4a7fa7; font-size: 12px; line-height: 1.45; }
       [hidden] { display: none !important; }
       @media (max-width: 640px) {
         header { align-items: flex-start; gap: 12px; }
@@ -76,6 +91,9 @@
         iframe { display: none; }
         .preview-actions { display: grid; grid-template-columns: 1fr 1fr; }
         .preview-mobile-note { display: block; }
+        .visibility-options { grid-template-columns: 1fr; }
+        .revision-entry { grid-template-columns: 1fr; }
+        .revision-entry button { width: 100%; }
       }
     </style>
   </head>
@@ -93,9 +111,9 @@
         <div class="admin-heading">
           <div>
             <h2>Certificate fields</h2>
-            <p>Correct typos or remove optional fields. Every change is recorded in the request audit trail.</p>
+            <p>Edit the patient-facing certificate content before approval or reissue.</p>
           </div>
-          <span class="admin-badge">Admin</span>
+          <span class="admin-badge">Clinician</span>
         </div>
         <div class="edit-grid">
           <label class="edit-field">
@@ -138,6 +156,10 @@
             <input id="edit-start-date" type="date" />
           </label>
           <label class="edit-field">
+            <span class="label">Date of issue</span>
+            <input id="edit-issue-date" type="date" />
+          </label>
+          <label class="edit-field">
             <span class="label">Duration (days)</span>
             <input id="edit-duration" type="number" min="1" max="7" step="1" />
           </label>
@@ -145,12 +167,28 @@
             <div class="field-label-row"><label class="label" for="edit-description">Clinical notes from patient</label><button type="button" class="clear-field" data-clear-field="description">Remove</button></div>
             <textarea id="edit-description" maxlength="4000"></textarea>
           </div>
+          <fieldset class="visibility-fieldset">
+            <legend class="label">Fields shown on PDF</legend>
+            <div class="visibility-options">
+              <label class="visibility-option"><input id="pdf-show-dob" type="checkbox" /><span>Date of birth</span></label>
+              <label class="visibility-option"><input id="pdf-show-age" type="checkbox" /><span>Age at consultation</span></label>
+              <label class="visibility-option"><input id="pdf-show-purpose" type="checkbox" /><span>Purpose</span></label>
+              <label class="visibility-option"><input id="pdf-show-symptom" type="checkbox" /><span>Reason provided</span></label>
+            </div>
+          </fieldset>
         </div>
         <div class="actions">
-          <button id="save-fields" class="secondary">Save corrections</button>
+          <button id="save-fields" class="secondary">Save draft</button>
           <button id="reissue" class="approve" hidden>Reissue &amp; email patient</button>
         </div>
         <div id="admin-edit-status" class="status muted"></div>
+      </div>
+      <div id="revision-history-panel" class="panel" hidden>
+        <div class="history-heading">
+          <h2>Certificate history</h2>
+          <span id="revision-count" class="muted"></span>
+        </div>
+        <div id="revision-history-list" class="revision-list"></div>
       </div>
       <div class="panel">
         <div class="label">Patient conversation</div>
@@ -226,7 +264,17 @@
       const previewDownloadLink = document.getElementById('preview-download');
       const adminEditPanel = document.getElementById('admin-edit-panel');
       const adminEditStatusNode = document.getElementById('admin-edit-status');
+      const issueDateNode = document.getElementById('edit-issue-date');
+      const revisionHistoryPanel = document.getElementById('revision-history-panel');
+      const revisionHistoryList = document.getElementById('revision-history-list');
+      const revisionCountNode = document.getElementById('revision-count');
       const clearFieldButtons = Array.from(document.querySelectorAll('[data-clear-field]'));
+      const pdfVisibilityNodes = {
+        dateOfBirth: document.getElementById('pdf-show-dob'),
+        age: document.getElementById('pdf-show-age'),
+        purpose: document.getElementById('pdf-show-purpose'),
+        symptom: document.getElementById('pdf-show-symptom'),
+      };
       const adminFieldNodes = {
         fullName: document.getElementById('edit-full-name'),
         email: document.getElementById('edit-email'),
@@ -249,6 +297,7 @@
       let currentCertificate = null;
       let canEditCertificate = false;
       let canReissueCertificate = false;
+      const revisionObjectUrls = [];
 
       function dateInputValue(date) {
         const year = date.getFullYear();
@@ -260,6 +309,7 @@
       const latestDob = new Date();
       latestDob.setFullYear(latestDob.getFullYear() - 16);
       adminFieldNodes.dob.max = dateInputValue(latestDob);
+      issueDateNode.max = dateInputValue(new Date());
 
       if (!id) {
         contentNode.textContent = 'Missing certificate ID.';
@@ -374,6 +424,13 @@
         adminFieldNodes.startDate.value = cert.startDate || '';
         adminFieldNodes.durationDays.value = String(cert.durationDays || 1);
         adminFieldNodes.description.value = cert.description || '';
+        issueDateNode.value = cert.certificateIssueDate || dateInputValue(new Date());
+        issueDateNode.min = cert.certificateConsultationDate || '';
+        const visibility = cert.certificatePdfFieldVisibility || {};
+        Object.entries(pdfVisibilityNodes).forEach(([fieldName, node]) => {
+          node.checked = Boolean(visibility[fieldName]);
+        });
+        updatePdfVisibilityAvailability();
       }
 
       function readAdminFields() {
@@ -393,6 +450,88 @@
 
       function adminRequestFields() {
         return canEditCertificate ? readAdminFields() : undefined;
+      }
+
+      function readCertificatePresentation() {
+        return {
+          issueDate: issueDateNode.value,
+          pdfFieldVisibility: Object.fromEntries(
+            Object.entries(pdfVisibilityNodes).map(([fieldName, node]) => [fieldName, node.checked])
+          ),
+        };
+      }
+
+      function updatePdfVisibilityAvailability() {
+        const editable = canEditCertificate && (isOpenStatus(currentStatus) || String(currentStatus || '').toLowerCase() === 'approved');
+        const available = {
+          dateOfBirth: Boolean(adminFieldNodes.dob.value),
+          age: Boolean(adminFieldNodes.dob.value),
+          purpose: Boolean(adminFieldNodes.purpose.value.trim()),
+          symptom: Boolean(adminFieldNodes.symptom.value.trim()),
+        };
+        Object.entries(pdfVisibilityNodes).forEach(([fieldName, node]) => {
+          if (!available[fieldName]) node.checked = false;
+          node.disabled = !editable || !available[fieldName];
+        });
+      }
+
+      function formatHistoryDate(value, includeTime = false) {
+        const date = new Date(value || '');
+        if (Number.isNaN(date.getTime())) return '';
+        return new Intl.DateTimeFormat('en-AU', includeTime
+          ? { dateStyle: 'medium', timeStyle: 'short' }
+          : { dateStyle: 'medium' }).format(date);
+      }
+
+      function humanizeChangedField(field) {
+        const labels = {
+          fullName: 'patient name',
+          dob: 'date of birth',
+          phone: 'phone',
+          address: 'address',
+          purpose: 'purpose',
+          symptom: 'reason provided',
+          symptomVisibility: 'symptom privacy',
+          description: 'patient notes',
+          startDate: 'certificate start date',
+          durationDays: 'duration',
+          certificateStatement: 'certificate wording',
+          issueDate: 'date of issue',
+          'pdfFieldVisibility.dateOfBirth': 'DOB visibility',
+          'pdfFieldVisibility.age': 'age visibility',
+          'pdfFieldVisibility.purpose': 'purpose visibility',
+          'pdfFieldVisibility.symptom': 'reason visibility',
+        };
+        return labels[field] || String(field || '').replaceAll('.', ' ');
+      }
+
+      function renderRevisionHistory(history) {
+        const revisions = Array.isArray(history) ? history : [];
+        revisionHistoryPanel.hidden = revisions.length === 0;
+        revisionCountNode.textContent = revisions.length ? `${revisions.length} version${revisions.length === 1 ? '' : 's'}` : '';
+        revisionHistoryList.innerHTML = revisions.map((entry) => {
+          const current = entry.state === 'current';
+          const issueDate = formatHistoryDate(entry.issueDate);
+          const issuedAt = formatHistoryDate(entry.issuedAt, true);
+          const changes = Array.isArray(entry.changedFields) && entry.changedFields.length
+            ? entry.changedFields.map(humanizeChangedField).join(', ')
+            : '';
+          const meta = [
+            issueDate ? `Issue date ${issueDate}` : '',
+            issuedAt ? `Issued ${issuedAt}` : '',
+            entry.issuedBy ? `by ${entry.issuedBy}` : '',
+            changes ? `Changes: ${changes}` : '',
+          ].filter(Boolean).join(' · ');
+          return `
+            <div class="revision-entry">
+              <div>
+                <div class="revision-title">Revision ${escapeHtml(entry.revision)} <span class="revision-state ${current ? '' : 'superseded'}">${current ? 'Current' : 'Superseded'}</span></div>
+                <div class="revision-meta">${escapeHtml(meta)}</div>
+              </div>
+              <button type="button" class="secondary" data-open-revision="${escapeHtml(entry.revision)}">Open PDF</button>
+            </div>
+          `;
+        }).join('');
       }
 
       function getReplySenderType() {
@@ -430,9 +569,11 @@
         Object.entries(adminFieldNodes).forEach(([fieldName, node]) => {
           node.disabled = fieldName === 'email' || !(canEditCertificate && (open || issued));
         });
+        issueDateNode.disabled = !(canEditCertificate && (open || issued));
         clearFieldButtons.forEach((button) => {
           button.disabled = !(canEditCertificate && (open || issued));
         });
+        updatePdfVisibilityAvailability();
       }
 
       async function parseResponseJson(response) {
@@ -467,9 +608,8 @@
         canEditCertificate = Boolean(payload.permissions?.canEditCertificate);
         canReissueCertificate = Boolean(payload.permissions?.canReissueCertificate);
         adminEditPanel.hidden = !canEditCertificate;
-        if (canEditCertificate) {
-          populateAdminFields(cert);
-        }
+        populateAdminFields(cert);
+        renderRevisionHistory(cert.certificateRevisionHistory);
         renderMessages(cert.messages);
         if (cert.decision?.notes) {
           notesNode.value = cert.decision.notes;
@@ -490,6 +630,7 @@
             <div><div class="label">Duration</div><div class="value">${escapeHtml(cert.durationDays || 1)} day(s)</div></div>
             <div><div class="label">Verification</div><div class="value">${escapeHtml(cert.verificationCode || '-')}</div></div>
             <div><div class="label">Certificate revision</div><div class="value">${escapeHtml(cert.certificateRevision || 1)}</div></div>
+            <div><div class="label">Date of issue</div><div class="value">${escapeHtml(cert.certificateIssueDate || '-')}</div></div>
             <div><div class="label">Risk</div><div class="value">${escapeHtml(String(cert.risk?.level || '').toUpperCase())} (${escapeHtml(cert.risk?.score ?? 0)})</div></div>
             <div><div class="label">Risk Notes</div><div class="value">${escapeHtml(formatReasons(cert.risk?.reasons))}</div></div>
           </div>
@@ -504,7 +645,7 @@
           setStatus(`This certificate is already ${cert.status}.`, 'muted');
         }
         if (String(cert.status || '').toLowerCase() === 'approved' && canReissueCertificate) {
-          setAdminEditStatus('Edit or remove fields, preview the corrected PDF, then reissue it to the patient.', 'muted');
+          setAdminEditStatus('Preview the corrected version before reissuing it to the patient.', 'muted');
         }
       }
 
@@ -563,6 +704,7 @@
               notes: notesNode.value,
               certificateStatement: certificateStatementNode.value,
               fields: adminRequestFields(),
+              ...readCertificatePresentation(),
             }),
           });
 
@@ -573,6 +715,8 @@
           }
 
           currentStatus = payload?.certificate?.status || decision;
+          if (payload?.certificate) currentCertificate = payload.certificate;
+          if (decision === 'approved') await loadCertificate();
           setStatus(payload.message || `Certificate ${decision}`, 'success');
           updateActionAvailability();
         } catch (error) {
@@ -701,6 +845,7 @@
               fields: readAdminFields(),
               notes: notesNode.value,
               certificateStatement: certificateStatementNode.value,
+              ...readCertificatePresentation(),
             }),
           });
           const payload = await parseResponseJson(response);
@@ -735,6 +880,7 @@
               fields: readAdminFields(),
               notes: notesNode.value,
               certificateStatement: certificateStatementNode.value,
+              ...readCertificatePresentation(),
             }),
           });
           const payload = await parseResponseJson(response);
@@ -742,7 +888,9 @@
             throw new Error(payload.error || 'Failed to reissue certificate');
           }
           currentCertificate = payload.certificate || currentCertificate;
-          if (payload.certificate) populateAdminFields(payload.certificate);
+          if (payload.certificate) {
+            await loadCertificate();
+          }
           setAdminEditStatus(
             payload.message || 'Certificate reissued.',
             payload.patientNotificationFailed ? 'error' : 'success'
@@ -776,6 +924,7 @@
               notes: notesNode.value,
               certificateStatement: certificateStatementNode.value,
               fields: adminRequestFields(),
+              ...readCertificatePresentation(),
             }),
           });
 
@@ -808,6 +957,38 @@
         }
       }
 
+      async function openCertificateRevision(revision, triggerButton) {
+        const revisionWindow = window.open('', '_blank');
+        if (revisionWindow) {
+          revisionWindow.document.title = `Certificate revision ${revision}`;
+          revisionWindow.document.body.textContent = 'Opening certificate...';
+        }
+        if (triggerButton) triggerButton.disabled = true;
+        try {
+          const response = await fetch(
+            `/api/doctor/certificates/${encodeURIComponent(id)}/revisions/${encodeURIComponent(revision)}/pdf`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          if (!response.ok) {
+            const payload = await parseResponseJson(response);
+            throw new Error(payload.error || 'Failed to open certificate revision');
+          }
+          const pdfBlob = await response.blob();
+          const objectUrl = URL.createObjectURL(pdfBlob);
+          revisionObjectUrls.push(objectUrl);
+          if (revisionWindow) {
+            revisionWindow.location.replace(objectUrl);
+          } else {
+            window.open(objectUrl, '_blank', 'noopener');
+          }
+        } catch (error) {
+          if (revisionWindow) revisionWindow.close();
+          setStatus(error.message || 'Failed to open certificate revision.', 'error');
+        } finally {
+          if (triggerButton) triggerButton.disabled = false;
+        }
+      }
+
       document.getElementById('assign').addEventListener('click', assignCertificate);
       document.getElementById('send-reply').addEventListener('click', sendReply);
       replySenderNodes.forEach((node) => node.addEventListener('change', updateReplyMode));
@@ -820,12 +1001,21 @@
       document.getElementById('preview-pdf').addEventListener('click', previewPdf);
       document.getElementById('save-fields').addEventListener('click', saveCertificateFields);
       document.getElementById('reissue').addEventListener('click', reissueCertificate);
+      revisionHistoryList.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-open-revision]');
+        if (!button) return;
+        openCertificateRevision(button.dataset.openRevision, button);
+      });
       clearFieldButtons.forEach((button) => {
         button.addEventListener('click', () => {
           const fieldName = button.dataset.clearField;
           const fieldNode = adminFieldNodes[fieldName];
           if (!fieldNode || fieldNode.disabled) return;
           fieldNode.value = '';
+          if (fieldName === 'dob') {
+            pdfVisibilityNodes.dateOfBirth.checked = false;
+            pdfVisibilityNodes.age.checked = false;
+          }
           fieldNode.dispatchEvent(new Event('input', { bubbles: true }));
           fieldNode.focus();
         });
@@ -837,14 +1027,30 @@
       });
       Object.values(adminFieldNodes).forEach((node) => {
         node.addEventListener('input', () => {
+          updatePdfVisibilityAvailability();
           setAdminEditStatus('Unsaved corrections.', 'muted');
           if (previewPanel.style.display !== 'none') {
             setStatus('Certificate fields changed. Regenerate the preview to see the update.', 'muted');
           }
         });
       });
+      issueDateNode.addEventListener('input', () => {
+        setAdminEditStatus('Unsaved corrections.', 'muted');
+        if (previewPanel.style.display !== 'none') {
+          setStatus('Date of issue changed. Regenerate the preview to see the update.', 'muted');
+        }
+      });
+      Object.values(pdfVisibilityNodes).forEach((node) => {
+        node.addEventListener('change', () => {
+          setAdminEditStatus('Unsaved corrections.', 'muted');
+          if (previewPanel.style.display !== 'none') {
+            setStatus('PDF fields changed. Regenerate the preview to see the update.', 'muted');
+          }
+        });
+      });
       window.addEventListener('beforeunload', () => {
         if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
+        revisionObjectUrls.forEach((objectUrl) => URL.revokeObjectURL(objectUrl));
       });
 
       if (id) {
