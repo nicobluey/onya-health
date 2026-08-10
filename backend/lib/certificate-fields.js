@@ -1,4 +1,9 @@
-import { isValidIsoDate, validateCertificatePatientDetails } from './patient-details.js';
+import {
+  EARLIEST_CERTIFICATE_DOB,
+  MINIMUM_CERTIFICATE_PATIENT_AGE,
+  calculateAgeYears,
+  isValidIsoDate,
+} from './patient-details.js';
 
 export const EDITABLE_CERTIFICATE_DRAFT_FIELDS = [
   'fullName',
@@ -63,8 +68,32 @@ export function normalizeEditableCertificateFields(input, currentDraft = {}, now
     durationDays,
   };
 
-  const patientValidation = validateCertificatePatientDetails(draft, now);
-  const errors = [...patientValidation.errors];
+  const errors = [];
+  if (!draft.fullName) {
+    errors.push('Patient name is required on the certificate');
+  }
+  if (draft.dob) {
+    if (!isValidIsoDate(draft.dob)) {
+      errors.push('Date of birth must be a valid date or removed');
+    } else {
+      const age = calculateAgeYears(draft.dob, now);
+      if (draft.dob < EARLIEST_CERTIFICATE_DOB) {
+        errors.push('Date of birth must be on or after 1 January 1900');
+      } else if (age === null) {
+        errors.push('Date of birth must be a valid date or removed');
+      } else if (age < 0) {
+        errors.push('Date of birth cannot be in the future');
+      } else if (age < MINIMUM_CERTIFICATE_PATIENT_AGE) {
+        errors.push(`Patient must be at least ${MINIMUM_CERTIFICATE_PATIENT_AGE} years old`);
+      }
+    }
+  }
+  if (draft.phone) {
+    const phoneDigits = draft.phone.replace(/\D+/g, '');
+    if (phoneDigits.length < 8 || phoneDigits.length > 15) {
+      errors.push('Phone number must contain 8 to 15 digits or be removed');
+    }
+  }
   if (!isValidIsoDate(draft.startDate)) {
     errors.push('Certificate start date must be a valid date');
   }
@@ -77,7 +106,6 @@ export function normalizeEditableCertificateFields(input, currentDraft = {}, now
     errors,
     draft: {
       ...draft,
-      ...patientValidation.patient,
       durationDays: Number.isInteger(durationDays) ? durationDays : 1,
     },
   };

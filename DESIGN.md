@@ -123,8 +123,11 @@ Avoid purple, beige-dominant palettes, gradient orbs, bokeh, glassmorphism, and 
   filters must use the same query for result counts and the selected patient's request list.
 - Certificate conversations use one shared thread. Patient messages align opposite staff messages;
   doctor replies use deep navy and `Customer support` replies use a distinct accessible blue.
-- Sender controls must name `Doctor` and `Customer support` explicitly. Support messages never use
-  a clinician name, but the authenticated portal account remains available in the server audit log.
+- Sender controls must name `Clinical team` and `Customer support` explicitly. Patient-facing
+  messages and email notifications never expose the authenticated clinician's name or email, but
+  the authenticated portal account remains available in the server audit log.
+- Queue progress uses real workflow states only. Do not display generated or static minute estimates
+  unless the API supplies a measured service estimate.
 - Patient certificate actions always enter the shared intake form. Unlimited coverage changes the
   checkout outcome after submission; it must not create a request from a portal card tap.
 - Queue milestone connectors stop at the edge of each milestone circle and sit behind the circles;
@@ -138,11 +141,16 @@ Avoid purple, beige-dominant palettes, gradient orbs, bokeh, glassmorphism, and 
   verification, and footer clearly separated.
 - Patient identity includes the patient's name and age at consultation. Date of birth remains in
   the protected patient and doctor records and must not be printed on the certificate.
+- If an administrator removes DOB from a corrected certificate draft, omit the derived age row too.
+- Private doctor notes remain in the clinical record only and must never be rendered into previews,
+  downloads, reissues, or emailed certificate attachments.
 - Clinician identity includes registration number and Medicare provider number.
 - Uploaded signatures are private profile assets. Render the signature without stretching it and
-  keep the clinician note beside it so neither element collides with the footer.
+  keep it clear of the certificate body, verification block, and footer.
 - Reissued certificates show their current issue date and revision while retaining the original
   consultation date and issuing clinician identity.
+- Mobile doctor review must provide an explicit browser-native `Open PDF` action plus download;
+  embedded PDF frames are desktop enhancement only because phone browsers render them inconsistently.
 
 ### Stripe Checkout
 

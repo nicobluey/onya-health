@@ -170,18 +170,18 @@ export function renderPatientCertificateDeniedEmail({ baseUrl, requestId }) {
   };
 }
 
-export function renderPatientMoreInfoEmail({ baseUrl, requestId, doctorEmail, notes }) {
+export function renderPatientMoreInfoEmail({ baseUrl, requestId, notes }) {
   const normalizedBaseUrl = String(baseUrl || '').replace(/\/$/, '');
   const patientPortalUrl = normalizedBaseUrl ? `${normalizedBaseUrl}/patient-login` : '/patient-login';
   const html = renderShell({
     baseUrl,
     badge: 'More Information Needed',
-    title: 'Your doctor needs one more detail',
+    title: 'Your clinical team needs one more detail',
     subtitle: 'Please reply to continue your certificate review quickly.',
     bodyHtml: `
       <p style="margin:0 0 10px;"><strong>Request ID:</strong> ${escapeHtml(requestId)}</p>
-      <p style="margin:0 0 10px;"><strong>Doctor:</strong> ${escapeHtml(doctorEmail)}</p>
-      <p style="margin:0 0 8px;"><strong>Doctor note:</strong></p>
+      <p style="margin:0 0 10px;"><strong>From:</strong> Clinical team</p>
+      <p style="margin:0 0 8px;"><strong>Message:</strong></p>
       <p style="margin:0;padding:12px 14px;border:1px solid ${BRAND.border};border-radius:12px;background:#f6fafd;">${escapeHtml(notes || 'Please provide additional details to continue your review.')}</p>
     `,
     ctaLabel: 'Reply in patient portal',
@@ -190,7 +190,7 @@ export function renderPatientMoreInfoEmail({ baseUrl, requestId, doctorEmail, no
 
   return {
     html,
-    text: `More information is needed for request ${requestId}.\nDoctor: ${doctorEmail}\nNote: ${notes || 'Please provide additional details to continue your review.'}\nReply in patient portal: ${patientPortalUrl}`,
+    text: `More information is needed for request ${requestId}.\nFrom: Clinical team\nMessage: ${notes || 'Please provide additional details to continue your review.'}\nReply in patient portal: ${patientPortalUrl}`,
   };
 }
 
@@ -297,8 +297,6 @@ export function renderDoctorPatientMessageEmail({ baseUrl, certId, patientEmail,
 export function renderPatientDoctorMessageEmail({
   baseUrl,
   requestId,
-  doctorName,
-  senderName,
   senderType = 'doctor',
   message,
 }) {
@@ -307,11 +305,11 @@ export function renderPatientDoctorMessageEmail({
   const fromCustomerSupport = senderType === 'support';
   const displayName = fromCustomerSupport
     ? 'Customer support'
-    : String(senderName || doctorName || 'Your doctor').trim();
-  const badge = fromCustomerSupport ? 'Customer Support' : 'Doctor Message';
+    : 'Clinical team';
+  const badge = fromCustomerSupport ? 'Customer Support' : 'Clinical Team';
   const title = fromCustomerSupport
     ? 'Customer support sent you a message'
-    : 'Your doctor sent you a message';
+    : 'Clinical team sent you a message';
   const html = renderShell({
     baseUrl,
     badge,
@@ -328,6 +326,6 @@ export function renderPatientDoctorMessageEmail({
   });
   return {
     html,
-    text: `${fromCustomerSupport ? 'Customer support' : 'Doctor'} message for request ${requestId}\nFrom: ${displayName}\nMessage: ${message}\nOpen patient portal: ${patientPortalUrl}`,
+    text: `${fromCustomerSupport ? 'Customer support' : 'Clinical team'} message for request ${requestId}\nFrom: ${displayName}\nMessage: ${message}\nOpen patient portal: ${patientPortalUrl}`,
   };
 }

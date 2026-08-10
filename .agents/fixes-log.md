@@ -1,5 +1,51 @@
 # Fixes Log
 
+## 2026-08-10 - Make reissues removable, messages role-based, and PDFs mobile-safe
+
+### Symptoms
+
+- Issued certificates could be reissued, but clearing optional fields such as DOB or phone failed
+  the original patient-intake validator; correcting names worked only when every intake field stayed present.
+- The patient portal displayed a deterministic but fabricated wait such as `27 min` indefinitely.
+- Patient threads and emails exposed the responding doctor's personal display name or email.
+- Private doctor notes were printed beside the signature in certificate previews, downloads, and attachments.
+- Embedded/forced-download PDF behavior made certificates difficult to preview from a phone.
+
+### Root causes
+
+1. Administrator certificate corrections reused the stricter new-patient identity validator.
+2. Queue minutes were generated from a stable request hash rather than measured queue data.
+3. Message events and email templates trusted stored clinician display names; more-information email
+   copy also included the clinician email address.
+4. The PDF generator explicitly rendered `decision.notes` as a clinician note.
+5. Doctor review relied on an iframe and the patient portal forced an anchor download, both of which
+   are inconsistently handled by mobile browsers.
+
+### Files changed
+
+- `backend/lib/certificate-fields.js`, `backend/lib/certificate-fields.test.js`
+  - separate administrator correction rules from intake requirements, permit removal of optional
+    fields, retain required certificate name/date/duration, and cover repeated typo/removal edits.
+- `backend/lib/certificate-messages.js`, `backend/lib/email-templates.js`,
+  `backend/lib/certificate-messages.test.js`
+  - force `Clinical team` / `Customer support` identities for patient-facing message history and
+    email, including historical events and more-information requests.
+- `api/index.js`, `backend/server.js`
+  - keep personal staff identity only in audit records, sanitize patient decision summaries, and
+    remove private notes from every PDF call site.
+- `backend/lib/pdf.js`, `backend/lib/pdf.test.js`
+  - remove the clinician-note block entirely and omit the age row when DOB is removed.
+- `frontend/public/doctor/review/index.html`, `backend/doctor-portal/review.html`
+  - add optional-field Remove controls, role-based reply copy, private-note guidance, safer
+    more-information drafting, and browser-native phone PDF Open/Download actions.
+- `frontend/src/pages/PatientPortalPage.tsx`, `frontend/src/patient-portal/home/HomeTab.tsx`,
+  `frontend/src/patient-portal/model.ts`
+  - remove synthetic timers and open patient certificates in the browser PDF viewer on mobile.
+
+### Verification
+
+Pending final automated, API, PDF render/text, responsive browser, and production checks.
+
 ## 2026-08-10 - Add controlled certificate corrections, reissue, and patient validation
 
 ### Symptoms

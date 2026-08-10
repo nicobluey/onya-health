@@ -47,6 +47,28 @@ test('normalizes editable certificate fields while preserving omitted fields', (
   assert.equal(result.draft.phone, CURRENT.phone);
 });
 
+test('allows administrators to remove optional certificate fields', () => {
+  const result = normalizeEditableCertificateFields(
+    {
+      fullName: 'Alexandra Smith',
+      dob: '',
+      phone: '',
+      address: '',
+      purpose: '',
+      symptom: '',
+      description: '',
+    },
+    CURRENT,
+    NOW
+  );
+
+  assert.equal(result.valid, true);
+  assert.equal(result.draft.fullName, 'Alexandra Smith');
+  assert.equal(result.draft.dob, '');
+  assert.equal(result.draft.phone, '');
+  assert.equal(result.draft.description, '');
+});
+
 test('does not allow certificate edits to change patient account ownership', () => {
   const result = normalizeEditableCertificateFields(
     { email: 'different-owner@example.com', symptomVisibility: 'public' },
@@ -68,8 +90,15 @@ test('rejects invalid admin edits', () => {
 
   assert.equal(result.valid, false);
   assert.match(result.errors.join(' '), /at least 16 years old/);
-  assert.match(result.errors.join(' '), /8 to 15 digits/);
+  assert.match(result.errors.join(' '), /8 to 15 digits or be removed/);
   assert.match(result.errors.join(' '), /between 1 and 7 days/);
+});
+
+test('does not allow the patient name to be removed from a certificate', () => {
+  const result = normalizeEditableCertificateFields({ fullName: '' }, CURRENT, NOW);
+
+  assert.equal(result.valid, false);
+  assert.match(result.errors.join(' '), /Patient name is required/);
 });
 
 test('keeps raw submission patient and consult fields in sync', () => {

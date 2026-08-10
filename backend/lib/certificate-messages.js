@@ -7,7 +7,7 @@ export const CERTIFICATE_MESSAGE_EVENT_TYPES = Object.freeze([
 
 const CERTIFICATE_MESSAGE_EVENT_TYPE_SET = new Set(CERTIFICATE_MESSAGE_EVENT_TYPES);
 
-export function resolveStaffMessageSender(requestedSenderType, doctorName) {
+export function resolveStaffMessageSender(requestedSenderType) {
   const sender = String(requestedSenderType || '').trim().toLowerCase() === 'support'
     ? 'support'
     : 'doctor';
@@ -22,7 +22,7 @@ export function resolveStaffMessageSender(requestedSenderType, doctorName) {
 
   return {
     sender,
-    senderName: String(doctorName || 'Doctor').trim() || 'Doctor',
+    senderName: 'Clinical team',
     eventType: 'DOCTOR_MESSAGE_SENT',
   };
 }
@@ -45,14 +45,14 @@ export function mapCertificateMessageEvent(entry, index = 0) {
     ? 'Patient'
     : sender === 'support'
       ? 'Customer support'
-      : 'Doctor';
+      : 'Clinical team';
 
   return {
     id: String(payload.messageId || `${eventType.toLowerCase()}-${createdAt || index}`).trim(),
     sender,
-    senderName: sender === 'support'
-      ? 'Customer support'
-      : String(payload.senderName || fallbackSenderName).trim(),
+    senderName: sender === 'patient'
+      ? String(payload.senderName || fallbackSenderName).trim()
+      : fallbackSenderName,
     message,
     createdAt,
   };

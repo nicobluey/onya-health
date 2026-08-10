@@ -57,7 +57,6 @@ import {
     hasPortalProfileData,
     isQueuedStatus,
     mergePortalProfileData,
-    queueEstimatedMinutes,
     queueStageIndex,
     readPortalProfile,
     sectionCardClassName,
@@ -287,10 +286,9 @@ function QueueBanner({
     onTap: () => void;
 }) {
     const stageIndex = queueStageIndex(request.status);
-    const etaMinutes = queueEstimatedMinutes(request);
     const queueTitle = stageIndex >= 2 ? 'Doctor review in progress' : 'Payment confirmation in progress';
     const queueSubtitle =
-        stageIndex >= 2 ? `Estimated time remaining: ${etaMinutes} min` : 'This usually updates within 1-2 minutes';
+        stageIndex >= 2 ? 'The clinical team is reviewing your request' : 'Waiting for payment confirmation';
 
     return (
         <button
@@ -825,7 +823,7 @@ function AccountTab({
                                     className="mt-3 inline-flex items-center gap-2 rounded-xl bg-[#1a3d63] px-3 py-2 text-sm font-semibold text-white"
                                 >
                                     <FileText size={15} />
-                                    Download Medical Certificate
+                                    View Medical Certificate
                                 </button>
                             )}
                         </>
@@ -927,10 +925,9 @@ function QueuedWaitingScreen({
 }) {
     const queueSteps = ['Submitted', 'Payment', 'Review', 'Issued'];
     const stageIndex = queueStageIndex(request?.status || '');
-    const etaMinutes = queueEstimatedMinutes(request);
     const reviewActive = stageIndex === 2;
     const queueHeading = reviewActive ? 'Under doctor review' : 'Queued';
-    const queueSubheading = reviewActive ? `Estimated time remaining: ${etaMinutes} min` : statusLabel(request?.status || '');
+    const queueSubheading = reviewActive ? 'Clinical review in progress' : statusLabel(request?.status || '');
     const messages = Array.isArray(request?.messages) ? request.messages : [];
     const rows = [
         { label: 'Type', value: 'Medical Certificate', icon: Tag },
@@ -1863,6 +1860,14 @@ export default function PatientPortalPage() {
     const downloadCertificatePdf = async (request: PortalRequest) => {
         if (!request.certificatePdfUrl || !token) return;
 
+        const previewWindow = window.open('about:blank', '_blank');
+        if (previewWindow) {
+            previewWindow.document.title = 'Opening medical certificate';
+            previewWindow.document.body.style.fontFamily = 'Inter, system-ui, sans-serif';
+            previewWindow.document.body.style.padding = '24px';
+            previewWindow.document.body.textContent = 'Opening medical certificate...';
+        }
+
         try {
             const response = await fetch(`${getApiBase()}${request.certificatePdfUrl}`, {
                 headers: {
@@ -1887,14 +1892,14 @@ export default function PatientPortalPage() {
 
             const blob = await response.blob();
             const objectUrl = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = objectUrl;
-            link.download = `medical-certificate-${request.id}.pdf`;
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
-            window.URL.revokeObjectURL(objectUrl);
+            if (previewWindow) {
+                previewWindow.location.replace(objectUrl);
+            } else {
+                window.location.assign(objectUrl);
+            }
+            window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 5 * 60 * 1000);
         } catch (errorObject) {
+            previewWindow?.close();
             window.alert(errorObject instanceof Error ? errorObject.message : 'Unable to download certificate');
         }
     };

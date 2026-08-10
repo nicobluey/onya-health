@@ -29,7 +29,6 @@ import {
     formatDate,
     formatReadableDate,
     isQueuedStatus,
-    queueEstimatedMinutes,
     queueStageIndex,
     statusLabel,
 } from '../model';
@@ -218,8 +217,14 @@ function QueueStatusCard({
     }
 
     const stageIndex = queueStageIndex(request.status);
-    const etaMinutes = queueEstimatedMinutes(request);
-    const waitingCopy = stageIndex >= 3 ? 'Certificate issued' : `Estimated wait: ${etaMinutes} min`;
+    const normalizedStatus = String(request.status || '').toLowerCase();
+    const waitingCopy = stageIndex >= 3
+        ? 'Certificate issued'
+        : normalizedStatus === 'in_review'
+          ? 'Clinical review in progress'
+          : normalizedStatus === 'assigned'
+            ? 'Assigned to the clinical team'
+            : 'Waiting for clinical review';
 
     return (
         <section className="overflow-hidden rounded-3xl border border-[#b3cfe5] bg-white p-5 shadow-[0_18px_36px_-28px_rgba(15,23,42,0.28)]">
@@ -341,7 +346,7 @@ function PreviousConsultQueue({
                                             className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-[#b3cfe5] bg-white px-3 py-1.5 text-xs font-semibold text-[#1a3d63] transition hover:border-[#b3cfe5]"
                                         >
                                             <FileText size={14} />
-                                            Download certificate PDF
+                                            View certificate PDF
                                         </button>
                                     )}
                                 </article>

@@ -49,6 +49,8 @@ Use when changing patient login, magic link, password reset, account creation, p
 - Reset and magic-link flows must return patient-safe generic success messages where account existence is sensitive.
 - `/api/patient/account-exists` must fail with controlled non-500 responses.
 - Message send success must keep the patient in the portal unless the session is actually invalid.
+- Open patient certificates in a browser PDF viewer on phone; do not rely on forced downloads.
+- Patient-facing request summaries must not expose private decision notes or personal staff identities.
 - Browser QA `/patient-login`, `/patient/reset-password`, and `/patient`.
 
 ## Doctor Portal Pass
@@ -60,6 +62,11 @@ Use when changing practitioner account creation, login, password reset, queue, r
 - Doctor profile must support AHPRA/provider metadata and allow provider-number updates.
 - Administrator certificate corrections and reissues must be audited. Do not allow draft edits to
   change patient account ownership, payment state, risk evidence, verification codes, or clinician credentials.
+- Administrators may remove optional certificate fields, but patient name, certificate date, and
+  duration remain required. Intake DOB/phone requirements are separate from certificate corrections.
+- Staff replies use the fixed `Clinical team` or `Customer support` identity in every patient-facing
+  thread and email; retain the authenticated staff account only in audit data.
+- Mobile review must expose browser-native Open/Download PDF controls after preview generation.
 - QA the static pages under `frontend/public/doctor` plus API routes.
 
 ## SEO And Crawlability Pass
@@ -78,6 +85,8 @@ Use when changing `api/index.js`, `backend/server.js`, storage, email, Stripe, S
 - Preserve existing route contracts unless frontend callers are updated.
 - Return controlled JSON errors instead of raw `fetch failed` or unhandled 500s.
 - Keep secret values out of logs and docs.
+- Treat doctor notes as private clinical data. PDF previews, downloads, reissues, and email
+  attachments must be generated without decision notes.
 - Add or update Supabase migrations for DB fields.
 - Smoke check affected endpoints locally when environment variables allow.
 

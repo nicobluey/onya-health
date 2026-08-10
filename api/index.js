@@ -1947,6 +1947,13 @@ function maskPatientName(value) {
 function patientSummaryFromCertificate(certificate) {
   const draft = certificate?.certificateDraft || {};
   const approved = isApprovedCertificate(certificate);
+  const patientDecision = certificate?.decision
+    ? {
+        by: 'Clinical team',
+        at: certificate.decision.at || null,
+        result: certificate.decision.result || certificate.status || null,
+      }
+    : null;
 
   return {
     id: certificate.id,
@@ -1961,7 +1968,7 @@ function patientSummaryFromCertificate(certificate) {
     durationDays: Number(draft.durationDays || 1),
     verificationCode: getCertificateVerificationCode(certificate),
     risk: certificate.risk || null,
-    decision: certificate.decision || null,
+    decision: patientDecision,
     certificatePdfUrl: approved
       ? `/api/patient/requests/${encodeURIComponent(certificate.id)}/certificate.pdf`
       : null,
@@ -3432,7 +3439,6 @@ async function sendPatientDecisionEmail(certificate, options = {}) {
       const doctorSignature = await resolveCertificateDoctorSignature(certificate);
       const pdfBuffer = await buildCertificatePdf(certificate, {
         doctorName: certificate?.decision?.by || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
-        doctorNotes: certificate?.decision?.notes || '',
         providerType: certificate?.decision?.providerType || '',
         registrationNumber: certificate?.decision?.registrationNumber || '',
         providerNumber: certificate?.decision?.providerNumber || '',
@@ -3524,14 +3530,13 @@ async function sendPatientDecisionEmail(certificate, options = {}) {
   });
 }
 
-async function sendPatientMoreInfoEmail(certificate, doctorEmail, notes) {
+async function sendPatientMoreInfoEmail(certificate, notes) {
   const patientEmail = certificate?.certificateDraft?.email;
   if (!patientEmail) return;
 
   const emailContent = renderPatientMoreInfoEmail({
     baseUrl: FRONTEND_BASE_URL || APP_BASE_URL || '',
     requestId: certificate.id,
-    doctorEmail,
     notes,
   });
 
@@ -3557,7 +3562,6 @@ async function sendPatientStaffMessageEmail(certificate, senderIdentity, message
   const emailContent = renderPatientDoctorMessageEmail({
     baseUrl: FRONTEND_BASE_URL || APP_BASE_URL || '',
     requestId: certificate.id,
-    senderName: senderIdentity.senderName,
     senderType: senderIdentity.sender,
     message,
   });
@@ -3566,7 +3570,7 @@ async function sendPatientStaffMessageEmail(certificate, senderIdentity, message
     to: patientEmail,
     subject: senderIdentity.sender === 'support'
       ? 'New message from Customer support'
-      : 'New message from your doctor',
+      : 'New message from the Clinical team',
     html: emailContent.html,
     text: emailContent.text,
   });
@@ -7308,7 +7312,6 @@ export default async function handler(req, res) {
       const doctorSignature = await resolveCertificateDoctorSignature(certificate);
       const pdfBuffer = await buildCertificatePdf(certificate, {
         doctorName: certificate?.decision?.by || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
-        doctorNotes: certificate?.decision?.notes || '',
         providerType: certificate?.decision?.providerType || '',
         registrationNumber: certificate?.decision?.registrationNumber || '',
         providerNumber: certificate?.decision?.providerNumber || '',
@@ -8326,13 +8329,11 @@ export default async function handler(req, res) {
     if (req.method === 'POST' && segments.length === 4 && segments[0] === 'doctor' && segments[1] === 'certificates' && segments[3] === 'message') {
       const doctor = await requireDoctor(req, res);
       if (!doctor) return;
-      const doctorProfile = doctor.profile || (await resolveDoctorProfile(doctor.email));
-      const doctorName = resolveDoctorDisplayName(doctorProfile, doctor.email);
 
       const certId = decodeURIComponent(segments[2]);
       const body = await parseJsonBody(req);
       const message = String(body.message || '').trim();
-      const senderIdentity = resolveStaffMessageSender(body.senderType, doctorName);
+      const senderIdentity = resolveStaffMessageSender(body.senderType);
       if (!message) {
         sendJson(res, 400, { error: 'Message is required' });
         return;
@@ -8567,10 +8568,10 @@ export default async function handler(req, res) {
         certificateId: updated.id,
         by: doctor.email,
         messageId: crypto.randomUUID(),
-        senderName: reviewerName,
+        senderName: 'Clinical team',
         notes,
       });
-      await sendPatientMoreInfoEmail(updated, doctor.email, notes);
+      await sendPatientMoreInfoEmail(updated, notes);
 
       sendJson(res, 200, {
         message: 'More information request sent to patient',
@@ -8655,7 +8656,6 @@ export default async function handler(req, res) {
       const doctorSignature = await resolveCertificateDoctorSignature(previewCertificate);
       const pdfBuffer = await buildCertificatePdf(previewCertificate, {
         doctorName: reviewerName,
-        doctorNotes: notes,
         certificateStatement,
         providerType: String(previewCertificate?.decision?.providerType || '').trim(),
         registrationNumber: String(previewCertificate?.decision?.registrationNumber || '')

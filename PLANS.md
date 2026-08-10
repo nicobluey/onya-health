@@ -51,8 +51,12 @@ Current implementation state:
   requests require the patient to be at least 16, certificate dates begin today or later, and
   date of birth is retained in the clinical record but omitted from issued PDFs.
 - Approved portal users can send a certificate-thread update as either the authenticated
-  doctor or the fixed `Customer support` identity. Both remain visible to the doctor and
-  patient, while the authenticated account remains in the server audit event.
+  clinical team or the fixed `Customer support` identity. Patient-facing threads and emails use
+  role identities only, while the authenticated account remains in the server audit event.
+- Administrators can remove optional fields from corrected/reissued certificates while retaining
+  required patient name and certificate dates. Private doctor notes are excluded from every PDF.
+- Patient queue status is workflow-based without synthetic minute estimates. Doctor and patient
+  certificate actions open PDFs through the phone's browser document viewer.
 - Booking flow in `frontend/src/consult-flow`.
 - Former dietitian, meal-plan, nutritionist, and weight-loss-reset surfaces are retired and redirect to the medical-certificate product.
 - Supabase migrations and helper scripts under `supabase/` and `scripts/`.
@@ -362,6 +366,14 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
 
 2026-08-10:
 
+- Removed the synthetic queue timer, replaced personal doctor identities with the fixed
+  `Clinical team` identity in patient threads/emails, and removed private decision notes from
+  patient request summaries and every certificate PDF generation path.
+- Added explicit removal controls for optional fields on open and issued certificates. Corrected
+  issued certificates can be previewed, reissued repeatedly, and still retain immutable account,
+  payment, verification, audit, and issuing-clinician records.
+- Added browser-native phone PDF preview/open controls in doctor review and patient certificate
+  history so mobile users do not depend on embedded frames or forced downloads.
 - Added shared browser/server validation for required DOB and phone, a self-service minimum age
   of 16, a 1900 DOB floor, and certificate start dates from today onward. The API rejects invalid,
   under-age, future, and backdated submissions even when browser controls are bypassed.

@@ -1146,6 +1146,13 @@ function getPatientCertificatesForEmail(certificates, email) {
 
 function patientSummaryFromCertificate(certificate) {
   const draft = certificate?.certificateDraft || {};
+  const patientDecision = certificate?.decision
+    ? {
+        by: 'Clinical team',
+        at: certificate.decision.at || null,
+        result: certificate.decision.result || certificate.status || null,
+      }
+    : null;
   return {
     id: certificate.id,
     createdAt: certificate.createdAt,
@@ -1159,7 +1166,7 @@ function patientSummaryFromCertificate(certificate) {
     durationDays: Number(draft.durationDays || 1),
     verificationCode: getCertificateVerificationCode(certificate),
     risk: certificate.risk || null,
-    decision: certificate.decision || null,
+    decision: patientDecision,
   };
 }
 
@@ -1343,7 +1350,6 @@ async function sendPatientDecisionEmail(certificate, options = {}) {
       const doctorSignature = await resolveCertificateDoctorSignature(certificate);
       const pdfBuffer = await buildCertificatePdf(certificate, {
         doctorName: certificate?.decision?.by || process.env.DOCTOR_DISPLAY_NAME || 'Onya Health Doctor',
-        doctorNotes: certificate?.decision?.notes || '',
         providerType: certificate?.decision?.providerType || '',
         registrationNumber: certificate?.decision?.registrationNumber || '',
         providerNumber: certificate?.decision?.providerNumber || '',
@@ -1428,7 +1434,7 @@ async function sendPatientDecisionEmail(certificate, options = {}) {
   });
 }
 
-async function sendPatientMoreInfoEmail(certificate, doctorEmail, notes) {
+async function sendPatientMoreInfoEmail(certificate, notes) {
   const patientEmail = certificate.certificateDraft.email;
   if (!patientEmail) {
     return;
@@ -1436,7 +1442,6 @@ async function sendPatientMoreInfoEmail(certificate, doctorEmail, notes) {
   const emailContent = renderPatientMoreInfoEmail({
     baseUrl: getFrontendBaseUrl(),
     requestId: certificate.id,
-    doctorEmail,
     notes,
   });
 
@@ -1461,7 +1466,6 @@ async function sendPatientStaffMessageEmail(certificate, senderIdentity, message
   const emailContent = renderPatientDoctorMessageEmail({
     baseUrl: getFrontendBaseUrl(),
     requestId: certificate.id,
-    senderName: senderIdentity.senderName,
     senderType: senderIdentity.sender,
     message,
   });
@@ -1470,7 +1474,7 @@ async function sendPatientStaffMessageEmail(certificate, senderIdentity, message
     to: patientEmail,
     subject: senderIdentity.sender === 'support'
       ? 'New message from Customer support'
-      : 'New message from your doctor',
+      : 'New message from the Clinical team',
     html: emailContent.html,
     text: emailContent.text,
   });
@@ -4486,13 +4490,11 @@ async function handleApi(req, res, url) {
   if (req.method === 'POST' && doctorMessageMatch) {
     const doctor = await requireDoctor(req, res);
     if (!doctor) return;
-    const doctorProfile = doctor.profile || (await resolveDoctorProfile(doctor.email));
-    const doctorName = resolveDoctorDisplayName(doctorProfile, doctor.email);
 
     const certId = decodeURIComponent(doctorMessageMatch[1]);
     const body = await parseJsonBody(req);
     const message = String(body.message || '').trim();
-    const senderIdentity = resolveStaffMessageSender(body.senderType, doctorName);
+    const senderIdentity = resolveStaffMessageSender(body.senderType);
     if (!message) {
       sendJson(res, 400, { error: 'Message is required' });
       return;
@@ -4671,7 +4673,6 @@ async function handleApi(req, res, url) {
     const doctorSignature = await resolveCertificateDoctorSignature(previewCertificate);
     const pdfBuffer = await buildCertificatePdf(previewCertificate, {
       doctorName: reviewerName,
-      doctorNotes: notes,
       certificateStatement,
       providerType: String(previewCertificate?.decision?.providerType || '').trim(),
       registrationNumber: String(previewCertificate?.decision?.registrationNumber || '')
@@ -4753,10 +4754,10 @@ async function handleApi(req, res, url) {
       certificateId: updated.id,
       by: doctor.email,
       messageId: crypto.randomUUID(),
-      senderName: reviewerName,
+      senderName: 'Clinical team',
       notes,
     });
-    await sendPatientMoreInfoEmail(updated, doctor.email, notes);
+    await sendPatientMoreInfoEmail(updated, notes);
     info('doctor.more_info.requested', {
       doctor: doctor.email,
       certificateId: updated.id,

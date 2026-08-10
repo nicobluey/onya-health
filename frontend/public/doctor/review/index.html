@@ -10,8 +10,9 @@
       main { max-width: 980px; margin: 24px auto; padding: 0 16px; }
       .panel { background: #fff; border: 1px solid #b3cfe5; border-radius: 14px; padding: 18px; margin-bottom: 14px; }
       .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+      .grid > div { min-width: 0; }
       .label { font-size: 12px; text-transform: uppercase; color: #4a7fa7; letter-spacing: 0.08em; margin-bottom: 4px; }
-      .value { font-weight: 600; }
+      .value { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
       textarea { width: 100%; min-height: 140px; border: 1px solid #b3cfe5; border-radius: 10px; padding: 10px; box-sizing: border-box; font: inherit; line-height: 1.45; }
       input, select { width: 100%; min-height: 44px; border: 1px solid #b3cfe5; border-radius: 10px; padding: 10px; box-sizing: border-box; background: #fff; color: #0a1931; font: inherit; }
       input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid #2879b9; outline-offset: 2px; }
@@ -58,6 +59,13 @@
       .edit-field { min-width: 0; }
       .edit-field.wide { grid-column: 1 / -1; }
       .edit-field textarea { min-height: 112px; }
+      .field-label-row { display: flex; min-height: 22px; align-items: flex-start; justify-content: space-between; gap: 10px; }
+      .clear-field { padding: 0; border-radius: 0; background: transparent; color: #2879b9; font-size: 12px; }
+      .clear-field:hover { text-decoration: underline; }
+      .preview-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 10px 0 12px; }
+      .preview-link { display: inline-flex; min-height: 42px; align-items: center; justify-content: center; border: 1px solid #b3cfe5; border-radius: 10px; padding: 0 14px; background: #fff; color: #1a3d63; font-size: 14px; font-weight: 700; text-decoration: none; }
+      .preview-link.primary { border-color: #1a3d63; background: #1a3d63; color: #fff; }
+      .preview-mobile-note { display: none; margin: 0 0 12px; color: #4a7fa7; font-size: 13px; line-height: 1.5; }
       [hidden] { display: none !important; }
       @media (max-width: 640px) {
         header { align-items: flex-start; gap: 12px; }
@@ -65,6 +73,9 @@
         .edit-grid { grid-template-columns: 1fr; }
         .edit-field.wide { grid-column: auto; }
         .admin-heading { align-items: flex-start; }
+        iframe { display: none; }
+        .preview-actions { display: grid; grid-template-columns: 1fr 1fr; }
+        .preview-mobile-note { display: block; }
       }
     </style>
   </head>
@@ -82,7 +93,7 @@
         <div class="admin-heading">
           <div>
             <h2>Certificate fields</h2>
-            <p>Administrator corrections are recorded in the request audit trail.</p>
+            <p>Correct typos or remove optional fields. Every change is recorded in the request audit trail.</p>
           </div>
           <span class="admin-badge">Admin</span>
         </div>
@@ -95,26 +106,26 @@
             <span class="label">Patient email (account)</span>
             <input id="edit-email" type="email" readonly />
           </label>
-          <label class="edit-field">
-            <span class="label">Date of birth</span>
+          <div class="edit-field">
+            <div class="field-label-row"><label class="label" for="edit-dob">Date of birth</label><button type="button" class="clear-field" data-clear-field="dob">Remove</button></div>
             <input id="edit-dob" type="date" min="1900-01-01" />
-          </label>
-          <label class="edit-field">
-            <span class="label">Phone</span>
+          </div>
+          <div class="edit-field">
+            <div class="field-label-row"><label class="label" for="edit-phone">Phone</label><button type="button" class="clear-field" data-clear-field="phone">Remove</button></div>
             <input id="edit-phone" maxlength="40" />
-          </label>
-          <label class="edit-field wide">
-            <span class="label">Address</span>
+          </div>
+          <div class="edit-field wide">
+            <div class="field-label-row"><label class="label" for="edit-address">Address</label><button type="button" class="clear-field" data-clear-field="address">Remove</button></div>
             <input id="edit-address" maxlength="300" />
-          </label>
-          <label class="edit-field">
-            <span class="label">Purpose</span>
+          </div>
+          <div class="edit-field">
+            <div class="field-label-row"><label class="label" for="edit-purpose">Purpose</label><button type="button" class="clear-field" data-clear-field="purpose">Remove</button></div>
             <input id="edit-purpose" maxlength="120" />
-          </label>
-          <label class="edit-field">
-            <span class="label">Symptom</span>
+          </div>
+          <div class="edit-field">
+            <div class="field-label-row"><label class="label" for="edit-symptom">Symptom</label><button type="button" class="clear-field" data-clear-field="symptom">Remove</button></div>
             <input id="edit-symptom" maxlength="500" />
-          </label>
+          </div>
           <label class="edit-field">
             <span class="label">Symptom visibility</span>
             <select id="edit-symptom-visibility">
@@ -130,14 +141,14 @@
             <span class="label">Duration (days)</span>
             <input id="edit-duration" type="number" min="1" max="7" step="1" />
           </label>
-          <label class="edit-field wide">
-            <span class="label">Clinical notes from patient</span>
+          <div class="edit-field wide">
+            <div class="field-label-row"><label class="label" for="edit-description">Clinical notes from patient</label><button type="button" class="clear-field" data-clear-field="description">Remove</button></div>
             <textarea id="edit-description" maxlength="4000"></textarea>
-          </label>
+          </div>
         </div>
         <div class="actions">
           <button id="save-fields" class="secondary">Save corrections</button>
-          <button id="reissue" class="approve">Reissue &amp; email patient</button>
+          <button id="reissue" class="approve" hidden>Reissue &amp; email patient</button>
         </div>
         <div id="admin-edit-status" class="status muted"></div>
       </div>
@@ -149,7 +160,7 @@
           <div class="reply-as-options">
             <label class="reply-option">
               <input type="radio" name="reply-sender" value="doctor" checked />
-              <span>Doctor</span>
+              <span>Clinical team</span>
             </label>
             <label class="reply-option">
               <input type="radio" name="reply-sender" value="support" />
@@ -160,19 +171,20 @@
         <label class="label" for="reply">Reply to patient</label>
         <textarea id="reply" maxlength="4000" placeholder="Write a clear message for the patient..."></textarea>
         <div class="actions">
-          <button id="send-reply" class="approve">Send as Doctor</button>
+          <button id="send-reply" class="approve">Send as Clinical team</button>
         </div>
         <div id="message-status" class="status muted"></div>
       </div>
       <div class="panel">
         <label class="label" for="certificate-statement">Certificate wording</label>
         <textarea id="certificate-statement" maxlength="1200"></textarea>
-        <label class="label field-spacer" for="notes">Doctor Notes</label>
+        <label class="label field-spacer" for="notes">Private doctor notes</label>
         <textarea id="notes" placeholder="Add your clinical review notes here..."></textarea>
+        <p class="muted" style="margin:6px 0 0;font-size:12px;">Stored in the clinical record and never included in the certificate PDF.</p>
         <div class="actions">
           <button id="assign" class="secondary">Assign to me</button>
           <button id="auto-notes" class="secondary">AI summary</button>
-          <button id="more-info" class="orange">Send more info request</button>
+          <button id="more-info" class="orange">Draft info request</button>
           <button id="preview-pdf" class="secondary">Preview PDF</button>
           <button id="approve" class="approve">Approve & Send Certificate</button>
           <button id="deny" class="deny">Deny Request</button>
@@ -182,6 +194,11 @@
       </div>
       <div id="preview-panel" class="panel" style="display:none">
         <div class="label">PDF Preview</div>
+        <div class="preview-actions">
+          <a id="preview-open" class="preview-link primary" target="_blank" rel="noopener">Open PDF</a>
+          <a id="preview-download" class="preview-link">Download PDF</a>
+        </div>
+        <p class="preview-mobile-note">The PDF opens in your phone's document viewer. Return to this tab after checking it to approve or reissue the certificate.</p>
         <iframe id="preview-frame" title="PDF preview"></iframe>
       </div>
     </main>
@@ -205,8 +222,11 @@
       const messageStatusNode = document.getElementById('message-status');
       const previewPanel = document.getElementById('preview-panel');
       const previewFrame = document.getElementById('preview-frame');
+      const previewOpenLink = document.getElementById('preview-open');
+      const previewDownloadLink = document.getElementById('preview-download');
       const adminEditPanel = document.getElementById('admin-edit-panel');
       const adminEditStatusNode = document.getElementById('admin-edit-status');
+      const clearFieldButtons = Array.from(document.querySelectorAll('[data-clear-field]'));
       const adminFieldNodes = {
         fullName: document.getElementById('edit-full-name'),
         email: document.getElementById('edit-email'),
@@ -278,7 +298,7 @@
           .map((entry) => {
             const fromDoctor = entry?.sender === 'doctor';
             const fromSupport = entry?.sender === 'support';
-            const senderName = entry?.senderName || (fromDoctor ? 'Doctor' : fromSupport ? 'Customer support' : 'Patient');
+            const senderName = fromDoctor ? 'Clinical team' : fromSupport ? 'Customer support' : entry?.senderName || 'Patient';
             const sentAt = formatMessageDate(entry?.createdAt);
             return `
               <div class="message ${fromDoctor ? 'doctor' : fromSupport ? 'support' : ''}">
@@ -307,6 +327,9 @@
           });
           replySenderNodes.forEach((node) => {
             node.disabled = true;
+          });
+          clearFieldButtons.forEach((button) => {
+            button.disabled = true;
           });
           return;
         }
@@ -378,7 +401,7 @@
 
       function updateReplyMode() {
         const senderType = getReplySenderType();
-        sendReplyButton.textContent = senderType === 'support' ? 'Send as Customer support' : 'Send as Doctor';
+        sendReplyButton.textContent = senderType === 'support' ? 'Send as Customer support' : 'Send as Clinical team';
       }
 
       function updateActionAvailability() {
@@ -398,10 +421,17 @@
         notesNode.disabled = !(open || (canEditCertificate && issued));
         certificateStatementNode.disabled = !(open || (canEditCertificate && issued));
         document.getElementById('close').disabled = !canCloseStatus(currentStatus);
-        document.getElementById('save-fields').disabled = !(canEditCertificate && open);
-        document.getElementById('reissue').disabled = !(canReissueCertificate && issued);
+        const saveFieldsButton = document.getElementById('save-fields');
+        const reissueButton = document.getElementById('reissue');
+        saveFieldsButton.hidden = !open;
+        saveFieldsButton.disabled = !(canEditCertificate && open);
+        reissueButton.hidden = !issued;
+        reissueButton.disabled = !(canReissueCertificate && issued);
         Object.entries(adminFieldNodes).forEach(([fieldName, node]) => {
           node.disabled = fieldName === 'email' || !(canEditCertificate && (open || issued));
+        });
+        clearFieldButtons.forEach((button) => {
+          button.disabled = !(canEditCertificate && (open || issued));
         });
       }
 
@@ -473,12 +503,15 @@
         if (!isOpenStatus(cert.status)) {
           setStatus(`This certificate is already ${cert.status}.`, 'muted');
         }
+        if (String(cert.status || '').toLowerCase() === 'approved' && canReissueCertificate) {
+          setAdminEditStatus('Edit or remove fields, preview the corrected PDF, then reissue it to the patient.', 'muted');
+        }
       }
 
       async function sendReply() {
         const message = replyNode.value.trim();
         const senderType = getReplySenderType();
-        const senderLabel = senderType === 'support' ? 'Customer support' : 'Doctor';
+        const senderLabel = senderType === 'support' ? 'Customer support' : 'Clinical team';
         if (!message) {
           setMessageStatus('Write a message before sending.', 'error');
           return;
@@ -625,43 +658,29 @@
       }
 
       async function addMoreInfoDraft() {
-        setStatus('Sending more-info request to patient...', 'muted');
+        setStatus('Drafting a request for more information...', 'muted');
         setBusy(true);
         try {
-          let notes = notesNode.value.trim();
-          if (!notes) {
-            const autoResponse = await fetch(`/api/doctor/certificates/${encodeURIComponent(id)}/auto-notes`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({}),
-            });
-            const autoPayload = await parseResponseJson(autoResponse);
-            if (autoResponse.ok && autoPayload.notes) {
-              notes = autoPayload.notes;
-              notesNode.value = notes;
-            }
-          }
-
-          const response = await fetch(`/api/doctor/certificates/${encodeURIComponent(id)}/request-more-info`, {
+          const response = await fetch(`/api/doctor/certificates/${encodeURIComponent(id)}/more-info`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ notes }),
+            body: JSON.stringify({}),
           });
           const payload = await parseResponseJson(response);
           if (!response.ok) {
-            throw new Error(payload.error || 'Failed to send more-info request');
+            throw new Error(payload.error || 'Failed to draft more-info request');
           }
-          currentStatus = payload?.certificate?.status || 'in_review';
-          setStatus(payload.message || 'More information request sent.', 'success');
-          updateActionAvailability();
+          replyNode.value = payload.notes || '';
+          const clinicalTeamOption = replySenderNodes.find((node) => node.value === 'doctor');
+          if (clinicalTeamOption) clinicalTeamOption.checked = true;
+          updateReplyMode();
+          replyNode.focus();
+          setStatus('Draft added to the patient reply. Review it before sending as Clinical team.', 'success');
         } catch (error) {
-          setStatus(error.message || 'Failed to send more-info request.', 'error');
+          setStatus(error.message || 'Failed to draft more-info request.', 'error');
         } finally {
           setBusy(false);
         }
@@ -738,6 +757,12 @@
       }
 
       async function previewPdf() {
+        const mobilePreview = window.matchMedia('(max-width: 640px)').matches;
+        const mobilePreviewWindow = mobilePreview ? window.open('', '_blank') : null;
+        if (mobilePreviewWindow) {
+          mobilePreviewWindow.document.title = 'Opening certificate preview';
+          mobilePreviewWindow.document.body.textContent = 'Opening certificate preview...';
+        }
         setStatus('Generating PDF preview...', 'muted');
         setBusy(true);
         try {
@@ -765,10 +790,18 @@
           }
           previewObjectUrl = URL.createObjectURL(pdfBlob);
           previewFrame.src = previewObjectUrl;
+          previewOpenLink.href = previewObjectUrl;
+          previewDownloadLink.href = previewObjectUrl;
+          previewDownloadLink.download = `medical-certificate-preview-${id}.pdf`;
           previewPanel.style.display = 'block';
+          previewPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          if (mobilePreviewWindow) {
+            mobilePreviewWindow.location.replace(previewObjectUrl);
+          }
           document.getElementById('preview-pdf').textContent = 'Regenerate PDF preview';
           setStatus('Preview generated.', 'success');
         } catch (error) {
+          if (mobilePreviewWindow) mobilePreviewWindow.close();
           setStatus(error.message || 'Failed to generate PDF preview.', 'error');
         } finally {
           setBusy(false);
@@ -787,6 +820,16 @@
       document.getElementById('preview-pdf').addEventListener('click', previewPdf);
       document.getElementById('save-fields').addEventListener('click', saveCertificateFields);
       document.getElementById('reissue').addEventListener('click', reissueCertificate);
+      clearFieldButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          const fieldName = button.dataset.clearField;
+          const fieldNode = adminFieldNodes[fieldName];
+          if (!fieldNode || fieldNode.disabled) return;
+          fieldNode.value = '';
+          fieldNode.dispatchEvent(new Event('input', { bubbles: true }));
+          fieldNode.focus();
+        });
+      });
       certificateStatementNode.addEventListener('input', () => {
         if (previewPanel.style.display !== 'none') {
           setStatus('Certificate wording changed. Regenerate the preview to see the update.', 'muted');
@@ -799,6 +842,9 @@
             setStatus('Certificate fields changed. Regenerate the preview to see the update.', 'muted');
           }
         });
+      });
+      window.addEventListener('beforeunload', () => {
+        if (previewObjectUrl) URL.revokeObjectURL(previewObjectUrl);
       });
 
       if (id) {

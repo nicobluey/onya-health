@@ -118,7 +118,7 @@ export function buildCertificateIdentityDetails(certificate, issuedAt = new Date
   const age = calculatePatientAge(data.dob, issuedAt);
   return {
     patientName: safeText(data.fullName, 'Patient name unavailable'),
-    ageAtConsultation: age === null ? 'Not provided' : `${age} years`,
+    ageAtConsultation: age === null ? '' : `${age} years`,
   };
 }
 
@@ -179,13 +179,6 @@ function dataUrlToBuffer(dataUrl) {
   const index = String(dataUrl || '').indexOf(marker);
   if (index === -1) return null;
   return Buffer.from(String(dataUrl).slice(index + marker.length), 'base64');
-}
-
-function truncateText(value, maxChars = 140) {
-  const text = String(value || '').trim();
-  if (!text) return '';
-  if (text.length <= maxChars) return text;
-  return `${text.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
 }
 
 async function buildQrBuffer(value) {
@@ -325,7 +318,6 @@ export async function buildCertificatePdf(certificate, options = {}) {
     String(options.providerNumber || certificate?.decision?.providerNumber || '').trim().toUpperCase(),
     'Provider number not recorded'
   );
-  const doctorNotes = safeText(options.doctorNotes ?? certificate?.decision?.notes, 'No additional doctor notes.');
   const certificateId = safeText(certificate?.id, '-');
 
   const durationDaysRaw = Number(data.durationDays || 1);
@@ -494,15 +486,17 @@ export async function buildCertificatePdf(certificate, options = {}) {
     });
     y += 22;
 
-    doc.font('Helvetica-Bold').fontSize(12).text('Age at consultation:', left, y, {
-      width: 126,
-      lineBreak: false,
-    });
-    doc.font('Helvetica').fontSize(12).text(patientIdentity.ageAtConsultation, left + 130, y, {
-      width: contentWidth - 130,
-      lineBreak: false,
-    });
-    y += 22;
+    if (patientIdentity.ageAtConsultation) {
+      doc.font('Helvetica-Bold').fontSize(12).text('Age at consultation:', left, y, {
+        width: 126,
+        lineBreak: false,
+      });
+      doc.font('Helvetica').fontSize(12).text(patientIdentity.ageAtConsultation, left + 130, y, {
+        width: contentWidth - 130,
+        lineBreak: false,
+      });
+      y += 22;
+    }
 
     doc.font('Helvetica-Bold').fontSize(12).text('Certificate Period:', left, y);
     const readablePeriod = buildReadablePeriod(data.startDate, durationDays);
@@ -564,17 +558,6 @@ export async function buildCertificatePdf(certificate, options = {}) {
       drawSignatureMark(doc, left, y + 10);
     }
 
-    if (doctorNotes && doctorNotes !== 'No additional doctor notes.') {
-      doc
-        .font('Helvetica')
-        .fontSize(9.5)
-        .fillColor(colors.muted)
-        .text(`Clinician note: ${truncateText(doctorNotes, 130)}`, left + 230, y + 9, {
-          width: contentWidth - 230,
-          height: 34,
-          ellipsis: true,
-        });
-    }
     y += 46;
 
     const verificationHeight = 112;
