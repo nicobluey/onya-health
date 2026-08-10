@@ -44,7 +44,25 @@
 
 ### Verification
 
-Pending final automated, API, PDF render/text, responsive browser, and production checks.
+- `PATH=".../poppler/bin:$PATH" npm test` passed all 36 tests, including PDF text
+  extraction proving private notes and the removed age row are absent.
+- `npm run build`, `npm run lint`, `npm audit --audit-level=high`, Node syntax checks,
+  portal-mirror comparison, and `git diff --check` passed.
+- An isolated local API flow sent current and historical clinical messages as `Clinical team`,
+  reissued one approved certificate repeatedly through revision 4, removed DOB/phone/address/
+  purpose/symptom/patient notes, corrected the patient name, and confirmed the patient API omitted
+  private decision notes and personal clinician identity.
+- The resulting PDF was a single A4 page. Poppler text extraction and rendered-page inspection
+  confirmed the corrected name, no DOB-derived age, no clinician note, no layout collision, and
+  intact registration/provider/verification details.
+- Browser QA at `1440x1000` and `390x844` found no horizontal overflow or console errors. Mobile
+  review hid the iframe and generated explicit blob-backed `Open PDF` and `Download PDF` actions;
+  long patient emails wrap inside the summary card.
+- Commit `7b52a78` deployed through Git CI/CD. `supadoc.com.au`, `www.supadoc.com.au`, and
+  `onya-health.vercel.app` each returned `200` with the new review markup. Production health
+  returned `200` with Supabase and SMTP configured; unauthenticated doctor reissue/message and
+  patient-detail probes returned controlled `401` responses. The live patient bundle contains the
+  new state-based review copy and no synthetic wait-minute strings.
 
 ## 2026-08-10 - Add controlled certificate corrections, reissue, and patient validation
 
