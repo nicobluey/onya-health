@@ -9,7 +9,7 @@ const HOME_REVIEWS = [
     },
     {
         title: 'Clear price before you commit',
-        body: 'A 1-day request starts at $11.21, with longer durations shown before payment so there are no checkout surprises.',
+        body: 'A 1-day request starts at $9.17, with longer durations shown before payment so there are no checkout surprises.',
         meta: 'Why patients use it · Transparent cost'
     },
     {

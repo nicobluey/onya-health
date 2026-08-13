@@ -1,5 +1,29 @@
 # Fixes Log
 
+## 2026-08-13 - Align one-day pricing at $9.17
+
+### Symptoms
+
+- Public pages and the booking flow displayed `$11.21` for a one-day request.
+- The backend Stripe pricing default and production environment also charged `1121` cents.
+
+### Root cause
+
+- The one-day amount was duplicated across public copy, frontend calculations, backend defaults,
+  tests, and the production environment.
+
+### Files changed
+
+- `frontend/index.html`, `frontend/src/components/*`, `frontend/src/consult-flow/*`, and
+  `frontend/src/pages/*` now display and calculate a `$9.17` one-day request.
+- `api/index.js`, `backend/server.js`, and `backend/lib/stripe-pricing.js` now use `917` cents as
+  the one-day Stripe amount while retaining the `$29.71` 5-7 day cap.
+- `backend/lib/stripe-pricing.test.js` covers the recalculated duration ladder.
+
+### Verification
+
+- Pending: test, build, lint, production environment update, deployment, and live Checkout smoke.
+
 ## 2026-08-10 - Preserve certificate revisions and expose doctor reissue history
 
 ### Symptoms

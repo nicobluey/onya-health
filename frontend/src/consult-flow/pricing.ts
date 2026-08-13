@@ -1,4 +1,4 @@
-export const ONE_OFF_BASE_PRICE_AUD = 11.21;
+export const ONE_OFF_BASE_PRICE_AUD = 9.17;
 export const ONE_OFF_MAX_PRICE_AUD = 29.71;
 export const ONE_OFF_MAX_PRICE_DAY = 5;
 export const ONE_OFF_CAP_END_DAY = 7;

@@ -10,7 +10,7 @@ const productConfiguration = {
 };
 
 test('matches the funnel price for every supported certificate duration', () => {
-  const expectedCents = [1121, 1584, 2046, 2509, 2971, 2971, 2971];
+  const expectedCents = [917, 1431, 1944, 2458, 2971, 2971, 2971];
   const actualCents = expectedCents.map((_, index) =>
     getStripePricing({ consult: { durationDays: index + 1 } }, productConfiguration).unitAmount
   );
@@ -24,9 +24,9 @@ test('adds the carer certificate price once', () => {
     productConfiguration
   );
 
-  assert.equal(pricing.baseUnitAmount, 2509);
+  assert.equal(pricing.baseUnitAmount, 2458);
   assert.equal(pricing.carerCertificateAmount, 495);
-  assert.equal(pricing.unitAmount, 3004);
+  assert.equal(pricing.unitAmount, 2953);
 });
 
 test('uses a true monthly interval for All Access', () => {

@@ -1,5 +1,5 @@
 export const DEFAULT_STRIPE_PRICING_CENTS = Object.freeze({
-  singleDay: 1121,
+  singleDay: 917,
   multiDayMaximum: 2971,
   recurringMonthly: 1900,
   carerCertificate: 495,

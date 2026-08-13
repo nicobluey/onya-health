@@ -513,3 +513,6 @@ The old `.agents/FE_AGENT.md` and `.agents/BE_AGENT.md` split was removed becaus
 - Keep retired dietitian and meal-plan data out of active patient API queries and payloads.
 - Keep Vercel Functions in Tokyo (`hnd1`) while production Supabase remains in Tokyo.
 - Treat `frontend/public/sitemap.xml` and `robots.txt` as deployable artifacts until a more complete prerender/SSR solution is adopted.
+- Keep the one-day certificate price consistent at `$9.17` across public copy, the booking flow,
+  backend pricing, and Stripe Checkout. Duration pricing continues to scale linearly to the
+  existing `$29.71` cap for 5-7 days.

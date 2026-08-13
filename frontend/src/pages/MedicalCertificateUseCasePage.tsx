@@ -46,8 +46,8 @@ const USE_CASES: UseCaseConfig[] = [
         cardCta: 'Start request',
         cardImageClass: 'object-[58%_center]',
         purposeParam: null,
-        metaTitle: 'Request a Medical Certificate Online | $11.21 for 1 Day | Onya Health',
-        metaDescription: 'Request a medical certificate online from $11.21 for a 1-day request, with pricing shown before payment. Australian doctor review required; issued where clinically appropriate.',
+        metaTitle: 'Request a Medical Certificate Online | $9.17 for 1 Day | Onya Health',
+        metaDescription: 'Request a medical certificate online from $9.17 for a 1-day request, with pricing shown before payment. Australian doctor review required; issued where clinically appropriate.',
     },
     {
         key: 'student',
@@ -64,8 +64,8 @@ const USE_CASES: UseCaseConfig[] = [
         cardCta: 'Start student request',
         cardImageClass: 'object-center',
         purposeParam: 'university',
-        metaTitle: 'Student Medical Certificates | $11.21 for 1 Day | Onya Health',
-        metaDescription: 'Request an online student medical certificate for $11.21 for 1 day with Australian doctor review and digital delivery where clinically appropriate.',
+        metaTitle: 'Student Medical Certificates | $9.17 for 1 Day | Onya Health',
+        metaDescription: 'Request an online student medical certificate for $9.17 for 1 day with Australian doctor review and digital delivery where clinically appropriate.',
     },
     {
         key: 'caretaker',
@@ -82,8 +82,8 @@ const USE_CASES: UseCaseConfig[] = [
         cardCta: 'Start carer request',
         cardImageClass: 'object-center',
         purposeParam: 'carers-leave',
-        metaTitle: 'Carer Medical Certificates | $11.21 for 1 Day | Onya Health',
-        metaDescription: 'Request an online carer leave certificate for $11.21 for 1 day with secure Australian doctor review and digital delivery where clinically appropriate.',
+        metaTitle: 'Carer Medical Certificates | $9.17 for 1 Day | Onya Health',
+        metaDescription: 'Request an online carer leave certificate for $9.17 for 1 day with secure Australian doctor review and digital delivery where clinically appropriate.',
     },
     {
         key: 'work',
@@ -100,8 +100,8 @@ const USE_CASES: UseCaseConfig[] = [
         cardCta: 'Start work request',
         cardImageClass: 'object-center',
         purposeParam: 'work',
-        metaTitle: 'Work Medical Certificates | $11.21 for 1 Day | Onya Health',
-        metaDescription: 'Request an online work medical certificate for $11.21 for 1 day with Australian doctor review and digital delivery where clinically appropriate.',
+        metaTitle: 'Work Medical Certificates | $9.17 for 1 Day | Onya Health',
+        metaDescription: 'Request an online work medical certificate for $9.17 for 1 day with Australian doctor review and digital delivery where clinically appropriate.',
     },
 ];
 
@@ -157,7 +157,7 @@ export default function MedicalCertificateUseCasePage() {
 
                     <div className="relative z-10 mx-auto flex min-h-[calc(100svh-64px)] max-w-7xl items-center px-5 py-10 md:min-h-[680px] md:px-8 md:py-20">
                         <div className="max-w-[740px]">
-                        <p className="onya-kicker border-white/20 bg-white/10 text-white">$11.21 one-day request</p>
+                        <p className="onya-kicker border-white/20 bg-white/10 text-white">$9.17 one-day request</p>
                         <h1 className="onya-display mt-5 max-w-[10ch] text-white">
                             {currentUseCase.title}
                         </h1>
@@ -166,7 +166,7 @@ export default function MedicalCertificateUseCasePage() {
                         </p>
                         <div className="mt-7 flex flex-col gap-3 sm:flex-row">
                             <a href={bookingHref} className="onya-button bg-white text-[#06142b] hover:bg-[#edf2ff]">
-                                Start from $11.21
+                                Start from $9.17
                                 <ArrowRight size={18} />
                             </a>
                             <a href="#certificate-options" className="onya-button-secondary border-white/20 bg-white/10 text-white hover:bg-white/18">

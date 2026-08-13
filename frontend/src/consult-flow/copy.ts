@@ -1,7 +1,7 @@
 export const COPY = {
     hero: {
         title: "Need a medical certificate today?",
-        subtitle: "Start from $11.21 for a 1-day request. Tell us what is going on, choose your dates, and an Australian doctor reviews whether a certificate is appropriate.",
+        subtitle: "Start from $9.17 for a 1-day request. Tell us what is going on, choose your dates, and an Australian doctor reviews whether a certificate is appropriate.",
         cta: "Start request",
         trust: [
             "For patients in Australia",
@@ -89,7 +89,7 @@ export const COPY = {
             },
             oneoff: {
                 title: "One-off request",
-                price: "$11.21 for 1 day · up to $29.71 for 5-7 days",
+                price: "$9.17 for 1 day · up to $29.71 for 5-7 days",
                 bullets: [
                     "One doctor-reviewed request",
                     "No ongoing commitment"

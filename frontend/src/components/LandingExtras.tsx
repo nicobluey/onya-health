@@ -31,7 +31,7 @@ const PATIENT_ORGS: PatientOrg[] = [
 ];
 
 const STATS: StatItem[] = [
-    { value: '$11.21', label: '1-day request' },
+    { value: '$9.17', label: '1-day request' },
     { value: '24/7', label: 'Start online' },
     { value: 'Doctor', label: 'Reviewed outcome' },
 ];
