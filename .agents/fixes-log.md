@@ -22,7 +22,17 @@
 
 ### Verification
 
-- Pending: test, build, lint, production environment update, deployment, and live Checkout smoke.
+1. `npm test` passed 40 tests; two PDF text-extraction checks were skipped because `pdftotext`
+   is not installed.
+2. `npm run lint`, `npm run build`, Node syntax checks, `git diff --check`, and the production
+   dependency audit passed; the audit reports zero vulnerabilities.
+3. Desktop `1440x1000` and mobile `390x844` checks showed `$9.17`, no stale `$11.21` copy, and no
+   horizontal overflow on the homepage and booking surface.
+4. Vercel production variable `STRIPE_AMOUNT_SINGLE_DAY_AUD_CENTS` was updated to `917`.
+5. Deployment `dpl_2qrjDR4oiRtvc3hfSoYRHL3R3MgF` became current on `supadoc.com.au`,
+   `www.supadoc.com.au`, and `onya-health.vercel.app`; all aliases returned `200` and `$9.17`.
+6. A live unpaid Checkout Session reported `amount_total: 917`, `currency: aud`. The session was
+   expired and its synthetic request, patient, profile, Auth user, and audit rows were removed.
 
 ## 2026-08-10 - Preserve certificate revisions and expose doctor reissue history
 
